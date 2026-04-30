@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wiki Cockpit Local</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<style>
+:root {
+  --bg:#080a0d;
+  --bg2:#0f1319;
+  --bg3:#151b24;
+  --bg4:#1d2633;
+  --panel:#10151d;
+  --panel2:#131a24;
+  --border:#253040;
+  --border2:#334256;
+  --text:#e7edf5;
+  --dim:#93a1b5;
+  --muted:#5f6d7f;
+  --muted2:#3d4a5c;
+  --accent:#e0a942;
+  --accent2:#72d6ff;
+  --good:#7bd88f;
+  --warn:#f0c36a;
+  --bad:#ff8080;
+  --purple:#c49bff;
+  --shadow: 0 18px 60px rgba(0,0,0,.35);
+  --font: Inter, system-ui, -apple-system, Segoe UI, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
+  --serif:'Playfair Display', Georgia, serif;
+  --sidebar: 300px;
+  --inspector: 310px;
+  --radius: 16px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:radial-gradient(circle at 30% -10%,#1f2b3d 0,#080a0d 38%,#06070a 100%);color:var(--text);font-family:var(--font);font-size:14px}
+button,input,select{font:inherit}
+button{cursor:pointer;color:inherit}
+.hidden{display:none!important}
+.app{display:grid;grid-template-columns:var(--sidebar) 1fr var(--inspector);height:100vh;min-width:980px}
+.sidebar,.inspector{background:rgba(15,19,25,.88);border-color:var(--border);backdrop-filter:blur(14px);overflow:hidden;display:flex;flex-direction:column}
+.sidebar{border-right:1px solid var(--border)}
+.inspector{border-left:1px solid var(--border)}
+.main{overflow:hidden;display:flex;flex-direction:column;min-width:0}
+.brand{padding:18px;border-bottom:1px solid var(--border)}
+.brand-row{display:flex;align-items:center;gap:12px}
+.logo{width:42px;height:42px;border-radius:14px;background:linear-gradient(135deg,var(--accent),#76531d);display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:26px;font-weight:700;color:#111;box-shadow:0 0 24px rgba(224,169,66,.25)}
+.brand-title{font-weight:800;letter-spacing:-.04em;font-size:18px;line-height:1.1}.brand-sub{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:4px}.brand-sub strong{color:var(--accent);font-weight:600}.open-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}.btn{border:1px solid var(--border2);background:var(--bg3);border-radius:12px;padding:9px 11px;font-family:var(--mono);font-size:11px;transition:.16s;color:var(--dim)}.btn:hover{border-color:var(--accent);color:var(--text);transform:translateY(-1px)}.btn.primary{background:linear-gradient(135deg,rgba(224,169,66,.18),rgba(114,214,255,.08));border-color:rgba(224,169,66,.45);color:var(--accent)}.btn.ghost{background:transparent}.btn.small{padding:7px 9px;border-radius:10px;font-size:10px}.sidebar-search{padding:14px 16px;border-bottom:1px solid var(--border)}.searchbox{position:relative}.searchbox input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:11px 36px 11px 12px;color:var(--text);outline:none;font-family:var(--mono);font-size:12px}.searchbox input:focus{border-color:var(--accent)}.searchbox .key{position:absolute;right:9px;top:8px;border:1px solid var(--border);border-radius:7px;padding:2px 5px;color:var(--muted);font-family:var(--mono);font-size:10px}.filters{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}.chip{border:1px solid var(--border);background:var(--bg2);border-radius:999px;padding:5px 8px;font-family:var(--mono);font-size:10px;color:var(--dim);cursor:pointer}.chip.active,.chip:hover{border-color:var(--accent);color:var(--accent);background:rgba(224,169,66,.09)}.nav{overflow:auto;flex:1;padding:10px 0}.nav::-webkit-scrollbar,.scroll::-webkit-scrollbar{width:6px;height:6px}.nav::-webkit-scrollbar-thumb,.scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}.nav-section{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:16px 16px 7px}.nav-item{display:grid;grid-template-columns:20px 1fr auto;gap:8px;align-items:center;padding:8px 16px;border-left:2px solid transparent;color:var(--dim);transition:.12s}.nav-item:hover{background:rgba(255,255,255,.03);color:var(--text)}.nav-item.active{background:rgba(224,169,66,.11);border-left-color:var(--accent);color:var(--accent)}.nav-ico{font-size:12px;text-align:center}.nav-name{font-family:var(--mono);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.nav-badge{font-family:var(--mono);font-size:10px;color:var(--muted)}.sidebar-footer{border-top:1px solid var(--border);padding:12px 16px;color:var(--muted);font-family:var(--mono);font-size:10px;display:flex;align-items:center;justify-content:space-between;gap:10px}.topbar{height:58px;border-bottom:1px solid var(--border);background:rgba(8,10,13,.76);display:flex;align-items:center;gap:12px;padding:0 18px;backdrop-filter:blur(10px);flex-shrink:0}.crumb{flex:1;min-width:0;font-family:var(--mono);font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.crumb span{color:var(--accent)}.tabs{display:flex;gap:7px}.tab{border:1px solid var(--border);background:rgba(15,19,25,.7);border-radius:12px;padding:8px 10px;font-family:var(--mono);font-size:11px;color:var(--dim);transition:.12s}.tab:hover{color:var(--text);border-color:var(--border2)}.tab.active{color:var(--accent);border-color:rgba(224,169,66,.45);background:rgba(224,169,66,.1)}.content{position:relative;flex:1;overflow:hidden}.panel{display:none;height:100%;overflow:auto}.panel.active{display:block}.scroll{height:100%;overflow:auto}.welcome{height:100%;display:flex;align-items:center;justify-content:center;padding:32px}.welcome-card{max-width:760px;background:linear-gradient(180deg,rgba(19,26,36,.88),rgba(12,15,20,.88));border:1px solid var(--border);border-radius:28px;padding:34px;box-shadow:var(--shadow);position:relative;overflow:hidden}.welcome-card:before{content:"";position:absolute;inset:-100px -100px auto auto;width:330px;height:330px;border-radius:50%;background:radial-gradient(circle,rgba(224,169,66,.16),transparent 65%)}.welcome-kicker{font-family:var(--mono);font-size:12px;color:var(--accent);letter-spacing:.12em;text-transform:uppercase;margin-bottom:12px}.welcome h1{font-size:44px;letter-spacing:-.06em;line-height:.98;margin-bottom:14px}.welcome p{color:var(--dim);font-size:16px;line-height:1.7;max-width:650px}.welcome-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:24px}.mini-feature{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:18px;padding:14px}.mini-feature b{display:block;margin-bottom:6px}.mini-feature span{color:var(--muted);font-size:12px;line-height:1.5}.cockpit{padding:22px;max-width:1360px;margin:0 auto}.hero{display:grid;grid-template-columns:1.2fr .8fr;gap:16px;margin-bottom:16px}.hero-card,.card{background:rgba(16,21,29,.86);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 30px rgba(0,0,0,.18)}.hero-card{padding:22px;position:relative;overflow:hidden}.hero-card:after{content:"";position:absolute;right:-70px;top:-90px;width:260px;height:260px;border-radius:50%;background:radial-gradient(circle,rgba(114,214,255,.12),transparent 70%)}.hero-card h2{font-size:28px;letter-spacing:-.04em;margin-bottom:8px}.hero-card p{color:var(--dim);line-height:1.7}.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:18px}.stat{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:12px}.stat-num{font-size:26px;font-weight:800;color:var(--accent);letter-spacing:-.05em}.stat-label{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-top:3px}.quick-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px}.action-tile{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:16px;padding:14px;text-align:left;transition:.12s}.action-tile:hover{border-color:var(--accent);transform:translateY(-1px)}.action-tile b{display:block;margin-bottom:4px}.action-tile span{font-size:12px;color:var(--muted);line-height:1.4}.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}.span-4{grid-column:span 4}.span-5{grid-column:span 5}.span-6{grid-column:span 6}.span-7{grid-column:span 7}.span-8{grid-column:span 8}.span-12{grid-column:span 12}.card{padding:16px;min-height:90px}.card-title{display:flex;align-items:center;justify-content:space-between;gap:10px;font-weight:800;font-size:14px;margin-bottom:12px}.card-title small{font-family:var(--mono);font-weight:500;color:var(--muted);font-size:10px}.list{display:flex;flex-direction:column;gap:8px}.list-item{background:rgba(255,255,255,.025);border:1px solid var(--border);border-radius:14px;padding:10px 12px;cursor:pointer;transition:.12s}.list-item:hover{border-color:var(--border2);background:rgba(255,255,255,.05)}.list-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.list-name{font-family:var(--mono);font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.list-meta{font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap}.list-desc{margin-top:5px;color:var(--muted);font-size:12px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.tag-cloud{display:flex;gap:8px;flex-wrap:wrap}.tag{font-family:var(--mono);font-size:11px;border:1px solid var(--border);background:var(--bg2);border-radius:999px;padding:6px 9px;color:var(--accent2);cursor:pointer}.tag:hover{border-color:var(--accent2)}.reader-layout{display:grid;grid-template-columns:minmax(0,820px) 240px;gap:24px;max-width:1120px;margin:0 auto;padding:34px 30px 80px}.reader-card{min-width:0}.page-header{margin-bottom:22px;padding-bottom:16px;border-bottom:1px solid var(--border)}.page-path{font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:8px}.page-title{font-size:38px;letter-spacing:-.055em;line-height:1.05;margin-bottom:10px}.page-meta{display:flex;gap:8px;flex-wrap:wrap}.pill{font-family:var(--mono);font-size:10px;color:var(--dim);border:1px solid var(--border);background:var(--bg2);border-radius:999px;padding:5px 8px}.pill.good{color:var(--good);border-color:rgba(123,216,143,.35)}.pill.warn{color:var(--warn);border-color:rgba(240,195,106,.35)}.pill.bad{color:var(--bad);border-color:rgba(255,128,128,.35)}.md{font-size:16px;line-height:1.75;color:#dbe5f0}.md h1,.md h2,.md h3,.md h4{line-height:1.25;letter-spacing:-.02em;margin:1.5em 0 .5em}.md h1{font-size:31px}.md h2{font-size:25px;border-bottom:1px solid var(--border);padding-bottom:8px}.md h3{font-size:19px;color:var(--accent)}.md p,.md ul,.md ol,.md blockquote,.md pre,.md table{margin:13px 0}.md a{color:var(--accent2);text-decoration:none;border-bottom:1px solid transparent}.md a:hover{border-bottom-color:var(--accent2)}.md a.wiki-link{color:var(--accent);border-bottom:1px dashed rgba(224,169,66,.45)}.md a.wiki-link.missing{color:var(--bad);border-bottom-color:rgba(255,128,128,.45)}.md code{font-family:var(--mono);font-size:.84em;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:2px 6px;color:var(--good)}.md pre{background:#090c10;border:1px solid var(--border);border-radius:14px;padding:16px;overflow:auto}.md pre code{background:transparent;border:0;padding:0;color:#c9d4e3}.md blockquote{border-left:3px solid var(--accent);background:rgba(224,169,66,.06);padding:8px 14px;color:var(--dim);border-radius:0 12px 12px 0}.md table{width:100%;border-collapse:collapse;font-size:14px}.md th,.md td{border-bottom:1px solid var(--border);padding:8px;text-align:left}.md th{font-family:var(--mono);font-size:11px;color:var(--accent);background:var(--bg2)}.md img{max-width:100%;border-radius:14px;border:1px solid var(--border)}.outline{position:sticky;top:22px;align-self:start;background:rgba(16,21,29,.74);border:1px solid var(--border);border-radius:16px;padding:12px;max-height:calc(100vh - 120px);overflow:auto}.outline-title{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px}.outline a{display:block;color:var(--dim);text-decoration:none;font-size:12px;padding:5px 4px;border-radius:8px;line-height:1.35}.outline a:hover{color:var(--accent);background:rgba(224,169,66,.07)}.outline .h3{padding-left:12px;color:var(--muted)}.inspector-header{padding:16px;border-bottom:1px solid var(--border)}.inspector-title{font-weight:800;font-size:15px}.inspector-sub{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:4px}.inspector-body{overflow:auto;flex:1;padding:14px;display:flex;flex-direction:column;gap:14px}.inspector-card{border:1px solid var(--border);border-radius:16px;background:rgba(255,255,255,.025);padding:12px}.inspector-card h4{font-size:12px;font-family:var(--mono);color:var(--accent);margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em}.kv{display:grid;grid-template-columns:1fr auto;gap:8px;font-family:var(--mono);font-size:11px;color:var(--dim);padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04)}.kv:last-child{border-bottom:0}.link-mini{display:block;padding:7px 8px;border-radius:10px;color:var(--dim);text-decoration:none;font-family:var(--mono);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.link-mini:hover{background:var(--bg3);color:var(--accent)}.graph-panel{height:100%;position:relative;background:radial-gradient(circle at center,rgba(114,214,255,.06),transparent 45%)}#graph-canvas{width:100%;height:100%;display:block}.graph-tools{position:absolute;left:16px;top:16px;display:flex;gap:8px;flex-wrap:wrap}.graph-legend{position:absolute;right:16px;bottom:16px;border:1px solid var(--border);background:rgba(15,19,25,.86);border-radius:14px;padding:10px 12px;font-family:var(--mono);font-size:11px;color:var(--dim);line-height:1.9}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}.tooltip{position:absolute;pointer-events:none;background:var(--bg3);border:1px solid var(--accent);border-radius:12px;padding:8px 10px;font-family:var(--mono);font-size:12px;color:var(--text);opacity:0;transform:translate(10px,-10px);transition:opacity .12s;box-shadow:var(--shadow);z-index:4}.tooltip.visible{opacity:1}.health{padding:22px;max-width:1280px;margin:0 auto}.issue-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}.issue{border-left:3px solid var(--border2)}.issue.bad{border-left-color:var(--bad)}.issue.warn{border-left-color:var(--warn)}.issue.good{border-left-color:var(--good)}.timeline{padding:30px;max-width:940px;margin:0 auto}.timeline-line{border-left:2px solid var(--border);margin-left:10px;padding-left:22px}.time-entry{position:relative;margin-bottom:16px;background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:14px}.time-entry:before{content:"";position:absolute;left:-28px;top:18px;width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 5px var(--bg)}.time-date{font-family:var(--mono);font-size:11px;color:var(--accent);margin-bottom:5px}.time-title{font-weight:800}.time-summary{font-size:12px;color:var(--muted);line-height:1.5;margin-top:5px}.search-overlay{position:absolute;inset:0;background:rgba(8,10,13,.94);z-index:20;display:none;backdrop-filter:blur(16px);padding:28px;overflow:auto}.search-overlay.visible{display:block}.search-title{font-size:22px;font-weight:800;margin-bottom:14px}.search-results{max-width:920px;margin:0 auto}.sr{border:1px solid var(--border);background:var(--panel);border-radius:16px;padding:13px;margin:10px 0;cursor:pointer}.sr:hover{border-color:var(--accent)}.sr-name{font-family:var(--mono);font-size:12px;color:var(--accent)}.sr-snippet{color:var(--dim);font-size:13px;line-height:1.55;margin-top:6px}.sr mark{background:rgba(224,169,66,.18);color:var(--accent);border-radius:4px;padding:0 2px}.palette{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;display:none;align-items:flex-start;justify-content:center;padding-top:8vh;backdrop-filter:blur(6px)}.palette.visible{display:flex}.palette-box{width:min(760px,92vw);background:var(--panel);border:1px solid var(--border2);border-radius:22px;box-shadow:var(--shadow);overflow:hidden}.palette-input{width:100%;background:transparent;border:0;border-bottom:1px solid var(--border);padding:18px 20px;color:var(--text);outline:none;font-size:18px}.palette-list{max-height:58vh;overflow:auto;padding:10px}.pal-item{display:grid;grid-template-columns:32px 1fr auto;gap:10px;align-items:center;padding:11px;border-radius:14px;cursor:pointer}.pal-item:hover,.pal-item.active{background:var(--bg3)}.pal-icon{color:var(--accent);font-family:var(--mono)}.pal-title{font-weight:700}.pal-sub{font-size:12px;color:var(--muted);margin-top:2px}.pal-kind{font-family:var(--mono);font-size:10px;color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:3px 6px}.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--border2);border-radius:14px;padding:10px 14px;color:var(--dim);font-family:var(--mono);font-size:11px;box-shadow:var(--shadow);z-index:200;display:none}.toast.visible{display:block}.empty{padding:34px;text-align:center;color:var(--muted);font-family:var(--mono);font-size:12px}.path-list{display:flex;flex-direction:column;gap:10px}.path{border:1px solid var(--border);border-radius:14px;padding:11px;background:rgba(255,255,255,.025)}.path-name{font-weight:800;margin-bottom:7px}.path-steps{display:flex;gap:6px;flex-wrap:wrap}.path-step{font-family:var(--mono);font-size:10px;background:var(--bg3);border:1px solid var(--border);border-radius:999px;padding:5px 8px;color:var(--dim);cursor:pointer}.path-step:hover{border-color:var(--accent);color:var(--accent)}.matrix{display:grid;grid-template-columns:repeat(auto-fill,minmax(9px,1fr));gap:4px}.matrix-cell{aspect-ratio:1;border-radius:3px;background:var(--bg3);border:1px solid rgba(255,255,255,.04);cursor:pointer}.matrix-cell.l1{background:rgba(123,216,143,.25)}.matrix-cell.l2{background:rgba(224,169,66,.35)}.matrix-cell.l3{background:rgba(255,128,128,.45)}
+@media(max-width:1180px){.app{grid-template-columns:280px 1fr}.inspector{display:none}.reader-layout{grid-template-columns:1fr}.outline{display:none}.hero{grid-template-columns:1fr}.span-4,.span-5,.span-6,.span-7,.span-8{grid-column:span 12}.issue-grid{grid-template-columns:1fr}.welcome-grid{grid-template-columns:1fr}.stat-grid{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-row">
+        <div class="logo">§</div>
+        <div>
+          <div class="brand-title">Wiki Cockpit</div>
+          <div class="brand-sub" id="wiki-sub">nenhuma wiki carregada</div>
+        </div>
+      </div>
+      <div class="open-actions">
+        <button class="btn primary" id="open-folder-btn">Abrir pasta</button>
+        <button class="btn" id="open-files-btn">Fallback</button>
+      </div>
+      <input id="folder-input" type="file" webkitdirectory directory multiple class="hidden">
+    </div>
+    <div class="sidebar-search">
+      <div class="searchbox">
+        <input id="side-search" placeholder="Buscar / filtrar..." autocomplete="off" spellcheck="false">
+        <span class="key">⌘K</span>
+      </div>
+      <div class="filters" id="filters">
+        <button class="chip active" data-filter="all">Tudo</button>
+        <button class="chip" data-filter="hub">Hubs</button>
+        <button class="chip" data-filter="orphan">Órfãos</button>
+        <button class="chip" data-filter="missing">C/ link ausente</button>
+      </div>
+    </div>
+    <nav class="nav" id="nav"><div class="empty">Abra uma pasta com arquivos .md</div></nav>
+    <div class="sidebar-footer"><span id="footer-left">offline-first</span><span>Ctrl/⌘ K</span></div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="crumb" id="breadcrumb"><span>wiki</span> / cockpit local</div>
+      <div class="tabs">
+        <button class="tab active" data-panel="cockpit">Cockpit</button>
+        <button class="tab" data-panel="reader">Leitor</button>
+        <button class="tab" data-panel="graph">Mapa</button>
+        <button class="tab" data-panel="health">Saúde</button>
+        <button class="tab" data-panel="timeline">Tempo</button>
+      </div>
+    </header>
+    <section class="content">
+      <div class="panel active" id="panel-welcome">
+        <div class="welcome">
+          <div class="welcome-card">
+            <div class="welcome-kicker">site local para Obsidian / markdown</div>
+            <h1>Transforme sua pasta de wiki em uma visão macro interativa.</h1>
+            <p>Abra a raiz da sua wiki. O Cockpit lê os arquivos <strong>.md</strong>, monta backlinks, detecta links quebrados, encontra hubs, sugere trilhas de leitura e desenha um mapa navegável — sem backend, banco ou build.</p>
+            <div class="open-actions" style="max-width:360px;margin-top:22px">
+              <button class="btn primary" onclick="openWiki()">Abrir pasta da wiki</button>
+              <button class="btn" onclick="openFallback()">Selecionar arquivos</button>
+            </div>
+            <div class="welcome-grid">
+              <div class="mini-feature"><b>Macrovisão</b><span>Hubs, órfãos, tags, páginas recentes e matriz de densidade.</span></div>
+              <div class="mini-feature"><b>Wiki viva</b><span>Backlinks, outlinks, links ausentes e trilhas sugeridas.</span></div>
+              <div class="mini-feature"><b>Navegação rápida</b><span>Command palette, busca global e grafo clicável.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel" id="panel-cockpit"><div class="scroll"><div class="cockpit" id="cockpit"></div></div></div>
+      <div class="panel" id="panel-reader"><div class="scroll"><div class="reader-layout"><article class="reader-card"><div id="reader"></div></article><aside class="outline" id="outline"></aside></div></div></div>
+      <div class="panel" id="panel-graph"><div class="graph-panel"><canvas id="graph-canvas"></canvas><div class="graph-tools"><button class="btn small" onclick="fitGraph()">Centralizar</button><button class="btn small" onclick="toggleGraphMode()" id="graph-mode-btn">Todos</button><button class="btn small" onclick="randomPage()">Aleatória</button></div><div class="tooltip" id="graph-tooltip"></div><div class="graph-legend"><div><span class="dot" style="background:#e0a942"></span>Página</div><div><span class="dot" style="background:#72d6ff"></span>Hub</div><div><span class="dot" style="background:#ff8080"></span>Ausente</div><div><span class="dot" style="background:#c49bff"></span>Atual</div></div></div></div>
+      <div class="panel" id="panel-health"><div class="scroll"><div class="health" id="health"></div></div></div>
+      <div class="panel" id="panel-timeline"><div class="scroll"><div class="timeline" id="timeline"></div></div></div>
+      <div class="search-overlay" id="search-overlay"><div class="search-results"><div class="search-title">Busca global</div><div id="global-results"></div></div></div>
+    </section>
+  </main>
+
+  <aside class="inspector">
+    <div class="inspector-header"><div class="inspector-title" id="inspector-title">Inspector</div><div class="inspector-sub" id="inspector-sub">contexto da página atual</div></div>
+    <div class="inspector-body" id="inspector-body"><div class="empty">Abra uma página para ver backlinks, links, tags e métricas.</div></div>
+  </aside>
+</div>
+
+<div class="palette" id="palette">
+  <div class="palette-box">
+    <input class="palette-input" id="palette-input" placeholder="Digite para abrir página, ação ou tag..." autocomplete="off" spellcheck="false">
+    <div class="palette-list" id="palette-list"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+const state = {
+  pages: new Map(),
+  rawFiles: new Map(),
+  missingLinks: new Map(),
+  aliasIndex: new Map(),
+  titleIndex: new Map(),
+  tagIndex: new Map(),
+  currentPage: null,
+  activePanel: 'welcome',
+  filter: 'all',
+  query: '',
+  graphMode: 'all',
+  graph: { nodes: [], edges: [], nodeMap: new Map() },
+  dirName: 'Wiki Local'
+};
+
+const $ = sel => document.querySelector(sel);
+const $$ = sel => Array.from(document.querySelectorAll(sel));
+const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+const attr = esc;
+const fmtDate = ts => ts ? new Intl.DateTimeFormat('pt-BR', { dateStyle:'medium', timeStyle:'short' }).format(new Date(ts)) : 'sem data';
+const today = () => Date.now();
+
+function showToast(msg){
+  const el = $('#toast');
+  el.textContent = msg;
+  el.classList.add('visible');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => el.classList.remove('visible'), 2600);
+}
+
+function slugify(text){
+  return String(text || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .toLowerCase()
+    .replace(/\.md$/i,'')
+    .replace(/[#?].*$/,'')
+    .trim()
+    .replace(/\\/g,'/')
+    .replace(/\s+/g,'-')
+    .replace(/[^a-z0-9/_-]+/g,'')
+    .replace(/-+/g,'-')
+    .replace(/\/+/g,'/')
+    .replace(/^\/|\/$/g,'');
+}
+
+function pathToSlug(path){
+  const clean = String(path || '').replace(/^\/?(wiki|docs|pages)\//i,'').replace(/\.md$/i,'');
+  return clean.split('/').map(slugify).filter(Boolean).join('/');
+}
+
+function baseName(path){
+  return String(path || '').split('/').pop().replace(/\.md$/i,'');
+}
+
+function titleFromContent(content, fallback){
+  const fm = parseFrontmatter(content);
+  if (fm.title) return String(fm.title).trim();
+  const h1 = content.match(/^#\s+(.+)$/m);
+  if (h1) return h1[1].replace(/[#*_`]/g,'').trim();
+  return fallback;
+}
+
+function parseFrontmatter(content){
+  const fm = {};
+  const m = content.match(/^---\s*\n([\s\S]*?)\n---\s*/);
+  if (!m) return fm;
+  m[1].split('\n').forEach(line => {
+    const ix = line.indexOf(':');
+    if (ix === -1) return;
+    const key = line.slice(0, ix).trim().toLowerCase();
+    let val = line.slice(ix + 1).trim();
+    val = val.replace(/^['"]|['"]$/g,'');
+    fm[key] = val;
+  });
+  return fm;
+}
+
+function stripFrontmatter(content){
+  return content.replace(/^---\s*\n[\s\S]*?\n---\s*/, '');
+}
+
+function extractTags(content){
+  const tags = new Set();
+  const noCode = content.replace(/```[\s\S]*?```/g,'');
+  const re = /(^|\s)#([\p{L}\p{N}_/-]{2,})/gu;
+  let m;
+  while ((m = re.exec(noCode)) !== null) tags.add(m[2].toLowerCase());
+  return [...tags];
+}
+
+function extractHeadings(content){
+  const headings = [];
+  const re = /^(#{1,4})\s+(.+)$/gm;
+  let m;
+  while ((m = re.exec(stripFrontmatter(content))) !== null) {
+    const text = m[2].replace(/[#*_`]/g,'').trim();
+    headings.push({ level: m[1].length, text, id: slugify(text) });
+  }
+  return headings;
+}
+
+function extractSummary(content){
+  const fm = parseFrontmatter(content);
+  if (fm.summary || fm.description) return String(fm.summary || fm.description).trim();
+  const summary = content.match(/\*\*Summary\*\*\s*:?\s*(.+)/i) || content.match(/\*\*Resumo\*\*\s*:?\s*(.+)/i);
+  if (summary) return summary[1].trim();
+  const clean = stripFrontmatter(content)
+    .replace(/```[\s\S]*?```/g,'')
+    .split('\n')
+    .map(s => s.trim())
+    .filter(s => s && !s.startsWith('#') && !s.startsWith('|') && !s.startsWith('---'));
+  return (clean[0] || '').replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g,'$2$1').replace(/[*_`>]/g,'').slice(0, 180);
+}
+
+function extractUpdated(content, lastModified){
+  const fm = parseFrontmatter(content);
+  const candidates = [fm.updated, fm.modified, fm.date, fm.created];
+  const m = content.match(/\*\*(Last updated|Atualizado|Data)\*\*\s*:?\s*(.+)/i);
+  if (m) candidates.unshift(m[2]);
+  for (const c of candidates) {
+    if (!c) continue;
+    const ts = Date.parse(String(c).trim());
+    if (!Number.isNaN(ts)) return ts;
+  }
+  return lastModified || null;
+}
+
+function extractWikiLinks(content){
+  const links = [];
+  const re = /\[\[([^\]]+)\]\]/g;
+  let m;
+  while ((m = re.exec(content)) !== null) {
+    const raw = m[1].trim();
+    const [targetRaw, aliasRaw] = raw.split('|').map(s => s.trim());
+    const target = targetRaw.replace(/#.*/, '').trim();
+    const heading = (targetRaw.match(/#(.+)$/) || [null, ''])[1];
+    links.push({ raw, targetRaw, target, heading, label: aliasRaw || targetRaw });
+  }
+  return links;
+}
+
+function wordCount(content){
+  const text = stripFrontmatter(content).replace(/```[\s\S]*?```/g,' ').replace(/[#*_`\[\]()>|:-]/g,' ');
+  return (text.match(/[\p{L}\p{N}]+/gu) || []).length;
+}
+
+async function openWiki(){
+  if (window.showDirectoryPicker) {
+    try {
+      const handle = await window.showDirectoryPicker({ mode:'read' });
+      await loadFromDirectoryHandle(handle);
+      return;
+    } catch (err) {
+      if (err && err.name === 'AbortError') return;
+      console.error(err);
+      showToast('Falha no seletor de pasta. Use o fallback.');
+    }
+  } else {
+    showToast('Este navegador não suporta showDirectoryPicker. Use Fallback.');
+  }
+  openFallback();
+}
+
+function openFallback(){
+  $('#folder-input').value = '';
+  $('#folder-input').click();
+}
+
+async function loadFromDirectoryHandle(handle){
+  resetState(handle.name || 'Wiki Local');
+  await walkDirectory(handle, '');
+  finalizeLoad();
+}
+
+async function walkDirectory(dir, prefix){
+  for await (const [name, handle] of dir.entries()) {
+    if (name.startsWith('.') || ['node_modules','dist','build'].includes(name)) continue;
+    const rel = prefix ? `${prefix}/${name}` : name;
+    if (handle.kind === 'directory') {
+      await walkDirectory(handle, rel);
+    } else if (handle.kind === 'file') {
+      const file = await handle.getFile();
+      await ingestFile(file, rel);
+    }
+  }
+}
+
+async function loadFromFileList(files){
+  resetState('Wiki Local');
+  const arr = Array.from(files || []);
+  for (const file of arr) {
+    const rel = file.webkitRelativePath || file.name;
+    const relWithoutRoot = file.webkitRelativePath && rel.includes('/') ? rel.split('/').slice(1).join('/') : rel;
+    await ingestFile(file, relWithoutRoot);
+  }
+  finalizeLoad();
+}
+
+async function ingestFile(file, relPath){
+  const path = String(relPath || file.name).replace(/^\/+/, '');
+  if (/\.md$/i.test(file.name)) {
+    const content = await file.text();
+    const slug = pathToSlug(path);
+    const name = baseName(path);
+    const title = titleFromContent(content, name);
+    const links = extractWikiLinks(content);
+    const words = wordCount(content);
+    const page = {
+      slug, path, name, title, folder: path.includes('/') ? path.split('/').slice(0,-1).join('/') : '',
+      content, links, outlinks: [], backlinks: new Set(), missing: [], tags: extractTags(content),
+      headings: extractHeadings(content), summary: extractSummary(content), frontmatter: parseFrontmatter(content),
+      updated: extractUpdated(content, file.lastModified), words, readingTime: Math.max(1, Math.ceil(words / 210)),
+      isSpecial: /(^|\/)(index|home|readme|log|changelog)$/i.test(slug)
+    };
+    state.pages.set(slug, page);
+  } else {
+    state.rawFiles.set(path, { path, size: file.size, type: file.type, updated: file.lastModified });
+  }
+}
+
+function resetState(name){
+  state.pages.clear(); state.rawFiles.clear(); state.missingLinks.clear(); state.aliasIndex.clear(); state.titleIndex.clear(); state.tagIndex.clear();
+  state.currentPage = null; state.query = ''; state.filter = 'all'; state.dirName = name;
+  $('#side-search').value = '';
+  $('#wiki-sub').innerHTML = '<strong>carregando</strong> arquivos...';
+}
+
+function finalizeLoad(){
+  buildIndexes();
+  resolveLinks();
+  buildGraph();
+  renderAll();
+  const first = pickHomePage();
+  if (first) openPage(first.slug, { silentPanel:true });
+  switchPanel('cockpit');
+  showToast(`${state.pages.size} páginas carregadas`);
+}
+
+function buildIndexes(){
+  for (const page of state.pages.values()) {
+    const fileAlias = slugify(page.name);
+    const titleAlias = slugify(page.title);
+    if (!state.aliasIndex.has(fileAlias)) state.aliasIndex.set(fileAlias, page.slug);
+    if (!state.aliasIndex.has(titleAlias)) state.aliasIndex.set(titleAlias, page.slug);
+    state.titleIndex.set(page.slug, titleAlias);
+    page.tags.forEach(tag => {
+      if (!state.tagIndex.has(tag)) state.tagIndex.set(tag, new Set());
+      state.tagIndex.get(tag).add(page.slug);
+    });
+  }
+}
+
+function resolveTarget(target){
+  const direct = pathToSlug(target);
+  if (state.pages.has(direct)) return direct;
+  const alias = slugify(target);
+  if (state.aliasIndex.has(alias)) return state.aliasIndex.get(alias);
+  const ends = [...state.pages.keys()].filter(s => s.endsWith('/' + alias) || s === alias);
+  if (ends.length === 1) return ends[0];
+  return null;
+}
+
+function resolveLinks(){
+  for (const page of state.pages.values()) {
+    page.outlinks = [];
+    page.missing = [];
+    page.backlinks = new Set();
+  }
+  state.missingLinks.clear();
+  for (const page of state.pages.values()) {
+    for (const link of page.links) {
+      const resolved = resolveTarget(link.target);
+      const enriched = { ...link, resolved };
+      if (resolved && state.pages.has(resolved)) {
+        page.outlinks.push(enriched);
+        state.pages.get(resolved).backlinks.add(page.slug);
+      } else {
+        page.missing.push(enriched);
+        const key = slugify(link.target);
+        if (!state.missingLinks.has(key)) state.missingLinks.set(key, { label: link.target, from: new Set() });
+        state.missingLinks.get(key).from.add(page.slug);
+      }
+    }
+  }
+}
+
+function pickHomePage(){
+  return state.pages.get('index') || state.pages.get('home') || state.pages.get('readme') || [...state.pages.values()].sort((a,b) => a.path.localeCompare(b.path))[0] || null;
+}
+
+function renderAll(){
+  $('#wiki-sub').innerHTML = `<strong>${state.pages.size}</strong> páginas · <strong>${state.rawFiles.size}</strong> anexos`;
+  $('#footer-left').textContent = state.dirName;
+  renderNav(); renderCockpit(); renderHealth(); renderTimeline(); renderInspector();
+}
+
+function pageScore(page){
+  return page.outlinks.length + page.backlinks.size * 1.5 + page.tags.length * 0.3;
+}
+
+function healthClass(page){
+  if (page.missing.length) return 'bad';
+  if (!page.summary || (!page.outlinks.length && !page.backlinks.size)) return 'warn';
+  return 'good';
+}
+
+function filteredPages(){
+  const q = state.query.toLowerCase();
+  return [...state.pages.values()].filter(p => {
+    if (state.filter === 'hub' && pageScore(p) < 4) return false;
+    if (state.filter === 'orphan' && (p.backlinks.size || p.isSpecial)) return false;
+    if (state.filter === 'missing' && !p.missing.length) return false;
+    if (!q) return true;
+    return `${p.title} ${p.path} ${p.summary} ${p.tags.join(' ')} ${p.content}`.toLowerCase().includes(q);
+  }).sort((a,b) => a.title.localeCompare(b.title));
+}
+
+function renderNav(){
+  const nav = $('#nav');
+  const pages = filteredPages();
+  if (!pages.length) { nav.innerHTML = '<div class="empty">Nenhuma página encontrada</div>'; return; }
+  const groups = new Map();
+  for (const p of pages) {
+    const key = p.isSpecial ? 'Sistema' : (p.folder || 'Raiz');
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(p);
+  }
+  nav.innerHTML = [...groups.entries()].map(([group, list]) => `
+    <div class="nav-section">${esc(group)} (${list.length})</div>
+    ${list.map(p => navItem(p)).join('')}
+  `).join('');
+  nav.querySelectorAll('[data-open-page]').forEach(el => el.addEventListener('click', () => openPage(el.dataset.openPage)));
+}
+
+function navItem(p){
+  const ico = p.isSpecial ? '◆' : (p.missing.length ? '!' : pageScore(p) >= 4 ? '◎' : '◦');
+  const badge = p.missing.length ? `${p.missing.length}!` : `${p.backlinks.size}/${p.outlinks.length}`;
+  return `<div class="nav-item ${state.currentPage === p.slug ? 'active' : ''}" data-open-page="${attr(p.slug)}">
+    <span class="nav-ico">${ico}</span><span class="nav-name">${esc(p.title)}</span><span class="nav-badge">${esc(badge)}</span>
+  </div>`;
+}
+
+function switchPanel(name){
+  $$('.panel').forEach(p => p.classList.remove('active'));
+  const panel = $(`#panel-${name}`);
+  if (panel) panel.classList.add('active');
+  $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.panel === name));
+  state.activePanel = name;
+  if (name === 'graph') setTimeout(() => { renderGraph(); fitGraph(false); }, 60);
+  if (name === 'cockpit') renderCockpit();
+  if (name === 'health') renderHealth();
+  if (name === 'timeline') renderTimeline();
+}
+
+function openPage(slug, opts = {}){
+  const page = state.pages.get(slug);
+  if (!page) return;
+  state.currentPage = slug;
+  $('#breadcrumb').innerHTML = `<span>wiki</span> / ${esc(page.path)}`;
+  renderReader(page);
+  renderInspector(page);
+  renderNav();
+  if (!opts.silentPanel) switchPanel('reader');
+  else if (state.activePanel === 'welcome') switchPanel('cockpit');
+  localStorage.setItem('wiki-cockpit:last', slug);
+}
+
+function renderReader(page){
+  const meta = [
+    `${page.words} palavras`, `${page.readingTime} min`, `${page.backlinks.size} backlinks`, `${page.outlinks.length} links`,
+    page.updated ? fmtDate(page.updated) : 'sem data'
+  ];
+  const html = markdownToHtml(page.content, page.slug);
+  $('#reader').innerHTML = `
+    <header class="page-header">
+      <div class="page-path">${esc(page.path)}</div>
+      <h1 class="page-title">${esc(page.title)}</h1>
+      <div class="page-meta">
+        ${meta.map(x => `<span class="pill">${esc(x)}</span>`).join('')}
+        ${page.missing.length ? `<span class="pill bad">${page.missing.length} links ausentes</span>` : ''}
+        ${page.tags.map(t => `<span class="pill good">#${esc(t)}</span>`).join('')}
+      </div>
+    </header>
+    <div class="md" id="md-root">${html}</div>
+  `;
+  enhanceMarkdown($('#md-root'));
+  renderOutline(page);
+}
+
+function markdownToHtml(content, currentSlug){
+  const withWiki = stripFrontmatter(content).replace(/\[\[([^\]]+)\]\]/g, (_, raw) => {
+    const [targetRaw, aliasRaw] = raw.split('|').map(s => s.trim());
+    const target = targetRaw.replace(/#.*/, '').trim();
+    const resolved = resolveTarget(target);
+    const label = aliasRaw || targetRaw;
+    const cls = resolved ? 'wiki-link' : 'wiki-link missing';
+    return `<a href="#" class="${cls}" data-wiki-target="${attr(resolved || slugify(target))}" data-missing="${resolved ? '0' : '1'}">${esc(label)}</a>`;
+  });
+  if (window.marked && marked.parse) {
+    try { return marked.parse(withWiki, { gfm:true, breaks:false }); } catch(err) { console.warn(err); }
+  }
+  return basicMarkdown(withWiki);
+}
+
+function basicMarkdown(md){
+  const lines = md.split('\n');
+  let html = '', inList = false, inCode = false;
+  for (const line of lines) {
+    if (line.startsWith('```')) { html += inCode ? '</code></pre>' : '<pre><code>'; inCode = !inCode; continue; }
+    if (inCode) { html += esc(line) + '\n'; continue; }
+    const h = line.match(/^(#{1,4})\s+(.+)$/);
+    if (h) { if (inList) { html += '</ul>'; inList = false; } const lvl = h[1].length; html += `<h${lvl}>${esc(h[2])}</h${lvl}>`; continue; }
+    const li = line.match(/^[-*]\s+(.+)$/);
+    if (li) { if (!inList) { html += '<ul>'; inList = true; } html += `<li>${li[1]}</li>`; continue; }
+    if (inList) { html += '</ul>'; inList = false; }
+    if (line.trim()) html += `<p>${line}</p>`;
+  }
+  if (inList) html += '</ul>';
+  return html;
+}
+
+function enhanceMarkdown(root){
+  root.querySelectorAll('a[data-wiki-target]').forEach(a => {
+    a.addEventListener('click', e => {
+      e.preventDefault();
+      const target = a.dataset.wikiTarget;
+      if (a.dataset.missing === '1' || !state.pages.has(target)) showToast(`Link ausente: ${a.textContent}`);
+      else openPage(target);
+    });
+  });
+  root.querySelectorAll('h1,h2,h3,h4').forEach(h => {
+    if (!h.id) h.id = slugify(h.textContent);
+  });
+  root.querySelectorAll('a[href^="http"]').forEach(a => { a.target = '_blank'; a.rel = 'noreferrer'; });
+}
+
+function renderOutline(page){
+  const heads = page.headings.filter(h => h.level <= 3);
+  if (!heads.length) { $('#outline').innerHTML = '<div class="outline-title">Sem sumário</div>'; return; }
+  $('#outline').innerHTML = `<div class="outline-title">Nesta página</div>${heads.map(h => `<a class="h${h.level}" href="#${attr(h.id)}">${esc(h.text)}</a>`).join('')}`;
+}
+
+function renderInspector(page = state.pages.get(state.currentPage)){
+  if (!page) {
+    $('#inspector-title').textContent = 'Inspector';
+    $('#inspector-sub').textContent = 'contexto da página atual';
+    $('#inspector-body').innerHTML = '<div class="empty">Abra uma página para ver backlinks, links, tags e métricas.</div>';
+    return;
+  }
+  $('#inspector-title').textContent = page.title;
+  $('#inspector-sub').textContent = page.path;
+  const backlinks = [...page.backlinks].map(s => state.pages.get(s)).filter(Boolean).sort((a,b)=>a.title.localeCompare(b.title));
+  const outlinks = page.outlinks.map(l => state.pages.get(l.resolved)).filter(Boolean);
+  $('#inspector-body').innerHTML = `
+    <div class="inspector-card"><h4>Métricas</h4>
+      <div class="kv"><span>Palavras</span><b>${page.words}</b></div>
+      <div class="kv"><span>Leitura</span><b>${page.readingTime} min</b></div>
+      <div class="kv"><span>Backlinks</span><b>${backlinks.length}</b></div>
+      <div class="kv"><span>Outlinks</span><b>${outlinks.length}</b></div>
+      <div class="kv"><span>Links ausentes</span><b>${page.missing.length}</b></div>
+      <div class="kv"><span>Atualizado</span><b>${esc(fmtDate(page.updated))}</b></div>
+    </div>
+    <div class="inspector-card"><h4>Tags</h4>${page.tags.length ? `<div class="tag-cloud">${page.tags.map(t => `<button class="tag" data-tag="${attr(t)}">#${esc(t)}</button>`).join('')}</div>` : '<div class="empty" style="padding:8px">sem tags</div>'}</div>
+    <div class="inspector-card"><h4>Backlinks</h4>${backlinks.length ? backlinks.map(p => miniLink(p)).join('') : '<div class="empty" style="padding:8px">ninguém aponta para esta página</div>'}</div>
+    <div class="inspector-card"><h4>Outlinks</h4>${outlinks.length ? outlinks.map(p => miniLink(p)).join('') : '<div class="empty" style="padding:8px">sem links para outras páginas</div>'}</div>
+    <div class="inspector-card"><h4>Ausentes</h4>${page.missing.length ? page.missing.map(l => `<span class="link-mini" style="color:var(--bad)">✕ ${esc(l.label)}</span>`).join('') : '<span class="link-mini" style="color:var(--good)">✓ nenhum link quebrado</span>'}</div>
+  `;
+  $('#inspector-body').querySelectorAll('[data-open-page]').forEach(el => el.addEventListener('click', () => openPage(el.dataset.openPage)));
+  $('#inspector-body').querySelectorAll('[data-tag]').forEach(el => el.addEventListener('click', () => filterTag(el.dataset.tag)));
+}
+
+function miniLink(p){ return `<a href="#" class="link-mini" data-open-page="${attr(p.slug)}">${esc(p.title)}</a>`; }
+
+function renderCockpit(){
+  const pages = [...state.pages.values()];
+  if (!pages.length) { $('#cockpit').innerHTML = '<div class="empty">Abra uma wiki para gerar o cockpit.</div>'; return; }
+  const totalLinks = pages.reduce((s,p)=>s+p.outlinks.length+p.missing.length,0);
+  const orphans = pages.filter(p => !p.isSpecial && p.backlinks.size === 0);
+  const hubs = pages.filter(p => pageScore(p) >= 4).sort((a,b)=>pageScore(b)-pageScore(a)).slice(0,8);
+  const missing = [...state.missingLinks.entries()].sort((a,b)=>b[1].from.size-a[1].from.size).slice(0,8);
+  const recent = pages.slice().sort((a,b)=>(b.updated||0)-(a.updated||0)).slice(0,8);
+  const tags = [...state.tagIndex.entries()].sort((a,b)=>b[1].size-a[1].size).slice(0,18);
+  const paths = suggestPaths();
+  $('#cockpit').innerHTML = `
+    <div class="hero">
+      <div class="hero-card">
+        <h2>${esc(state.dirName)}</h2>
+        <p>Visão executiva da sua wiki: densidade de conhecimento, páginas centrais, buracos de documentação e trilhas sugeridas para navegar sem depender do Obsidian arquivo por arquivo.</p>
+        <div class="stat-grid">
+          <div class="stat"><div class="stat-num">${pages.length}</div><div class="stat-label">Páginas</div></div>
+          <div class="stat"><div class="stat-num">${totalLinks}</div><div class="stat-label">Links</div></div>
+          <div class="stat"><div class="stat-num">${state.tagIndex.size}</div><div class="stat-label">Tags</div></div>
+          <div class="stat"><div class="stat-num">${state.missingLinks.size}</div><div class="stat-label">Ausentes</div></div>
+        </div>
+      </div>
+      <div class="card quick-actions">
+        <button class="action-tile" onclick="openPalette()"><b>Command palette</b><span>Abra página, ação, tag ou filtro com Ctrl/⌘ K.</span></button>
+        <button class="action-tile" onclick="switchPanel('graph')"><b>Mapa vivo</b><span>Visualize relações, hubs e links quebrados.</span></button>
+        <button class="action-tile" onclick="randomPage()"><b>Página aleatória</b><span>Modo exploração para redescobrir conteúdo.</span></button>
+        <button class="action-tile" onclick="copyWikiReport()"><b>Copiar relatório</b><span>Resumo markdown da saúde da wiki.</span></button>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="card span-7"><div class="card-title">Trilhas sugeridas <small>geradas por relações</small></div><div class="path-list">${paths.map(renderPath).join('') || '<div class="empty">adicione wiki-links para gerar trilhas</div>'}</div></div>
+      <div class="card span-5"><div class="card-title">Densidade <small>cada bloco é uma página</small></div><div class="matrix">${pages.map(renderMatrixCell).join('')}</div></div>
+      <div class="card span-4"><div class="card-title">Hubs <small>mais conectadas</small></div><div class="list">${hubs.map(p => listPage(p, `${p.backlinks.size} back · ${p.outlinks.length} out`)).join('') || '<div class="empty">nenhum hub detectado</div>'}</div></div>
+      <div class="card span-4"><div class="card-title">Links ausentes <small>prioridade</small></div><div class="list">${missing.map(([key,m]) => `<div class="list-item" onclick="showToast('Crie a página: ${attr(m.label)}')"><div class="list-head"><span class="list-name" style="color:var(--bad)">${esc(m.label)}</span><span class="list-meta">${m.from.size} refs</span></div></div>`).join('') || '<div class="empty">sem links quebrados</div>'}</div></div>
+      <div class="card span-4"><div class="card-title">Tags <small>clusters</small></div><div class="tag-cloud">${tags.map(([t,set]) => `<button class="tag" data-tag="${attr(t)}">#${esc(t)} · ${set.size}</button>`).join('') || '<div class="empty">sem tags</div>'}</div></div>
+      <div class="card span-6"><div class="card-title">Órfãos <small>sem backlinks</small></div><div class="list">${orphans.slice(0,8).map(p => listPage(p, p.folder || 'raiz')).join('') || '<div class="empty">sem órfãos relevantes</div>'}</div></div>
+      <div class="card span-6"><div class="card-title">Recentes <small>por data detectada</small></div><div class="list">${recent.map(p => listPage(p, fmtDate(p.updated))).join('')}</div></div>
+    </div>
+  `;
+  $('#cockpit').querySelectorAll('[data-open-page]').forEach(el => el.addEventListener('click', () => openPage(el.dataset.openPage)));
+  $('#cockpit').querySelectorAll('[data-tag]').forEach(el => el.addEventListener('click', () => filterTag(el.dataset.tag)));
+}
+
+function listPage(p, meta){
+  return `<div class="list-item" data-open-page="${attr(p.slug)}"><div class="list-head"><span class="list-name">${esc(p.title)}</span><span class="list-meta">${esc(meta)}</span></div>${p.summary ? `<div class="list-desc">${esc(p.summary)}</div>` : ''}</div>`;
+}
+
+function renderMatrixCell(p){
+  const score = pageScore(p) + p.missing.length;
+  const cls = score > 8 ? 'l3' : score > 3 ? 'l2' : score > 0 ? 'l1' : '';
+  return `<div class="matrix-cell ${cls}" title="${attr(p.title)}" data-open-page="${attr(p.slug)}"></div>`;
+}
+
+function renderPath(path){
+  return `<div class="path"><div class="path-name">${esc(path.name)}</div><div class="path-steps">${path.pages.map(p => `<span class="path-step" data-open-page="${attr(p.slug)}">${esc(p.title)}</span>`).join('<span style="color:var(--muted)">→</span>')}</div></div>`;
+}
+
+function suggestPaths(){
+  const hubs = [...state.pages.values()].filter(p => pageScore(p) >= 3).sort((a,b)=>pageScore(b)-pageScore(a)).slice(0,4);
+  const paths = [];
+  for (const hub of hubs) {
+    const neighbors = [...new Set([...hub.outlinks.map(l=>l.resolved), ...hub.backlinks])].map(s=>state.pages.get(s)).filter(Boolean).filter(p=>p.slug!==hub.slug).slice(0,4);
+    if (neighbors.length) paths.push({ name:`Trilha ao redor de ${hub.title}`, pages:[hub, ...neighbors] });
+  }
+  const orphan = [...state.pages.values()].filter(p=>!p.backlinks.size && !p.isSpecial).sort((a,b)=>(b.updated||0)-(a.updated||0)).slice(0,4);
+  if (orphan.length) paths.push({ name:'Revisar páginas órfãs', pages: orphan });
+  const brokenSources = [...state.pages.values()].filter(p=>p.missing.length).sort((a,b)=>b.missing.length-a.missing.length).slice(0,4);
+  if (brokenSources.length) paths.push({ name:'Corrigir links quebrados', pages: brokenSources });
+  return paths.slice(0,4);
+}
+
+function renderHealth(){
+  const pages = [...state.pages.values()];
+  const missingSources = pages.filter(p=>p.missing.length).sort((a,b)=>b.missing.length-a.missing.length);
+  const orphans = pages.filter(p=>!p.isSpecial && !p.backlinks.size);
+  const noSummary = pages.filter(p=>!p.summary);
+  const stale = pages.filter(p=>p.updated && today() - p.updated > 180*24*3600*1000).sort((a,b)=>a.updated-b.updated);
+  const isolated = pages.filter(p=>!p.backlinks.size && !p.outlinks.length && !p.isSpecial);
+  const score = Math.max(0, Math.round(100 - state.missingLinks.size*5 - orphans.length*2 - noSummary.length - isolated.length*3));
+  $('#health').innerHTML = `
+    <div class="hero-card" style="margin-bottom:16px"><h2>Saúde da wiki: ${score}/100</h2><p>Essa nota é heurística: penaliza links ausentes, páginas órfãs, páginas sem resumo e conteúdo isolado.</p></div>
+    <div class="issue-grid">
+      ${issueCard('Links quebrados', missingSources, 'bad', p => `${p.missing.length} ausentes`)}
+      ${issueCard('Órfãos', orphans, 'warn', p => p.folder || 'raiz')}
+      ${issueCard('Sem resumo', noSummary, 'warn', p => `${p.words} palavras`)}
+      ${issueCard('Isoladas', isolated, 'bad', p => 'sem entrada/saída')}
+      ${issueCard('Antigas > 180 dias', stale, 'warn', p => fmtDate(p.updated))}
+      ${issueCard('Boas páginas', pages.filter(p=>healthClass(p)==='good').slice(0,10), 'good', p => `${p.backlinks.size}/${p.outlinks.length} links`)}
+    </div>`;
+  $('#health').querySelectorAll('[data-open-page]').forEach(el => el.addEventListener('click', () => openPage(el.dataset.openPage)));
+}
+
+function issueCard(title, list, cls, metaFn){
+  return `<div class="card issue ${cls}"><div class="card-title">${esc(title)} <small>${list.length}</small></div><div class="list">${list.slice(0,12).map(p => listPage(p, metaFn(p))).join('') || '<div class="empty">nada encontrado</div>'}</div></div>`;
+}
+
+function renderTimeline(){
+  const pages = [...state.pages.values()].sort((a,b)=>(b.updated||0)-(a.updated||0));
+  $('#timeline').innerHTML = `<div class="hero-card" style="margin-bottom:18px"><h2>Linha do tempo</h2><p>Ordenada por frontmatter <code>updated/date</code>, campos “Last updated/Atualizado” ou data de modificação do arquivo.</p></div><div class="timeline-line">${pages.map(p => `<div class="time-entry" data-open-page="${attr(p.slug)}"><div class="time-date">${esc(fmtDate(p.updated))}</div><div class="time-title">${esc(p.title)}</div>${p.summary ? `<div class="time-summary">${esc(p.summary)}</div>` : ''}</div>`).join('')}</div>`;
+  $('#timeline').querySelectorAll('[data-open-page]').forEach(el => el.addEventListener('click', () => openPage(el.dataset.openPage)));
+}
+
+function filterTag(tag){
+  state.query = `#${tag}`;
+  $('#side-search').value = tag;
+  const slugs = state.tagIndex.get(tag) || new Set();
+  const nav = $('#nav');
+  const pages = [...slugs].map(s=>state.pages.get(s)).filter(Boolean).sort((a,b)=>a.title.localeCompare(b.title));
+  nav.innerHTML = `<div class="nav-section">Tag #${esc(tag)} (${pages.length})</div>${pages.map(navItem).join('')}`;
+  nav.querySelectorAll('[data-open-page]').forEach(el => el.addEventListener('click', () => openPage(el.dataset.openPage)));
+  switchPanel('cockpit');
+}
+
+function copyWikiReport(){
+  const pages = [...state.pages.values()];
+  const report = [
+    `# Relatório da Wiki - ${state.dirName}`,
+    ``,
+    `- Páginas: ${pages.length}`,
+    `- Anexos/fontes: ${state.rawFiles.size}`,
+    `- Tags: ${state.tagIndex.size}`,
+    `- Links ausentes: ${state.missingLinks.size}`,
+    `- Órfãos: ${pages.filter(p=>!p.isSpecial && !p.backlinks.size).length}`,
+    ``,
+    `## Top hubs`,
+    ...pages.slice().sort((a,b)=>pageScore(b)-pageScore(a)).slice(0,10).map(p=>`- ${p.title}: ${p.backlinks.size} backlinks, ${p.outlinks.length} outlinks`),
+    ``,
+    `## Links ausentes`,
+    ...[...state.missingLinks.values()].slice(0,20).map(m=>`- ${m.label}: ${m.from.size} referência(s)`)
+  ].join('\n');
+  navigator.clipboard?.writeText(report).then(()=>showToast('Relatório copiado em Markdown')).catch(()=>showToast('Não foi possível copiar'));
+}
+
+// Graph
+let graphAnim = null;
+let graphPan = {x:0,y:0};
+let graphZoom = 1;
+let graphDrag = null;
+let graphHover = null;
+
+function buildGraph(){
+  const nodes = [];
+  const edges = [];
+  const nodeMap = new Map();
+  for (const p of state.pages.values()) {
+    const score = pageScore(p);
+    const node = { id:p.slug, label:p.title, type: score >= 5 ? 'hub' : 'page', page:p, x:0,y:0,vx:0,vy:0, r: score >= 5 ? 10 : 7 };
+    nodes.push(node); nodeMap.set(p.slug,node);
+  }
+  for (const [key, m] of state.missingLinks.entries()) {
+    const node = { id:'missing:'+key, label:m.label, type:'missing', x:0,y:0,vx:0,vy:0,r:6 };
+    nodes.push(node); nodeMap.set(node.id,node);
+  }
+  for (const p of state.pages.values()) {
+    for (const l of p.outlinks) edges.push({ source:p.slug, target:l.resolved, missing:false });
+    for (const l of p.missing) edges.push({ source:p.slug, target:'missing:'+slugify(l.target), missing:true });
+  }
+  state.graph = { nodes, edges, nodeMap };
+  initGraph();
+}
+
+function initGraph(){
+  const nodes = state.graph.nodes;
+  const r = Math.min(420, 90 + nodes.length * 10);
+  nodes.forEach((n,i)=>{
+    const a = i / Math.max(1,nodes.length) * Math.PI * 2;
+    n.x = Math.cos(a)*r + (Math.random()-.5)*40;
+    n.y = Math.sin(a)*r + (Math.random()-.5)*40;
+    n.vx=0; n.vy=0;
+  });
+}
+
+function graphVisible(){
+  if (state.graphMode === 'all' || !state.currentPage) return { nodes:state.graph.nodes, edges:state.graph.edges };
+  const keep = new Set([state.currentPage]);
+  const page = state.pages.get(state.currentPage);
+  if (page) {
+    page.outlinks.forEach(l=>keep.add(l.resolved));
+    page.missing.forEach(l=>keep.add('missing:'+slugify(l.target)));
+    page.backlinks.forEach(s=>keep.add(s));
+  }
+  return { nodes: state.graph.nodes.filter(n=>keep.has(n.id)), edges: state.graph.edges.filter(e=>keep.has(e.source) && keep.has(e.target)) };
+}
+
+function renderGraph(){
+  const canvas = $('#graph-canvas');
+  const panel = $('#panel-graph');
+  const tooltip = $('#graph-tooltip');
+  if (!canvas || !panel.classList.contains('active')) return;
+  const rect = panel.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+  canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  if (graphAnim) cancelAnimationFrame(graphAnim);
+
+  function sim(nodes, edges){
+    const nodeMap = state.graph.nodeMap;
+    const repel = 2600, attract = .035, linkLen = 115, damping = .84;
+    for (let i=0;i<nodes.length;i++) for (let j=i+1;j<nodes.length;j++) {
+      const a=nodes[i], b=nodes[j]; const dx=b.x-a.x, dy=b.y-a.y; const d2=dx*dx+dy*dy+.01; const d=Math.sqrt(d2); const f=repel/d2;
+      a.vx -= f*dx/d; a.vy -= f*dy/d; b.vx += f*dx/d; b.vy += f*dy/d;
+    }
+    for (const e of edges) {
+      const s=nodeMap.get(e.source), t=nodeMap.get(e.target); if(!s||!t) continue;
+      const dx=t.x-s.x, dy=t.y-s.y; const d=Math.hypot(dx,dy)||1; const f=attract*(d-linkLen);
+      s.vx += f*dx/d; s.vy += f*dy/d; t.vx -= f*dx/d; t.vy -= f*dy/d;
+    }
+    for (const n of nodes) { if (graphDrag?.node === n) continue; n.vx*=damping; n.vy*=damping; n.x+=n.vx; n.y+=n.vy; }
+  }
+  function col(n){ return n.id === state.currentPage ? '#c49bff' : n.type === 'hub' ? '#72d6ff' : n.type === 'missing' ? '#ff8080' : '#e0a942'; }
+  function draw(){
+    const w = rect.width, h = rect.height;
+    const { nodes, edges } = graphVisible();
+    sim(nodes, edges);
+    ctx.clearRect(0,0,w,h);
+    ctx.save(); ctx.translate(w/2+graphPan.x,h/2+graphPan.y); ctx.scale(graphZoom,graphZoom);
+    for (const e of edges) {
+      const s=state.graph.nodeMap.get(e.source), t=state.graph.nodeMap.get(e.target); if(!s||!t) continue;
+      ctx.beginPath(); ctx.moveTo(s.x,s.y); ctx.lineTo(t.x,t.y); ctx.strokeStyle = e.missing ? 'rgba(255,128,128,.35)' : 'rgba(147,161,181,.22)'; ctx.lineWidth = e.missing ? 1.5 : 1; ctx.stroke();
+    }
+    for (const n of nodes) {
+      const c = col(n); const active = n.id === state.currentPage || n === graphHover;
+      if (active) { ctx.beginPath(); ctx.arc(n.x,n.y,n.r+8,0,Math.PI*2); ctx.fillStyle = c + '33'; ctx.fill(); }
+      ctx.beginPath(); ctx.arc(n.x,n.y,n.r,0,Math.PI*2); ctx.fillStyle = c + (active ? 'ee' : '99'); ctx.fill(); ctx.strokeStyle = c; ctx.lineWidth = 1.5; ctx.stroke();
+      if (graphZoom > .55 || active) { ctx.fillStyle = active ? '#e7edf5' : 'rgba(147,161,181,.75)'; ctx.font = `${active?'700 ':''}${Math.max(10,12/Math.sqrt(graphZoom))}px JetBrains Mono`; ctx.textAlign='center'; ctx.fillText(n.label, n.x, n.y+n.r+15); }
+    }
+    ctx.restore();
+    graphAnim = requestAnimationFrame(draw);
+  }
+  draw();
+
+  function toWorld(e){ return { x:(e.offsetX-rect.width/2-graphPan.x)/graphZoom, y:(e.offsetY-rect.height/2-graphPan.y)/graphZoom }; }
+  function hit(w){
+    const nodes = graphVisible().nodes; let best=null, bd=18/graphZoom;
+    for (const n of nodes){ const d=Math.hypot(n.x-w.x,n.y-w.y); if(d<bd){bd=d; best=n;} }
+    return best;
+  }
+  let down = null;
+  canvas.onmousedown = e => { const w=toWorld(e); const h=hit(w); down={x:e.offsetX,y:e.offsetY}; graphDrag = h ? {node:h, ox:w.x-h.x, oy:w.y-h.y} : {pan:true, px:e.offsetX-graphPan.x, py:e.offsetY-graphPan.y}; };
+  canvas.onmousemove = e => { const w=toWorld(e); if(graphDrag?.node){graphDrag.node.x=w.x-graphDrag.ox; graphDrag.node.y=w.y-graphDrag.oy; graphDrag.node.vx=0; graphDrag.node.vy=0;} else if(graphDrag?.pan){graphPan.x=e.offsetX-graphDrag.px; graphPan.y=e.offsetY-graphDrag.py;} graphHover=hit(w); if(graphHover){tooltip.textContent=graphHover.label+(graphHover.type==='missing'?' (ausente)':''); tooltip.style.left=e.offsetX+'px'; tooltip.style.top=e.offsetY+'px'; tooltip.classList.add('visible'); canvas.style.cursor='pointer';} else {tooltip.classList.remove('visible'); canvas.style.cursor=graphDrag?'grabbing':'grab';} };
+  canvas.onmouseup = e => { const moved = down ? Math.hypot(e.offsetX-down.x,e.offsetY-down.y) : 99; const node = graphDrag?.node; graphDrag=null; if(node && moved < 5){ if(node.type==='missing') showToast(`Link ausente: ${node.label}`); else openPage(node.id); } };
+  canvas.onmouseleave = () => { graphDrag=null; graphHover=null; tooltip.classList.remove('visible'); };
+  canvas.onwheel = e => { e.preventDefault(); const f=e.deltaY<0?1.1:.9; graphZoom=Math.max(.18,Math.min(4,graphZoom*f)); };
+}
+
+function fitGraph(show=true){ graphPan={x:0,y:0}; graphZoom=1; if(show) showToast('Mapa centralizado'); }
+function toggleGraphMode(){ state.graphMode = state.graphMode === 'all' ? 'neighborhood' : 'all'; $('#graph-mode-btn').textContent = state.graphMode === 'all' ? 'Todos' : 'Vizinhança'; showToast(state.graphMode === 'all' ? 'Mostrando toda a wiki' : 'Mostrando vizinhança da página atual'); }
+
+function randomPage(){ const pages=[...state.pages.values()].filter(p=>!p.isSpecial); if(!pages.length) return; openPage(pages[Math.floor(Math.random()*pages.length)].slug); }
+
+// Search and palette
+function globalSearch(q){
+  q = q.trim().toLowerCase();
+  if (!q) return [];
+  return [...state.pages.values()].map(p => {
+    const hay = `${p.title} ${p.path} ${p.summary} ${p.tags.join(' ')} ${p.content}`.toLowerCase();
+    const idx = hay.indexOf(q.replace(/^#/,'').toLowerCase());
+    if (idx === -1) return null;
+    const contentIdx = p.content.toLowerCase().indexOf(q.replace(/^#/,''));
+    const start = Math.max(0, contentIdx - 80);
+    const snip = contentIdx >= 0 ? p.content.slice(start, contentIdx + 140) : p.summary || p.path;
+    return { page:p, score: (p.title.toLowerCase().includes(q)?5:0) + (p.tags.includes(q.replace(/^#/,''))?4:0) + pageScore(p), snippet: snip };
+  }).filter(Boolean).sort((a,b)=>b.score-a.score).slice(0,30);
+}
+
+function renderGlobalSearch(){
+  const q = $('#side-search').value.trim();
+  state.query = q;
+  renderNav();
+  const overlay = $('#search-overlay');
+  if (!q) { overlay.classList.remove('visible'); return; }
+  const hits = globalSearch(q);
+  overlay.classList.add('visible');
+  $('#global-results').innerHTML = hits.length ? hits.map(h => {
+    let snip = esc(h.snippet).replace(new RegExp(escapeReg(q.replace(/^#/,'')), 'ig'), m=>`<mark>${esc(m)}</mark>`);
+    return `<div class="sr" data-open-page="${attr(h.page.slug)}"><div class="sr-name">${esc(h.page.title)} <span style="color:var(--muted)">· ${esc(h.page.path)}</span></div><div class="sr-snippet">${snip}</div></div>`;
+  }).join('') : `<div class="empty">Nenhum resultado para ${esc(q)}</div>`;
+  $('#global-results').querySelectorAll('[data-open-page]').forEach(el => el.addEventListener('click', () => { $('#search-overlay').classList.remove('visible'); $('#side-search').value=''; state.query=''; openPage(el.dataset.openPage); }));
+}
+function escapeReg(s){ return String(s).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+
+function openPalette(){
+  $('#palette').classList.add('visible');
+  $('#palette-input').value = '';
+  renderPalette('');
+  setTimeout(()=>$('#palette-input').focus(), 0);
+}
+function closePalette(){ $('#palette').classList.remove('visible'); }
+function paletteItems(q){
+  const items = [
+    { icon:'⌘', title:'Abrir cockpit', sub:'visão macro', kind:'ação', run:()=>switchPanel('cockpit') },
+    { icon:'◎', title:'Abrir mapa', sub:'grafo de relações', kind:'ação', run:()=>switchPanel('graph') },
+    { icon:'✓', title:'Ver saúde da wiki', sub:'links quebrados, órfãos e lacunas', kind:'ação', run:()=>switchPanel('health') },
+    { icon:'?', title:'Página aleatória', sub:'modo discovery', kind:'ação', run:()=>randomPage() },
+    { icon:'md', title:'Copiar relatório', sub:'markdown da saúde da wiki', kind:'ação', run:()=>copyWikiReport() }
+  ];
+  for (const [tag,set] of state.tagIndex) items.push({ icon:'#', title:'#'+tag, sub:`${set.size} páginas`, kind:'tag', run:()=>filterTag(tag) });
+  for (const p of state.pages.values()) items.push({ icon:p.missing.length?'!':'↗', title:p.title, sub:p.path, kind:'página', run:()=>openPage(p.slug) });
+  const needle = q.toLowerCase();
+  return items.filter(i => !needle || `${i.title} ${i.sub} ${i.kind}`.toLowerCase().includes(needle)).slice(0,60);
+}
+function renderPalette(q){
+  const items = paletteItems(q);
+  $('#palette-list').innerHTML = items.map((i,idx)=>`<div class="pal-item ${idx===0?'active':''}" data-index="${idx}"><div class="pal-icon">${esc(i.icon)}</div><div><div class="pal-title">${esc(i.title)}</div><div class="pal-sub">${esc(i.sub)}</div></div><div class="pal-kind">${esc(i.kind)}</div></div>`).join('') || '<div class="empty">Nada encontrado</div>';
+  $('#palette-list').querySelectorAll('[data-index]').forEach(el => el.addEventListener('click', () => { const item = paletteItems($('#palette-input').value)[Number(el.dataset.index)]; closePalette(); item?.run(); }));
+}
+
+// Events
+$('#open-folder-btn').addEventListener('click', openWiki);
+$('#open-files-btn').addEventListener('click', openFallback);
+$('#folder-input').addEventListener('change', e => loadFromFileList(e.target.files));
+$$('.tab').forEach(t => t.addEventListener('click', () => switchPanel(t.dataset.panel)));
+$('#side-search').addEventListener('input', renderGlobalSearch);
+$('#side-search').addEventListener('keydown', e => { if(e.key==='Escape'){ e.target.value=''; state.query=''; $('#search-overlay').classList.remove('visible'); renderNav(); }});
+$('#filters').addEventListener('click', e => { const btn=e.target.closest('[data-filter]'); if(!btn) return; state.filter=btn.dataset.filter; $$('#filters .chip').forEach(c=>c.classList.toggle('active', c===btn)); renderNav(); });
+$('#palette-input').addEventListener('input', e => renderPalette(e.target.value));
+$('#palette-input').addEventListener('keydown', e => { if(e.key==='Escape') closePalette(); if(e.key==='Enter'){ const first=paletteItems(e.target.value)[0]; closePalette(); first?.run(); }});
+$('#palette').addEventListener('click', e => { if(e.target.id === 'palette') closePalette(); });
+document.addEventListener('keydown', e => { const k=e.key.toLowerCase(); if((e.metaKey||e.ctrlKey) && k==='k'){ e.preventDefault(); openPalette(); } if(k==='escape'){ closePalette(); $('#search-overlay').classList.remove('visible'); }});
+window.addEventListener('resize', () => { if(state.activePanel==='graph') renderGraph(); });
+
+if (window.marked?.setOptions) marked.setOptions({ gfm:true, breaks:false, mangle:false, headerIds:false });
+</script>
+</body>
+</html>
