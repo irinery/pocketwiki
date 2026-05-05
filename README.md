@@ -1,4 +1,8 @@
-# PocketWiki
+<p align="center">
+  <img src="assets/favicon.png" alt="PocketWiki" width="96">
+</p>
+
+<h1 align="center">PocketWiki</h1>
 
 Funcionalidades:
 - le Markdown, `.excalidraw` e `.excalidraw.md` direto do filesystem local
