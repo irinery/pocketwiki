@@ -1,16 +1,13 @@
 <p align="center">
-  <img src="assets/favicon.png" alt="PocketWiki" width="96">
+  <img src="assets/favicon.png" alt="PocketWiki" width="500">
 </p>
-
-<h1 align="center">PocketWiki</h1>
-
 Funcionalidades:
-- le Markdown, `.excalidraw` e `.excalidraw.md` direto do filesystem local
-- exibe a base como wiki interativa com leitor, dashboard, mapa, saude, tempo e IA
-- usa layout responsivo para celular, tablet, notebook e telas grandes
-- usa icones compactos nas areas principais para reduzir ruido em telas pequenas
-- usa IA local via LM Studio, sempre mediada pelo proxy do servidor
-- interpreta desenhos Excalidraw como fontes visuais pesquisaveis e indexaveis
+- Le Markdown, `.excalidraw` e `.excalidraw.md` direto do filesystem local;
+- Exibe a base como wiki interativa com leitor, dashboard, mapa, saude, tempo e IA;
+- Usa layout responsivo para celular, tablet, notebook e telas grandes;
+- Usa icones compactos nas areas principais para reduzir ruido em telas pequenas;
+- Usa IA local via LM Studio, sempre mediada pelo proxy do servidor;
+- Interpreta desenhos Excalidraw como fontes visuais pesquisaveis e indexaveis.
 
 ## Base de referencia
 
