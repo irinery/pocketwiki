@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "inery-skills": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/absolute/path/to/pocketwiki/SKILL"
+      ]
+    }
+  }
+}

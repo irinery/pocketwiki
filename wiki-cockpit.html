@@ -3,10 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Wiki Cockpit Local</title>
+<title>PocketWiki</title>
+<link rel="icon" href="/favicon.ico?v=3" sizes="any">
+<link rel="shortcut icon" href="/favicon.ico?v=3">
+<link rel="icon" type="image/png" sizes="64x64" href="/favicon.png?v=3">
+<link rel="apple-touch-icon" href="/assets/favicon.png?v=3">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#080a0d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="PocketWiki">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<script src="/assets/lz-string.min.js"></script>
 <style>
 :root {
   --bg:#080a0d;
@@ -47,9 +57,104 @@ button{cursor:pointer;color:inherit}
 .main{overflow:hidden;display:flex;flex-direction:column;min-width:0}
 .brand{padding:18px;border-bottom:1px solid var(--border)}
 .brand-row{display:flex;align-items:center;gap:12px}
-.logo{width:42px;height:42px;border-radius:14px;background:linear-gradient(135deg,var(--accent),#76531d);display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:26px;font-weight:700;color:#111;box-shadow:0 0 24px rgba(224,169,66,.25)}
-.brand-title{font-weight:800;letter-spacing:-.04em;font-size:18px;line-height:1.1}.brand-sub{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:4px}.brand-sub strong{color:var(--accent);font-weight:600}.open-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}.btn{border:1px solid var(--border2);background:var(--bg3);border-radius:12px;padding:9px 11px;font-family:var(--mono);font-size:11px;transition:.16s;color:var(--dim)}.btn:hover{border-color:var(--accent);color:var(--text);transform:translateY(-1px)}.btn.primary{background:linear-gradient(135deg,rgba(224,169,66,.18),rgba(114,214,255,.08));border-color:rgba(224,169,66,.45);color:var(--accent)}.btn.ghost{background:transparent}.btn.small{padding:7px 9px;border-radius:10px;font-size:10px}.sidebar-search{padding:14px 16px;border-bottom:1px solid var(--border)}.searchbox{position:relative}.searchbox input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:11px 36px 11px 12px;color:var(--text);outline:none;font-family:var(--mono);font-size:12px}.searchbox input:focus{border-color:var(--accent)}.searchbox .key{position:absolute;right:9px;top:8px;border:1px solid var(--border);border-radius:7px;padding:2px 5px;color:var(--muted);font-family:var(--mono);font-size:10px}.filters{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}.chip{border:1px solid var(--border);background:var(--bg2);border-radius:999px;padding:5px 8px;font-family:var(--mono);font-size:10px;color:var(--dim);cursor:pointer}.chip.active,.chip:hover{border-color:var(--accent);color:var(--accent);background:rgba(224,169,66,.09)}.nav{overflow:auto;flex:1;padding:10px 0}.nav::-webkit-scrollbar,.scroll::-webkit-scrollbar{width:6px;height:6px}.nav::-webkit-scrollbar-thumb,.scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}.nav-section{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:16px 16px 7px}.nav-item{display:grid;grid-template-columns:20px 1fr auto;gap:8px;align-items:center;padding:8px 16px;border-left:2px solid transparent;color:var(--dim);transition:.12s}.nav-item:hover{background:rgba(255,255,255,.03);color:var(--text)}.nav-item.active{background:rgba(224,169,66,.11);border-left-color:var(--accent);color:var(--accent)}.nav-ico{font-size:12px;text-align:center}.nav-name{font-family:var(--mono);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.nav-badge{font-family:var(--mono);font-size:10px;color:var(--muted)}.sidebar-footer{border-top:1px solid var(--border);padding:12px 16px;color:var(--muted);font-family:var(--mono);font-size:10px;display:flex;align-items:center;justify-content:space-between;gap:10px}.topbar{height:58px;border-bottom:1px solid var(--border);background:rgba(8,10,13,.76);display:flex;align-items:center;gap:12px;padding:0 18px;backdrop-filter:blur(10px);flex-shrink:0}.crumb{flex:1;min-width:0;font-family:var(--mono);font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.crumb span{color:var(--accent)}.tabs{display:flex;gap:7px}.tab{border:1px solid var(--border);background:rgba(15,19,25,.7);border-radius:12px;padding:8px 10px;font-family:var(--mono);font-size:11px;color:var(--dim);transition:.12s}.tab:hover{color:var(--text);border-color:var(--border2)}.tab.active{color:var(--accent);border-color:rgba(224,169,66,.45);background:rgba(224,169,66,.1)}.content{position:relative;flex:1;overflow:hidden}.panel{display:none;height:100%;overflow:auto}.panel.active{display:block}.scroll{height:100%;overflow:auto}.welcome{height:100%;display:flex;align-items:center;justify-content:center;padding:32px}.welcome-card{max-width:760px;background:linear-gradient(180deg,rgba(19,26,36,.88),rgba(12,15,20,.88));border:1px solid var(--border);border-radius:28px;padding:34px;box-shadow:var(--shadow);position:relative;overflow:hidden}.welcome-card:before{content:"";position:absolute;inset:-100px -100px auto auto;width:330px;height:330px;border-radius:50%;background:radial-gradient(circle,rgba(224,169,66,.16),transparent 65%)}.welcome-kicker{font-family:var(--mono);font-size:12px;color:var(--accent);letter-spacing:.12em;text-transform:uppercase;margin-bottom:12px}.welcome h1{font-size:44px;letter-spacing:-.06em;line-height:.98;margin-bottom:14px}.welcome p{color:var(--dim);font-size:16px;line-height:1.7;max-width:650px}.welcome-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:24px}.mini-feature{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:18px;padding:14px}.mini-feature b{display:block;margin-bottom:6px}.mini-feature span{color:var(--muted);font-size:12px;line-height:1.5}.cockpit{padding:22px;max-width:1360px;margin:0 auto}.hero{display:grid;grid-template-columns:1.2fr .8fr;gap:16px;margin-bottom:16px}.hero-card,.card{background:rgba(16,21,29,.86);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 30px rgba(0,0,0,.18)}.hero-card{padding:22px;position:relative;overflow:hidden}.hero-card:after{content:"";position:absolute;right:-70px;top:-90px;width:260px;height:260px;border-radius:50%;background:radial-gradient(circle,rgba(114,214,255,.12),transparent 70%)}.hero-card h2{font-size:28px;letter-spacing:-.04em;margin-bottom:8px}.hero-card p{color:var(--dim);line-height:1.7}.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:18px}.stat{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:12px}.stat-num{font-size:26px;font-weight:800;color:var(--accent);letter-spacing:-.05em}.stat-label{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-top:3px}.quick-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px}.action-tile{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:16px;padding:14px;text-align:left;transition:.12s}.action-tile:hover{border-color:var(--accent);transform:translateY(-1px)}.action-tile b{display:block;margin-bottom:4px}.action-tile span{font-size:12px;color:var(--muted);line-height:1.4}.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}.span-4{grid-column:span 4}.span-5{grid-column:span 5}.span-6{grid-column:span 6}.span-7{grid-column:span 7}.span-8{grid-column:span 8}.span-12{grid-column:span 12}.card{padding:16px;min-height:90px}.card-title{display:flex;align-items:center;justify-content:space-between;gap:10px;font-weight:800;font-size:14px;margin-bottom:12px}.card-title small{font-family:var(--mono);font-weight:500;color:var(--muted);font-size:10px}.list{display:flex;flex-direction:column;gap:8px}.list-item{background:rgba(255,255,255,.025);border:1px solid var(--border);border-radius:14px;padding:10px 12px;cursor:pointer;transition:.12s}.list-item:hover{border-color:var(--border2);background:rgba(255,255,255,.05)}.list-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.list-name{font-family:var(--mono);font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.list-meta{font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap}.list-desc{margin-top:5px;color:var(--muted);font-size:12px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.tag-cloud{display:flex;gap:8px;flex-wrap:wrap}.tag{font-family:var(--mono);font-size:11px;border:1px solid var(--border);background:var(--bg2);border-radius:999px;padding:6px 9px;color:var(--accent2);cursor:pointer}.tag:hover{border-color:var(--accent2)}.reader-layout{display:grid;grid-template-columns:minmax(0,820px) 240px;gap:24px;max-width:1120px;margin:0 auto;padding:34px 30px 80px}.reader-card{min-width:0}.page-header{margin-bottom:22px;padding-bottom:16px;border-bottom:1px solid var(--border)}.page-path{font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:8px}.page-title{font-size:38px;letter-spacing:-.055em;line-height:1.05;margin-bottom:10px}.page-meta{display:flex;gap:8px;flex-wrap:wrap}.pill{font-family:var(--mono);font-size:10px;color:var(--dim);border:1px solid var(--border);background:var(--bg2);border-radius:999px;padding:5px 8px}.pill.good{color:var(--good);border-color:rgba(123,216,143,.35)}.pill.warn{color:var(--warn);border-color:rgba(240,195,106,.35)}.pill.bad{color:var(--bad);border-color:rgba(255,128,128,.35)}.md{font-size:16px;line-height:1.75;color:#dbe5f0}.md h1,.md h2,.md h3,.md h4{line-height:1.25;letter-spacing:-.02em;margin:1.5em 0 .5em}.md h1{font-size:31px}.md h2{font-size:25px;border-bottom:1px solid var(--border);padding-bottom:8px}.md h3{font-size:19px;color:var(--accent)}.md p,.md ul,.md ol,.md blockquote,.md pre,.md table{margin:13px 0}.md a{color:var(--accent2);text-decoration:none;border-bottom:1px solid transparent}.md a:hover{border-bottom-color:var(--accent2)}.md a.wiki-link{color:var(--accent);border-bottom:1px dashed rgba(224,169,66,.45)}.md a.wiki-link.missing{color:var(--bad);border-bottom-color:rgba(255,128,128,.45)}.md code{font-family:var(--mono);font-size:.84em;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:2px 6px;color:var(--good)}.md pre{background:#090c10;border:1px solid var(--border);border-radius:14px;padding:16px;overflow:auto}.md pre code{background:transparent;border:0;padding:0;color:#c9d4e3}.md blockquote{border-left:3px solid var(--accent);background:rgba(224,169,66,.06);padding:8px 14px;color:var(--dim);border-radius:0 12px 12px 0}.md table{width:100%;border-collapse:collapse;font-size:14px}.md th,.md td{border-bottom:1px solid var(--border);padding:8px;text-align:left}.md th{font-family:var(--mono);font-size:11px;color:var(--accent);background:var(--bg2)}.md img{max-width:100%;border-radius:14px;border:1px solid var(--border)}.outline{position:sticky;top:22px;align-self:start;background:rgba(16,21,29,.74);border:1px solid var(--border);border-radius:16px;padding:12px;max-height:calc(100vh - 120px);overflow:auto}.outline-title{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px}.outline a{display:block;color:var(--dim);text-decoration:none;font-size:12px;padding:5px 4px;border-radius:8px;line-height:1.35}.outline a:hover{color:var(--accent);background:rgba(224,169,66,.07)}.outline .h3{padding-left:12px;color:var(--muted)}.inspector-header{padding:16px;border-bottom:1px solid var(--border)}.inspector-title{font-weight:800;font-size:15px}.inspector-sub{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:4px}.inspector-body{overflow:auto;flex:1;padding:14px;display:flex;flex-direction:column;gap:14px}.inspector-card{border:1px solid var(--border);border-radius:16px;background:rgba(255,255,255,.025);padding:12px}.inspector-card h4{font-size:12px;font-family:var(--mono);color:var(--accent);margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em}.kv{display:grid;grid-template-columns:1fr auto;gap:8px;font-family:var(--mono);font-size:11px;color:var(--dim);padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04)}.kv:last-child{border-bottom:0}.link-mini{display:block;padding:7px 8px;border-radius:10px;color:var(--dim);text-decoration:none;font-family:var(--mono);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.link-mini:hover{background:var(--bg3);color:var(--accent)}.graph-panel{height:100%;position:relative;background:radial-gradient(circle at center,rgba(114,214,255,.06),transparent 45%)}#graph-canvas{width:100%;height:100%;display:block}.graph-tools{position:absolute;left:16px;top:16px;display:flex;gap:8px;flex-wrap:wrap}.graph-legend{position:absolute;right:16px;bottom:16px;border:1px solid var(--border);background:rgba(15,19,25,.86);border-radius:14px;padding:10px 12px;font-family:var(--mono);font-size:11px;color:var(--dim);line-height:1.9}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}.tooltip{position:absolute;pointer-events:none;background:var(--bg3);border:1px solid var(--accent);border-radius:12px;padding:8px 10px;font-family:var(--mono);font-size:12px;color:var(--text);opacity:0;transform:translate(10px,-10px);transition:opacity .12s;box-shadow:var(--shadow);z-index:4}.tooltip.visible{opacity:1}.health{padding:22px;max-width:1280px;margin:0 auto}.issue-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}.issue{border-left:3px solid var(--border2)}.issue.bad{border-left-color:var(--bad)}.issue.warn{border-left-color:var(--warn)}.issue.good{border-left-color:var(--good)}.timeline{padding:30px;max-width:940px;margin:0 auto}.timeline-line{border-left:2px solid var(--border);margin-left:10px;padding-left:22px}.time-entry{position:relative;margin-bottom:16px;background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:14px}.time-entry:before{content:"";position:absolute;left:-28px;top:18px;width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 5px var(--bg)}.time-date{font-family:var(--mono);font-size:11px;color:var(--accent);margin-bottom:5px}.time-title{font-weight:800}.time-summary{font-size:12px;color:var(--muted);line-height:1.5;margin-top:5px}.search-overlay{position:absolute;inset:0;background:rgba(8,10,13,.94);z-index:20;display:none;backdrop-filter:blur(16px);padding:28px;overflow:auto}.search-overlay.visible{display:block}.search-title{font-size:22px;font-weight:800;margin-bottom:14px}.search-results{max-width:920px;margin:0 auto}.sr{border:1px solid var(--border);background:var(--panel);border-radius:16px;padding:13px;margin:10px 0;cursor:pointer}.sr:hover{border-color:var(--accent)}.sr-name{font-family:var(--mono);font-size:12px;color:var(--accent)}.sr-snippet{color:var(--dim);font-size:13px;line-height:1.55;margin-top:6px}.sr mark{background:rgba(224,169,66,.18);color:var(--accent);border-radius:4px;padding:0 2px}.palette{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;display:none;align-items:flex-start;justify-content:center;padding-top:8vh;backdrop-filter:blur(6px)}.palette.visible{display:flex}.palette-box{width:min(760px,92vw);background:var(--panel);border:1px solid var(--border2);border-radius:22px;box-shadow:var(--shadow);overflow:hidden}.palette-input{width:100%;background:transparent;border:0;border-bottom:1px solid var(--border);padding:18px 20px;color:var(--text);outline:none;font-size:18px}.palette-list{max-height:58vh;overflow:auto;padding:10px}.pal-item{display:grid;grid-template-columns:32px 1fr auto;gap:10px;align-items:center;padding:11px;border-radius:14px;cursor:pointer}.pal-item:hover,.pal-item.active{background:var(--bg3)}.pal-icon{color:var(--accent);font-family:var(--mono)}.pal-title{font-weight:700}.pal-sub{font-size:12px;color:var(--muted);margin-top:2px}.pal-kind{font-family:var(--mono);font-size:10px;color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:3px 6px}.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--border2);border-radius:14px;padding:10px 14px;color:var(--dim);font-family:var(--mono);font-size:11px;box-shadow:var(--shadow);z-index:200;display:none}.toast.visible{display:block}.empty{padding:34px;text-align:center;color:var(--muted);font-family:var(--mono);font-size:12px}.path-list{display:flex;flex-direction:column;gap:10px}.path{border:1px solid var(--border);border-radius:14px;padding:11px;background:rgba(255,255,255,.025)}.path-name{font-weight:800;margin-bottom:7px}.path-steps{display:flex;gap:6px;flex-wrap:wrap}.path-step{font-family:var(--mono);font-size:10px;background:var(--bg3);border:1px solid var(--border);border-radius:999px;padding:5px 8px;color:var(--dim);cursor:pointer}.path-step:hover{border-color:var(--accent);color:var(--accent)}.matrix{display:grid;grid-template-columns:repeat(auto-fill,minmax(9px,1fr));gap:4px}.matrix-cell{aspect-ratio:1;border-radius:3px;background:var(--bg3);border:1px solid rgba(255,255,255,.04);cursor:pointer}.matrix-cell.l1{background:rgba(123,216,143,.25)}.matrix-cell.l2{background:rgba(224,169,66,.35)}.matrix-cell.l3{background:rgba(255,128,128,.45)}
-@media(max-width:1180px){.app{grid-template-columns:280px 1fr}.inspector{display:none}.reader-layout{grid-template-columns:1fr}.outline{display:none}.hero{grid-template-columns:1fr}.span-4,.span-5,.span-6,.span-7,.span-8{grid-column:span 12}.issue-grid{grid-template-columns:1fr}.welcome-grid{grid-template-columns:1fr}.stat-grid{grid-template-columns:repeat(2,1fr)}}
+.logo{width:82px;height:82px;border-radius:0;background:transparent;display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:18px;font-weight:800;color:var(--accent);box-shadow:none;overflow:visible;flex:0 0 auto}
+.logo:after{content:attr(data-fallback)}
+.logo img{width:116%;height:116%;object-fit:contain;display:block}
+.brand-title{font-weight:800;letter-spacing:-.04em;font-size:18px;line-height:1.1}.brand-sub{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:4px}.brand-sub strong{color:var(--accent);font-weight:600}.open-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}.btn{border:1px solid var(--border2);background:var(--bg3);border-radius:12px;padding:9px 11px;font-family:var(--mono);font-size:11px;transition:.16s;color:var(--dim)}.btn:hover{border-color:var(--accent);color:var(--text);transform:translateY(-1px)}.btn.primary{background:linear-gradient(135deg,rgba(224,169,66,.18),rgba(114,214,255,.08));border-color:rgba(224,169,66,.45);color:var(--accent)}.btn.ghost{background:transparent}.btn.small{padding:7px 9px;border-radius:10px;font-size:10px}.sidebar-search{padding:14px 16px;border-bottom:1px solid var(--border)}.searchbox{position:relative}.searchbox input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:11px 36px 11px 12px;color:var(--text);outline:none;font-family:var(--mono);font-size:12px}.searchbox input:focus{border-color:var(--accent)}.searchbox .key{position:absolute;right:9px;top:8px;border:1px solid var(--border);border-radius:7px;padding:2px 5px;color:var(--muted);font-family:var(--mono);font-size:10px}.filters{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}.chip{border:1px solid var(--border);background:var(--bg2);border-radius:999px;padding:5px 8px;font-family:var(--mono);font-size:10px;color:var(--dim);cursor:pointer}.chip.active,.chip:hover{border-color:var(--accent);color:var(--accent);background:rgba(224,169,66,.09)}.nav{overflow:auto;flex:1;padding:10px 0}.nav::-webkit-scrollbar,.scroll::-webkit-scrollbar{width:6px;height:6px}.nav::-webkit-scrollbar-thumb,.scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}.nav-section{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:16px 16px 7px}.nav-item{display:grid;grid-template-columns:20px 1fr auto;gap:8px;align-items:center;padding:8px 16px;border-left:2px solid transparent;color:var(--dim);transition:.12s}.nav-item:hover{background:rgba(255,255,255,.03);color:var(--text)}.nav-item.active{background:rgba(224,169,66,.11);border-left-color:var(--accent);color:var(--accent)}.nav-ico{font-size:12px;text-align:center}.nav-name{font-family:var(--mono);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.nav-badge{font-family:var(--mono);font-size:10px;color:var(--muted)}.sidebar-footer{border-top:1px solid var(--border);padding:12px 16px;color:var(--muted);font-family:var(--mono);font-size:10px;display:flex;align-items:center;justify-content:space-between;gap:10px}.topbar{height:58px;border-bottom:1px solid var(--border);background:rgba(8,10,13,.76);display:flex;align-items:center;gap:12px;padding:0 18px;backdrop-filter:blur(10px);flex-shrink:0}.crumb{flex:1;min-width:0;font-family:var(--mono);font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.crumb span{color:var(--accent)}.tabs{display:flex;gap:7px}.tab{border:1px solid var(--border);background:rgba(15,19,25,.7);border-radius:12px;padding:8px 10px;font-family:var(--mono);font-size:11px;color:var(--dim);transition:.12s}.tab:hover{color:var(--text);border-color:var(--border2)}.tab.active{color:var(--accent);border-color:rgba(224,169,66,.45);background:rgba(224,169,66,.1)}.content{position:relative;flex:1;overflow:hidden}.panel{display:none;height:100%;overflow:auto}.panel.active{display:block}.scroll{height:100%;overflow:auto}.welcome{height:100%;display:flex;align-items:center;justify-content:center;padding:32px}.welcome-card{max-width:760px;background:linear-gradient(180deg,rgba(19,26,36,.88),rgba(12,15,20,.88));border:1px solid var(--border);border-radius:28px;padding:34px;box-shadow:var(--shadow);position:relative;overflow:hidden}.welcome-card:before{content:"";position:absolute;inset:-100px -100px auto auto;width:330px;height:330px;border-radius:50%;background:radial-gradient(circle,rgba(224,169,66,.16),transparent 65%)}.welcome-kicker{font-family:var(--mono);font-size:12px;color:var(--accent);letter-spacing:.12em;text-transform:uppercase;margin-bottom:12px}.welcome h1{font-size:44px;letter-spacing:-.06em;line-height:.98;margin-bottom:14px}.welcome p{color:var(--dim);font-size:16px;line-height:1.7;max-width:650px}.welcome-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:24px}.mini-feature{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:18px;padding:14px}.mini-feature b{display:block;margin-bottom:6px}.mini-feature span{color:var(--muted);font-size:12px;line-height:1.5}.dashboard{padding:22px;max-width:1360px;margin:0 auto}.hero{display:grid;grid-template-columns:1.2fr .8fr;gap:16px;margin-bottom:16px}.hero-card,.card{background:rgba(16,21,29,.86);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 30px rgba(0,0,0,.18)}.hero-card{padding:22px;position:relative;overflow:hidden}.hero-card:after{content:"";position:absolute;right:-70px;top:-90px;width:260px;height:260px;border-radius:50%;background:radial-gradient(circle,rgba(114,214,255,.12),transparent 70%)}.hero-card h2{font-size:28px;letter-spacing:-.04em;margin-bottom:8px}.hero-card p{color:var(--dim);line-height:1.7}.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:18px}.stat{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:12px}.stat-num{font-size:26px;font-weight:800;color:var(--accent);letter-spacing:-.05em}.stat-label{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-top:3px}.quick-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px}.action-tile{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:16px;padding:14px;text-align:left;transition:.12s}.action-tile:hover{border-color:var(--accent);transform:translateY(-1px)}.action-tile b{display:block;margin-bottom:4px}.action-tile span{font-size:12px;color:var(--muted);line-height:1.4}.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}.span-4{grid-column:span 4}.span-5{grid-column:span 5}.span-6{grid-column:span 6}.span-7{grid-column:span 7}.span-8{grid-column:span 8}.span-12{grid-column:span 12}.card{padding:16px;min-height:90px}.card-title{display:flex;align-items:center;justify-content:space-between;gap:10px;font-weight:800;font-size:14px;margin-bottom:12px}.card-title small{font-family:var(--mono);font-weight:500;color:var(--muted);font-size:10px}.list{display:flex;flex-direction:column;gap:8px}.list-item{background:rgba(255,255,255,.025);border:1px solid var(--border);border-radius:14px;padding:10px 12px;cursor:pointer;transition:.12s}.list-item:hover{border-color:var(--border2);background:rgba(255,255,255,.05)}.list-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.list-name{font-family:var(--mono);font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.list-meta{font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap}.list-desc{margin-top:5px;color:var(--muted);font-size:12px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.tag-cloud{display:flex;gap:8px;flex-wrap:wrap}.tag{font-family:var(--mono);font-size:11px;border:1px solid var(--border);background:var(--bg2);border-radius:999px;padding:6px 9px;color:var(--accent2);cursor:pointer}.tag:hover{border-color:var(--accent2)}.reader-layout{display:grid;grid-template-columns:minmax(0,820px) 240px;gap:24px;max-width:1120px;margin:0 auto;padding:34px 30px 80px}.reader-card{min-width:0}.page-header{margin-bottom:22px;padding-bottom:16px;border-bottom:1px solid var(--border)}.page-path{font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:8px}.page-title{font-size:38px;letter-spacing:-.055em;line-height:1.05;margin-bottom:10px}.page-meta{display:flex;gap:8px;flex-wrap:wrap}.pill{font-family:var(--mono);font-size:10px;color:var(--dim);border:1px solid var(--border);background:var(--bg2);border-radius:999px;padding:5px 8px}.pill.good{color:var(--good);border-color:rgba(123,216,143,.35)}.pill.warn{color:var(--warn);border-color:rgba(240,195,106,.35)}.pill.bad{color:var(--bad);border-color:rgba(255,128,128,.35)}.md{font-size:16px;line-height:1.75;color:#dbe5f0}.md h1,.md h2,.md h3,.md h4{line-height:1.25;letter-spacing:-.02em;margin:1.5em 0 .5em}.md h1{font-size:31px}.md h2{font-size:25px;border-bottom:1px solid var(--border);padding-bottom:8px}.md h3{font-size:19px;color:var(--accent)}.md p,.md ul,.md ol,.md blockquote,.md pre,.md table{margin:13px 0}.md a{color:var(--accent2);text-decoration:none;border-bottom:1px solid transparent}.md a:hover{border-bottom-color:var(--accent2)}.md a.wiki-link{color:var(--accent);border-bottom:1px dashed rgba(224,169,66,.45)}.md a.wiki-link.missing{color:var(--bad);border-bottom-color:rgba(255,128,128,.45)}.md code{font-family:var(--mono);font-size:.84em;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:2px 6px;color:var(--good)}.md pre{background:#090c10;border:1px solid var(--border);border-radius:14px;padding:16px;overflow:auto}.md pre code{background:transparent;border:0;padding:0;color:#c9d4e3}.md blockquote{border-left:3px solid var(--accent);background:rgba(224,169,66,.06);padding:8px 14px;color:var(--dim);border-radius:0 12px 12px 0}.md table{width:100%;border-collapse:collapse;font-size:14px}.md th,.md td{border-bottom:1px solid var(--border);padding:8px;text-align:left}.md th{font-family:var(--mono);font-size:11px;color:var(--accent);background:var(--bg2)}.md img{max-width:100%;border-radius:14px;border:1px solid var(--border)}.outline{position:sticky;top:22px;align-self:start;background:rgba(16,21,29,.74);border:1px solid var(--border);border-radius:16px;padding:12px;max-height:calc(100vh - 120px);overflow:auto}.outline-title{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px}.outline a{display:block;color:var(--dim);text-decoration:none;font-size:12px;padding:5px 4px;border-radius:8px;line-height:1.35}.outline a:hover{color:var(--accent);background:rgba(224,169,66,.07)}.outline .h3{padding-left:12px;color:var(--muted)}.inspector-header{padding:16px;border-bottom:1px solid var(--border)}.inspector-title{font-weight:800;font-size:15px}.inspector-sub{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:4px}.inspector-body{overflow:auto;flex:1;padding:14px;display:flex;flex-direction:column;gap:14px}.inspector-card{border:1px solid var(--border);border-radius:16px;background:rgba(255,255,255,.025);padding:12px}.inspector-card h4{font-size:12px;font-family:var(--mono);color:var(--accent);margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em}.kv{display:grid;grid-template-columns:1fr auto;gap:8px;font-family:var(--mono);font-size:11px;color:var(--dim);padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04)}.kv:last-child{border-bottom:0}.link-mini{display:block;padding:7px 8px;border-radius:10px;color:var(--dim);text-decoration:none;font-family:var(--mono);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.link-mini:hover{background:var(--bg3);color:var(--accent)}.graph-panel{height:100%;position:relative;background:radial-gradient(circle at center,rgba(114,214,255,.06),transparent 45%)}#graph-canvas{width:100%;height:100%;display:block}.graph-tools{position:absolute;left:16px;top:16px;display:flex;gap:8px;flex-wrap:wrap}.graph-legend{position:absolute;right:16px;bottom:16px;border:1px solid var(--border);background:rgba(15,19,25,.86);border-radius:14px;padding:10px 12px;font-family:var(--mono);font-size:11px;color:var(--dim);line-height:1.9}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}.tooltip{position:absolute;pointer-events:none;background:var(--bg3);border:1px solid var(--accent);border-radius:12px;padding:8px 10px;font-family:var(--mono);font-size:12px;color:var(--text);opacity:0;transform:translate(10px,-10px);transition:opacity .12s;box-shadow:var(--shadow);z-index:4}.tooltip.visible{opacity:1}.health{padding:22px;max-width:1280px;margin:0 auto}.issue-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}.issue{border-left:3px solid var(--border2)}.issue.bad{border-left-color:var(--bad)}.issue.warn{border-left-color:var(--warn)}.issue.good{border-left-color:var(--good)}.timeline{padding:30px;max-width:940px;margin:0 auto}.timeline-line{border-left:2px solid var(--border);margin-left:10px;padding-left:22px}.time-entry{position:relative;margin-bottom:16px;background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:14px}.time-entry:before{content:"";position:absolute;left:-28px;top:18px;width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 5px var(--bg)}.time-date{font-family:var(--mono);font-size:11px;color:var(--accent);margin-bottom:5px}.time-title{font-weight:800}.time-summary{font-size:12px;color:var(--muted);line-height:1.5;margin-top:5px}.search-overlay{position:absolute;inset:0;background:rgba(8,10,13,.94);z-index:20;display:none;backdrop-filter:blur(16px);padding:28px;overflow:auto}.search-overlay.visible{display:block}.search-title{font-size:22px;font-weight:800;margin-bottom:14px}.search-results{max-width:920px;margin:0 auto}.sr{border:1px solid var(--border);background:var(--panel);border-radius:16px;padding:13px;margin:10px 0;cursor:pointer}.sr:hover{border-color:var(--accent)}.sr-name{font-family:var(--mono);font-size:12px;color:var(--accent)}.sr-snippet{color:var(--dim);font-size:13px;line-height:1.55;margin-top:6px}.sr mark{background:rgba(224,169,66,.18);color:var(--accent);border-radius:4px;padding:0 2px}.palette{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;display:none;align-items:flex-start;justify-content:center;padding-top:8vh;backdrop-filter:blur(6px)}.palette.visible{display:flex}.palette-box{width:min(760px,92vw);background:var(--panel);border:1px solid var(--border2);border-radius:22px;box-shadow:var(--shadow);overflow:hidden}.palette-input{width:100%;background:transparent;border:0;border-bottom:1px solid var(--border);padding:18px 20px;color:var(--text);outline:none;font-size:18px}.palette-list{max-height:58vh;overflow:auto;padding:10px}.pal-item{display:grid;grid-template-columns:32px 1fr auto;gap:10px;align-items:center;padding:11px;border-radius:14px;cursor:pointer}.pal-item:hover,.pal-item.active{background:var(--bg3)}.pal-icon{color:var(--accent);font-family:var(--mono)}.pal-title{font-weight:700}.pal-sub{font-size:12px;color:var(--muted);margin-top:2px}.pal-kind{font-family:var(--mono);font-size:10px;color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:3px 6px}.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--border2);border-radius:14px;padding:10px 14px;color:var(--dim);font-family:var(--mono);font-size:11px;box-shadow:var(--shadow);z-index:200;display:none}.toast.visible{display:block}.empty{padding:34px;text-align:center;color:var(--muted);font-family:var(--mono);font-size:12px}.path-list{display:flex;flex-direction:column;gap:10px}.path{border:1px solid var(--border);border-radius:14px;padding:11px;background:rgba(255,255,255,.025)}.path-name{font-weight:800;margin-bottom:7px}.path-steps{display:flex;gap:6px;flex-wrap:wrap}.path-step{font-family:var(--mono);font-size:10px;background:var(--bg3);border:1px solid var(--border);border-radius:999px;padding:5px 8px;color:var(--dim);cursor:pointer}.path-step:hover{border-color:var(--accent);color:var(--accent)}.matrix{display:grid;grid-template-columns:repeat(auto-fill,minmax(9px,1fr));gap:4px}.matrix-cell{aspect-ratio:1;border-radius:3px;background:var(--bg3);border:1px solid rgba(255,255,255,.04);cursor:pointer}.matrix-cell.l1{background:rgba(123,216,143,.25)}.matrix-cell.l2{background:rgba(224,169,66,.35)}.matrix-cell.l3{background:rgba(255,128,128,.45)}.ai{padding:22px;max-width:1280px;margin:0 auto}.ai-grid{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px}.ai-chat{min-height:calc(100vh - 170px);display:flex;flex-direction:column}.ai-messages{flex:1;overflow:auto;display:flex;flex-direction:column;gap:10px;padding-right:4px}.ai-msg{border:1px solid var(--border);background:rgba(255,255,255,.025);border-radius:14px;padding:12px;line-height:1.6;white-space:pre-wrap}.ai-msg.user{border-color:rgba(114,214,255,.35);background:rgba(114,214,255,.06)}.ai-msg.assistant{border-color:rgba(224,169,66,.35);background:rgba(224,169,66,.06)}.ai-msg.system{font-family:var(--mono);font-size:11px;color:var(--muted)}.ai-input{display:grid;grid-template-columns:1fr auto;gap:10px;margin-top:12px}.ai-input textarea{width:100%;min-height:76px;resize:vertical;background:var(--bg);border:1px solid var(--border);border-radius:14px;color:var(--text);padding:12px;outline:none;line-height:1.45}.ai-input textarea:focus,.field input:focus{border-color:var(--accent)}.ai-side{display:flex;flex-direction:column;gap:12px}.field{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}.field label{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}.field input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:11px;color:var(--text);padding:9px 10px;outline:none;font-family:var(--mono);font-size:11px}.ai-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.ai-context{font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.6;max-height:190px;overflow:auto}.ai-status{font-family:var(--mono);font-size:11px;color:var(--muted)}
+@media(max-width:1180px){.app{grid-template-columns:280px 1fr}.inspector{display:none}.reader-layout{grid-template-columns:1fr}.outline{display:none}.hero{grid-template-columns:1fr}.span-4,.span-5,.span-6,.span-7,.span-8{grid-column:span 12}.issue-grid{grid-template-columns:1fr}.welcome-grid{grid-template-columns:1fr}.stat-grid{grid-template-columns:repeat(2,1fr)}.ai-grid{grid-template-columns:1fr}}
+</style>
+<style>
+.ai-msg a.wiki-path-link{color:var(--accent);border-bottom:1px dashed rgba(224,169,66,.55);text-decoration:none;word-break:break-word}
+.ai-msg a.wiki-path-link:hover{color:var(--text);border-bottom-color:var(--accent)}
+.ai-msg a.wiki-path-link.missing{color:var(--bad);border-bottom-color:rgba(255,128,128,.55)}
+.route-card{margin-bottom:16px}
+.route-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.route-group{background:rgba(255,255,255,.025);border:1px solid var(--border);border-radius:14px;padding:11px;min-width:0}
+.route-group b{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;margin-bottom:8px}
+.route-group small{font-family:var(--mono);font-weight:500;color:var(--muted);font-size:10px}
+.route-link{display:block;color:var(--accent2);font-family:var(--mono);font-size:11px;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:4px 0}
+.route-link:hover{color:var(--text)}
+.route-empty{font-family:var(--mono);font-size:11px;color:var(--muted);padding:4px 0}
+.route-note{margin-top:10px;color:var(--muted);font-size:12px;line-height:1.5}
+.field select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:11px;color:var(--text);padding:9px 10px;outline:none;font-family:var(--mono);font-size:11px}
+.field select:focus{border-color:var(--accent)}
+.ai-hint{margin-top:7px;font-family:var(--mono);font-size:10px;color:var(--muted)}
+.review-card{margin-bottom:16px}
+.review-list{display:flex;flex-direction:column;gap:10px}
+.review-item{border:1px solid var(--border);background:rgba(255,255,255,.025);border-radius:14px;padding:12px}
+.review-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:6px}
+.review-head b{font-size:13px}
+.priority{font-family:var(--mono);font-size:10px;border:1px solid var(--border);border-radius:999px;padding:4px 7px;white-space:nowrap}
+.priority.high{color:var(--bad);border-color:rgba(255,128,128,.45)}
+.priority.medium{color:var(--warn);border-color:rgba(240,195,106,.45)}
+.priority.low{color:var(--accent2);border-color:rgba(114,214,255,.45)}
+.review-detail{color:var(--dim);font-size:12px;line-height:1.5;margin-bottom:8px}
+.review-pages{display:flex;gap:6px;flex-wrap:wrap}
+@media(max-width:1180px){.route-grid{grid-template-columns:repeat(2,1fr)}}
+</style>
+<style>
+.app{min-width:0}.ico{width:16px;height:16px;display:inline-block;vertical-align:-3px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.btn,.tab,.chip{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-width:0}.btn:disabled{opacity:.62;cursor:wait;transform:none}.btn .ico,.tab .ico,.chip .ico{flex:0 0 auto}.tag{display:inline-flex;align-items:center;gap:5px}.tag .ico{width:13px;height:13px}.mini-feature>.ico,.access-step>.ico{color:var(--accent);margin-bottom:8px}.nav-ico{display:flex;align-items:center;justify-content:center;color:currentColor}.nav-ico .ico{width:15px;height:15px}.card-title-text{display:flex;align-items:center;gap:8px;min-width:0}.card-title-text .ico{color:var(--accent);flex:0 0 auto}.stat{display:grid;grid-template-columns:auto minmax(0,1fr);gap:9px;align-items:center}.stat-icon,.action-icon,.list-icon,.review-icon,.time-icon,.access-mark{display:inline-flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);color:var(--accent);border-radius:12px;flex:0 0 auto}.stat-icon{width:34px;height:34px;grid-row:span 2}.stat-icon .ico{width:18px;height:18px}.action-tile{display:grid;grid-template-columns:38px minmax(0,1fr);gap:10px;align-items:start;min-width:0}.action-icon{width:38px;height:38px}.action-icon .ico{width:20px;height:20px}.action-copy{min-width:0}.list-item{display:grid;grid-template-columns:24px minmax(0,1fr);gap:9px;align-items:start}.list-icon{width:24px;height:24px;border-radius:9px;margin-top:-1px;color:var(--accent2)}.list-icon.bad,.review-icon.high{color:var(--bad)}.list-icon.warn,.review-icon.medium{color:var(--warn)}.list-icon.good,.review-icon.low{color:var(--good)}.list-icon .ico{width:14px;height:14px}.list-content{min-width:0}.link-mini{display:flex;align-items:center;gap:7px}.link-mini .ico{width:13px;height:13px;flex:0 0 auto}.pal-icon{display:flex;align-items:center;justify-content:center}.pal-icon .ico{width:18px;height:18px}.review-head{align-items:center}.review-title{display:flex;align-items:center;gap:9px;min-width:0}.review-icon{width:30px;height:30px}.review-icon .ico{width:16px;height:16px}.time-entry{display:grid;grid-template-columns:30px minmax(0,1fr);gap:10px}.time-entry:before{left:-28px}.time-icon{width:30px;height:30px;color:var(--accent)}.time-icon .ico{width:16px;height:16px}.time-content{min-width:0}.access-screen,.copy-modal{position:fixed;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;padding:22px;background:radial-gradient(circle at 20% 0,rgba(224,169,66,.18),transparent 32%),radial-gradient(circle at 84% 20%,rgba(114,214,255,.12),transparent 30%),rgba(6,7,10,.94);backdrop-filter:blur(18px)}.access-card,.copy-box{width:min(780px,100%);background:linear-gradient(180deg,rgba(19,26,36,.94),rgba(10,13,18,.96));border:1px solid var(--border2);border-radius:24px;box-shadow:var(--shadow);padding:26px;position:relative;overflow:hidden}.access-card:before{content:"";position:absolute;inset:auto -80px -140px auto;width:280px;height:280px;border-radius:50%;background:radial-gradient(circle,rgba(123,216,143,.12),transparent 68%)}.access-mark{width:56px;height:56px;border-radius:18px;color:var(--bad);margin-bottom:16px}.access-mark .ico{width:28px;height:28px}.access-kicker{font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:.12em;text-transform:uppercase;margin-bottom:9px}.access-card h1{font-size:34px;letter-spacing:-.05em;line-height:1.05;margin-bottom:10px}.access-card p{color:var(--dim);line-height:1.65;max-width:640px}.access-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}.access-step{border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.03);padding:12px}.access-step b{display:block;font-size:12px;margin:7px 0 4px}.access-step small{display:block;color:var(--muted);font-size:11px;line-height:1.45}.access-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}.access-url{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.copy-modal{z-index:160}.copy-box{width:min(820px,96vw);padding:18px}.copy-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.copy-head b{display:flex;align-items:center;gap:8px}.copy-box textarea{width:100%;min-height:46vh;resize:vertical;background:#090c10;border:1px solid var(--border);border-radius:14px;color:var(--text);padding:12px;font-family:var(--mono);font-size:12px;line-height:1.5;outline:none}.copy-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
+@media(min-width:1600px){:root{--sidebar:320px;--inspector:360px}.dashboard,.health,.ai{max-width:1680px}.reader-layout{max-width:1320px;grid-template-columns:minmax(0,940px) 280px}.grid{gap:18px}.hero{gap:18px}.card{padding:18px}}
+@media(max-width:900px){html,body{height:100%;overflow:hidden}.app{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr);height:100dvh}.sidebar{border-right:0;border-bottom:1px solid var(--border);max-height:42dvh}.brand{padding:10px 12px}.brand-row{gap:9px}.logo{width:48px;height:48px}.brand-title{font-size:16px}.brand-sub{font-size:10px}.open-actions{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:10px}.sidebar-search{padding:10px 12px}.filters{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px}.chip{white-space:nowrap;flex:0 0 auto}.nav{display:flex;overflow-x:auto;overflow-y:hidden;gap:8px;padding:8px 12px;flex:0 0 auto}.nav-section{display:none}.nav-item{grid-template-columns:auto minmax(72px,1fr);grid-template-rows:auto auto;gap:2px 7px;min-width:132px;max-width:180px;border:1px solid var(--border);border-left:1px solid var(--border);border-radius:12px;padding:8px 9px}.nav-badge{grid-column:2}.sidebar-footer{display:none}.main{min-height:0}.topbar{height:auto;min-height:54px;flex-wrap:wrap;padding:8px 10px;align-content:center;gap:8px}.crumb{order:2;flex-basis:100%;font-size:10px}.tabs{order:1;flex:1;display:grid;grid-template-columns:repeat(6,minmax(42px,1fr));gap:5px}.tab{padding:8px 6px;border-radius:10px}.tab-label{display:none}.tab .ico{width:18px;height:18px}.dashboard,.health,.ai{padding:12px}.hero{gap:10px;margin-bottom:10px}.hero-card,.card{border-radius:12px}.hero-card{padding:15px}.hero-card h2{font-size:22px;line-height:1.08}.hero-card p{font-size:13px;line-height:1.55}.stat-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.stat{padding:10px}.stat-num{font-size:22px}.quick-actions{grid-template-columns:repeat(2,minmax(0,1fr));padding:10px}.action-tile{grid-template-columns:1fr;justify-items:center;text-align:center;padding:10px;min-height:86px}.action-tile span:not(.action-icon){display:none}.grid{grid-template-columns:1fr;gap:10px}.span-4,.span-5,.span-6,.span-7,.span-8,.span-12{grid-column:1}.card{padding:12px}.card-title small{display:none}.list-desc{display:none}.list-item{padding:9px}.list-meta{font-size:9px}.route-grid{grid-template-columns:1fr 1fr}.route-note{font-size:11px}.reader-layout{display:block;padding:18px 14px 70px}.page-title{font-size:30px}.md{font-size:15px;line-height:1.68}.md table{display:block;overflow-x:auto}.issue-grid{grid-template-columns:1fr;gap:10px}.timeline{padding:16px 14px 70px}.timeline-line{margin-left:7px;padding-left:18px}.ai-grid{grid-template-columns:1fr}.ai-chat{min-height:55dvh}.ai-input{grid-template-columns:1fr}.ai-actions{grid-template-columns:repeat(2,minmax(0,1fr))}.graph-tools{left:10px;top:10px}.graph-legend{right:10px;bottom:10px;font-size:10px}.search-overlay{padding:14px}.palette{padding-top:4vh}.palette-box{width:94vw}.pal-sub,.pal-kind{display:none}.pal-item{grid-template-columns:26px 1fr}.access-grid{grid-template-columns:1fr}.access-card h1{font-size:28px}.access-card,.copy-box{border-radius:18px;padding:18px}}
+@media(max-width:430px){.sidebar{max-height:36dvh}.brand{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.brand-row{min-width:0}.open-actions{grid-column:2;grid-row:1;display:flex;gap:6px;margin:0}.open-actions .btn{width:38px;height:38px;padding:0}.open-actions .btn-text{display:none}.sidebar-search{padding:8px 10px}.searchbox input{padding:9px 32px 9px 10px;font-size:11px}.searchbox .key{display:none}.nav{padding:6px 10px}.nav-item{min-width:54px;max-width:54px;display:flex;align-items:center;justify-content:center;padding:8px 5px}.nav-name,.nav-badge{display:none}.nav-ico .ico{width:19px;height:19px}.topbar{padding:6px 8px}.tabs{grid-template-columns:repeat(6,1fr);gap:4px}.tab{padding:8px 4px}.welcome{padding:12px}.welcome-card{padding:18px;border-radius:18px}.welcome h1{font-size:29px}.welcome p{font-size:14px}.welcome-grid{display:none}.stat-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.stat{display:flex;flex-direction:column;text-align:center;gap:4px;padding:8px 4px}.stat-icon{width:26px;height:26px}.stat-icon .ico{width:15px;height:15px}.stat-num{font-size:18px}.stat-label{font-size:8px}.quick-actions{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.action-tile{min-height:58px;padding:8px 4px}.action-tile b{display:none}.action-icon{width:34px;height:34px}.hero-card p,.route-note{display:none}.route-grid{grid-template-columns:1fr}.route-link{font-size:10px}.page-title{font-size:26px}.page-path{font-size:10px}.pill{font-size:9px}.review-detail{display:none}.review-pages .path-step:nth-child(n+4){display:none}.access-screen,.copy-modal{padding:12px}.access-mark{width:48px;height:48px}.access-card h1{font-size:25px}.access-actions .btn{flex:1 1 100%}}
+@media(max-height:720px) and (max-width:900px){.sidebar{max-height:34dvh}.brand-sub,.filters{display:none}.nav{padding-top:6px}}
+</style>
+<style>
+.action-copy b,.action-copy span,.stat-label,.list-name,.route-link{overflow-wrap:anywhere}
+.reader-tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.reader-tools .btn{min-height:34px}.reader-tools .btn-text{white-space:nowrap}
+@media(max-width:1400px) and (min-width:1181px){
+  .app{grid-template-columns:var(--sidebar) minmax(0,1fr)}
+  .inspector{display:none}
+  .dashboard,.health,.ai{max-width:1100px}
+  .hero{grid-template-columns:minmax(0,1fr) minmax(270px,.65fr)}
+  .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .quick-actions{grid-template-columns:repeat(2,minmax(0,1fr));align-content:start}
+  .action-tile{grid-template-columns:34px minmax(0,1fr);padding:12px;min-height:0}
+  .action-icon{width:34px;height:34px}
+  .hero-card,.card.quick-actions{min-height:0}
+  .ai-grid{grid-template-columns:minmax(0,1fr) 330px}
+  .ai-chat{min-height:calc(100vh - 190px)}
+}
+@media(max-width:1180px) and (min-width:901px){
+  .ai-grid{grid-template-columns:1fr}
+  .ai-chat{min-height:58vh}
+}
+</style>
+<style>
+.excalidraw{padding:18px clamp(12px,2vw,24px);max-width:1600px;margin:0 auto}.excalidraw-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,340px);gap:16px;align-items:start}.excalidraw-stage{min-height:520px;overflow:hidden;position:relative}.excalidraw-preview{height:clamp(460px,62vh,760px);border:1px solid var(--border);border-radius:14px;background:#111;overflow:auto;position:relative;display:flex;align-items:flex-start;justify-content:center}.excalidraw-preview svg{display:block;width:100%;height:auto;min-height:100%;min-width:0}.excalidraw-preview[data-render-status="loading"]::after{content:"renderizando Excalidraw oficial";position:absolute;right:12px;bottom:12px;font-family:var(--mono);font-size:10px;color:var(--muted);background:rgba(0,0,0,.48);border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:6px 9px}.excalidraw-render-note{position:absolute;left:12px;bottom:12px;max-width:min(420px,calc(100% - 24px));font-family:var(--mono);font-size:10px;color:var(--muted);background:rgba(0,0,0,.56);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:8px 10px}.excalidraw-fallback{width:100%;height:100%;overflow:auto;padding:22px;background:#111;color:#f5f1e8}.excalidraw-fallback-board{min-width:min(980px,100%);display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;align-content:start}.excalidraw-fallback-card{border:1px solid rgba(245,241,232,.34);border-radius:12px;background:rgba(255,255,255,.035);box-shadow:0 8px 24px rgba(0,0,0,.24);padding:12px;min-height:84px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:13px;line-height:1.35;color:#f5f1e8}.excalidraw-fallback-card:nth-child(3n){border-color:rgba(224,169,66,.72);color:#ffd58a}.excalidraw-fallback-card:nth-child(4n){border-color:rgba(74,222,128,.62);color:#a7f3d0}.excalidraw-fallback-card:nth-child(5n){border-color:rgba(125,211,252,.62);color:#bae6fd}.excalidraw-list{display:flex;flex-direction:column;gap:8px;max-height:520px;overflow:auto;padding-right:2px}.excalidraw-item{display:grid;grid-template-columns:28px minmax(0,1fr);gap:9px;align-items:start;text-align:left;background:rgba(255,255,255,.025);border:1px solid var(--border);border-radius:14px;padding:10px;transition:.12s}.excalidraw-item:hover,.excalidraw-item.active{border-color:var(--accent);background:rgba(224,169,66,.08)}.excalidraw-meta{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}.excalidraw-chip{font-family:var(--mono);font-size:10px;color:var(--dim);border:1px solid var(--border);background:var(--bg2);border-radius:999px;padding:5px 8px}.excalidraw-chip.ok{color:#a7f3d0;border-color:rgba(74,222,128,.4)}.excalidraw-chip.warn{color:#ffd58a;border-color:rgba(224,169,66,.5)}.excalidraw-text-list{display:flex;flex-direction:column;gap:7px;max-height:260px;overflow:auto}.excalidraw-text{font-size:12px;line-height:1.45;color:var(--dim);border-left:2px solid rgba(224,169,66,.5);padding-left:9px}.excalidraw-rel{display:flex;gap:6px;align-items:center;min-width:0}.excalidraw-rel span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.excalidraw-empty{height:360px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-family:var(--mono);font-size:12px}
+@media(min-width:1600px){.excalidraw{max-width:1900px}.excalidraw-grid{grid-template-columns:minmax(0,1fr) 390px}.excalidraw-preview{height:72vh}}
+@media(max-width:900px){.tabs{grid-template-columns:repeat(7,minmax(38px,1fr))}.dashboard,.health,.ai,.excalidraw{padding:12px}.excalidraw-grid{grid-template-columns:1fr}.excalidraw-preview{height:58dvh;min-height:360px}.excalidraw-stage{min-height:420px}.excalidraw-list{max-height:none}.excalidraw-item{grid-template-columns:24px minmax(0,1fr)}}
+@media(max-width:430px){.tabs{grid-template-columns:repeat(7,1fr)}.excalidraw-preview{height:54dvh;min-height:320px}.excalidraw-meta .excalidraw-chip:nth-child(n+5){display:none}.excalidraw-fallback{padding:14px}.excalidraw-fallback-board{grid-template-columns:1fr}.excalidraw-fallback-card{min-height:72px}}
+</style>
+<style>
+@media(max-width:900px){
+  .sidebar{max-height:38dvh}
+  .nav{gap:6px;padding:6px 12px 10px;scroll-padding-inline:12px}
+  .nav-item{min-width:118px;max-width:132px;min-height:46px;padding:7px 8px;border-radius:10px;grid-template-columns:18px minmax(0,1fr);grid-template-rows:auto auto;gap:1px 6px;align-content:center}
+  .nav-ico .ico{width:14px;height:14px}
+  .nav-name{font-size:11px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .nav-badge{grid-column:2;font-size:9px;line-height:1.15}
+  .sidebar-search{padding-bottom:8px}
+}
+@media(max-width:700px){
+  .brand{padding:8px 12px}
+  .sidebar-search{padding:8px 12px}
+  .filters{margin-top:8px}
+  .nav{padding:5px 12px 9px}
+  .nav-item{min-width:104px;max-width:118px;min-height:42px;padding:6px 7px}
+  .nav-name{font-size:10.5px}
+  .nav-badge{font-size:8.5px}
+}
+@media(max-width:430px){
+  .nav{padding:5px 10px 8px}
+  .nav-item{min-width:48px;max-width:48px;min-height:40px;padding:6px 4px}
+}
+</style>
+<style>
+.density-panel{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(220px,.75fr);gap:14px;align-items:start}.density-map{display:grid;grid-template-columns:repeat(auto-fill,minmax(10px,1fr));gap:5px;padding:10px;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.018)}.density-cell{position:relative;aspect-ratio:1;border-radius:4px;border:1px solid rgba(255,255,255,.05);background:var(--bg3);cursor:pointer;transition:.12s}.density-cell:hover{transform:scale(1.7);z-index:3;border-color:var(--accent);box-shadow:0 0 0 2px rgba(224,169,66,.18)}.density-cell.l1{background:rgba(86,166,125,.36)}.density-cell.l2{background:rgba(114,214,255,.35)}.density-cell.l3{background:rgba(224,169,66,.55)}.density-cell.l4{background:rgba(255,128,128,.6)}.density-cell.excalidraw{box-shadow:inset 0 0 0 1px rgba(196,155,255,.65)}.density-cell.missing{border-color:rgba(255,128,128,.45)}.density-side{display:flex;flex-direction:column;gap:10px;min-width:0}.density-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.density-kpi{border:1px solid var(--border);background:rgba(255,255,255,.025);border-radius:12px;padding:9px}.density-kpi b{display:block;color:var(--accent);font-size:20px;letter-spacing:-.04em}.density-kpi span{font-family:var(--mono);font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}.density-legend{display:flex;gap:6px;flex-wrap:wrap}.density-legend span{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;color:var(--muted)}.density-dot{width:10px;height:10px;border-radius:3px;background:var(--bg3);border:1px solid rgba(255,255,255,.06)}.density-top{display:flex;flex-direction:column;gap:7px}.density-top button{width:100%;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;text-align:left;border:1px solid var(--border);background:rgba(255,255,255,.025);border-radius:12px;padding:8px 10px;color:var(--dim)}.density-top button:hover{border-color:var(--accent);color:var(--text)}.density-top strong{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.density-top small{font-family:var(--mono);font-size:9px;color:var(--muted);white-space:nowrap}.density-note{font-size:11px;line-height:1.45;color:var(--muted)}
+@media(max-width:900px){.density-panel{grid-template-columns:1fr}.density-map{grid-template-columns:repeat(auto-fill,minmax(9px,1fr));gap:4px}.density-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.density-kpi{padding:7px}.density-kpi b{font-size:16px}.density-top{display:none}}
+@media(max-width:430px){.density-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.density-map{max-height:190px;overflow:hidden}}
 </style>
 </head>
 <body>
@@ -57,15 +162,15 @@ button{cursor:pointer;color:inherit}
   <aside class="sidebar">
     <div class="brand">
       <div class="brand-row">
-        <div class="logo">§</div>
+        <div class="logo" aria-label="PocketWiki"><img src="/assets/favicon.png" alt="" onerror="if(!this.dataset.ico){this.dataset.ico='1';this.src='/favicon.ico';}else{this.remove();this.parentElement.dataset.fallback='PW';}"></div>
         <div>
-          <div class="brand-title">Wiki Cockpit</div>
+          <div class="brand-title">PocketWiki</div>
           <div class="brand-sub" id="wiki-sub">nenhuma wiki carregada</div>
         </div>
       </div>
       <div class="open-actions">
-        <button class="btn primary" id="open-folder-btn">Abrir pasta</button>
-        <button class="btn" id="open-files-btn">Fallback</button>
+        <button class="btn primary" id="open-folder-btn" data-icon="folder"><span class="btn-text">Abrir pasta</span></button>
+        <button class="btn" id="open-files-btn" data-icon="files"><span class="btn-text">Fallback</span></button>
       </div>
       <input id="folder-input" type="file" webkitdirectory directory multiple class="hidden">
     </div>
@@ -75,25 +180,27 @@ button{cursor:pointer;color:inherit}
         <span class="key">⌘K</span>
       </div>
       <div class="filters" id="filters">
-        <button class="chip active" data-filter="all">Tudo</button>
-        <button class="chip" data-filter="hub">Hubs</button>
-        <button class="chip" data-filter="orphan">Órfãos</button>
-        <button class="chip" data-filter="missing">C/ link ausente</button>
+        <button class="chip active" data-filter="all" data-icon="dashboard">Tudo</button>
+        <button class="chip" data-filter="hub" data-icon="hub">Hubs</button>
+        <button class="chip" data-filter="orphan" data-icon="orphan">Órfãos</button>
+        <button class="chip" data-filter="missing" data-icon="missing">C/ link ausente</button>
       </div>
     </div>
-    <nav class="nav" id="nav"><div class="empty">Abra uma pasta com arquivos .md</div></nav>
+    <nav class="nav" id="nav"><div class="empty">Abra uma pasta com arquivos .md ou .excalidraw</div></nav>
     <div class="sidebar-footer"><span id="footer-left">offline-first</span><span>Ctrl/⌘ K</span></div>
   </aside>
 
   <main class="main">
     <header class="topbar">
-      <div class="crumb" id="breadcrumb"><span>wiki</span> / cockpit local</div>
+      <div class="crumb" id="breadcrumb"><span>PocketWiki</span> / dashboard local</div>
       <div class="tabs">
-        <button class="tab active" data-panel="cockpit">Cockpit</button>
-        <button class="tab" data-panel="reader">Leitor</button>
-        <button class="tab" data-panel="graph">Mapa</button>
-        <button class="tab" data-panel="health">Saúde</button>
-        <button class="tab" data-panel="timeline">Tempo</button>
+        <button class="tab active" data-panel="dashboard" data-icon="dashboard"><span class="tab-label">Dashboard</span></button>
+        <button class="tab" data-panel="ai" data-icon="ai"><span class="tab-label">IA</span></button>
+        <button class="tab" data-panel="reader" data-icon="reader"><span class="tab-label">Leitor</span></button>
+        <button class="tab" data-panel="excalidraw" data-icon="draw"><span class="tab-label">Excalidraw</span></button>
+        <button class="tab" data-panel="graph" data-icon="graph"><span class="tab-label">Mapa</span></button>
+        <button class="tab" data-panel="health" data-icon="health"><span class="tab-label">Saúde</span></button>
+        <button class="tab" data-panel="timeline" data-icon="timeline"><span class="tab-label">Tempo</span></button>
       </div>
     </header>
     <section class="content">
@@ -102,24 +209,26 @@ button{cursor:pointer;color:inherit}
           <div class="welcome-card">
             <div class="welcome-kicker">site local para Obsidian / markdown</div>
             <h1>Transforme sua pasta de wiki em uma visão macro interativa.</h1>
-            <p>Abra a raiz da sua wiki. O Cockpit lê os arquivos <strong>.md</strong>, monta backlinks, detecta links quebrados, encontra hubs, sugere trilhas de leitura e desenha um mapa navegável — sem backend, banco ou build.</p>
+            <p>Abra a raiz da sua wiki. O PocketWiki lê arquivos <strong>.md</strong> e <strong>.excalidraw</strong>, monta backlinks, detecta links quebrados, interpreta diagramas, sugere trilhas de leitura e desenha um mapa navegável — sem banco externo ou build.</p>
             <div class="open-actions" style="max-width:360px;margin-top:22px">
-              <button class="btn primary" onclick="openWiki()">Abrir pasta da wiki</button>
-              <button class="btn" onclick="openFallback()">Selecionar arquivos</button>
+              <button class="btn primary" onclick="openWiki()" data-icon="folder"><span class="btn-text">Abrir pasta da wiki</span></button>
+              <button class="btn" onclick="openFallback()" data-icon="files"><span class="btn-text">Selecionar arquivos</span></button>
             </div>
             <div class="welcome-grid">
-              <div class="mini-feature"><b>Macrovisão</b><span>Hubs, órfãos, tags, páginas recentes e matriz de densidade.</span></div>
-              <div class="mini-feature"><b>Wiki viva</b><span>Backlinks, outlinks, links ausentes e trilhas sugeridas.</span></div>
-              <div class="mini-feature"><b>Navegação rápida</b><span>Command palette, busca global e grafo clicável.</span></div>
+              <div class="mini-feature" data-icon="dashboard"><b>Macrovisão</b><span>Hubs, órfãos, tags, páginas recentes e matriz de densidade.</span></div>
+              <div class="mini-feature" data-icon="graph"><b>Wiki viva</b><span>Backlinks, outlinks, links ausentes e trilhas sugeridas.</span></div>
+              <div class="mini-feature" data-icon="command"><b>Navegação rápida</b><span>Command palette, busca global e grafo clicável.</span></div>
             </div>
           </div>
         </div>
       </div>
-      <div class="panel" id="panel-cockpit"><div class="scroll"><div class="cockpit" id="cockpit"></div></div></div>
+      <div class="panel" id="panel-dashboard"><div class="scroll"><div class="dashboard" id="dashboard"></div></div></div>
       <div class="panel" id="panel-reader"><div class="scroll"><div class="reader-layout"><article class="reader-card"><div id="reader"></div></article><aside class="outline" id="outline"></aside></div></div></div>
-      <div class="panel" id="panel-graph"><div class="graph-panel"><canvas id="graph-canvas"></canvas><div class="graph-tools"><button class="btn small" onclick="fitGraph()">Centralizar</button><button class="btn small" onclick="toggleGraphMode()" id="graph-mode-btn">Todos</button><button class="btn small" onclick="randomPage()">Aleatória</button></div><div class="tooltip" id="graph-tooltip"></div><div class="graph-legend"><div><span class="dot" style="background:#e0a942"></span>Página</div><div><span class="dot" style="background:#72d6ff"></span>Hub</div><div><span class="dot" style="background:#ff8080"></span>Ausente</div><div><span class="dot" style="background:#c49bff"></span>Atual</div></div></div></div>
+      <div class="panel" id="panel-excalidraw"><div class="scroll"><div class="excalidraw" id="excalidraw"></div></div></div>
+      <div class="panel" id="panel-graph"><div class="graph-panel"><canvas id="graph-canvas"></canvas><div class="graph-tools"><button class="btn small" onclick="fitGraph()" data-icon="target"><span class="btn-text">Centralizar</span></button><button class="btn small" onclick="toggleGraphMode()" id="graph-mode-btn" data-icon="graph"><span class="btn-text">Todos</span></button><button class="btn small" onclick="randomPage()" data-icon="random"><span class="btn-text">Aleatória</span></button></div><div class="tooltip" id="graph-tooltip"></div><div class="graph-legend"><div><span class="dot" style="background:#e0a942"></span>Página</div><div><span class="dot" style="background:#72d6ff"></span>Hub</div><div><span class="dot" style="background:#ff8080"></span>Ausente</div><div><span class="dot" style="background:#c49bff"></span>Atual</div></div></div></div>
       <div class="panel" id="panel-health"><div class="scroll"><div class="health" id="health"></div></div></div>
       <div class="panel" id="panel-timeline"><div class="scroll"><div class="timeline" id="timeline"></div></div></div>
+      <div class="panel" id="panel-ai"><div class="scroll"><div class="ai" id="ai"></div></div></div>
       <div class="search-overlay" id="search-overlay"><div class="search-results"><div class="search-title">Busca global</div><div id="global-results"></div></div></div>
     </section>
   </main>
@@ -130,10 +239,43 @@ button{cursor:pointer;color:inherit}
   </aside>
 </div>
 
+<div class="access-screen hidden" id="access-screen">
+  <div class="access-card">
+    <div class="access-mark" data-icon="noaccess"></div>
+    <div class="access-kicker" id="access-kicker">servidor local indisponível</div>
+    <h1 id="access-title">Não foi possível acessar o PocketWiki daqui.</h1>
+    <p id="access-detail">O atalho abriu, mas a rota local não respondeu como esperado. Isso costuma ser DNS/mDNS, VPN/Tailscale, Wi-Fi trocado ou o servidor ainda subindo na máquina principal.</p>
+    <div class="access-grid">
+      <div class="access-step" data-icon="server"><b>Servidor</b><small>Confere se o `node server.mjs` está rodando na máquina principal.</small></div>
+      <div class="access-step" data-icon="lan"><b>Rede</b><small>Teste a rota LAN ou Tailscale em vez de depender só do `.local`.</small></div>
+      <div class="access-step" data-icon="files"><b>Fallback</b><small>Se estiver neste dispositivo, abra os Markdown direto pelo seletor.</small></div>
+    </div>
+    <div class="access-actions">
+      <button class="btn primary" id="access-retry" data-icon="refresh"><span class="btn-text">Tentar de novo</span></button>
+      <button class="btn" id="access-fallback" data-icon="files"><span class="btn-text">Abrir arquivos</span></button>
+      <button class="btn" id="access-copy-url" data-icon="copy"><span class="btn-text">Copiar URL atual</span></button>
+    </div>
+    <div class="access-url" id="access-url"></div>
+  </div>
+</div>
+
 <div class="palette" id="palette">
   <div class="palette-box">
     <input class="palette-input" id="palette-input" placeholder="Digite para abrir página, ação ou tag..." autocomplete="off" spellcheck="false">
     <div class="palette-list" id="palette-list"></div>
+  </div>
+</div>
+<div class="copy-modal hidden" id="copy-modal">
+  <div class="copy-box">
+    <div class="copy-head">
+      <b id="copy-modal-title" data-icon="copy">Copiar manualmente</b>
+      <button class="btn small" id="copy-modal-close" data-icon="close"><span class="btn-text">Fechar</span></button>
+    </div>
+    <textarea id="copy-modal-text" readonly spellcheck="false"></textarea>
+    <div class="copy-actions">
+      <button class="btn" id="copy-modal-select" data-icon="target"><span class="btn-text">Selecionar tudo</span></button>
+      <button class="btn primary" id="copy-modal-copy" data-icon="copy"><span class="btn-text">Tentar copiar</span></button>
+    </div>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -144,6 +286,7 @@ button{cursor:pointer;color:inherit}
 const state = {
   pages: new Map(),
   rawFiles: new Map(),
+  excalidraws: new Map(),
   missingLinks: new Map(),
   aliasIndex: new Map(),
   titleIndex: new Map(),
@@ -154,15 +297,103 @@ const state = {
   query: '',
   graphMode: 'all',
   graph: { nodes: [], edges: [], nodeMap: new Map() },
-  dirName: 'Wiki Local'
+  selectedExcalidraw: null,
+  dirName: 'Wiki Local',
+  appConfig: null,
+  routes: null,
+  ai: {
+    baseUrl: localStorage.getItem('pocketwiki:ai-base-url') || 'http://localhost:1234/v1',
+    apiKey: '',
+    model: localStorage.getItem('pocketwiki:ai-model') || '',
+    models: [],
+    modelsBusy: false,
+    messages: [],
+    connected: false,
+    busy: false,
+    lastContext: []
+  }
 };
+
+const EXCALIDRAW_RENDERER_VERSION = '2026-05-05.3';
+let excalidrawRendererPromise = null;
+
+localStorage.removeItem('pocketwiki:ai-api-key');
 
 const $ = sel => document.querySelector(sel);
 const $$ = sel => Array.from(document.querySelectorAll(sel));
 const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const attr = esc;
+const ICONS = {
+  dashboard:'<path d="M3 3v18h18"></path><rect x="7" y="12" width="3" height="5" rx="1"></rect><rect x="12" y="8" width="3" height="9" rx="1"></rect><rect x="17" y="5" width="3" height="12" rx="1"></rect>',
+  ai:'<path d="M9.5 2A3.5 3.5 0 0 0 6 5.5v.2A4 4 0 0 0 4 13a4 4 0 0 0 4 6h1.5V2z"></path><path d="M14.5 2A3.5 3.5 0 0 1 18 5.5v.2A4 4 0 0 1 20 13a4 4 0 0 1-4 6h-1.5V2z"></path><path d="M9.5 7H8"></path><path d="M14.5 7H16"></path><path d="M9.5 12H7"></path><path d="M14.5 12H17"></path><path d="M9.5 17H8"></path><path d="M14.5 17H16"></path>',
+  reader:'<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z"></path>',
+  draw:'<path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path><path d="M15 5l3 3"></path>',
+  graph:'<circle cx="6" cy="6" r="3"></circle><circle cx="18" cy="7" r="3"></circle><circle cx="12" cy="18" r="3"></circle><path d="M8.6 7.1l6.8.8"></path><path d="M16.4 9.5l-3 5.8"></path><path d="M10.2 15.8L7.8 8.8"></path>',
+  health:'<path d="M22 12h-4l-3 8-6-16-3 8H2"></path>',
+  timeline:'<circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path>',
+  folder:'<path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>',
+  files:'<path d="M14 2H6a2 2 0 0 0-2 2v12"></path><path d="M8 6h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"></path>',
+  command:'<path d="M18 7a3 3 0 1 0-3-3v16a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V4a3 3 0 1 0-3 3z"></path>',
+  random:'<path d="M16 3h5v5"></path><path d="M4 20L21 3"></path><path d="M21 16v5h-5"></path><path d="M15 15l6 6"></path><path d="M4 4l5 5"></path>',
+  copy:'<rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>',
+  link:'<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>',
+  tag:'<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><circle cx="7" cy="7" r="1"></circle>',
+  alert:'<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path>',
+  page:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 13h8"></path><path d="M8 17h5"></path>',
+  hub:'<circle cx="12" cy="12" r="3"></circle><path d="M12 3v6"></path><path d="M12 15v6"></path><path d="M3 12h6"></path><path d="M15 12h6"></path>',
+  orphan:'<circle cx="12" cy="12" r="4"></circle><path d="M4.93 4.93l14.14 14.14"></path>',
+  missing:'<circle cx="12" cy="12" r="9"></circle><path d="M15 9l-6 6"></path><path d="M9 9l6 6"></path>',
+  check:'<path d="M20 6L9 17l-5-5"></path>',
+  summary:'<path d="M8 6h13"></path><path d="M8 12h13"></path><path d="M8 18h13"></path><path d="M3 6h.01"></path><path d="M3 12h.01"></path><path d="M3 18h.01"></path>',
+  isolated:'<circle cx="12" cy="12" r="4"></circle><path d="M12 2v3"></path><path d="M12 19v3"></path><path d="M2 12h3"></path><path d="M19 12h3"></path>',
+  stale:'<path d="M3 3v5h5"></path><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"></path><path d="M12 7v5l3 2"></path>',
+  target:'<circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="3"></circle>',
+  route:'<path d="M6 19a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"></path><path d="M18 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"></path><path d="M6 13V9a4 4 0 0 1 4-4h5"></path><path d="M18 11v4a4 4 0 0 1-4 4H9"></path>',
+  local:'<path d="M4 4h16v12H4z"></path><path d="M8 20h8"></path><path d="M12 16v4"></path>',
+  lan:'<path d="M12 3v5"></path><path d="M6 21v-5a6 6 0 0 1 12 0v5"></path><path d="M3 21h18"></path>',
+  tailscale:'<circle cx="6" cy="6" r="2"></circle><circle cx="12" cy="6" r="2"></circle><circle cx="18" cy="6" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="18" cy="12" r="2"></circle><circle cx="6" cy="18" r="2"></circle><circle cx="12" cy="18" r="2"></circle><circle cx="18" cy="18" r="2"></circle>',
+  mdns:'<path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><path d="M12 20h.01"></path>',
+  refresh:'<path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path><path d="M3 16v5h5"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M21 8V3h-5"></path>',
+  server:'<rect x="3" y="4" width="18" height="8" rx="2"></rect><rect x="3" y="12" width="18" height="8" rx="2"></rect><path d="M7 8h.01"></path><path d="M7 16h.01"></path>',
+  noaccess:'<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><path d="M12 8v5"></path><path d="M12 17h.01"></path>',
+  close:'<path d="M18 6L6 18"></path><path d="M6 6l12 12"></path>'
+};
 const fmtDate = ts => ts ? new Intl.DateTimeFormat('pt-BR', { dateStyle:'medium', timeStyle:'short' }).format(new Date(ts)) : 'sem data';
 const today = () => Date.now();
+
+function icon(name){
+  return `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ICONS.page}</svg>`;
+}
+
+function decorateStaticIcons(root = document){
+  root.querySelectorAll('[data-icon]:not([data-icon-ready])').forEach(el => {
+    el.insertAdjacentHTML('afterbegin', icon(el.dataset.icon));
+    el.dataset.iconReady = '1';
+  });
+}
+
+function cardTitle(iconName, title, small = ''){
+  return `<span class="card-title-text">${icon(iconName)}<span>${esc(title)}</span></span>${small ? `<small>${esc(small)}</small>` : ''}`;
+}
+
+function statCard(iconName, value, label){
+  return `<div class="stat"><span class="stat-icon">${icon(iconName)}</span><div><div class="stat-num">${esc(value)}</div><div class="stat-label">${esc(label)}</div></div></div>`;
+}
+
+function actionTile(iconName, title, sub, onclick){
+  return `<button class="action-tile" onclick="${attr(onclick)}"><span class="action-icon">${icon(iconName)}</span><span class="action-copy"><b>${esc(title)}</b><span>${esc(sub)}</span></span></button>`;
+}
+
+function pageIconName(page){
+  if (!page) return 'page';
+  if (page.kind === 'excalidraw') return 'draw';
+  if (page.missing?.length) return 'missing';
+  if (healthClass(page) === 'good') return pageScore(page) >= 4 ? 'hub' : 'check';
+  if (!page.summary) return 'summary';
+  if (!page.backlinks?.size && !page.outlinks?.length && !page.isSpecial) return 'isolated';
+  if (!page.backlinks?.size && !page.isSpecial) return 'orphan';
+  return page.isSpecial ? 'dashboard' : 'page';
+}
 
 function showToast(msg){
   const el = $('#toast');
@@ -172,10 +403,86 @@ function showToast(msg){
   showToast._t = setTimeout(() => el.classList.remove('visible'), 2600);
 }
 
+async function copyText(text, successMsg = 'Copiado', failMsg = 'Não foi possível copiar'){
+  const value = String(text ?? '');
+  if (!value) {
+    showToast('Nada para copiar');
+    return false;
+  }
+  try {
+    if (navigator.clipboard?.writeText && window.isSecureContext) {
+      await navigator.clipboard.writeText(value);
+      showToast(successMsg);
+      return true;
+    }
+  } catch (err) {
+    console.warn(err);
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = value;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  textarea.style.top = '0';
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  textarea.setSelectionRange(0, value.length);
+
+  let copied = false;
+  try {
+    copied = document.execCommand('copy');
+  } catch (err) {
+    console.warn(err);
+  } finally {
+    textarea.remove();
+  }
+
+  showToast(copied ? successMsg : failMsg);
+  return copied;
+}
+
+function showCopyFallback(title, text){
+  $('#copy-modal-title').innerHTML = `${icon('copy')}<span>${esc(title || 'Copiar manualmente')}</span>`;
+  const textarea = $('#copy-modal-text');
+  textarea.value = String(text ?? '');
+  $('#copy-modal').classList.remove('hidden');
+  setTimeout(() => {
+    textarea.focus();
+    textarea.select();
+  }, 0);
+}
+
+function closeCopyFallback(){
+  $('#copy-modal').classList.add('hidden');
+}
+
+function showAccessScreen(detail, opts = {}){
+  const kickerEl = $('#access-kicker');
+  const titleEl = $('#access-title');
+  const detailEl = $('#access-detail');
+  if (kickerEl) kickerEl.textContent = opts.kicker || 'servidor local indisponível';
+  if (titleEl) titleEl.textContent = opts.title || 'Não foi possível acessar o PocketWiki daqui.';
+  if (detail && detailEl) detailEl.textContent = detail;
+  $('#access-url').textContent = location.href;
+  $('#access-screen').classList.remove('hidden');
+}
+
+function hideAccessScreen(){
+  $('#access-screen')?.classList.add('hidden');
+}
+
+function registerServiceWorker(){
+  if (!('serviceWorker' in navigator) || !location.protocol.startsWith('http')) return;
+  navigator.serviceWorker.register('/sw.js').catch(err => console.warn('Service worker indisponível:', err));
+}
+
 function slugify(text){
   return String(text || '')
     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .toLowerCase()
+    .replace(/\.excalidraw(?:\.md)?$/i,'')
     .replace(/\.md$/i,'')
     .replace(/[#?].*$/,'')
     .trim()
@@ -188,12 +495,12 @@ function slugify(text){
 }
 
 function pathToSlug(path){
-  const clean = String(path || '').replace(/^\/?(wiki|docs|pages)\//i,'').replace(/\.md$/i,'');
+  const clean = String(path || '').replace(/^\/?(wiki|docs|pages)\//i,'').replace(/\.excalidraw(?:\.md)?$/i,'').replace(/\.md$/i,'');
   return clean.split('/').map(slugify).filter(Boolean).join('/');
 }
 
 function baseName(path){
-  return String(path || '').split('/').pop().replace(/\.md$/i,'');
+  return String(path || '').split('/').pop().replace(/\.excalidraw(?:\.md)?$/i,'').replace(/\.md$/i,'');
 }
 
 function titleFromContent(content, fallback){
@@ -283,13 +590,571 @@ function extractWikiLinks(content){
   return links;
 }
 
+function uniqueWikiLinks(links){
+  const seen = new Set();
+  return (links || []).filter(link => {
+    const key = `${slugify(link.target)}#${slugify(link.heading || '')}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function wordCount(content){
   const text = stripFrontmatter(content).replace(/```[\s\S]*?```/g,' ').replace(/[#*_`\[\]()>|:-]/g,' ');
   return (text.match(/[\p{L}\p{N}]+/gu) || []).length;
 }
 
+function isExcalidrawPath(path){
+  return /\.excalidraw(?:\.md)?$/i.test(String(path || ''));
+}
+
+function isExcalidrawSource(path, content){
+  const text = String(content || '');
+  return isExcalidrawPath(path) ||
+    /excalidraw-plugin\s*:/i.test(text) ||
+    /Switch to EXCALIDRAW VIEW/i.test(text) ||
+    (/^\s*#{1,3}\s*Excalidraw Data/im.test(text) && /^\s*#{1,3}\s*(Text Elements|Drawing)/im.test(text)) ||
+    (/"elements"\s*:\s*\[/i.test(text) && /"type"\s*:\s*"excalidraw"/i.test(text));
+}
+
+function parseExcalidrawScene(content){
+  const direct = tryParseExcalidrawJson(content);
+  if (direct) return direct;
+
+  const obsidian = extractObsidianDrawingScene(content);
+  if (obsidian) return obsidian;
+
+  const fenceRe = /```[^\n]*\n([\s\S]*?)```/gi;
+  let match;
+  while ((match = fenceRe.exec(String(content || ''))) !== null) {
+    const parsed = tryParseExcalidrawJson(match[1]);
+    if (parsed) return parsed;
+  }
+
+  const embedded = extractEmbeddedExcalidrawJson(content);
+  if (embedded) return embedded;
+
+  return null;
+}
+
+function tryParseExcalidrawJson(raw){
+  const clean = String(raw || '').trim();
+  if (!clean) return null;
+  try {
+    const parsed = JSON.parse(clean);
+    return parsed && Array.isArray(parsed.elements) ? parsed : null;
+  } catch {
+    const end = clean.lastIndexOf('}');
+    if (end <= 0) return null;
+    try {
+      const parsed = JSON.parse(clean.slice(0, end + 1));
+      return parsed && Array.isArray(parsed.elements) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+}
+
+function extractObsidianDrawingScene(content){
+  const text = String(content || '');
+  const compressedRe = /(?:^|\n)##?\s+Drawing\s*\n[^`]*```compressed-json\s*\n([\s\S]*?)```/gi;
+  let match;
+  while ((match = compressedRe.exec(text)) !== null) {
+    const decompressed = decompressExcalidrawBase64(match[1]);
+    const parsed = decompressed ? tryParseExcalidrawJson(decompressed) : null;
+    if (parsed) {
+      parsed.__pocketwikiSource = 'obsidian-compressed-json';
+      return parsed;
+    }
+  }
+
+  const jsonRe = /(?:^|\n)##?\s+Drawing\s*\n[^`]*```json\s*\n([\s\S]*?)```/gi;
+  while ((match = jsonRe.exec(text)) !== null) {
+    const parsed = tryParseExcalidrawJson(match[1]);
+    if (parsed) {
+      parsed.__pocketwikiSource = 'obsidian-json';
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+function decompressExcalidrawBase64(value){
+  const clean = String(value || '').replace(/[\r\n]/g, '').trim();
+  if (!clean || !window.LZString?.decompressFromBase64) return '';
+  try {
+    return window.LZString.decompressFromBase64(clean) || '';
+  } catch (err) {
+    console.warn('Falha ao descompactar compressed-json do Excalidraw');
+    return '';
+  }
+}
+
+function extractEmbeddedExcalidrawJson(content){
+  const text = String(content || '');
+  const starts = [];
+  for (const pattern of [/"type"\s*:\s*"excalidraw"/gi, /"elements"\s*:\s*\[/gi]) {
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      const start = text.lastIndexOf('{', match.index);
+      if (start >= 0) starts.push(start);
+    }
+  }
+
+  for (const start of [...new Set(starts)].sort((a,b)=>a-b)) {
+    const json = readBalancedJsonObject(text, start);
+    const parsed = json ? tryParseExcalidrawJson(json) : null;
+    if (parsed) return parsed;
+  }
+  return null;
+}
+
+function readBalancedJsonObject(text, start){
+  let depth = 0, inString = false, escaped = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return '';
+}
+
+function ingestExcalidrawContent(path, content, size, type, lastModified){
+  const scene = parseExcalidrawScene(content);
+  if (!scene) {
+    const analysis = analyzeMarkdownExcalidraw(path, content, lastModified);
+    const md = buildExcalidrawIndexMarkdown(analysis);
+    const slug = pathToSlug(path);
+    const words = wordCount(md);
+    state.pages.set(slug, {
+      slug, path, name: baseName(path), title: analysis.title, folder: path.includes('/') ? path.split('/').slice(0,-1).join('/') : '',
+      content: md, links: uniqueWikiLinks(extractWikiLinks(md)), outlinks: [], backlinks: new Set(), missing: [], tags: extractTags(md),
+      headings: extractHeadings(md), summary: extractSummary(md), frontmatter: {},
+      updated: lastModified || null, words, readingTime: Math.max(1, Math.ceil(words / 210)),
+      isSpecial: false, size: size || 0, type: type || 'application/vnd.excalidraw+json',
+      kind: 'excalidraw', excalidraw: analysis
+    });
+    state.excalidraws.set(slug, analysis);
+    if (!state.selectedExcalidraw) state.selectedExcalidraw = slug;
+    return;
+  }
+
+  const analysis = analyzeExcalidrawScene(scene, path, content);
+  const md = buildExcalidrawIndexMarkdown(analysis);
+  const slug = pathToSlug(path);
+  const words = wordCount(md);
+  const page = {
+    slug, path, name: baseName(path), title: analysis.title, folder: path.includes('/') ? path.split('/').slice(0,-1).join('/') : '',
+    content: md, links: uniqueWikiLinks(extractWikiLinks(md)), outlinks: [], backlinks: new Set(), missing: [], tags: extractTags(md),
+    headings: extractHeadings(md), summary: extractSummary(md), frontmatter: parseFrontmatter(md),
+    updated: extractUpdated(md, lastModified), words, readingTime: Math.max(1, Math.ceil(words / 210)),
+    isSpecial: false, size: size || 0, type: type || 'application/vnd.excalidraw+json',
+    kind: 'excalidraw', excalidraw: analysis
+  };
+  state.pages.set(slug, page);
+  state.excalidraws.set(slug, analysis);
+  if (!state.selectedExcalidraw) state.selectedExcalidraw = slug;
+}
+
+function analyzeExcalidrawScene(scene, path, content){
+  const elements = (scene.elements || []).filter(el => el && !el.isDeleted);
+  const elementMap = new Map(elements.map(el => [el.id, el]));
+  const textElements = elements.filter(el => el.type === 'text' && cleanExcalidrawText(el.rawText || el.text));
+  const texts = textElements.map(el => ({
+    id: el.id,
+    text: cleanExcalidrawText(el.rawText || el.text),
+    x: num(el.x), y: num(el.y), width: Math.max(1, Math.abs(num(el.width))), height: Math.max(1, Math.abs(num(el.height))),
+    fontSize: num(el.fontSize) || 16,
+    containerId: el.containerId || null,
+    element: el
+  }));
+  const title = pickExcalidrawTitle(path, content, texts);
+  const links = collectExcalidrawLinks(elements, texts);
+  const relations = collectExcalidrawRelations(elements, elementMap, texts);
+  const bounds = excalidrawBounds(elements);
+  return {
+    slug: pathToSlug(path),
+    path,
+    title,
+    source: scene.__pocketwikiSource || scene.source || '',
+    version: scene.version || '',
+    updated: Date.now(),
+    scene: {
+      type: scene.type || 'excalidraw',
+      version: scene.version || 2,
+      source: scene.source || scene.__pocketwikiSource || '',
+      elements,
+      appState: scene.appState && typeof scene.appState === 'object' ? scene.appState : {},
+      files: scene.files && typeof scene.files === 'object' ? scene.files : {}
+    },
+    elements,
+    texts,
+    links,
+    relations,
+    bounds,
+    stats: {
+      elements: elements.length,
+      text: texts.length,
+      arrows: elements.filter(el => el.type === 'arrow').length,
+      relations: relations.length,
+      links: links.length
+    }
+  };
+}
+
+function analyzeMarkdownExcalidraw(path, content, lastModified){
+  const texts = extractMarkdownExcalidrawTexts(content).map((text, idx) => ({
+    id: `text-${idx}`,
+    text,
+    x: (idx % 2) * 440,
+    y: Math.floor(idx / 2) * 92,
+    width: 360,
+    height: 56,
+    fontSize: idx === 0 ? 22 : 16,
+    containerId: null,
+    element: null
+  }));
+  const elements = texts.map(item => ({
+    id: item.id,
+    type: 'text',
+    x: item.x,
+    y: item.y,
+    width: item.width,
+    height: item.height,
+    fontSize: item.fontSize,
+    rawText: item.text,
+    text: item.text,
+    strokeColor: '#1f2937'
+  }));
+  const links = collectExcalidrawLinks(elements, texts);
+  const title = pickMarkdownExcalidrawTitle(path, content, texts);
+  const relations = inferMarkdownExcalidrawRelations(texts);
+  return {
+    slug: pathToSlug(path),
+    path,
+    title,
+    source: 'obsidian-excalidraw-markdown',
+    version: 'markdown-fallback',
+    updated: lastModified || Date.now(),
+    elements,
+    texts,
+    links,
+    relations,
+    bounds: excalidrawBounds(elements),
+    fallback: true,
+    stats: {
+      elements: elements.length,
+      text: texts.length,
+      arrows: 0,
+      relations: relations.length,
+      links: links.length
+    }
+  };
+}
+
+function extractMarkdownExcalidrawTexts(content){
+  const text = stripFrontmatter(String(content || ''));
+  const sections = [];
+  let inTextSection = false;
+  const sectionLines = [];
+  for (const line of text.split(/\r?\n/)) {
+    if (/^\s*#{1,6}\s*Text Elements\s*$/i.test(line)) {
+      inTextSection = true;
+      continue;
+    }
+    if (inTextSection && /^\s*#{1,6}\s+(Embedded files|Drawing|Excalidraw Data)\s*$/i.test(line)) break;
+    if (inTextSection) sectionLines.push(line);
+  }
+  if (sectionLines.length) sections.push(sectionLines.join('\n'));
+  else sections.push(text);
+
+  const lines = sections.join('\n')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .split(/\r?\n/)
+    .map(line => line
+      .replace(/\^[A-Za-z0-9_-]+\s*$/g, '')
+      .replace(/^[-*]\s+/, '')
+      .trim())
+    .filter(line => line &&
+      !/^=+.*EXCALIDRAW VIEW/i.test(line) &&
+      !/^#{1,6}\s*(Excalidraw Data|Text Elements|Embedded files|Drawing)/i.test(line) &&
+      !/^%%/.test(line));
+
+  const seen = new Set();
+  return lines.filter(line => {
+    const clean = singleLine(line);
+    if (!clean || seen.has(clean)) return false;
+    seen.add(clean);
+    return true;
+  }).slice(0, 120);
+}
+
+function inferMarkdownExcalidrawRelations(texts){
+  const relations = [];
+  for (const item of texts) {
+    const match = item.text.match(/^(.{2,80}?)\s*(?:->|→|=>)\s*(.{2,80})$/);
+    if (match) relations.push({ from: match[1].trim(), to: match[2].trim(), label:'texto', kind:'text' });
+  }
+  return relations.slice(0, 80);
+}
+
+function cleanExcalidrawText(value){
+  return String(value || '').replace(/\r/g, '').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function pickExcalidrawTitle(path, content, texts){
+  const title = titleFromContent(content, baseName(path));
+  if (title && title !== baseName(path) && !/^Excalidraw Data$/i.test(title)) return title;
+  const prominent = texts.slice().sort((a,b)=>(b.fontSize || 0) - (a.fontSize || 0)).find(t => t.text.length <= 90);
+  if (prominent && !/^(Excalidraw Data|Text Elements|Drawing)$/i.test(prominent.text)) return prominent.text.split('\n')[0].trim();
+  return baseName(path);
+}
+
+function pickMarkdownExcalidrawTitle(path, content, texts){
+  const fm = parseFrontmatter(content);
+  if (fm.title && !/^Excalidraw Data$/i.test(fm.title)) return String(fm.title).trim();
+  const title = titleFromContent(content, baseName(path));
+  if (title && title !== baseName(path) && !/^Excalidraw Data$/i.test(title)) return title;
+  return baseName(path);
+}
+
+function collectExcalidrawLinks(elements, texts){
+  const links = new Set();
+  for (const el of elements) {
+    if (el.link) links.add(String(el.link));
+  }
+  for (const item of texts) {
+    const re = /https?:\/\/[^\s)]+|\[\[[^\]]+\]\]|[^\s`'"]+\.md(?:#[^\s`'"]+)?/gi;
+    let match;
+    while ((match = re.exec(item.text)) !== null) links.add(match[0]);
+  }
+  return [...links].slice(0, 80);
+}
+
+function collectExcalidrawRelations(elements, elementMap, texts){
+  const relations = [];
+  const seen = new Set();
+  for (const el of elements) {
+    if (el.type !== 'arrow' && el.type !== 'line') continue;
+    const from = labelForExcalidrawElement(el.startBinding?.elementId, elementMap, texts);
+    const to = labelForExcalidrawElement(el.endBinding?.elementId, elementMap, texts);
+    const label = labelForExcalidrawElement(el.id, elementMap, texts);
+    if (!from && !to && !label) continue;
+    const key = `${from || ''}->${to || ''}:${label || ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    relations.push({ from: from || 'origem solta', to: to || 'destino solto', label: label || '', kind: el.type });
+  }
+  return relations.slice(0, 80);
+}
+
+function labelForExcalidrawElement(id, elementMap, texts){
+  if (!id) return '';
+  const el = elementMap.get(id);
+  if (!el) return '';
+  if (el.type === 'text') return cleanExcalidrawText(el.rawText || el.text).slice(0, 140);
+  const bound = texts.find(t => t.containerId === id);
+  if (bound) return bound.text.slice(0, 140);
+  const box = elementBox(el);
+  const inside = texts.find(t => {
+    const cx = t.x + t.width / 2;
+    const cy = t.y + t.height / 2;
+    return cx >= box.x && cx <= box.x + box.width && cy >= box.y && cy <= box.y + box.height;
+  });
+  return inside ? inside.text.slice(0, 140) : '';
+}
+
+function excalidrawBounds(elements){
+  const boxes = elements.map(elementBox).filter(box => box.width || box.height);
+  if (!boxes.length) return { x:0, y:0, width:1200, height:720 };
+  const minX = Math.min(...boxes.map(b => b.x));
+  const minY = Math.min(...boxes.map(b => b.y));
+  const maxX = Math.max(...boxes.map(b => b.x + b.width));
+  const maxY = Math.max(...boxes.map(b => b.y + b.height));
+  return { x:minX, y:minY, width:Math.max(1, maxX - minX), height:Math.max(1, maxY - minY) };
+}
+
+function elementBox(el){
+  const points = Array.isArray(el.points) ? el.points : null;
+  if (points?.length) {
+    const xs = points.map(p => num(p[0]) + num(el.x));
+    const ys = points.map(p => num(p[1]) + num(el.y));
+    const minX = Math.min(...xs), minY = Math.min(...ys);
+    return { x:minX, y:minY, width:Math.max(1, Math.max(...xs) - minX), height:Math.max(1, Math.max(...ys) - minY) };
+  }
+  return { x:num(el.x), y:num(el.y), width:Math.max(1, Math.abs(num(el.width))), height:Math.max(1, Math.abs(num(el.height))) };
+}
+
+function buildExcalidrawIndexMarkdown(analysis){
+  const lines = [
+    `# ${analysis.title}`,
+    '',
+    `**Summary**: Diagrama Excalidraw interpretado com ${analysis.stats.elements} elementos, ${analysis.stats.text} textos, ${analysis.stats.relations} relacoes visuais e ${analysis.stats.links} links.`,
+    '',
+    '#excalidraw #diagrama',
+    '',
+    '## Fonte',
+    `- Path: ${analysis.path}`,
+    `- Origem: ${analysis.source || 'arquivo local'}`,
+    '',
+    '## Textos detectados',
+    ...(analysis.texts.length ? analysis.texts.slice(0, 120).map(t => `- ${singleLine(t.text)}`) : ['- nenhum texto detectado']),
+    '',
+    '## Relacoes visuais',
+    ...(analysis.relations.length ? analysis.relations.map(r => `- ${singleLine(r.from)} -> ${singleLine(r.to)}${r.label ? ` (${singleLine(r.label)})` : ''}`) : ['- nenhuma seta/linha conectada detectada']),
+    '',
+    '## Links detectados',
+    ...(analysis.links.length ? analysis.links.map(link => `- ${singleLine(link)}`) : ['- nenhum link explicito detectado'])
+  ];
+  return lines.join('\n');
+}
+
+function addExcalidrawIndexLinks(){
+  for (const page of state.pages.values()) {
+    if (page.kind !== 'excalidraw' || !page.excalidraw) continue;
+    const candidates = new Map();
+    const add = (value, label = value) => {
+      const target = normalizeExcalidrawTarget(value);
+      if (!target) return;
+      const resolved = resolveTarget(target);
+      if (!resolved || resolved === page.slug) return;
+      const key = slugify(target);
+      if (!candidates.has(key)) candidates.set(key, { raw:String(value), target, targetRaw:String(value), heading:'', label:String(label || target), source:'excalidraw' });
+    };
+
+    for (const text of page.excalidraw.texts) {
+      text.text.split(/\n|;|,/).map(s => s.trim()).filter(Boolean).forEach(add);
+    }
+    for (const rel of page.excalidraw.relations) {
+      add(rel.from);
+      add(rel.to);
+    }
+    for (const link of page.excalidraw.links) add(link);
+
+    const existing = new Set(page.links.map(link => slugify(link.target)));
+    for (const [key, link] of candidates) {
+      if (!existing.has(key)) page.links.push(link);
+    }
+  }
+}
+
+function normalizeExcalidrawTarget(value){
+  let text = String(value || '').trim();
+  if (!text || /^https?:\/\//i.test(text)) return '';
+  const obsidianFile = text.match(/^obsidian:\/\/open\?(.+)$/i);
+  if (obsidianFile) {
+    const params = new URLSearchParams(obsidianFile[1]);
+    text = params.get('file') || params.get('path') || text;
+  }
+  const wiki = text.match(/^\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|[^\]]+)?\]\]$/);
+  if (wiki) text = wiki[1];
+  text = text.replace(/^['"`]|['"`]$/g, '').replace(/\.md(?:#.*)?$/i, '').trim();
+  if (text.length > 90 || /\s{2,}/.test(text)) return '';
+  return text;
+}
+
+function singleLine(value){
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function num(value){
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+async function loadAppConfig(){
+  try {
+    const res = await fetch('/api/config', { cache:'no-store' });
+    if (!res.ok) return null;
+    const config = await res.json();
+    state.appConfig = config;
+    if (config.lmStudioModel) state.ai.model = config.lmStudioModel;
+    if (config.aiProxy) {
+      state.ai.apiKey = '';
+      localStorage.removeItem('pocketwiki:ai-api-key');
+    }
+    return config;
+  } catch {
+    return null;
+  }
+}
+
+async function loadRoutes(){
+  try {
+    const res = await fetch('/api/routes', { cache:'no-store' });
+    if (!res.ok) return null;
+    state.routes = await res.json();
+    return state.routes;
+  } catch {
+    state.routes = null;
+    return null;
+  }
+}
+
+async function loadFromServerReference(){
+  if (!state.appConfig?.referenceName) return false;
+  if (state.appConfig.referenceAvailable === false) {
+    if (state.appConfig.referenceConfigured) showReferenceLoadIssue(state.appConfig.referenceStatus);
+    return false;
+  }
+  try {
+    const res = await fetch('/api/wiki/files', { cache:'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.available === false) {
+      if (state.appConfig.referenceConfigured || data.configured) showReferenceLoadIssue(data.status);
+      return false;
+    }
+    const files = Array.isArray(data.files) ? data.files : [];
+    const indexable = files.filter(file => typeof file.content === 'string').length;
+    if (!files.length || !indexable) {
+      if (state.appConfig.referenceConfigured || data.configured) showReferenceLoadIssue(files.length ? 'no_indexable' : 'empty');
+      return false;
+    }
+    const rootName = data.rootName || state.appConfig.referenceName || 'Wiki Local';
+    resetState(rootName);
+    for (const file of files) ingestVirtualFile(file);
+    finalizeLoad();
+    return true;
+  } catch (err) {
+    console.warn(err);
+    if (state.appConfig.referenceConfigured) showReferenceLoadIssue('request_failed');
+    else showToast('Não consegui carregar a wiki configurada no servidor');
+    return false;
+  }
+}
+
+function showReferenceLoadIssue(status){
+  const messages = {
+    missing: 'POCKETWIKI_REFERENCE_PATH está configurado, mas o servidor não encontrou essa pasta. Ajuste o path no .env e use Tentar de novo.',
+    not_directory: 'POCKETWIKI_REFERENCE_PATH está apontando para um arquivo, não para uma pasta. Aponte para a raiz da wiki no .env.',
+    permission_denied: 'O servidor não tem permissão para ler a pasta configurada em POCKETWIKI_REFERENCE_PATH.',
+    no_indexable: 'A pasta configurada abriu, mas não encontrei Markdown ou Excalidraw indexável nela. Confira se o path aponta para a raiz certa da wiki.',
+    empty: 'A pasta configurada abriu, mas veio vazia para o indexador. Confira o path da base no .env.',
+    request_failed: 'A API local respondeu, mas falhou ao carregar os arquivos da base configurada. Veja o terminal do servidor e tente de novo.',
+    unavailable: 'A base configurada no .env não ficou disponível para leitura agora.'
+  };
+  showAccessScreen(messages[status] || messages.unavailable, {
+    kicker: 'base configurada indisponível',
+    title: 'Não foi possível carregar a wiki do .env.'
+  });
+}
+
 async function openWiki(){
   if (window.showDirectoryPicker) {
+    if (await tryLoadStoredDirectory({ requestPermission:true })) return;
     try {
       const handle = await window.showDirectoryPicker({ mode:'read' });
       await loadFromDirectoryHandle(handle);
@@ -310,10 +1175,67 @@ function openFallback(){
   $('#folder-input').click();
 }
 
-async function loadFromDirectoryHandle(handle){
+async function openHandleDb(){
+  if (!window.indexedDB) return null;
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('pocketwiki-handles', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('handles');
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function saveDirectoryHandle(handle){
+  const db = await openHandleDb().catch(() => null);
+  if (!db || !handle) return;
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction('handles', 'readwrite');
+    tx.objectStore('handles').put(handle, 'wiki-root');
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  }).catch(() => {});
+  localStorage.setItem('pocketwiki:last-dir-name', handle.name || 'Wiki Local');
+}
+
+async function getStoredDirectoryHandle(){
+  const db = await openHandleDb().catch(() => null);
+  if (!db) return null;
+  return new Promise(resolve => {
+    const tx = db.transaction('handles', 'readonly');
+    const req = tx.objectStore('handles').get('wiki-root');
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => resolve(null);
+  });
+}
+
+async function hasDirectoryPermission(handle, requestPermission = false){
+  if (!handle?.queryPermission) return true;
+  const opts = { mode:'read' };
+  if (await handle.queryPermission(opts) === 'granted') return true;
+  if (!requestPermission || !handle.requestPermission) return false;
+  return await handle.requestPermission(opts) === 'granted';
+}
+
+async function tryLoadStoredDirectory(opts = {}){
+  if (!window.showDirectoryPicker) return false;
+  const handle = await getStoredDirectoryHandle();
+  if (!handle) return false;
+  try {
+    if (!await hasDirectoryPermission(handle, Boolean(opts.requestPermission))) return false;
+    await loadFromDirectoryHandle(handle, { persist:false, restored:true });
+    return true;
+  } catch (err) {
+    console.warn(err);
+    return false;
+  }
+}
+
+async function loadFromDirectoryHandle(handle, opts = {}){
+  if (opts.persist !== false) await saveDirectoryHandle(handle);
   resetState(handle.name || 'Wiki Local');
   await walkDirectory(handle, '');
   finalizeLoad();
+  if (opts.restored) showToast(`Wiki restaurada: ${handle.name || 'última pasta'}`);
 }
 
 async function walkDirectory(dir, prefix){
@@ -342,42 +1264,54 @@ async function loadFromFileList(files){
 
 async function ingestFile(file, relPath){
   const path = String(relPath || file.name).replace(/^\/+/, '');
-  if (/\.md$/i.test(file.name)) {
-    const content = await file.text();
-    const slug = pathToSlug(path);
-    const name = baseName(path);
-    const title = titleFromContent(content, name);
-    const links = extractWikiLinks(content);
-    const words = wordCount(content);
-    const page = {
-      slug, path, name, title, folder: path.includes('/') ? path.split('/').slice(0,-1).join('/') : '',
-      content, links, outlinks: [], backlinks: new Set(), missing: [], tags: extractTags(content),
-      headings: extractHeadings(content), summary: extractSummary(content), frontmatter: parseFrontmatter(content),
-      updated: extractUpdated(content, file.lastModified), words, readingTime: Math.max(1, Math.ceil(words / 210)),
-      isSpecial: /(^|\/)(index|home|readme|log|changelog)$/i.test(slug)
-    };
-    state.pages.set(slug, page);
-  } else {
-    state.rawFiles.set(path, { path, size: file.size, type: file.type, updated: file.lastModified });
-  }
+  if (/\.md$/i.test(file.name) || /\.excalidraw$/i.test(file.name)) ingestContent(path, await file.text(), file.size, file.type, file.lastModified);
+  else state.rawFiles.set(path, { path, size: file.size, type: file.type, updated: file.lastModified });
+}
+
+function ingestVirtualFile(file){
+  const path = String(file.path || file.name || '').replace(/^\/+/, '');
+  if (!path) return;
+  if ((/\.md$/i.test(file.name || path) || /\.excalidraw$/i.test(file.name || path)) && typeof file.content === 'string') ingestContent(path, file.content, file.size, file.type, file.updated);
+  else state.rawFiles.set(path, { path, size: file.size || 0, type: file.type || '', updated: file.updated || null });
+}
+
+function ingestContent(path, content, size, type, lastModified){
+  if (isExcalidrawSource(path, content)) return ingestExcalidrawContent(path, content, size, type, lastModified);
+  const slug = pathToSlug(path);
+  const name = baseName(path);
+  const title = titleFromContent(content, name);
+  const links = uniqueWikiLinks(extractWikiLinks(content));
+  const words = wordCount(content);
+  const page = {
+    slug, path, name, title, folder: path.includes('/') ? path.split('/').slice(0,-1).join('/') : '',
+    content, links, outlinks: [], backlinks: new Set(), missing: [], tags: extractTags(content),
+    headings: extractHeadings(content), summary: extractSummary(content), frontmatter: parseFrontmatter(content),
+    updated: extractUpdated(content, lastModified), words, readingTime: Math.max(1, Math.ceil(words / 210)),
+    isSpecial: /(^|\/)(index|home|readme|log|changelog)$/i.test(slug),
+    size: size || 0,
+    type: type || 'text/markdown'
+  };
+  state.pages.set(slug, page);
 }
 
 function resetState(name){
-  state.pages.clear(); state.rawFiles.clear(); state.missingLinks.clear(); state.aliasIndex.clear(); state.titleIndex.clear(); state.tagIndex.clear();
-  state.currentPage = null; state.query = ''; state.filter = 'all'; state.dirName = name;
+  state.pages.clear(); state.rawFiles.clear(); state.excalidraws.clear(); state.missingLinks.clear(); state.aliasIndex.clear(); state.titleIndex.clear(); state.tagIndex.clear();
+  state.currentPage = null; state.query = ''; state.filter = 'all'; state.dirName = name; state.selectedExcalidraw = null;
   $('#side-search').value = '';
   $('#wiki-sub').innerHTML = '<strong>carregando</strong> arquivos...';
 }
 
 function finalizeLoad(){
+  hideAccessScreen();
   buildIndexes();
+  addExcalidrawIndexLinks();
   resolveLinks();
   buildGraph();
   renderAll();
   const first = pickHomePage();
   if (first) openPage(first.slug, { silentPanel:true });
-  switchPanel('cockpit');
-  showToast(`${state.pages.size} páginas carregadas`);
+  switchPanel('dashboard');
+  showToast(`${state.pages.size} páginas · ${state.excalidraws.size} desenhos carregados`);
 }
 
 function buildIndexes(){
@@ -433,9 +1367,9 @@ function pickHomePage(){
 }
 
 function renderAll(){
-  $('#wiki-sub').innerHTML = `<strong>${state.pages.size}</strong> páginas · <strong>${state.rawFiles.size}</strong> anexos`;
+  $('#wiki-sub').innerHTML = `<strong>${state.pages.size}</strong> páginas · <strong>${state.excalidraws.size}</strong> desenhos · <strong>${state.rawFiles.size}</strong> anexos`;
   $('#footer-left').textContent = state.dirName;
-  renderNav(); renderCockpit(); renderHealth(); renderTimeline(); renderInspector();
+  renderNav(); renderDashboard(); renderHealth(); renderTimeline(); renderExcalidrawPanel(); renderInspector();
 }
 
 function pageScore(page){
@@ -477,10 +1411,9 @@ function renderNav(){
 }
 
 function navItem(p){
-  const ico = p.isSpecial ? '◆' : (p.missing.length ? '!' : pageScore(p) >= 4 ? '◎' : '◦');
   const badge = p.missing.length ? `${p.missing.length}!` : `${p.backlinks.size}/${p.outlinks.length}`;
   return `<div class="nav-item ${state.currentPage === p.slug ? 'active' : ''}" data-open-page="${attr(p.slug)}">
-    <span class="nav-ico">${ico}</span><span class="nav-name">${esc(p.title)}</span><span class="nav-badge">${esc(badge)}</span>
+    <span class="nav-ico">${icon(pageIconName(p))}</span><span class="nav-name">${esc(p.title)}</span><span class="nav-badge">${esc(badge)}</span>
   </div>`;
 }
 
@@ -489,11 +1422,17 @@ function switchPanel(name){
   const panel = $(`#panel-${name}`);
   if (panel) panel.classList.add('active');
   $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.panel === name));
+  if (name !== 'graph') stopGraph();
   state.activePanel = name;
   if (name === 'graph') setTimeout(() => { renderGraph(); fitGraph(false); }, 60);
-  if (name === 'cockpit') renderCockpit();
+  if (name === 'dashboard') renderDashboard();
+  if (name === 'excalidraw') renderExcalidrawPanel();
   if (name === 'health') renderHealth();
   if (name === 'timeline') renderTimeline();
+  if (name === 'ai') {
+    renderAiPanel();
+    if (!state.ai.models.length && !state.ai.modelsBusy) refreshAiModels({ silent:true });
+  }
 }
 
 function openPage(slug, opts = {}){
@@ -504,9 +1443,13 @@ function openPage(slug, opts = {}){
   renderReader(page);
   renderInspector(page);
   renderNav();
-  if (!opts.silentPanel) switchPanel('reader');
-  else if (state.activePanel === 'welcome') switchPanel('cockpit');
-  localStorage.setItem('wiki-cockpit:last', slug);
+  if (page.kind === 'excalidraw' && !opts.forceReader) {
+    state.selectedExcalidraw = page.slug;
+    if (!opts.silentPanel) switchPanel('excalidraw');
+    else if (state.activePanel === 'excalidraw') renderExcalidrawPanel();
+  } else if (!opts.silentPanel) switchPanel('reader');
+  else if (state.activePanel === 'welcome') switchPanel('dashboard');
+  localStorage.setItem('pocketwiki:last', slug);
 }
 
 function renderReader(page){
@@ -524,11 +1467,34 @@ function renderReader(page){
         ${page.missing.length ? `<span class="pill bad">${page.missing.length} links ausentes</span>` : ''}
         ${page.tags.map(t => `<span class="pill good">#${esc(t)}</span>`).join('')}
       </div>
+      <div class="reader-tools">
+        ${page.kind === 'excalidraw' ? `<button class="btn primary" id="reader-open-excalidraw" data-icon="draw"><span class="btn-text">Ver desenho</span></button>` : ''}
+        <button class="btn" id="reader-ai-summary" data-icon="summary"><span class="btn-text">Resumir na IA</span></button>
+        <button class="btn" id="reader-ai-links" data-icon="link"><span class="btn-text">Sugerir links</span></button>
+        <button class="btn" id="reader-ai-gaps" data-icon="missing"><span class="btn-text">Achar lacunas</span></button>
+      </div>
     </header>
     <div class="md" id="md-root">${html}</div>
   `;
+  decorateStaticIcons($('#reader'));
+  bindReaderAiActions(page);
   enhanceMarkdown($('#md-root'));
   renderOutline(page);
+}
+
+function bindReaderAiActions(page){
+  $('#reader-open-excalidraw')?.addEventListener('click', () => {
+    state.selectedExcalidraw = page.slug;
+    switchPanel('excalidraw');
+  });
+  $('#reader-ai-summary')?.addEventListener('click', () => askPageAi(`Resuma a página "${page.title}" em tópicos práticos. Destaque decisões, comandos, riscos e próximos passos se existirem.`));
+  $('#reader-ai-links')?.addEventListener('click', () => askPageAi(`Sugira links internos úteis para a página "${page.title}", usando apenas páginas existentes no contexto. Explique por que cada link faz sentido.`));
+  $('#reader-ai-gaps')?.addEventListener('click', () => askPageAi(`Analise a página "${page.title}" e aponte lacunas, trechos desatualizados, links internos que faltam e melhorias objetivas.`));
+}
+
+function askPageAi(prompt){
+  switchPanel('ai');
+  setTimeout(() => askAi(prompt), 0);
 }
 
 function markdownToHtml(content, currentSlug){
@@ -541,9 +1507,24 @@ function markdownToHtml(content, currentSlug){
     return `<a href="#" class="${cls}" data-wiki-target="${attr(resolved || slugify(target))}" data-missing="${resolved ? '0' : '1'}">${esc(label)}</a>`;
   });
   if (window.marked && marked.parse) {
-    try { return marked.parse(withWiki, { gfm:true, breaks:false }); } catch(err) { console.warn(err); }
+    try { return sanitizeHtml(marked.parse(withWiki, { gfm:true, breaks:false })); } catch(err) { console.warn(err); }
   }
   return basicMarkdown(withWiki);
+}
+
+function sanitizeHtml(html){
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  template.content.querySelectorAll('script,iframe,object,embed,link,style,meta').forEach(el => el.remove());
+  template.content.querySelectorAll('*').forEach(el => {
+    for (const attrNode of [...el.attributes]) {
+      const name = attrNode.name.toLowerCase();
+      const value = attrNode.value.trim();
+      if (name.startsWith('on')) el.removeAttribute(attrNode.name);
+      if ((name === 'href' || name === 'src') && /^javascript:/i.test(value)) el.removeAttribute(attrNode.name);
+    }
+  });
+  return template.innerHTML;
 }
 
 function basicMarkdown(md){
@@ -607,17 +1588,17 @@ function renderInspector(page = state.pages.get(state.currentPage)){
     <div class="inspector-card"><h4>Tags</h4>${page.tags.length ? `<div class="tag-cloud">${page.tags.map(t => `<button class="tag" data-tag="${attr(t)}">#${esc(t)}</button>`).join('')}</div>` : '<div class="empty" style="padding:8px">sem tags</div>'}</div>
     <div class="inspector-card"><h4>Backlinks</h4>${backlinks.length ? backlinks.map(p => miniLink(p)).join('') : '<div class="empty" style="padding:8px">ninguém aponta para esta página</div>'}</div>
     <div class="inspector-card"><h4>Outlinks</h4>${outlinks.length ? outlinks.map(p => miniLink(p)).join('') : '<div class="empty" style="padding:8px">sem links para outras páginas</div>'}</div>
-    <div class="inspector-card"><h4>Ausentes</h4>${page.missing.length ? page.missing.map(l => `<span class="link-mini" style="color:var(--bad)">✕ ${esc(l.label)}</span>`).join('') : '<span class="link-mini" style="color:var(--good)">✓ nenhum link quebrado</span>'}</div>
+    <div class="inspector-card"><h4>Ausentes</h4>${page.missing.length ? page.missing.map(l => `<span class="link-mini" style="color:var(--bad)">${icon('missing')}<span>${esc(l.label)}</span></span>`).join('') : `<span class="link-mini" style="color:var(--good)">${icon('check')}<span>nenhum link quebrado</span></span>`}</div>
   `;
   $('#inspector-body').querySelectorAll('[data-open-page]').forEach(el => el.addEventListener('click', () => openPage(el.dataset.openPage)));
   $('#inspector-body').querySelectorAll('[data-tag]').forEach(el => el.addEventListener('click', () => filterTag(el.dataset.tag)));
 }
 
-function miniLink(p){ return `<a href="#" class="link-mini" data-open-page="${attr(p.slug)}">${esc(p.title)}</a>`; }
+function miniLink(p){ return `<a href="#" class="link-mini" data-open-page="${attr(p.slug)}">${icon(pageIconName(p))}<span>${esc(p.title)}</span></a>`; }
 
-function renderCockpit(){
+function renderDashboard(){
   const pages = [...state.pages.values()];
-  if (!pages.length) { $('#cockpit').innerHTML = '<div class="empty">Abra uma wiki para gerar o cockpit.</div>'; return; }
+  if (!pages.length) { $('#dashboard').innerHTML = `${renderRoutesCard()}<div class="empty">Abra uma wiki para gerar o dashboard.</div>`; return; }
   const totalLinks = pages.reduce((s,p)=>s+p.outlinks.length+p.missing.length,0);
   const orphans = pages.filter(p => !p.isSpecial && p.backlinks.size === 0);
   const hubs = pages.filter(p => pageScore(p) >= 4).sort((a,b)=>pageScore(b)-pageScore(a)).slice(0,8);
@@ -625,47 +1606,135 @@ function renderCockpit(){
   const recent = pages.slice().sort((a,b)=>(b.updated||0)-(a.updated||0)).slice(0,8);
   const tags = [...state.tagIndex.entries()].sort((a,b)=>b[1].size-a[1].size).slice(0,18);
   const paths = suggestPaths();
-  $('#cockpit').innerHTML = `
+  $('#dashboard').innerHTML = `
     <div class="hero">
       <div class="hero-card">
         <h2>${esc(state.dirName)}</h2>
         <p>Visão executiva da sua wiki: densidade de conhecimento, páginas centrais, buracos de documentação e trilhas sugeridas para navegar sem depender do Obsidian arquivo por arquivo.</p>
         <div class="stat-grid">
-          <div class="stat"><div class="stat-num">${pages.length}</div><div class="stat-label">Páginas</div></div>
-          <div class="stat"><div class="stat-num">${totalLinks}</div><div class="stat-label">Links</div></div>
-          <div class="stat"><div class="stat-num">${state.tagIndex.size}</div><div class="stat-label">Tags</div></div>
-          <div class="stat"><div class="stat-num">${state.missingLinks.size}</div><div class="stat-label">Ausentes</div></div>
+          ${statCard('page', pages.length, 'Páginas')}
+          ${statCard('link', totalLinks, 'Links')}
+          ${statCard('draw', state.excalidraws.size, 'Desenhos')}
+          ${statCard('missing', state.missingLinks.size, 'Ausentes')}
         </div>
       </div>
       <div class="card quick-actions">
-        <button class="action-tile" onclick="openPalette()"><b>Command palette</b><span>Abra página, ação, tag ou filtro com Ctrl/⌘ K.</span></button>
-        <button class="action-tile" onclick="switchPanel('graph')"><b>Mapa vivo</b><span>Visualize relações, hubs e links quebrados.</span></button>
-        <button class="action-tile" onclick="randomPage()"><b>Página aleatória</b><span>Modo exploração para redescobrir conteúdo.</span></button>
-        <button class="action-tile" onclick="copyWikiReport()"><b>Copiar relatório</b><span>Resumo markdown da saúde da wiki.</span></button>
+        ${actionTile('command', 'Command palette', 'Abra página, ação, tag ou filtro com Ctrl/⌘ K.', 'openPalette()')}
+        ${actionTile('graph', 'Mapa vivo', 'Visualize relações, hubs e links quebrados.', "switchPanel('graph')")}
+        ${actionTile('draw', 'Excalidraw', 'Veja e indexe diagramas como fonte da wiki.', "switchPanel('excalidraw')")}
+        ${actionTile('copy', 'Copiar relatório', 'Resumo markdown da saúde da wiki.', 'copyWikiReport()')}
       </div>
     </div>
+    ${renderRoutesCard()}
     <div class="grid">
-      <div class="card span-7"><div class="card-title">Trilhas sugeridas <small>geradas por relações</small></div><div class="path-list">${paths.map(renderPath).join('') || '<div class="empty">adicione wiki-links para gerar trilhas</div>'}</div></div>
-      <div class="card span-5"><div class="card-title">Densidade <small>cada bloco é uma página</small></div><div class="matrix">${pages.map(renderMatrixCell).join('')}</div></div>
-      <div class="card span-4"><div class="card-title">Hubs <small>mais conectadas</small></div><div class="list">${hubs.map(p => listPage(p, `${p.backlinks.size} back · ${p.outlinks.length} out`)).join('') || '<div class="empty">nenhum hub detectado</div>'}</div></div>
-      <div class="card span-4"><div class="card-title">Links ausentes <small>prioridade</small></div><div class="list">${missing.map(([key,m]) => `<div class="list-item" onclick="showToast('Crie a página: ${attr(m.label)}')"><div class="list-head"><span class="list-name" style="color:var(--bad)">${esc(m.label)}</span><span class="list-meta">${m.from.size} refs</span></div></div>`).join('') || '<div class="empty">sem links quebrados</div>'}</div></div>
-      <div class="card span-4"><div class="card-title">Tags <small>clusters</small></div><div class="tag-cloud">${tags.map(([t,set]) => `<button class="tag" data-tag="${attr(t)}">#${esc(t)} · ${set.size}</button>`).join('') || '<div class="empty">sem tags</div>'}</div></div>
-      <div class="card span-6"><div class="card-title">Órfãos <small>sem backlinks</small></div><div class="list">${orphans.slice(0,8).map(p => listPage(p, p.folder || 'raiz')).join('') || '<div class="empty">sem órfãos relevantes</div>'}</div></div>
-      <div class="card span-6"><div class="card-title">Recentes <small>por data detectada</small></div><div class="list">${recent.map(p => listPage(p, fmtDate(p.updated))).join('')}</div></div>
+      <div class="card span-7"><div class="card-title">${cardTitle('route', 'Trilhas sugeridas', 'geradas por relações')}</div><div class="path-list">${paths.map(renderPath).join('') || '<div class="empty">adicione wiki-links para gerar trilhas</div>'}</div></div>
+      <div class="card span-5"><div class="card-title">${cardTitle('dashboard', 'Densidade', 'links por nota')}</div>${renderDensityPanel(pages)}</div>
+      <div class="card span-4"><div class="card-title">${cardTitle('hub', 'Hubs', 'mais conectadas')}</div><div class="list">${hubs.map(p => listPage(p, `${p.backlinks.size} back · ${p.outlinks.length} out`)).join('') || '<div class="empty">nenhum hub detectado</div>'}</div></div>
+      <div class="card span-4"><div class="card-title">${cardTitle('missing', 'Links ausentes', 'prioridade')}</div><div class="list">${missing.map(([key,m]) => `<div class="list-item" onclick="showToast('Crie a página: ${attr(m.label)}')"><span class="list-icon bad">${icon('missing')}</span><div class="list-content"><div class="list-head"><span class="list-name" style="color:var(--bad)">${esc(m.label)}</span><span class="list-meta">${m.from.size} refs</span></div></div></div>`).join('') || '<div class="empty">sem links quebrados</div>'}</div></div>
+      <div class="card span-4"><div class="card-title">${cardTitle('tag', 'Tags', 'clusters')}</div><div class="tag-cloud">${tags.map(([t,set]) => `<button class="tag" data-tag="${attr(t)}">${icon('tag')}#${esc(t)} · ${set.size}</button>`).join('') || '<div class="empty">sem tags</div>'}</div></div>
+      <div class="card span-6"><div class="card-title">${cardTitle('orphan', 'Órfãos', 'sem backlinks')}</div><div class="list">${orphans.slice(0,8).map(p => listPage(p, p.folder || 'raiz')).join('') || '<div class="empty">sem órfãos relevantes</div>'}</div></div>
+      <div class="card span-6"><div class="card-title">${cardTitle('timeline', 'Recentes', 'por data detectada')}</div><div class="list">${recent.map(p => listPage(p, fmtDate(p.updated))).join('')}</div></div>
     </div>
   `;
-  $('#cockpit').querySelectorAll('[data-open-page]').forEach(el => el.addEventListener('click', () => openPage(el.dataset.openPage)));
-  $('#cockpit').querySelectorAll('[data-tag]').forEach(el => el.addEventListener('click', () => filterTag(el.dataset.tag)));
+  $('#dashboard').querySelectorAll('[data-open-page]').forEach(el => el.addEventListener('click', () => openPage(el.dataset.openPage)));
+  $('#dashboard').querySelectorAll('[data-tag]').forEach(el => el.addEventListener('click', () => filterTag(el.dataset.tag)));
+  $('#dashboard').querySelectorAll('[data-copy-route]').forEach(el => el.addEventListener('click', () => {
+    copyText(el.dataset.copyRoute, 'Rota copiada', 'Não foi possível copiar a rota');
+  }));
+}
+
+function renderRoutesCard(){
+  const routes = state.routes;
+  if (!routes) return '';
+  const groups = [
+    ['Local', routes.local || [], 'local'],
+    ['mDNS', routes.mdns || [], 'mdns'],
+    ['LAN', routes.lan || [], 'lan'],
+    ['Tailscale', routes.tailscale || [], 'tailscale']
+  ];
+  const portNote = routes.portless
+    ? 'Servidor em HTTP :80: as rotas aparecem sem porta.'
+    : `Servidor em :${routes.port}: navegador vai exigir a porta ou um reverse proxy/Tailscale Serve.`;
+  return `
+    <div class="card route-card">
+      <div class="card-title">${cardTitle('route', 'Rotas de acesso', 'detectadas pelo servidor')}</div>
+      <div class="route-grid">
+        ${groups.map(([name, urls, iconName]) => `<div class="route-group"><b><span class="card-title-text">${icon(iconName)}<span>${esc(name)}</span></span> <small>${urls.length}</small></b>${routeLinks(urls)}</div>`).join('')}
+      </div>
+      <div class="route-note">${esc(portNote)} Tailscale MagicDNS não cria <code>pocketwiki.local</code>; para esse nome na tailnet, crie DNS rewrite/hosts apontando para o IP Tailscale listado aqui.</div>
+    </div>`;
+}
+
+function routeLinks(urls){
+  return urls.length
+    ? urls.map(url => `<a class="route-link" href="${attr(url)}" target="_blank" rel="noreferrer" data-copy-route="${attr(url)}" title="Clique para abrir e tentar copiar a rota">${esc(url)}</a>`).join('')
+    : '<div class="route-empty">não detectado</div>';
 }
 
 function listPage(p, meta){
-  return `<div class="list-item" data-open-page="${attr(p.slug)}"><div class="list-head"><span class="list-name">${esc(p.title)}</span><span class="list-meta">${esc(meta)}</span></div>${p.summary ? `<div class="list-desc">${esc(p.summary)}</div>` : ''}</div>`;
+  const iconName = pageIconName(p);
+  const cls = p.missing.length ? 'bad' : healthClass(p) === 'good' ? 'good' : 'warn';
+  return `<div class="list-item" data-open-page="${attr(p.slug)}"><span class="list-icon ${cls}">${icon(iconName)}</span><div class="list-content"><div class="list-head"><span class="list-name">${esc(p.title)}</span><span class="list-meta">${esc(meta)}</span></div>${p.summary ? `<div class="list-desc">${esc(p.summary)}</div>` : ''}</div></div>`;
 }
 
-function renderMatrixCell(p){
-  const score = pageScore(p) + p.missing.length;
-  const cls = score > 8 ? 'l3' : score > 3 ? 'l2' : score > 0 ? 'l1' : '';
-  return `<div class="matrix-cell ${cls}" title="${attr(p.title)}" data-open-page="${attr(p.slug)}"></div>`;
+function renderDensityPanel(pages){
+  const items = pages.map(p => ({ page:p, density:pageDensity(p), score:pageScore(p) })).sort((a,b)=>b.density-a.density || b.score-a.score);
+  const connected = items.filter(item => item.density > 0).length;
+  const dense = items.filter(item => item.density >= 8).length;
+  const isolated = pages.filter(p=>!p.backlinks.size && !p.outlinks.length && !p.isSpecial).length;
+  const avg = pages.length ? Math.round(items.reduce((sum,item)=>sum + item.density, 0) / pages.length * 10) / 10 : 0;
+  const top = items.filter(item => item.density > 0).slice(0,5);
+  return `
+    <div class="density-panel">
+      <div>
+        <div class="density-map">${items.map(renderDensityCell).join('')}</div>
+        <div class="density-legend" style="margin-top:10px">
+          <span><i class="density-dot"></i>solta</span>
+          <span><i class="density-dot l1"></i>baixa</span>
+          <span><i class="density-dot l2"></i>média</span>
+          <span><i class="density-dot l3"></i>alta</span>
+          <span><i class="density-dot l4"></i>quebrada</span>
+        </div>
+      </div>
+      <div class="density-side">
+        <div class="density-kpis">
+          <div class="density-kpi"><b>${esc(avg)}</b><span>média</span></div>
+          <div class="density-kpi"><b>${esc(connected)}</b><span>conectadas</span></div>
+          <div class="density-kpi"><b>${esc(dense)}</b><span>hubs</span></div>
+          <div class="density-kpi"><b>${esc(isolated)}</b><span>soltas</span></div>
+        </div>
+        <div class="density-top">${top.map(renderDensityTopItem).join('') || '<div class="empty" style="padding:12px">sem notas conectadas</div>'}</div>
+        <div class="density-note">Cada bloco é uma nota. A cor combina backlinks, outlinks e links ausentes; hover mostra o detalhe e clique abre a nota.</div>
+      </div>
+    </div>`;
+}
+
+function pageDensity(page){
+  return page.backlinks.size + page.outlinks.length + page.missing.length;
+}
+
+function renderDensityCell(item){
+  const p = item.page;
+  const cls = densityClass(p, item.density);
+  const type = p.kind === 'excalidraw' ? ' · Excalidraw' : '';
+  const title = `${p.title}${type}\n${p.backlinks.size} backlinks · ${p.outlinks.length} outlinks · ${p.missing.length} ausentes\n${p.path}`;
+  return `<button class="density-cell ${cls}" title="${attr(title)}" aria-label="${attr(title)}" data-open-page="${attr(p.slug)}"></button>`;
+}
+
+function densityClass(page, density){
+  const parts = [];
+  if (page.missing.length) parts.push('l4', 'missing');
+  else if (density >= 12) parts.push('l3');
+  else if (density >= 5) parts.push('l2');
+  else if (density > 0) parts.push('l1');
+  if (page.kind === 'excalidraw') parts.push('excalidraw');
+  return parts.join(' ');
+}
+
+function renderDensityTopItem(item){
+  const p = item.page;
+  const meta = `${p.backlinks.size} back · ${p.outlinks.length} out · ${p.missing.length} faltam`;
+  return `<button data-open-page="${attr(p.slug)}"><strong>${esc(p.title)}</strong><small>${esc(meta)}</small></button>`;
 }
 
 function renderPath(path){
@@ -693,9 +1762,29 @@ function renderHealth(){
   const noSummary = pages.filter(p=>!p.summary);
   const stale = pages.filter(p=>p.updated && today() - p.updated > 180*24*3600*1000).sort((a,b)=>a.updated-b.updated);
   const isolated = pages.filter(p=>!p.backlinks.size && !p.outlinks.length && !p.isSpecial);
+  const tagless = pages.filter(p=>!p.tags.length && !p.isSpecial);
   const score = Math.max(0, Math.round(100 - state.missingLinks.size*5 - orphans.length*2 - noSummary.length - isolated.length*3));
+  const improvements = buildWikiImprovements({ pages, missingSources, orphans, noSummary, stale, isolated, tagless });
   $('#health').innerHTML = `
-    <div class="hero-card" style="margin-bottom:16px"><h2>Saúde da wiki: ${score}/100</h2><p>Essa nota é heurística: penaliza links ausentes, páginas órfãs, páginas sem resumo e conteúdo isolado.</p></div>
+    <div class="hero-card" style="margin-bottom:16px">
+      <h2>Saúde da wiki: ${score}/100</h2>
+      <p>Essa nota é heurística e vira fila de ação: links ausentes, páginas órfãs, conteúdo sem resumo, páginas isoladas e material antigo.</p>
+      <div class="stat-grid">
+        ${statCard('missing', state.missingLinks.size, 'Links quebrados')}
+        ${statCard('orphan', orphans.length, 'Órfãos')}
+        ${statCard('summary', noSummary.length, 'Sem resumo')}
+        ${statCard('isolated', isolated.length, 'Isoladas')}
+      </div>
+    </div>
+    <div class="card review-card">
+      <div class="card-title">${cardTitle('ai', 'Revisão', 'prompt dedicado para LLM')}</div>
+      <div class="route-note">Use esta fila como checklist ou copie o prompt completo para qualquer LLM. O arquivo base fica em <code>prompts/wiki-review.md</code>.</div>
+      <div class="open-actions" style="max-width:420px;margin:12px 0 14px">
+        <button class="btn primary" id="copy-review-prompt" data-icon="copy"><span class="btn-text">Copiar prompt</span></button>
+        <button class="btn" id="ai-review-prompt" data-icon="ai"><span class="btn-text">Revisar na IA local</span></button>
+      </div>
+      <div class="review-list">${improvements.map(renderReviewItem).join('') || '<div class="empty">Nada crítico encontrado. Mantenha revisão periódica de páginas antigas e hubs.</div>'}</div>
+    </div>
     <div class="issue-grid">
       ${issueCard('Links quebrados', missingSources, 'bad', p => `${p.missing.length} ausentes`)}
       ${issueCard('Órfãos', orphans, 'warn', p => p.folder || 'raiz')}
@@ -704,17 +1793,277 @@ function renderHealth(){
       ${issueCard('Antigas > 180 dias', stale, 'warn', p => fmtDate(p.updated))}
       ${issueCard('Boas páginas', pages.filter(p=>healthClass(p)==='good').slice(0,10), 'good', p => `${p.backlinks.size}/${p.outlinks.length} links`)}
     </div>`;
+  decorateStaticIcons($('#health'));
   $('#health').querySelectorAll('[data-open-page]').forEach(el => el.addEventListener('click', () => openPage(el.dataset.openPage)));
+  $('#copy-review-prompt')?.addEventListener('click', copyWikiReviewPrompt);
+  $('#ai-review-prompt')?.addEventListener('click', askWikiReview);
+}
+
+function buildWikiImprovements(data){
+  const items = [];
+  if (data.missingSources.length) items.push({
+    priority:'high',
+    title:'Corrigir links quebrados primeiro',
+    detail:`${state.missingLinks.size} destino(s) ausente(s). Priorize páginas com mais referências para recuperar navegação e contexto da IA.`,
+    pages:data.missingSources.slice(0,6)
+  });
+  if (data.isolated.length) items.push({
+    priority:'high',
+    title:'Conectar páginas isoladas',
+    detail:`${data.isolated.length} página(s) não recebem nem apontam links. Adicione backlinks ou links de saída para elas entrarem no mapa.`,
+    pages:data.isolated.slice(0,6)
+  });
+  if (data.orphans.length) items.push({
+    priority:'medium',
+    title:'Dar entrada para páginas órfãs',
+    detail:`${data.orphans.length} página(s) sem backlinks. Crie links a partir de hubs ou índices para reduzir conteúdo perdido.`,
+    pages:data.orphans.slice(0,6)
+  });
+  if (data.noSummary.length) items.push({
+    priority:'medium',
+    title:'Adicionar resumos operacionais',
+    detail:`${data.noSummary.length} página(s) sem resumo detectado. Um resumo curto melhora busca, triagem e respostas da IA.`,
+    pages:data.noSummary.slice(0,6)
+  });
+  if (data.stale.length) items.push({
+    priority:'low',
+    title:'Revalidar conteúdo antigo',
+    detail:`${data.stale.length} página(s) têm data detectada maior que 180 dias. Revise comandos, versões, URLs e decisões antigas.`,
+    pages:data.stale.slice(0,6)
+  });
+  if (data.tagless.length) items.push({
+    priority:'low',
+    title:'Normalizar tags nos clusters',
+    detail:`${data.tagless.length} página(s) sem tags. Use tags estáveis para melhorar filtros e agrupamento do Dashboard.`,
+    pages:data.tagless.slice(0,6)
+  });
+  return items.sort((a,b)=>priorityWeight(a.priority)-priorityWeight(b.priority));
+}
+
+function priorityWeight(priority){
+  return { high:0, medium:1, low:2 }[priority] ?? 9;
+}
+
+function priorityLabel(priority){
+  return { high:'alta', medium:'média', low:'baixa' }[priority] || priority;
+}
+
+function renderReviewItem(item){
+  const iconName = item.priority === 'high' ? 'alert' : item.priority === 'medium' ? 'health' : 'check';
+  return `<div class="review-item">
+    <div class="review-head"><b class="review-title"><span class="review-icon ${attr(item.priority)}">${icon(iconName)}</span><span>${esc(item.title)}</span></b><span class="priority ${attr(item.priority)}">${esc(priorityLabel(item.priority))}</span></div>
+    <div class="review-detail">${esc(item.detail)}</div>
+    <div class="review-pages">${item.pages.map(p => `<button class="path-step" data-open-page="${attr(p.slug)}">${esc(p.title)}</button>`).join('')}</div>
+  </div>`;
 }
 
 function issueCard(title, list, cls, metaFn){
-  return `<div class="card issue ${cls}"><div class="card-title">${esc(title)} <small>${list.length}</small></div><div class="list">${list.slice(0,12).map(p => listPage(p, metaFn(p))).join('') || '<div class="empty">nada encontrado</div>'}</div></div>`;
+  const iconName = cls === 'bad' ? 'missing' : cls === 'good' ? 'check' : title.includes('Antigas') ? 'stale' : 'health';
+  return `<div class="card issue ${cls}"><div class="card-title">${cardTitle(iconName, title, String(list.length))}</div><div class="list">${list.slice(0,12).map(p => listPage(p, metaFn(p))).join('') || '<div class="empty">nada encontrado</div>'}</div></div>`;
 }
 
 function renderTimeline(){
   const pages = [...state.pages.values()].sort((a,b)=>(b.updated||0)-(a.updated||0));
-  $('#timeline').innerHTML = `<div class="hero-card" style="margin-bottom:18px"><h2>Linha do tempo</h2><p>Ordenada por frontmatter <code>updated/date</code>, campos “Last updated/Atualizado” ou data de modificação do arquivo.</p></div><div class="timeline-line">${pages.map(p => `<div class="time-entry" data-open-page="${attr(p.slug)}"><div class="time-date">${esc(fmtDate(p.updated))}</div><div class="time-title">${esc(p.title)}</div>${p.summary ? `<div class="time-summary">${esc(p.summary)}</div>` : ''}</div>`).join('')}</div>`;
+  $('#timeline').innerHTML = `<div class="hero-card" style="margin-bottom:18px"><h2>Linha do tempo</h2><p>Ordenada por frontmatter <code>updated/date</code>, campos “Last updated/Atualizado” ou data de modificação do arquivo.</p></div><div class="timeline-line">${pages.map(p => `<div class="time-entry" data-open-page="${attr(p.slug)}"><span class="time-icon">${icon('timeline')}</span><div class="time-content"><div class="time-date">${esc(fmtDate(p.updated))}</div><div class="time-title">${esc(p.title)}</div>${p.summary ? `<div class="time-summary">${esc(p.summary)}</div>` : ''}</div></div>`).join('')}</div>`;
   $('#timeline').querySelectorAll('[data-open-page]').forEach(el => el.addEventListener('click', () => openPage(el.dataset.openPage)));
+}
+
+function renderExcalidrawPanel(){
+  const root = $('#excalidraw');
+  if (!root) return;
+  const diagrams = [...state.excalidraws.values()].sort((a,b)=>a.title.localeCompare(b.title));
+  if (!diagrams.length) {
+    root.innerHTML = `
+      <div class="hero-card">
+        <h2>Excalidraw</h2>
+        <p>Carregue arquivos <code>.excalidraw</code> ou <code>.excalidraw.md</code>. O PocketWiki vai renderizar uma prévia local, extrair textos, links e relações visuais e colocar tudo no indexador.</p>
+        <div class="excalidraw-empty">nenhum desenho encontrado na base atual</div>
+      </div>`;
+    return;
+  }
+
+  const selected = state.excalidraws.get(state.selectedExcalidraw) || diagrams[0];
+  state.selectedExcalidraw = selected.slug;
+  const page = state.pages.get(selected.slug);
+  root.innerHTML = `
+    <div class="hero-card" style="margin-bottom:16px">
+      <h2>Excalidraw interpretado</h2>
+      <p>Os desenhos viram fontes indexáveis: textos entram na busca e na IA, links internos entram no mapa, e setas conectadas viram relações visuais navegáveis.</p>
+      <div class="stat-grid">
+        ${statCard('draw', diagrams.length, 'Desenhos')}
+        ${statCard('page', selected.stats.elements, 'Elementos')}
+        ${statCard('summary', selected.stats.text, 'Textos')}
+        ${statCard('link', selected.stats.relations, 'Relações')}
+      </div>
+    </div>
+    <div class="excalidraw-grid">
+      <div class="card excalidraw-stage">
+        <div class="card-title">${cardTitle('draw', selected.title, selected.path)}</div>
+        <div class="excalidraw-meta">
+          <span class="excalidraw-chip">${esc(selected.stats.elements)} elementos</span>
+          <span class="excalidraw-chip">${esc(selected.stats.text)} textos</span>
+          <span class="excalidraw-chip">${esc(selected.stats.arrows)} setas</span>
+          <span class="excalidraw-chip">${esc(selected.stats.links)} links</span>
+          <span class="excalidraw-chip ${selected.fallback ? 'warn' : 'ok'}">${selected.fallback ? 'fallback textual' : 'cena completa'}</span>
+        </div>
+        <div class="excalidraw-preview" id="excalidraw-preview" data-render-status="${selected.fallback ? 'fallback' : 'loading'}">${selected.fallback ? renderExcalidrawFallback(selected) : renderExcalidrawSvg(selected)}</div>
+        <div class="reader-tools">
+          <button class="btn primary" id="excalidraw-open-page" data-icon="reader"><span class="btn-text">Abrir índice</span></button>
+          <button class="btn" id="excalidraw-copy-index" data-icon="copy"><span class="btn-text">Copiar índice</span></button>
+          <button class="btn" id="excalidraw-ai" data-icon="ai"><span class="btn-text">Interpretar na IA</span></button>
+        </div>
+      </div>
+      <aside class="ai-side">
+        <div class="card">
+          <div class="card-title">${cardTitle('files', 'Desenhos', String(diagrams.length))}</div>
+          <div class="excalidraw-list">${diagrams.map(item => renderExcalidrawListItem(item)).join('')}</div>
+        </div>
+        <div class="card">
+          <div class="card-title">${cardTitle('summary', 'Textos extraídos', String(selected.texts.length))}</div>
+          <div class="excalidraw-text-list">${selected.texts.slice(0,18).map(t => `<div class="excalidraw-text">${esc(t.text)}</div>`).join('') || '<div class="empty">sem texto extraído</div>'}</div>
+        </div>
+        <div class="card">
+          <div class="card-title">${cardTitle('link', 'Relações visuais', String(selected.relations.length))}</div>
+          <div class="list">${selected.relations.slice(0,12).map(r => `<div class="list-item"><span class="list-icon">${icon('link')}</span><div class="list-content"><div class="excalidraw-rel"><span>${esc(r.from)}</span><b style="color:var(--accent)">→</b><span>${esc(r.to)}</span></div>${r.label ? `<div class="list-desc">${esc(r.label)}</div>` : ''}</div></div>`).join('') || '<div class="empty">sem relações conectadas</div>'}</div>
+        </div>
+      </aside>
+    </div>`;
+  decorateStaticIcons(root);
+  root.querySelectorAll('[data-excalidraw-select]').forEach(el => el.addEventListener('click', () => {
+    state.selectedExcalidraw = el.dataset.excalidrawSelect;
+    renderExcalidrawPanel();
+  }));
+  $('#excalidraw-open-page')?.addEventListener('click', () => openPage(selected.slug, { forceReader:true }));
+  $('#excalidraw-copy-index')?.addEventListener('click', async () => {
+    const text = page?.content || buildExcalidrawIndexMarkdown(selected);
+    const ok = await copyText(text, 'Índice do Excalidraw copiado', 'Não consegui copiar automaticamente');
+    if (!ok) showCopyFallback('Índice Excalidraw', text);
+  });
+  $('#excalidraw-ai')?.addEventListener('click', () => askExcalidrawAi(selected.slug));
+  mountExcalidrawPreview(selected.slug);
+}
+
+function renderExcalidrawListItem(item){
+  const active = state.selectedExcalidraw === item.slug ? 'active' : '';
+  return `<button class="excalidraw-item ${active}" data-excalidraw-select="${attr(item.slug)}"><span class="list-icon">${icon('draw')}</span><span class="list-content"><span class="list-head"><span class="list-name">${esc(item.title)}</span><span class="list-meta">${esc(item.stats.text)} txt</span></span><span class="list-desc">${esc(item.path)}</span></span></button>`;
+}
+
+function ensureExcalidrawRenderer(){
+  if (window.PocketExcalidrawRenderer?.renderExcalidrawToSvg) return Promise.resolve(window.PocketExcalidrawRenderer);
+  if (!excalidrawRendererPromise) {
+    excalidrawRendererPromise = import(`/assets/excalidraw-renderer.js?v=${EXCALIDRAW_RENDERER_VERSION}`)
+      .then(mod => mod || window.PocketExcalidrawRenderer)
+      .catch(err => {
+        excalidrawRendererPromise = null;
+        throw err;
+      });
+  }
+  return excalidrawRendererPromise;
+}
+
+async function mountExcalidrawPreview(slug){
+  const preview = $('#excalidraw-preview');
+  const analysis = state.excalidraws.get(slug);
+  if (!preview || !analysis || state.selectedExcalidraw !== slug) return;
+
+  if (analysis.fallback || !analysis.scene?.elements?.length) {
+    preview.dataset.renderStatus = 'fallback';
+    preview.innerHTML = renderExcalidrawFallback(analysis);
+    return;
+  }
+
+  preview.dataset.renderStatus = 'loading';
+  try {
+    const renderer = await ensureExcalidrawRenderer();
+    const html = await renderer.renderExcalidrawToSvg(analysis.scene, {
+      title: analysis.title,
+      theme: 'dark',
+      backgroundColor: 'transparent',
+      padding: 56
+    });
+    if (state.selectedExcalidraw !== slug || !$('#excalidraw-preview')) return;
+    $('#excalidraw-preview').dataset.renderStatus = 'official';
+    $('#excalidraw-preview').innerHTML = html;
+  } catch (err) {
+    console.warn('Falha no renderer oficial do Excalidraw, usando fallback local');
+    if (state.selectedExcalidraw !== slug || !$('#excalidraw-preview')) return;
+    $('#excalidraw-preview').dataset.renderStatus = 'fallback';
+    $('#excalidraw-preview').innerHTML = `${renderExcalidrawFallback(analysis)}<div class="excalidraw-render-note">renderer oficial indisponível; exibindo fallback local</div>`;
+  }
+}
+
+function renderExcalidrawFallback(analysis){
+  const items = (analysis.texts || []).slice(0, 80);
+  if (!items.length) return `<div class="excalidraw-empty">sem cena renderizável neste arquivo</div>`;
+  return `<div class="excalidraw-fallback" role="img" aria-label="${attr(analysis.title)}">
+    <div class="excalidraw-fallback-board">
+      ${items.map(item => `<div class="excalidraw-fallback-card">${esc(item.text)}</div>`).join('')}
+    </div>
+    <div class="excalidraw-render-note">arquivo sem JSON completo interpretável; o PocketWiki indexou os textos disponíveis</div>
+  </div>`;
+}
+
+function renderExcalidrawSvg(analysis){
+  const b = analysis.bounds || { x:0, y:0, width:1200, height:720 };
+  const pad = Math.max(80, Math.min(180, Math.max(b.width, b.height) * 0.08));
+  const viewBox = `${b.x - pad} ${b.y - pad} ${b.width + pad * 2} ${b.height + pad * 2}`;
+  return `<svg viewBox="${attr(viewBox)}" role="img" aria-label="${attr(analysis.title)}" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="ex-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#f5f1e8"></path></marker>
+    </defs>
+    <rect x="${b.x - pad}" y="${b.y - pad}" width="${b.width + pad * 2}" height="${b.height + pad * 2}" fill="#111111"></rect>
+    ${analysis.elements.map(renderExcalidrawSvgElement).join('')}
+  </svg>`;
+}
+
+function renderExcalidrawSvgElement(el){
+  const x = num(el.x), y = num(el.y), w = Math.max(1, Math.abs(num(el.width))), h = Math.max(1, Math.abs(num(el.height)));
+  const stroke = displaySvgColor(el.strokeColor, '#f5f1e8');
+  const fill = el.backgroundColor && el.backgroundColor !== 'transparent' ? safeSvgColor(el.backgroundColor, 'transparent') : 'transparent';
+  const sw = Math.max(1, num(el.strokeWidth) || 1.5);
+  const common = `stroke="${attr(stroke)}" stroke-width="${sw}" fill="${attr(fill)}" opacity="${el.opacity ? Math.max(0.1, Math.min(1, num(el.opacity) / 100)) : 1}"`;
+  if (el.type === 'text') return renderExcalidrawSvgText(el, x, y, stroke);
+  if (el.type === 'ellipse') return `<ellipse cx="${x + w / 2}" cy="${y + h / 2}" rx="${w / 2}" ry="${h / 2}" ${common}></ellipse>`;
+  if (el.type === 'diamond') return `<polygon points="${x + w / 2},${y} ${x + w},${y + h / 2} ${x + w / 2},${y + h} ${x},${y + h / 2}" ${common}></polygon>`;
+  if (el.type === 'arrow' || el.type === 'line' || el.type === 'freedraw') return renderExcalidrawSvgLine(el, stroke, sw);
+  if (el.type === 'image') return `<g><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" ${common}></rect><text x="${x + w / 2}" y="${y + h / 2}" text-anchor="middle" fill="#94a3b8" font-size="14" font-family="Inter, sans-serif">imagem</text></g>`;
+  const dash = el.type === 'frame' ? 'stroke-dasharray="10 7"' : '';
+  return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" ${common} ${dash}></rect>`;
+}
+
+function renderExcalidrawSvgText(el, x, y, stroke){
+  const lines = cleanExcalidrawText(el.rawText || el.text).split('\n');
+  const size = Math.max(10, num(el.fontSize) || 16);
+  const lineHeight = size * 1.22;
+  return `<text x="${x}" y="${y + size}" fill="${attr(stroke)}" font-size="${size}" font-family="Inter, sans-serif" font-weight="${el.fontFamily === 1 ? 600 : 500}">${lines.map((line, idx) => `<tspan x="${x}" dy="${idx ? lineHeight : 0}">${esc(line)}</tspan>`).join('')}</text>`;
+}
+
+function renderExcalidrawSvgLine(el, stroke, sw){
+  const points = Array.isArray(el.points) && el.points.length ? el.points : [[0,0], [num(el.width), num(el.height)]];
+  const coords = points.map(p => `${num(el.x) + num(p[0])},${num(el.y) + num(p[1])}`).join(' ');
+  const marker = el.type === 'arrow' ? 'marker-end="url(#ex-arrow)"' : '';
+  return `<polyline points="${attr(coords)}" fill="none" stroke="${attr(stroke)}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" ${marker}></polyline>`;
+}
+
+function safeSvgColor(value, fallback){
+  const color = String(value || '').trim();
+  if (/^#[0-9a-f]{3,8}$/i.test(color) || /^(black|white|transparent|red|blue|green|yellow|orange|purple|gray|grey)$/i.test(color)) return color;
+  return fallback;
+}
+
+function displaySvgColor(value, fallback){
+  const color = safeSvgColor(value, fallback);
+  if (/^(#000|#000000|#1e1e1e|black)$/i.test(color)) return '#f5f1e8';
+  if (/^#fff(?:fff)?$/i.test(color) || /^white$/i.test(color)) return '#f5f1e8';
+  return color;
+}
+
+function askExcalidrawAi(slug){
+  const page = state.pages.get(slug);
+  if (!page) return;
+  openPage(slug, { silentPanel:true });
+  switchPanel('ai');
+  setTimeout(() => askAi(`Interprete o diagrama Excalidraw "${page.title}". Extraia componentes, fluxos, relações, possíveis lacunas e links internos úteis. Use o índice textual já extraído do desenho como fonte principal.`), 0);
 }
 
 function filterTag(tag){
@@ -725,15 +2074,16 @@ function filterTag(tag){
   const pages = [...slugs].map(s=>state.pages.get(s)).filter(Boolean).sort((a,b)=>a.title.localeCompare(b.title));
   nav.innerHTML = `<div class="nav-section">Tag #${esc(tag)} (${pages.length})</div>${pages.map(navItem).join('')}`;
   nav.querySelectorAll('[data-open-page]').forEach(el => el.addEventListener('click', () => openPage(el.dataset.openPage)));
-  switchPanel('cockpit');
+  switchPanel('dashboard');
 }
 
-function copyWikiReport(){
+async function copyWikiReport(){
   const pages = [...state.pages.values()];
   const report = [
     `# Relatório da Wiki - ${state.dirName}`,
     ``,
     `- Páginas: ${pages.length}`,
+    `- Excalidraw: ${state.excalidraws.size}`,
     `- Anexos/fontes: ${state.rawFiles.size}`,
     `- Tags: ${state.tagIndex.size}`,
     `- Links ausentes: ${state.missingLinks.size}`,
@@ -745,7 +2095,124 @@ function copyWikiReport(){
     `## Links ausentes`,
     ...[...state.missingLinks.values()].slice(0,20).map(m=>`- ${m.label}: ${m.from.size} referência(s)`)
   ].join('\n');
-  navigator.clipboard?.writeText(report).then(()=>showToast('Relatório copiado em Markdown')).catch(()=>showToast('Não foi possível copiar'));
+  const ok = await copyText(report, 'Relatório copiado em Markdown', 'Não consegui copiar automaticamente');
+  if (!ok) showCopyFallback('Relatório da wiki', report);
+}
+
+function wikiReviewPayload(){
+  const pages = [...state.pages.values()];
+  const missingSources = pages.filter(p=>p.missing.length).sort((a,b)=>b.missing.length-a.missing.length);
+  const orphans = pages.filter(p=>!p.isSpecial && !p.backlinks.size);
+  const noSummary = pages.filter(p=>!p.summary);
+  const stale = pages.filter(p=>p.updated && today() - p.updated > 180*24*3600*1000).sort((a,b)=>a.updated-b.updated);
+  const isolated = pages.filter(p=>!p.backlinks.size && !p.outlinks.length && !p.isSpecial);
+  const tagless = pages.filter(p=>!p.tags.length && !p.isSpecial);
+  const improvements = buildWikiImprovements({ pages, missingSources, orphans, noSummary, stale, isolated, tagless });
+  return {
+    wiki: state.dirName,
+    generatedAt: new Date().toISOString(),
+    metrics: {
+      pages: pages.length,
+      excalidraw: state.excalidraws.size,
+      attachments: state.rawFiles.size,
+      tags: state.tagIndex.size,
+      missingTargets: state.missingLinks.size,
+      orphanPages: orphans.length,
+      noSummaryPages: noSummary.length,
+      isolatedPages: isolated.length,
+      stalePages: stale.length,
+      taglessPages: tagless.length
+    },
+    priorities: improvements.map(item => ({
+      priority: priorityLabel(item.priority),
+      title: item.title,
+      detail: item.detail,
+      pages: item.pages.map(pageBrief)
+    })),
+    topHubs: pages.slice().sort((a,b)=>pageScore(b)-pageScore(a)).slice(0,12).map(pageBrief),
+    missingLinks: [...state.missingLinks.values()].slice(0,30).map(m => ({
+      label: m.label,
+      references: m.from.size,
+      sources: [...m.from].map(slug => state.pages.get(slug)).filter(Boolean).slice(0,8).map(pageBrief)
+    }))
+  };
+}
+
+function pageBrief(page){
+  return {
+    title: page.title,
+    path: page.path,
+    kind: page.kind || 'markdown',
+    tags: page.tags,
+    backlinks: page.backlinks.size,
+    outlinks: page.outlinks.length,
+    missingLinks: page.missing.length,
+    words: page.words,
+    updated: page.updated ? new Date(page.updated).toISOString() : null,
+    summary: page.summary || ''
+  };
+}
+
+async function loadWikiReviewTemplate(){
+  try {
+    const res = await fetch('/api/prompts/wiki-review', { cache:'no-store' });
+    if (res.ok) return await res.text();
+  } catch {
+    /* fallback below */
+  }
+  return `# Revisão da wiki PocketWiki
+
+Você é um revisor técnico de uma wiki Markdown. Analise as métricas e gere melhorias práticas, priorizadas por impacto.
+
+Retorne:
+- prioridade alta, média e baixa;
+- páginas que precisam de ação;
+- links internos sugeridos;
+- lacunas de documentação;
+- quick wins para manutenção.
+
+Use apenas paths relativos e não invente arquivos fora da wiki.
+
+## Dados da wiki
+
+{{WIKI_REPORT_JSON}}
+`;
+}
+
+async function buildWikiReviewPrompt(){
+  const template = await loadWikiReviewTemplate();
+  const report = JSON.stringify(wikiReviewPayload(), null, 2);
+  return template.includes('{{WIKI_REPORT_JSON}}')
+    ? template.replace('{{WIKI_REPORT_JSON}}', report)
+    : `${template.trim()}\n\n## Dados da wiki\n\n\`\`\`json\n${report}\n\`\`\`\n`;
+}
+
+async function copyWikiReviewPrompt(){
+  const btn = $('#copy-review-prompt');
+  const previous = btn?.innerHTML;
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `${icon('copy')}<span class="btn-text">Preparando...</span>`;
+  }
+  try {
+    const prompt = await buildWikiReviewPrompt();
+    const ok = await copyText(prompt, 'Prompt de revisão copiado', 'Não consegui copiar automaticamente');
+    if (!ok) showCopyFallback('Prompt de revisão', prompt);
+  } catch (err) {
+    console.warn(err);
+    showToast('Não consegui montar o prompt');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = previous;
+    }
+  }
+}
+
+async function askWikiReview(){
+  const prompt = await buildWikiReviewPrompt();
+  switchPanel('ai');
+  setTimeout(() => askAi(prompt), 0);
 }
 
 // Graph
@@ -754,6 +2221,15 @@ let graphPan = {x:0,y:0};
 let graphZoom = 1;
 let graphDrag = null;
 let graphHover = null;
+
+function stopGraph(){
+  if (graphAnim) {
+    cancelAnimationFrame(graphAnim);
+    graphAnim = null;
+  }
+  graphDrag = null;
+  graphHover = null;
+}
 
 function buildGraph(){
   const nodes = [];
@@ -830,6 +2306,7 @@ function renderGraph(){
   }
   function col(n){ return n.id === state.currentPage ? '#c49bff' : n.type === 'hub' ? '#72d6ff' : n.type === 'missing' ? '#ff8080' : '#e0a942'; }
   function draw(){
+    if (state.activePanel !== 'graph') { stopGraph(); return; }
     const w = rect.width, h = rect.height;
     const { nodes, edges } = graphVisible();
     sim(nodes, edges);
@@ -843,7 +2320,13 @@ function renderGraph(){
       const c = col(n); const active = n.id === state.currentPage || n === graphHover;
       if (active) { ctx.beginPath(); ctx.arc(n.x,n.y,n.r+8,0,Math.PI*2); ctx.fillStyle = c + '33'; ctx.fill(); }
       ctx.beginPath(); ctx.arc(n.x,n.y,n.r,0,Math.PI*2); ctx.fillStyle = c + (active ? 'ee' : '99'); ctx.fill(); ctx.strokeStyle = c; ctx.lineWidth = 1.5; ctx.stroke();
-      if (graphZoom > .55 || active) { ctx.fillStyle = active ? '#e7edf5' : 'rgba(147,161,181,.75)'; ctx.font = `${active?'700 ':''}${Math.max(10,12/Math.sqrt(graphZoom))}px JetBrains Mono`; ctx.textAlign='center'; ctx.fillText(n.label, n.x, n.y+n.r+15); }
+      const showLabel = active || n.id === state.currentPage || (state.graphMode !== 'all' && graphZoom > .75) || (n.type === 'hub' && graphZoom > 1.25);
+      if (showLabel) {
+        ctx.fillStyle = active ? '#e7edf5' : 'rgba(213,224,238,.86)';
+        ctx.font = `${active?'700 ':''}${Math.max(10,11/Math.sqrt(Math.max(.5, graphZoom)))}px JetBrains Mono`;
+        ctx.textAlign='center';
+        ctx.fillText(n.label, n.x, n.y+n.r+15);
+      }
     }
     ctx.restore();
     graphAnim = requestAnimationFrame(draw);
@@ -864,8 +2347,35 @@ function renderGraph(){
   canvas.onwheel = e => { e.preventDefault(); const f=e.deltaY<0?1.1:.9; graphZoom=Math.max(.18,Math.min(4,graphZoom*f)); };
 }
 
-function fitGraph(show=true){ graphPan={x:0,y:0}; graphZoom=1; if(show) showToast('Mapa centralizado'); }
-function toggleGraphMode(){ state.graphMode = state.graphMode === 'all' ? 'neighborhood' : 'all'; $('#graph-mode-btn').textContent = state.graphMode === 'all' ? 'Todos' : 'Vizinhança'; showToast(state.graphMode === 'all' ? 'Mostrando toda a wiki' : 'Mostrando vizinhança da página atual'); }
+function fitGraph(show=true){
+  const panel = $('#panel-graph');
+  const nodes = graphVisible().nodes;
+  if (!panel || !nodes.length) {
+    graphPan = {x:0,y:0};
+    graphZoom = 1;
+    if (show) showToast('Mapa centralizado');
+    return;
+  }
+  const rect = panel.getBoundingClientRect();
+  const xs = nodes.map(n => n.x);
+  const ys = nodes.map(n => n.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const width = Math.max(120, maxX - minX + 80);
+  const height = Math.max(120, maxY - minY + 80);
+  const zoom = Math.min(1.25, Math.max(.28, Math.min((rect.width - 120) / width, (rect.height - 130) / height)));
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  graphZoom = Number.isFinite(zoom) ? zoom : 1;
+  graphPan = { x:-cx * graphZoom, y:-cy * graphZoom };
+  if(show) showToast('Mapa centralizado');
+}
+function toggleGraphMode(){
+  state.graphMode = state.graphMode === 'all' ? 'neighborhood' : 'all';
+  $('#graph-mode-btn').innerHTML = `${icon('graph')}<span class="btn-text">${state.graphMode === 'all' ? 'Todos' : 'Vizinhança'}</span>`;
+  fitGraph(false);
+  showToast(state.graphMode === 'all' ? 'Mostrando toda a wiki' : 'Mostrando vizinhança da página atual');
+}
 
 function randomPage(){ const pages=[...state.pages.values()].filter(p=>!p.isSpecial); if(!pages.length) return; openPage(pages[Math.floor(Math.random()*pages.length)].slug); }
 
@@ -909,24 +2419,375 @@ function openPalette(){
 function closePalette(){ $('#palette').classList.remove('visible'); }
 function paletteItems(q){
   const items = [
-    { icon:'⌘', title:'Abrir cockpit', sub:'visão macro', kind:'ação', run:()=>switchPanel('cockpit') },
-    { icon:'◎', title:'Abrir mapa', sub:'grafo de relações', kind:'ação', run:()=>switchPanel('graph') },
-    { icon:'✓', title:'Ver saúde da wiki', sub:'links quebrados, órfãos e lacunas', kind:'ação', run:()=>switchPanel('health') },
-    { icon:'?', title:'Página aleatória', sub:'modo discovery', kind:'ação', run:()=>randomPage() },
-    { icon:'md', title:'Copiar relatório', sub:'markdown da saúde da wiki', kind:'ação', run:()=>copyWikiReport() }
+    { icon:'dashboard', title:'Abrir dashboard', sub:'visão macro', kind:'ação', run:()=>switchPanel('dashboard') },
+    { icon:'graph', title:'Abrir mapa', sub:'grafo de relações', kind:'ação', run:()=>switchPanel('graph') },
+    { icon:'draw', title:'Abrir Excalidraw', sub:'diagramas interpretados', kind:'ação', run:()=>switchPanel('excalidraw') },
+    { icon:'health', title:'Ver saúde da wiki', sub:'links quebrados, órfãos e lacunas', kind:'ação', run:()=>switchPanel('health') },
+    { icon:'ai', title:'Abrir IA local', sub:'chat contextual via LM Studio', kind:'ação', run:()=>switchPanel('ai') },
+    { icon:'random', title:'Página aleatória', sub:'modo discovery', kind:'ação', run:()=>randomPage() },
+    { icon:'copy', title:'Copiar relatório', sub:'markdown da saúde da wiki', kind:'ação', run:()=>copyWikiReport() }
   ];
-  for (const [tag,set] of state.tagIndex) items.push({ icon:'#', title:'#'+tag, sub:`${set.size} páginas`, kind:'tag', run:()=>filterTag(tag) });
-  for (const p of state.pages.values()) items.push({ icon:p.missing.length?'!':'↗', title:p.title, sub:p.path, kind:'página', run:()=>openPage(p.slug) });
+  for (const [tag,set] of state.tagIndex) items.push({ icon:'tag', title:'#'+tag, sub:`${set.size} páginas`, kind:'tag', run:()=>filterTag(tag) });
+  for (const p of state.pages.values()) items.push({ icon:pageIconName(p), title:p.title, sub:p.path, kind:'página', run:()=>openPage(p.slug) });
   const needle = q.toLowerCase();
   return items.filter(i => !needle || `${i.title} ${i.sub} ${i.kind}`.toLowerCase().includes(needle)).slice(0,60);
 }
 function renderPalette(q){
   const items = paletteItems(q);
-  $('#palette-list').innerHTML = items.map((i,idx)=>`<div class="pal-item ${idx===0?'active':''}" data-index="${idx}"><div class="pal-icon">${esc(i.icon)}</div><div><div class="pal-title">${esc(i.title)}</div><div class="pal-sub">${esc(i.sub)}</div></div><div class="pal-kind">${esc(i.kind)}</div></div>`).join('') || '<div class="empty">Nada encontrado</div>';
+  $('#palette-list').innerHTML = items.map((i,idx)=>`<div class="pal-item ${idx===0?'active':''}" data-index="${idx}"><div class="pal-icon">${icon(i.icon)}</div><div><div class="pal-title">${esc(i.title)}</div><div class="pal-sub">${esc(i.sub)}</div></div><div class="pal-kind">${esc(i.kind)}</div></div>`).join('') || '<div class="empty">Nada encontrado</div>';
   $('#palette-list').querySelectorAll('[data-index]').forEach(el => el.addEventListener('click', () => { const item = paletteItems($('#palette-input').value)[Number(el.dataset.index)]; closePalette(); item?.run(); }));
 }
 
+// Local AI
+function renderAiPanel(){
+  const current = state.pages.get(state.currentPage);
+  const contextLabel = state.ai.lastContext.length
+    ? state.ai.lastContext.map(p => p.path).join('\n')
+    : (current ? current.path : 'sem página atual');
+  $('#ai').innerHTML = `
+    <div class="hero-card" style="margin-bottom:16px">
+      <h2>IA local da wiki</h2>
+      <p>Chat com contexto dos Markdown carregados. A resposta sai pelo LM Studio local e o contexto é montado em cima da página atual, links e busca textual.</p>
+    </div>
+    <div class="ai-grid">
+      <div class="card ai-chat">
+        <div class="card-title">${cardTitle('ai', 'Conversa', state.ai.connected ? 'LM Studio conectado' : 'desconectado')}</div>
+        <div class="ai-messages" id="ai-messages"></div>
+        <div class="ai-input">
+          <textarea id="ai-question" placeholder="Pergunte algo sobre a wiki..." spellcheck="false"></textarea>
+          <button class="btn primary" id="ai-send" data-icon="ai"><span class="btn-text">${state.ai.busy ? 'Pensando...' : 'Enviar'}</span></button>
+        </div>
+        <div class="ai-hint">Enter envia · Shift+Enter quebra linha</div>
+      </div>
+      <aside class="ai-side">
+        <div class="card">
+          <div class="card-title">${cardTitle('server', 'LM Studio', state.ai.connected ? 'ok' : 'offline')}</div>
+          <div class="field"><label>Base URL</label><input id="ai-base-url" value="${attr(state.ai.baseUrl)}" spellcheck="false"></div>
+          <div class="field"><label>Modelo</label><select id="ai-model">${renderAiModelOptions()}</select></div>
+          ${state.appConfig?.aiProxy ? '' : `<div class="field"><label>Token</label><input id="ai-api-key" type="password" value="${attr(state.ai.apiKey)}" placeholder="LM_STUDIO_API_KEY" spellcheck="false"></div>`}
+          <button class="btn primary" id="ai-connect" data-icon="refresh"><span class="btn-text">${state.ai.modelsBusy ? 'Consultando...' : 'Atualizar modelos'}</span></button>
+          <div class="ai-status" style="margin-top:10px">${state.appConfig?.aiProxy ? 'usando proxy local do PocketWiki' : 'chamada direta ao LM Studio'}</div>
+        </div>
+        <div class="card">
+          <div class="card-title">${cardTitle('reader', 'Contexto', `${state.ai.lastContext.length || (current ? 1 : 0)} fonte(s)`)}</div>
+          <div class="ai-context">${esc(contextLabel)}</div>
+        </div>
+      </aside>
+    </div>
+  `;
+  decorateStaticIcons($('#ai'));
+  bindAiPanel();
+  renderAiMessages();
+}
+
+function renderAiModelOptions(){
+  const models = state.ai.models || [];
+  if (!models.length) {
+    const label = state.ai.modelsBusy ? 'consultando LM Studio...' : 'clique para consultar /v1/models';
+    return `<option value="${attr(state.ai.model)}">${esc(state.ai.model || label)}</option>`;
+  }
+  return models.map(model => {
+    const id = model.id || model.name || String(model);
+    return `<option value="${attr(id)}" ${id === state.ai.model ? 'selected' : ''}>${esc(id)}</option>`;
+  }).join('');
+}
+
+function bindAiPanel(){
+  $('#ai-connect')?.addEventListener('click', connectAi);
+  $('#ai-send')?.addEventListener('click', () => askAi());
+  $('#ai-question')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      askAi();
+    }
+  });
+}
+
+function renderAiMessages(){
+  const box = $('#ai-messages');
+  if (!box) return;
+  if (!state.ai.messages.length) {
+    box.innerHTML = '<div class="ai-msg system">Conecte o LM Studio e faça uma pergunta. O contexto vai incluir a página atual e páginas relevantes da wiki.</div>';
+    return;
+  }
+  box.innerHTML = state.ai.messages.map(m => `<div class="ai-msg ${attr(m.role)}">${formatAiMessage(m.content)}</div>`).join('');
+  bindAiMessageLinks(box);
+  box.scrollTop = box.scrollHeight;
+}
+
+function formatAiMessage(content){
+  const text = String(content || '');
+  const markdownLinkRe = /\[([^\]\n]+)\]\(([^)\n]+\.md)\)/gi;
+  const pathRe = /`?((?:\.\/)?[^\s`\n\r()[\]]+\/(?:[^`\n\r()[\]]+\/)*[^`\n\r()[\]]+\.md)`?/gi;
+  let html = '', last = 0, match;
+
+  while ((match = markdownLinkRe.exec(text)) !== null) {
+    html += linkifyPlainPaths(text.slice(last, match.index), pathRe);
+    html += renderAiPathLink(match[2], match[1]);
+    last = match.index + match[0].length;
+  }
+
+  html += linkifyPlainPaths(text.slice(last), pathRe);
+  return html;
+}
+
+function linkifyPlainPaths(text, pathRe){
+  pathRe.lastIndex = 0;
+  let html = '';
+  let last = 0;
+  let match;
+
+  while ((match = pathRe.exec(text)) !== null) {
+    const rawPath = match[1];
+    if (/^https?:/i.test(rawPath)) continue;
+    html += esc(text.slice(last, match.index));
+    html += renderAiPathLink(rawPath);
+    last = match.index + match[0].length;
+  }
+
+  html += esc(text.slice(last));
+  return html;
+}
+
+function renderAiPathLink(rawPath, label){
+  const cleanPath = cleanAiPath(rawPath);
+  const text = label ? String(label).trim() : cleanPath;
+  const slug = resolveAiPath(cleanPath);
+  if (slug) {
+    return `<a href="#" class="wiki-path-link" data-ai-open-page="${attr(slug)}" title="Abrir ${attr(cleanPath)}">${esc(text)}</a>`;
+  }
+  return `<a href="#" class="wiki-path-link missing" data-ai-missing-path="${attr(cleanPath)}" title="Arquivo não carregado: ${attr(cleanPath)}">${esc(text)}</a>`;
+}
+
+function bindAiMessageLinks(root){
+  root.querySelectorAll('[data-ai-open-page]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.preventDefault();
+      openPage(el.dataset.aiOpenPage);
+    });
+  });
+  root.querySelectorAll('[data-ai-missing-path]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.preventDefault();
+      showToast(`Arquivo não carregado: ${el.dataset.aiMissingPath}`);
+    });
+  });
+}
+
+function cleanAiPath(rawPath){
+  return String(rawPath || '')
+    .trim()
+    .replace(/^`+|`+$/g, '')
+    .replace(/^['"]|['"]$/g, '')
+    .replace(/%20/g, ' ')
+    .replace(/^\s*(?:[-*+]|\d+[.)])\s+/, '')
+    .replace(/[),.;:!?]+$/g, '')
+    .replace(/^\.?\//, '');
+}
+
+function resolveAiPath(rawPath){
+  const cleanPath = cleanAiPath(rawPath);
+  const candidates = [
+    cleanPath,
+    cleanPath.replace(/\.md$/i, ''),
+    cleanPath.replace(/^(wiki|docs|pages|raw)\//i, ''),
+    cleanPath.replace(/^(wiki|docs|pages|raw)\//i, '').replace(/\.md$/i, '')
+  ];
+
+  for (const candidate of candidates) {
+    const slug = pathToSlug(candidate);
+    if (state.pages.has(slug)) return slug;
+    const resolved = resolveTarget(candidate);
+    if (resolved) return resolved;
+  }
+
+  const normalized = normalizeAiPath(cleanPath);
+  const slug = pathToSlug(cleanPath);
+  const matches = [...state.pages.values()].filter(page => {
+    const pagePath = normalizeAiPath(page.path);
+    return page.slug === slug || pagePath === normalized || pagePath.endsWith('/' + normalized) || normalized.endsWith('/' + pagePath);
+  });
+  if (matches.length === 1) return matches[0].slug;
+
+  const fileName = baseName(cleanPath).toLowerCase();
+  const byName = [...state.pages.values()].filter(page => page.name.toLowerCase() === fileName || page.path.toLowerCase().endsWith('/' + cleanPath.toLowerCase()));
+  return byName.length === 1 ? byName[0].slug : null;
+}
+
+function normalizeAiPath(value){
+  return String(value || '')
+    .replace(/\\/g, '/')
+    .replace(/%20/g, ' ')
+    .replace(/\.md$/i, '')
+    .replace(/^\/+/, '')
+    .toLowerCase();
+}
+
+function saveAiSettings(){
+  const baseUrl = $('#ai-base-url')?.value.trim();
+  const model = $('#ai-model')?.value.trim();
+  const apiKey = $('#ai-api-key')?.value.trim();
+  if (baseUrl) state.ai.baseUrl = baseUrl;
+  if (model !== undefined) state.ai.model = model;
+  if (apiKey !== undefined) state.ai.apiKey = apiKey;
+  localStorage.setItem('pocketwiki:ai-base-url', state.ai.baseUrl);
+  localStorage.setItem('pocketwiki:ai-model', state.ai.model);
+  localStorage.removeItem('pocketwiki:ai-api-key');
+}
+
+async function connectAi(){
+  saveAiSettings();
+  await refreshAiModels();
+}
+
+async function refreshAiModels(opts = {}){
+  if (state.ai.modelsBusy) return;
+  state.ai.modelsBusy = true;
+  if (!opts.silent) renderAiPanel();
+  try {
+    const data = await fetchAiModels();
+    state.ai.models = data.data || [];
+    const ids = state.ai.models.map(m => m.id || m.name || String(m)).filter(Boolean);
+    const configured = state.appConfig?.lmStudioModel;
+    if (configured && ids.includes(configured) && (!state.ai.model || !ids.includes(state.ai.model))) state.ai.model = configured;
+    if ((!state.ai.model || !ids.includes(state.ai.model)) && ids[0]) state.ai.model = ids[0];
+    state.ai.connected = ids.length > 0;
+    localStorage.setItem('pocketwiki:ai-model', state.ai.model);
+    if (!opts.silent) showToast(`LM Studio conectado: ${state.ai.model || 'modelo detectado'}`);
+  } catch (err) {
+    state.ai.connected = false;
+    if (!opts.silent) showToast(formatAiError(err));
+  } finally {
+    state.ai.modelsBusy = false;
+    renderAiPanel();
+  }
+}
+
+async function fetchAiModels(){
+  const res = await fetchAi('/models', { method:'GET' });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function askAi(preset){
+  if (state.ai.busy) return;
+  const input = $('#ai-question');
+  const question = String(preset || input?.value || '').trim();
+  if (!question) return showToast('Digite uma pergunta');
+  saveAiSettings();
+  if (!state.ai.model && state.ai.modelsBusy) await waitForAiModels();
+  if (!state.ai.model) {
+    try { await connectAi(); } catch { /* handled by connectAi */ }
+  }
+  if (!state.ai.model) return showToast('Nenhum modelo carregado no LM Studio');
+  if (!preset && input) input.value = '';
+
+  const context = buildAiContext(question);
+  const messages = [
+    {
+      role:'system',
+      content:'Você é o assistente local do PocketWiki. Responda em português brasileiro informal, direto e prático. Use somente o contexto fornecido da wiki. Quando faltar informação, diga que não achou na wiki. Quando citar uma página ou fonte, use exatamente o valor de Path com extensão .md, sem caminho absoluto do sistema. Prefira citar como path em texto simples, por exemplo: raw/area/arquivo.md. Se usar Markdown, use [titulo](path-relativo.md), nunca URL absoluta. A interface transforma paths .md em links clicáveis.'
+    },
+    {
+      role:'user',
+      content:`Pergunta:\n${question}\n\nContexto da wiki:\n${context.text}`
+    }
+  ];
+
+  state.ai.messages.push({ role:'user', content:question });
+  trimAiMessages();
+  state.ai.busy = true;
+  renderAiPanel();
+
+  try {
+    const payload = { model:state.ai.model, messages, temperature:0.2, max_tokens:1200, stream:false };
+    const res = await fetchAi('/chat/completions', { method:'POST', body:JSON.stringify(payload) });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    const answer = data.choices?.[0]?.message?.content || data.output_text || 'Sem resposta do modelo.';
+    state.ai.connected = true;
+    state.ai.messages.push({ role:'assistant', content:answer.trim() });
+  } catch (err) {
+    state.ai.connected = false;
+    state.ai.messages.push({ role:'system', content:formatAiError(err) });
+  } finally {
+    trimAiMessages();
+    state.ai.busy = false;
+    renderAiPanel();
+  }
+}
+
+async function waitForAiModels(){
+  for (let i = 0; i < 50 && state.ai.modelsBusy; i++) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+}
+
+function trimAiMessages(){
+  const maxMessages = 80;
+  if (state.ai.messages.length > maxMessages) {
+    state.ai.messages.splice(0, state.ai.messages.length - maxMessages);
+  }
+}
+
+async function fetchAi(endpoint, init){
+  if (state.appConfig?.aiProxy && location.protocol.startsWith('http')) {
+    const apiEndpoint = endpoint === '/models' ? '/api/ai/models' : '/api/ai/chat';
+    return fetch(apiEndpoint, {
+      ...init,
+      headers:{ 'Content-Type':'application/json' }
+    });
+  }
+  const headers = { 'Content-Type':'application/json' };
+  if (state.ai.apiKey) headers.Authorization = `Bearer ${state.ai.apiKey}`;
+  return fetch(`${trimSlash(state.ai.baseUrl)}${endpoint}`, { ...init, headers });
+}
+
+function buildAiContext(question){
+  const pages = [...state.pages.values()];
+  const current = state.pages.get(state.currentPage);
+  const terms = slugify(question).split(/[-/_]+/).filter(t => t.length > 2);
+  const scored = pages.map(p => {
+    const hay = `${p.title} ${p.path} ${p.summary} ${p.tags.join(' ')} ${p.content}`.toLowerCase();
+    const termScore = terms.reduce((sum,t)=>sum + (hay.includes(t) ? 1 : 0), 0);
+    const linkBoost = current && (p.slug === current.slug || current.outlinks.some(l=>l.resolved===p.slug) || current.backlinks.has(p.slug)) ? 3 : 0;
+    return { page:p, score:termScore * 4 + linkBoost + pageScore(p) * 0.15 };
+  }).sort((a,b)=>b.score-a.score);
+  const selected = [];
+  if (current) selected.push(current);
+  for (const item of scored) {
+    if (selected.some(p=>p.slug===item.page.slug)) continue;
+    if (item.score <= 0 && selected.length >= 4) continue;
+    selected.push(item.page);
+    if (selected.length >= 8) break;
+  }
+  state.ai.lastContext = selected;
+  let budget = 14000;
+  const parts = [];
+  for (const page of selected) {
+    const clean = stripFrontmatter(page.content).replace(/```[\s\S]*?```/g, m => m.slice(0, 900));
+    const head = `\n\n---\nPagina: ${page.title}\nPath: ${page.path}\nTags: ${page.tags.map(t=>'#'+t).join(' ') || 'sem tags'}\nResumo: ${page.summary || 'sem resumo'}\nConteudo:\n`;
+    const room = Math.max(700, Math.floor(budget / Math.max(1, selected.length)));
+    parts.push(head + clean.slice(0, room));
+    budget -= head.length + room;
+    if (budget <= 0) break;
+  }
+  return { pages:selected, text:parts.join('') || 'Nenhuma página carregada.' };
+}
+
+function formatAiError(err){
+  const text = String(err?.message || err || '');
+  if (/invalid_api_key|api token|Authorization/i.test(text)) return 'LM Studio está pedindo token. Preencha LM_STUDIO_API_KEY no .env e rode pelo servidor local, ou informe o token no painel IA.';
+  if (/Failed to fetch|NetworkError/i.test(text)) return 'Não consegui falar com o LM Studio. Confere se o server está ativo em http://localhost:1234.';
+  return `Erro no LM Studio: ${text.slice(0, 240)}`;
+}
+
+function trimSlash(value){ return String(value || '').replace(/\/+$/, ''); }
+
 // Events
+decorateStaticIcons();
+registerServiceWorker();
+
 $('#open-folder-btn').addEventListener('click', openWiki);
 $('#open-files-btn').addEventListener('click', openFallback);
 $('#folder-input').addEventListener('change', e => loadFromFileList(e.target.files));
@@ -937,10 +2798,38 @@ $('#filters').addEventListener('click', e => { const btn=e.target.closest('[data
 $('#palette-input').addEventListener('input', e => renderPalette(e.target.value));
 $('#palette-input').addEventListener('keydown', e => { if(e.key==='Escape') closePalette(); if(e.key==='Enter'){ const first=paletteItems(e.target.value)[0]; closePalette(); first?.run(); }});
 $('#palette').addEventListener('click', e => { if(e.target.id === 'palette') closePalette(); });
-document.addEventListener('keydown', e => { const k=e.key.toLowerCase(); if((e.metaKey||e.ctrlKey) && k==='k'){ e.preventDefault(); openPalette(); } if(k==='escape'){ closePalette(); $('#search-overlay').classList.remove('visible'); }});
+$('#access-retry').addEventListener('click', () => location.reload());
+$('#access-fallback').addEventListener('click', openFallback);
+$('#access-copy-url').addEventListener('click', () => copyText(location.href, 'URL copiada', 'Não foi possível copiar a URL'));
+$('#copy-modal-close').addEventListener('click', closeCopyFallback);
+$('#copy-modal-select').addEventListener('click', () => { const el = $('#copy-modal-text'); el.focus(); el.select(); });
+$('#copy-modal-copy').addEventListener('click', async () => {
+  const text = $('#copy-modal-text').value;
+  if (await copyText(text, 'Texto copiado', 'Ainda não consegui copiar automaticamente')) closeCopyFallback();
+});
+$('#copy-modal').addEventListener('click', e => { if (e.target.id === 'copy-modal') closeCopyFallback(); });
+document.addEventListener('keydown', e => { const k=e.key.toLowerCase(); if((e.metaKey||e.ctrlKey) && k==='k'){ e.preventDefault(); openPalette(); } if(k==='escape'){ closePalette(); closeCopyFallback(); $('#search-overlay').classList.remove('visible'); }});
 window.addEventListener('resize', () => { if(state.activePanel==='graph') renderGraph(); });
 
 if (window.marked?.setOptions) marked.setOptions({ gfm:true, breaks:false, mangle:false, headerIds:false });
+
+async function initApp(){
+  const [config, routes] = await Promise.all([loadAppConfig(), loadRoutes()]);
+  if (!config && !routes && location.protocol.startsWith('http')) {
+    showAccessScreen('A página abriu, mas as APIs locais do PocketWiki não responderam. Pode ser interferência de rota, DNS/mDNS, Tailscale/VPN ou o servidor reiniciando na máquina principal.');
+  }
+  let loaded = false;
+  const hasServerReference = Boolean(config?.referenceConfigured || config?.referenceAvailable || (config?.referenceAvailable == null && config?.referenceName));
+  if (hasServerReference) {
+    $('#footer-left').textContent = config.referenceName || 'wiki configurada';
+    loaded = await loadFromServerReference();
+  }
+  if (!loaded && !config?.referenceConfigured) loaded = await tryLoadStoredDirectory();
+  if (loaded) hideAccessScreen();
+  else if (!config?.referenceConfigured) renderDashboard();
+}
+
+initApp();
 </script>
 </body>
 </html>
