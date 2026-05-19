@@ -303,12 +303,17 @@ async function proxyLmStudio(res, endpoint, init, aiConfig) {
     ...init,
     headers
   });
-  const text = await upstream.text();
   res.writeHead(upstream.status, {
     ...securityHeaders(),
-    'Content-Type': upstream.headers.get('content-type') || 'application/json; charset=utf-8'
+    'Content-Type': upstream.headers.get('content-type') || 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store, no-transform'
   });
-  res.end(text);
+  if (!upstream.body) {
+    res.end(await upstream.text());
+    return;
+  }
+  for await (const chunk of upstream.body) res.write(Buffer.from(chunk));
+  res.end();
 }
 
 async function readJsonBody(req) {
@@ -368,6 +373,8 @@ function securityHeaders() {
 
 function contentType(file) {
   if (/\.excalidraw$/i.test(file)) return 'application/vnd.excalidraw+json';
+  if (/\.canvas$/i.test(file)) return 'application/vnd.obsidian.canvas+json';
+  if (/\.drawio$/i.test(file)) return 'application/vnd.jgraph.mxfile';
   if (/\.md$/i.test(file)) return 'text/markdown';
   if (/\.ico$/i.test(file)) return 'image/x-icon';
   if (/\.png$/i.test(file)) return 'image/png';
