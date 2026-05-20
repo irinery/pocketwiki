@@ -1,3 +1,5 @@
 .env
 .DS_Store
 .pocketwiki-cache/
+.build/
+dist/

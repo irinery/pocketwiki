@@ -67,6 +67,17 @@ button{cursor:pointer;color:inherit}
 .ai-msg a.wiki-path-link{color:var(--accent);border-bottom:1px dashed rgba(224,169,66,.55);text-decoration:none;word-break:break-word}
 .ai-msg a.wiki-path-link:hover{color:var(--text);border-bottom-color:var(--accent)}
 .ai-msg a.wiki-path-link.missing{color:var(--bad);border-bottom-color:rgba(255,128,128,.55)}
+.ai-msg{white-space:normal}
+.ai-msg-content{line-height:1.62}
+.ai-msg-content p{margin:0 0 9px}
+.ai-msg-content p:last-child{margin-bottom:0}
+.ai-msg-content ul,.ai-msg-content ol{margin:6px 0 10px 20px;padding:0}
+.ai-msg-content li{margin:3px 0}
+.ai-msg-content strong{color:var(--accent);font-weight:800}
+.ai-msg-content em{color:var(--accent2);font-style:normal}
+.ai-msg-content code{font-family:var(--mono);font-size:.88em;color:var(--good);background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:6px;padding:1px 5px}
+.ai-msg-content .ai-section-title{font-weight:800;color:var(--accent);margin:10px 0 4px}
+.ai-msg-content .ai-section-title:first-child{margin-top:0}
 .route-card{margin-bottom:16px}
 .route-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
 .route-group{background:rgba(255,255,255,.025);border:1px solid var(--border);border-radius:14px;padding:11px;min-width:0}
@@ -2823,7 +2834,105 @@ function aiUsageSummary(usage){
 }
 
 function formatAiMessage(content){
-  const text = String(content || '');
+  const text = cleanAiDisplayText(content);
+  return `<div class="ai-msg-content">${renderAiMarkdown(text)}</div>`;
+}
+
+function cleanAiDisplayText(content){
+  const controlTags = new Set([
+    'explicação',
+    'explicacao',
+    'resposta objetiva',
+    'resposta',
+    'interpretação',
+    'interpretacao',
+    'páginas consultadas',
+    'paginas consultadas',
+    'fontes',
+    'fonte'
+  ]);
+  return String(content || '')
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .filter(line => {
+      const clean = line.trim().toLowerCase();
+      const tag = clean.match(/^<\/?([^<>]+)>$/);
+      if (!tag) return true;
+      return !controlTags.has(tag[1].trim());
+    })
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function renderAiMarkdown(text){
+  const lines = String(text || '').split('\n');
+  let html = '';
+  let paragraph = [];
+  let list = null;
+
+  const flushParagraph = () => {
+    if (!paragraph.length) return;
+    html += `<p>${renderAiInline(paragraph.join(' '))}</p>`;
+    paragraph = [];
+  };
+  const flushList = () => {
+    if (!list) return;
+    html += `<${list.type}>${list.items.map(item => `<li>${renderAiInline(item)}</li>`).join('')}</${list.type}>`;
+    list = null;
+  };
+  const addListItem = (type, value) => {
+    flushParagraph();
+    if (!list || list.type !== type) flushList();
+    if (!list) list = { type, items:[] };
+    list.items.push(value);
+  };
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) {
+      flushParagraph();
+      flushList();
+      continue;
+    }
+
+    const heading = line.match(/^#{1,3}\s+(.+)$/);
+    if (heading) {
+      flushParagraph();
+      flushList();
+      html += `<div class="ai-section-title">${renderAiInline(heading[1])}</div>`;
+      continue;
+    }
+
+    const title = line.match(/^\*\*([^*]+)\*\*:?\s*$/) || line.match(/^([A-ZÁ-Úa-zá-ú0-9][^:]{1,42}):\s*$/);
+    if (title) {
+      flushParagraph();
+      flushList();
+      html += `<div class="ai-section-title">${renderAiInline(title[1])}</div>`;
+      continue;
+    }
+
+    const bullet = line.match(/^[-*]\s+(.+)$/);
+    if (bullet) {
+      addListItem('ul', bullet[1]);
+      continue;
+    }
+
+    const numbered = line.match(/^\d+[.)]\s+(.+)$/);
+    if (numbered) {
+      addListItem('ol', numbered[1]);
+      continue;
+    }
+
+    paragraph.push(line);
+  }
+
+  flushParagraph();
+  flushList();
+  return html || esc(text);
+}
+
+function renderAiInline(text){
   const markdownLinkRe = /\[([^\]\n]+)\]\(([^)\n]+\.md)\)/gi;
   const pathRe = /`?((?:\.\/)?[^\s`\n\r()[\]]+\/(?:[^`\n\r()[\]]+\/)*[^`\n\r()[\]]+\.md)`?/gi;
   let html = '', last = 0, match;
@@ -2847,12 +2956,20 @@ function linkifyPlainPaths(text, pathRe){
   while ((match = pathRe.exec(text)) !== null) {
     const rawPath = match[1];
     if (/^https?:/i.test(rawPath)) continue;
-    html += esc(text.slice(last, match.index));
+    html += renderAiInlineMarkdown(text.slice(last, match.index));
     html += renderAiPathLink(rawPath);
     last = match.index + match[0].length;
   }
 
-  html += esc(text.slice(last));
+  html += renderAiInlineMarkdown(text.slice(last));
+  return html;
+}
+
+function renderAiInlineMarkdown(text){
+  let html = esc(text);
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  html = html.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/(^|[\s([{])\*([^*\n]+)\*/g, '$1<em>$2</em>');
   return html;
 }
 
@@ -2980,6 +3097,45 @@ async function fetchAiModels(){
   return res.json();
 }
 
+const POCKETWIKI_AI_SYSTEM_PROMPT = `Você é o assistente local do PocketWiki.
+
+Você recebe o resultado de uma consulta seletiva feita pelo PocketWiki.
+O fluxo é: pergunta -> interpretação -> busca no índice -> escolha de páginas -> leitura só das páginas necessárias.
+
+Regras:
+- Responda em português brasileiro informal, direto e curto.
+- Use Markdown simples: **negrito** para rótulos importantes, *itálico* para ressalvas e listas com "-".
+- Não use tags XML/HTML nem placeholders como <resposta>, <interpretação> ou <páginas consultadas>.
+- Não exponha etapas internas como "interpretação da pergunta", "resultado do índice" ou "páginas consultadas" como se fossem rótulos técnicos.
+- Não use conhecimento externo.
+- Não invente arquivo, path, link ou detalhe que não esteja na consulta.
+- Para citar fonte, copie exatamente o valor depois de "Path:".
+- Use principalmente "Páginas consultadas"; "Resultado do índice" serve só para explicar por que as páginas foram abertas.
+- Se só houver resultado de índice e nenhuma página consultada, diga que a resposta é parcial.
+- Se a consulta trouxe páginas relacionadas, interprete o conteúdo encontrado, mesmo que o termo da pergunta não esteja igual.
+- Só diga "não achei isso na wiki" quando a consulta não trouxer nenhuma página relacionada.
+- Se a pergunta pedir lista, entregue lista.
+- Se a pergunta pedir resumo, entregue resumo.
+- Se a pergunta pedir trecho ou parte chave, extraia das páginas consultadas.
+
+Formato recomendado:
+**Resposta:** frase direta.
+
+**O que encontrei**
+- ponto interpretado da página consultada
+- outro ponto, se existir
+
+**Fontes**
+- path-relativo.md`;
+
+const POCKETWIKI_GENERAL_SYSTEM_PROMPT = `Você é o assistente local do PocketWiki.
+
+Responda como um chatbot normal, em português brasileiro informal, direto e curto.
+Não force consulta à wiki quando a mensagem for conversa comum.
+Use Markdown simples quando ajudar: **negrito**, *itálico* e listas.
+Não use tags XML/HTML nem placeholders.
+Se o sistema disser que a wiki não trouxe resultado, mencione isso em uma frase curta só quando for relevante, e continue ajudando normalmente.`;
+
 async function askAi(preset){
   if (state.ai.busy) return;
   const input = $('#ai-question');
@@ -2995,18 +3151,6 @@ async function askAi(preset){
     input.value = '';
     state.ai.draft = '';
   }
-
-  const context = buildAiContext(question);
-  const messages = [
-    {
-      role:'system',
-      content:'Você é o assistente local do PocketWiki. Responda em português brasileiro informal, direto e prático. Use o contexto fornecido quando a pergunta for sobre a wiki. Se o contexto vier vazio e a pergunta for conversa curta, responda normalmente sem inventar conteúdo da wiki. Quando faltar informação da wiki, diga que não achou na wiki. Quando citar uma página ou fonte, use exatamente o valor de Path com extensão .md, sem caminho absoluto do sistema. Prefira citar como path em texto simples, por exemplo: raw/area/arquivo.md. Se usar Markdown, use [titulo](path-relativo.md), nunca URL absoluta. A interface transforma paths .md em links clicáveis.'
-    },
-    {
-      role:'user',
-      content:`Pergunta:\n${question}\n\nContexto da wiki:\n${context.text}`
-    }
-  ];
 
   state.ai.messages.push({ role:'user', content:question });
   const assistantMessage = {
@@ -3024,6 +3168,28 @@ async function askAi(preset){
   renderAiPanel();
 
   try {
+    const context = await buildAiContext(question);
+    const messages = context.mode === 'wiki'
+      ? [
+          {
+            role:'system',
+            content:POCKETWIKI_AI_SYSTEM_PROMPT
+          },
+          {
+            role:'user',
+            content:`Pergunta do usuário:\n${question}\n\nConsulta seletiva do PocketWiki:\n${context.text}\n\nResponda interpretando somente a consulta acima.\nSe a relação for parcial, diga que é parcial e cite os paths relacionados.\nSó diga que não achou na wiki quando a consulta não trouxer nenhuma página relacionada.`
+          }
+        ]
+      : [
+          {
+            role:'system',
+            content:POCKETWIKI_GENERAL_SYSTEM_PROMPT
+          },
+          {
+            role:'user',
+            content:`${context.notice ? `Nota do PocketWiki: ${context.notice}\n\n` : ''}${question}`
+          }
+        ];
     const payload = { model:state.ai.model, messages, temperature:0.2, stream:true };
     const res = await fetchAi('/chat/completions', { method:'POST', body:JSON.stringify(payload) });
     if (!res.ok) throw new Error(await res.text());
@@ -3224,39 +3390,72 @@ async function fetchAi(endpoint, init){
   return fetch(`${trimSlash(state.ai.baseUrl)}${endpoint}`, { ...init, headers });
 }
 
-const AI_STOP_WORDS = new Set('a o os as um uma uns umas de da do das dos e em no na nos nas por para com sem sobre entre que qual quais como quando onde porque pra pro ao aos ou se sua seu suas seus meu minha meus minhas isso esse essa estes estas aquele aquela trazer traga mostre mostrar quero preciso pode poderia pagina página wiki arquivo arquivos'.split(' '));
+const AI_STOP_WORDS = new Set('a o os as um uma uns umas de da do das dos e em no na nos nas por para com sem sobre entre que qual quais como quando onde porque pra pro ao aos ou se sua seu suas seus meu minha meus minhas isso esse essa estes estas aquele aquela trazer traga mostre mostra mostrar quero preciso pode poderia pagina página wiki arquivo arquivos ajuda ajudar favor favorzinho explica explique falar fale diz diga'.split(' '));
+const AI_SHORT_TERMS = new Set('ai ia ip db ui vm ci cd dns tls ssh vpn nas wan lan iot idp sso api sql pwa'.split(' '));
+const AI_TERM_ALIASES = {
+  auth:['autenticacao','autorizacao','login','sso','oauth','oidc','keycloak','token','sessao','senha'],
+  autenticacao:['auth','login','sso','oauth','oidc','keycloak','token','sessao','senha'],
+  login:['auth','autenticacao','sso','oauth','oidc','keycloak','senha','usuario'],
+  sso:['auth','autenticacao','login','oauth','oidc','keycloak'],
+  token:['auth','autenticacao','api-key','apikey','chave','bearer'],
+  rede:['network','lan','wan','vlan','wifi','dns','dhcp','roteador','mikrotik'],
+  network:['rede','lan','wan','vlan','wifi','dns','dhcp','router','mikrotik'],
+  roteador:['router','mikrotik','rede','gateway'],
+  router:['roteador','mikrotik','network','gateway'],
+  monitoramento:['zabbix','grafana','alerta','metricas','observabilidade','dashboard'],
+  observabilidade:['monitoramento','zabbix','grafana','alerta','metricas','dashboard'],
+  alerta:['alertas','discord','zabbix','monitoramento'],
+  servidor:['server','host','maquina','vm','node'],
+  server:['servidor','host','maquina','vm','node'],
+  container:['docker','compose','pod','kubernetes','k8s','k3s'],
+  docker:['container','compose','pod'],
+  kubernetes:['k8s','k3s','cluster','pod','deployment'],
+  k3s:['kubernetes','k8s','cluster','pod'],
+  banco:['database','db','postgres','postgresql','sql'],
+  database:['banco','db','postgres','postgresql','sql'],
+  camera:['câmera','scrypted','homekit','hksv','stream','rtsp'],
+  câmera:['camera','scrypted','homekit','hksv','stream','rtsp'],
+  backup:['restore','snapshot','copia','export','dump'],
+  restore:['backup','snapshot','import','dump'],
+  desenho:['diagrama','excalidraw','fluxo','mapa'],
+  diagrama:['desenho','excalidraw','fluxo','mapa'],
+  ia:['ai','llm','modelo','lm-studio','lmstudio'],
+  ai:['ia','llm','modelo','lm-studio','lmstudio'],
+  llm:['ia','ai','modelo','lm-studio','lmstudio']
+};
 
-function buildAiContext(question){
+async function buildAiContext(question){
   const scope = classifyAiQuestion(question);
   const limits = aiContextLimits(scope);
   const pages = [...state.pages.values()];
-  const terms = aiQuestionTerms(question);
   if (!limits.maxPages) {
     state.ai.lastContext = [];
-    return { pages:[], text:'Sem contexto da wiki para esta pergunta simples.' };
+    return { mode:'general', pages:[], text:'', notice:'' };
   }
   if (!pages.length) {
     state.ai.lastContext = [];
-    return { pages:[], text:'Nenhuma página carregada.' };
+    return { mode:'general', pages:[], text:'', notice:'Nenhuma página da wiki está carregada agora.' };
   }
 
-  const current = state.pages.get(state.currentPage);
-  const scored = pages
-    .map(page => ({ page, score: scoreAiContextPage(page, terms, current) }))
-    .sort((a,b) => b.score - a.score);
-  const selected = [];
-
-  if (current && scope !== 'simple') selected.push(current);
-  for (const item of scored) {
-    if (selected.length >= limits.maxPages) break;
-    if (selected.some(page => page.slug === item.page.slug)) continue;
-    if (item.score <= 0 && selected.length >= Math.min(3, limits.maxPages)) continue;
-    selected.push(item.page);
-  }
-
+  const plan = await planAiIndexSearch(question);
+  const candidates = searchAiIndex(question, plan, limits);
+  const indexText = compactAiIndexResults(candidates, limits.indexBudget);
+  const llmSelection = await selectAiPagesFromIndex(question, plan, indexText, limits);
+  const fallback = highConfidenceAiCandidates(candidates, limits);
+  const selected = mergeAiContextSelection(llmSelection ?? fallback, [], limits.maxPages);
   state.ai.lastContext = selected;
+  if (!selected.length) {
+    return {
+      mode:'general',
+      pages:[],
+      text:'',
+      notice:'não achei páginas relacionadas na wiki para essa pergunta.'
+    };
+  }
+
+  const terms = aiSearchTermsFromPlan(plan, question);
   const parts = [];
-  let budget = limits.budget;
+  let budget = Math.max(0, limits.budget - indexText.length);
   for (const page of selected) {
     const room = Math.max(900, Math.floor(budget / Math.max(1, selected.length - parts.length)));
     const block = compactAiPage(page, terms, room);
@@ -3265,19 +3464,260 @@ function buildAiContext(question){
     if (budget <= 0) break;
   }
 
+  const blocks = [
+    `Interpretação da pergunta:\n${plan.intent || 'sem interpretação explícita'}`,
+    `Busca no índice:\n${plan.queries.length ? plan.queries.map(query => `- ${query}`).join('\n') : '- sem termos úteis gerados'}`,
+    `Resultado do índice:\n${indexText || 'Nenhuma página candidata encontrada no índice.'}`
+  ];
+  if (parts.length) blocks.push(`Páginas consultadas:\n\n${parts.join('\n\n---\n\n')}`);
+  else blocks.push('Páginas consultadas:\nnenhuma página foi aberta.');
+
   return {
+    mode:'wiki',
     pages:selected,
-    text:parts.length ? parts.join('\n\n---\n\n') : 'Nenhuma página relevante encontrada para esta pergunta.'
+    text:blocks.join('\n\n===\n\n')
   };
+}
+
+async function planAiIndexSearch(question){
+  const fallback = fallbackAiSearchPlan(question);
+  if (!state.ai.model || String(question || '').length > 1600) return fallback;
+  const messages = [
+    {
+      role:'system',
+      content:'Você transforma uma pergunta em uma consulta para o índice de uma wiki. Não responda a pergunta. Não converse. Não use introdução. Sua resposta deve começar com INTENCAO: e seguir só este formato:\nINTENCAO: <o que o usuário quer encontrar>\nBUSCAR: <termo ou conceito>; <sinônimo útil>; <outro termo>\nFOCO: <conceito|procedimento|diagnostico|lista|resumo|relacao>'
+    },
+    {
+      role:'user',
+      content:`Pergunta:\n${question}`
+    }
+  ];
+  try {
+    const payload = { model:state.ai.model, messages, temperature:0, stream:false, max_tokens:220 };
+    const res = await fetchAi('/chat/completions', { method:'POST', body:JSON.stringify(payload) });
+    if (!res.ok) return fallback;
+    return parseAiSearchPlan(normalizeAiResponse(await res.json()).content, question);
+  } catch {
+    return fallback;
+  }
+}
+
+function fallbackAiSearchPlan(question){
+  return {
+    intent:singleLine(question).slice(0, 220),
+    queries:aiQuestionTerms(question).slice(0, 10),
+    focus:'consulta',
+    raw:''
+  };
+}
+
+function parseAiSearchPlan(answer, question){
+  const text = String(answer || '');
+  const intent = (text.match(/INTEN[ÇC][AÃ]O\s*:\s*(.+)/i) || [null, ''])[1].trim();
+  const focus = (text.match(/FOCO\s*:\s*(.+)/i) || [null, 'consulta'])[1].trim();
+  const queryLines = text.split(/\r?\n/).filter(line => /\b(BUSCAR|BUSCA|TERMOS)\s*:/i.test(line));
+  const queries = [];
+  for (const line of queryLines) {
+    const raw = line.replace(/^.*?\b(?:BUSCAR|BUSCA|TERMOS)\s*:\s*/i, '');
+    raw.split(/[;,|]/).map(item => item.trim()).filter(Boolean).forEach(item => queries.push(item));
+  }
+  const fallback = fallbackAiSearchPlan(question);
+  return {
+    intent:intent || fallback.intent,
+    queries:normalizeAiQueries(queries.length ? queries : fallback.queries),
+    focus:focus || fallback.focus,
+    raw:text
+  };
+}
+
+function normalizeAiQueries(queries){
+  const seen = new Set();
+  const out = [];
+  for (const query of queries) {
+    const clean = singleLine(query).replace(/^['"`]|['"`]$/g, '').slice(0, 80);
+    const key = slugify(clean);
+    if (!clean || !key || AI_STOP_WORDS.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    out.push(clean);
+  }
+  return out.slice(0, 12);
+}
+
+function searchAiIndex(question, plan, limits){
+  const current = state.pages.get(state.currentPage);
+  const terms = aiSearchTermsFromPlan(plan, question);
+  const scored = [...state.pages.values()]
+    .map(page => ({ page, score:scoreAiIndexPage(page, terms, current) }))
+    .filter(item => item.score > 0)
+    .sort((a,b) => b.score - a.score || pageScore(b.page) - pageScore(a.page));
+  return scored.slice(0, limits.indexItems);
+}
+
+function aiSearchTermsFromPlan(plan, question){
+  const raw = [
+    ...(plan?.queries || []),
+    plan?.intent || '',
+    question || ''
+  ].join(' ');
+  const base = slugify(raw)
+    .split(/[-/_]+/)
+    .filter(term => (term.length > 2 || AI_SHORT_TERMS.has(term)) && !AI_STOP_WORDS.has(term))
+    .slice(0, 18);
+  return aiExpandTerms(base).slice(0, 54);
+}
+
+function scoreAiIndexPage(page, terms, current){
+  const title = aiFold(page.title);
+  const path = aiFold(page.path);
+  const summary = aiFold(page.summary);
+  const tags = aiFold((page.tags || []).join(' '));
+  const headings = aiFold((page.headings || []).map(h => h.text).join(' '));
+  const metadata = [title, path, tags, summary, headings];
+  let score = pageScore(page) * 0.08;
+
+  if (current) {
+    if (page.slug === current.slug) score += 5;
+    if (current.outlinks?.some(link => link.resolved === page.slug)) score += 2;
+    if (current.backlinks?.has(page.slug)) score += 1.5;
+    if (page.folder && page.folder === current.folder) score += 1;
+  }
+
+  for (const term of terms) {
+    if (title.includes(term)) score += 10;
+    if (path.includes(term)) score += 7;
+    if (tags.includes(term)) score += 6;
+    if (summary.includes(term)) score += 5;
+    if (headings.includes(term)) score += 4;
+    score += aiFuzzyMetadataScore(term, metadata);
+  }
+  return score;
+}
+
+function compactAiIndexResults(candidates, maxChars = 4200){
+  if (!candidates.length) return '';
+  const lines = [
+    'Índice consultado. Estes são candidatos por título, path, resumo, tags e headings; conteúdo completo ainda não foi lido nesta etapa.'
+  ];
+  for (const item of candidates) {
+    const page = item.page;
+    const tags = (page.tags || []).slice(0, 7).map(tag => `#${tag}`).join(' ');
+    const headings = (page.headings || []).slice(0, 5).map(h => h.text).join(' | ');
+    const summary = singleLine(page.summary || '').slice(0, 180) || 'sem resumo';
+    const block = [
+      `- Path: ${page.path}`,
+      `  Titulo: ${singleLine(page.title)}`,
+      `  Resumo: ${summary}`,
+      `  Tags: ${tags || 'sem tags'}`,
+      `  Headings: ${headings || 'sem headings'}`
+    ].join('\n');
+    if (lines.join('\n').length + block.length + 1 > maxChars) break;
+    lines.push(block);
+  }
+  return lines.join('\n');
+}
+
+async function selectAiPagesFromIndex(question, plan, indexText, limits){
+  if (!shouldUseAiPageSelector(question, indexText)) return null;
+  const messages = [
+    {
+      role:'system',
+      content:'Você é a etapa "ler índice" do PocketWiki. O índice mostra páginas candidatas, mas não o conteúdo completo. Escolha só as páginas que precisam ser abertas para responder. Responda somente com paths copiados exatamente do índice, um path por linha. Escolha no máximo 4. Se nenhuma página parecer relacionada, responda NENHUM.'
+    },
+    {
+      role:'user',
+      content:`Pergunta:\n${question}\n\nInterpretação:\n${plan.intent}\n\nBuscas feitas:\n${plan.queries.map(query => `- ${query}`).join('\n') || '- sem busca'}\n\nResultado do índice:\n${indexText}\n\nPaths para abrir:`
+    }
+  ];
+  try {
+    const payload = {
+      model:state.ai.model,
+      messages,
+      temperature:0,
+      stream:false,
+      max_tokens:180
+    };
+    const res = await fetchAi('/chat/completions', { method:'POST', body:JSON.stringify(payload) });
+    if (!res.ok) return null;
+    const answer = normalizeAiResponse(await res.json()).content;
+    const parsed = parseAiPageSelection(answer);
+    return parsed.explicitNone ? [] : parsed.pages.slice(0, limits.maxPages);
+  } catch {
+    return null;
+  }
+}
+
+function shouldUseAiPageSelector(question, summary){
+  if (!state.ai.model || !summary || summary.length < 80) return false;
+  if (String(question || '').length > 1600) return false;
+  return true;
+}
+
+function parseAiPageSelection(answer){
+  const text = String(answer || '');
+  if (!text || /\bNENHUM\b/i.test(text)) return { explicitNone:true, pages:[] };
+  const found = [];
+  const seen = new Set();
+  const add = page => {
+    if (!page || seen.has(page.slug)) return;
+    seen.add(page.slug);
+    found.push(page);
+  };
+
+  for (const line of text.split(/\r?\n/)) {
+    const clean = line
+      .replace(/^\s*(?:[-*]|\d+[.)])\s*/, '')
+      .replace(/^[`'"(<\[]+|[`'",.)>\]]+$/g, '')
+      .trim();
+    add(findAiPageByPath(clean));
+  }
+
+  for (const page of [...state.pages.values()].sort((a,b)=>b.path.length-a.path.length)) {
+    if (text.includes(page.path)) add(page);
+  }
+  return { explicitNone:false, pages:found };
+}
+
+function findAiPageByPath(value){
+  const clean = String(value || '').trim();
+  if (!clean) return null;
+  const lower = clean.toLowerCase();
+  for (const page of state.pages.values()) {
+    if (page.path === clean || page.path.toLowerCase() === lower) return page;
+  }
+  return state.pages.get(pathToSlug(clean)) || null;
+}
+
+function mergeAiContextSelection(primary, fallback, maxPages){
+  const selected = [];
+  const seen = new Set();
+  const add = page => {
+    if (!page || seen.has(page.slug) || selected.length >= maxPages) return;
+    seen.add(page.slug);
+    selected.push(page);
+  };
+  primary.forEach(add);
+  fallback.forEach(add);
+  return selected;
+}
+
+function highConfidenceAiCandidates(candidates, limits){
+  if (!candidates.length) return [];
+  const best = candidates[0].score;
+  const threshold = Math.max(3, best * .45);
+  return candidates
+    .filter(item => item.score >= threshold)
+    .slice(0, Math.min(limits.maxPages, 3))
+    .map(item => item.page);
 }
 
 function classifyAiQuestion(question){
   const text = singleLine(question);
   const folded = aiFold(text);
   const words = folded.match(/[\p{L}\p{N}]+/gu) || [];
+  const terms = aiQuestionTerms(text);
   if (!text) return 'simple';
   if (/^(oi|ola|bom dia|boa tarde|boa noite|e ai|teste|ping|ok|valeu|obrigado|obrigada|tente novamente)$/.test(folded)) return 'simple';
-  if (words.length <= 3 && !/\b(wiki|nota|pagina|arquivo|link|vault|desenho|diagrama|arquitetura)\b/.test(folded)) return 'simple';
+  if (words.length <= 3 && !terms.length) return 'simple';
   if (/\b(detalh|profund|compare|comparar|comparativo|auditor|auditoria|diagnostic|diagnostico|arquitetura|explique|analise|analisar|mapeia|mapear|revisao|plano|passo a passo|inventario|relatorio)\b/.test(folded)) return 'detailed';
   if (words.length > 24 || text.length > 140) return 'detailed';
   return 'normal';
@@ -3285,53 +3725,108 @@ function classifyAiQuestion(question){
 
 function aiContextLimits(scope){
   if (scope === 'simple') return { maxPages:0, budget:0 };
-  if (scope === 'detailed') return { maxPages:8, budget:11000 };
-  return { maxPages:4, budget:6200 };
+  if (scope === 'detailed') return { maxPages:5, budget:12000, indexItems:28, indexBudget:5200 };
+  return { maxPages:3, budget:6800, indexItems:18, indexBudget:3600 };
 }
 
 function aiQuestionTerms(question){
-  return [...new Set(slugify(question).split(/[-/_]+/).filter(term => term.length > 2 && !AI_STOP_WORDS.has(term)).slice(0, 14))];
+  const base = slugify(question)
+    .split(/[-/_]+/)
+    .filter(term => (term.length > 2 || AI_SHORT_TERMS.has(term)) && !AI_STOP_WORDS.has(term))
+    .slice(0, 14);
+  return aiExpandTerms(base).slice(0, 36);
 }
 
-function scoreAiContextPage(page, terms, current){
-  const title = aiFold(page.title);
-  const path = aiFold(page.path);
-  const summary = aiFold(page.summary);
-  const tags = aiFold((page.tags || []).join(' '));
-  const headings = aiFold((page.headings || []).map(h => h.text).join(' '));
-  const content = aiFold(page.content);
-  let score = pageScore(page) * 0.12;
-
-  if (current) {
-    if (page.slug === current.slug) score += 8;
-    if (current.outlinks?.some(link => link.resolved === page.slug)) score += 5;
-    if (current.backlinks?.has(page.slug)) score += 4;
-    if (page.folder && page.folder === current.folder) score += 1.5;
-  }
-
+function aiExpandTerms(terms){
+  const expanded = new Set();
   for (const term of terms) {
-    if (title.includes(term)) score += 9;
-    if (path.includes(term)) score += 6;
-    if (tags.includes(term)) score += 6;
-    if (summary.includes(term)) score += 5;
-    if (headings.includes(term)) score += 4;
-    if (content.includes(term)) score += Math.min(4, aiTermCount(content, term));
+    expanded.add(term);
+    aiTermVariants(term).forEach(item => expanded.add(item));
+    (AI_TERM_ALIASES[term] || []).forEach(item => {
+      const clean = slugify(item);
+      if (clean) expanded.add(clean);
+    });
   }
+  return [...expanded].filter(term => term && !AI_STOP_WORDS.has(term));
+}
 
-  return score;
+function aiTermVariants(term){
+  const variants = new Set();
+  const clean = String(term || '');
+  if (clean.length < 4) return [];
+  if (clean.endsWith('oes')) variants.add(clean.slice(0, -3) + 'ao');
+  if (clean.endsWith('ções')) variants.add(clean.slice(0, -4) + 'cao');
+  if (clean.endsWith('cao')) variants.add(clean.slice(0, -3) + 'coes');
+  if (clean.endsWith('s')) variants.add(clean.replace(/s$/, ''));
+  if (clean.endsWith('es')) variants.add(clean.replace(/es$/, ''));
+  if (clean.length > 6) variants.add(clean.slice(0, -1));
+  return [...variants].filter(item => item.length > 2);
+}
+
+function aiFuzzyMetadataScore(term, fields){
+  if (!term || term.length < 4) return 0;
+  let best = 0;
+  for (const field of fields) {
+    const tokens = aiTokenize(field);
+    for (const token of tokens) best = Math.max(best, aiTokenSimilarity(term, token));
+  }
+  if (best >= .9) return 5;
+  if (best >= .76) return 3;
+  if (best >= .62) return 1.5;
+  return 0;
+}
+
+function aiTokenize(value){
+  return [...new Set(aiFold(value).split(/[^a-z0-9]+/).filter(token => token.length > 2 || AI_SHORT_TERMS.has(token)))];
+}
+
+function aiTokenSimilarity(a, b){
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  const min = Math.min(a.length, b.length);
+  const max = Math.max(a.length, b.length);
+  if (min >= 4 && (a.startsWith(b) || b.startsWith(a))) return min / max >= .55 ? .86 : .68;
+  const sa = aiLooseStem(a);
+  const sb = aiLooseStem(b);
+  if (sa.length >= 4 && sb.length >= 4 && (sa === sb || sa.startsWith(sb) || sb.startsWith(sa))) return .78;
+  const distance = aiEditDistance(a, b, 2);
+  if (distance <= 1 && max <= 7) return .72;
+  if (distance <= 2 && max > 7) return .66;
+  return 0;
+}
+
+function aiLooseStem(term){
+  return String(term || '').replace(/(acoes|ções|cao|ção|mente|idades|idade|ismo|ista|ores|ora|or|as|os|es|s)$/i, '');
+}
+
+function aiEditDistance(a, b, limit = 2){
+  if (Math.abs(a.length - b.length) > limit) return limit + 1;
+  const prev = Array.from({ length:b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    let best = row[0];
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      row[j] = Math.min(row[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
+      best = Math.min(best, row[j]);
+    }
+    if (best > limit) return limit + 1;
+    for (let j = 0; j < row.length; j++) prev[j] = row[j];
+  }
+  return prev[b.length];
 }
 
 function compactAiPage(page, terms, maxChars){
   const headings = (page.headings || []).slice(0, 8).map(h => `${'#'.repeat(Math.min(4, h.level))} ${h.text}`).join(' | ') || 'sem headings';
-  const excerpts = aiMatchingExcerpts(page.content, terms, 3, 380);
-  const fallback = excerpts.length ? excerpts : aiFallbackExcerpts(page.content, 2, 380);
+  const excerpts = aiMatchingExcerpts(page.content, terms, 4, 520);
+  const fallback = excerpts.length ? excerpts : aiFallbackExcerpts(page.content, 4, 520);
   const lines = [
     `Path: ${page.path}`,
     `Titulo: ${page.title}`,
     `Resumo: ${page.summary || 'sem resumo'}`,
     `Tags: ${(page.tags || []).map(tag => '#'+tag).join(' ') || 'sem tags'}`,
     `Headings: ${headings}`,
-    'Excertos:',
+    'Conteúdo consultado:',
     ...(fallback.length ? fallback.map(text => `- ${text}`) : ['- sem excertos úteis'])
   ];
   const block = lines.join('\n');
@@ -3356,9 +3851,17 @@ function aiMatchingExcerpts(content, terms, maxItems, maxLen){
 }
 
 function aiFallbackExcerpts(content, maxItems, maxLen){
-  const text = compactAiText(content);
+  const raw = stripFrontmatter(content)
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, ' ')
+    .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, '$2$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+  const text = compactAiText(raw);
   if (!text) return [];
-  const chunks = text.split(/(?<=[.!?])\s+/).filter(Boolean);
+  const chunks = raw
+    .split(/\n{2,}|(?:^|\n)(?=#{1,4}\s+)/)
+    .map(chunk => compactAiText(chunk))
+    .filter(Boolean);
   const excerpts = [];
   for (const chunk of chunks) {
     const trimmed = chunk.trim();
@@ -3394,18 +3897,6 @@ function compactAiText(content){
     .replace(/[#*_`>|]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-}
-
-function aiTermCount(text, term){
-  let count = 0;
-  let from = 0;
-  while (count < 4) {
-    const ix = text.indexOf(term, from);
-    if (ix === -1) break;
-    count++;
-    from = ix + term.length;
-  }
-  return count;
 }
 
 function aiFold(value){

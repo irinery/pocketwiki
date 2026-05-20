@@ -1,0 +1,43 @@
+# PocketWiki macOS Nativo — Contrato Técnico
+
+## Arquivos gerados
+
+| Ordem | Arquivo | Fase | Dependências | Paralelizável |
+| --- | --- | --- | --- | --- |
+| 1 | `01_scaffold_seguranca.md` | Scaffold SwiftPM, launcher e acesso seguro à pasta | nenhuma | não |
+| 2 | `02_core_indexacao.md` | Modelos, parser e índice local | `01_scaffold_seguranca.md` | não |
+| 3 | `03_shell_leitor_busca.md` | Shell SwiftUI, sidebar, leitor e busca | `02_core_indexacao.md` | sim |
+| 4 | `04_dashboard_saude_tempo.md` | Dashboard, saúde e timeline | `02_core_indexacao.md` | sim |
+| 5 | `05_excalidraw_textual.md` | Excalidraw textual/fallback | `02_core_indexacao.md` | sim |
+| 6 | `06_ferramentas_adiadas.md` | Itens dificuldade 4+ anotados e não implementados | nenhuma | sim |
+
+## Convenções globais
+
+| Item | Convenção |
+| --- | --- |
+| Plataforma mínima | macOS 14.0 |
+| Linguagem | Swift 6 |
+| Empacotamento | SwiftPM com executável GUI `PocketWikiMac` |
+| Bundle local | `dist/PocketWikiMac.app` |
+| Bundle ID | `com.irinery.PocketWikiMac` |
+| Fonte padrão | pasta local escolhida pelo usuário |
+| Persistência de acesso | security-scoped bookmark em `UserDefaults` |
+| Arquivos indexáveis | `.md`, `.excalidraw`, `.excalidraw.md` |
+| Diretórios ignorados | nomes iniciados por `.`, `node_modules`, `dist`, `build`, `.git`, `.pocketwiki-cache` |
+| Limite de leitura por arquivo | 5 MiB |
+| Datas | `Date` em UTC internamente; exibição via locale do sistema |
+| Slug | minúsculo, sem diacríticos, `/` preservado, espaços viram `-`, extensão removida |
+| Markdown | renderização local sem executar HTML, scripts ou conteúdo remoto |
+
+## Definition of Done global
+
+| Critério | Medida objetiva |
+| --- | --- |
+| Contrato | todos os arquivos `00` a `06` existem e seguem as seções obrigatórias |
+| Branch | desenvolvimento feito em `codex/pocketwiki-macos-app` |
+| App | `swift build` compila `PocketWikiMac` sem erro |
+| Launcher | `./script/build_and_run.sh --verify` cria bundle e encontra processo `PocketWikiMac` |
+| Segurança | bookmark é criado/restaurado e acesso à pasta chama `startAccessingSecurityScopedResource()` quando aplicável |
+| Indexação | testes cobrem slug, frontmatter, tags, links, arquivos ignorados e Excalidraw textual |
+| UI | telas de dificuldade 1-3 estão navegáveis via SwiftUI, sem WebView |
+| Itens 4+ | grafo, IA streaming e render oficial Excalidraw estão documentados como adiados |
