@@ -26,6 +26,7 @@ struct ReaderView: View {
             .environment(\.openURL, OpenURLAction { url in
                 handleOpenURL(url)
             })
+            .background(PocketWikiTheme.appBackground)
         )
     }
 
@@ -33,11 +34,12 @@ struct ReaderView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(page.path)
                 .font(.caption.monospaced())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(PocketWikiTheme.muted)
                 .textSelection(.enabled)
 
             Text(page.title)
-                .font(.system(size: 36, weight: .bold, design: .default))
+                .font(.system(size: 38, weight: .heavy, design: .serif))
+                .foregroundStyle(PocketWikiTheme.text)
                 .lineLimit(3)
                 .textSelection(.enabled)
 
@@ -49,11 +51,11 @@ struct ReaderView: View {
                 Label(PocketFormatters.date(page.updatedAt), systemImage: "calendar")
                 if !page.missingLinks.isEmpty {
                     Label("\(page.missingLinks.count) ausentes", systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(PocketWikiTheme.bad)
                 }
             }
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(PocketWikiTheme.dim)
 
             if !page.tags.isEmpty {
                 FlowLayout(spacing: 8) {
@@ -62,6 +64,7 @@ struct ReaderView: View {
                             store.selectTag(tag)
                         }
                         .buttonStyle(.bordered)
+                        .tint(PocketWikiTheme.accent2)
                         .controlSize(.small)
                     }
                 }
@@ -69,7 +72,9 @@ struct ReaderView: View {
         }
         .padding(.bottom, 12)
         .overlay(alignment: .bottom) {
-            Divider()
+            Rectangle()
+                .fill(PocketWikiTheme.border)
+                .frame(height: 1)
         }
     }
 
@@ -79,6 +84,7 @@ struct ReaderView: View {
 
         return Text(attributed)
             .font(.body)
+            .foregroundStyle(PocketWikiTheme.text)
             .lineSpacing(4)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -92,10 +98,14 @@ struct ReaderView: View {
                         ForEach(page.missingLinks) { link in
                             Text(link.label)
                                 .font(.caption)
-                                .foregroundStyle(.red)
+                                .foregroundStyle(PocketWikiTheme.bad)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(.thinMaterial, in: Capsule())
+                                .background(PocketWikiTheme.bg3.opacity(0.72), in: Capsule())
+                                .overlay {
+                                    Capsule()
+                                        .stroke(PocketWikiTheme.bad.opacity(0.45), lineWidth: 1)
+                                }
                         }
                     }
                 }
@@ -108,6 +118,8 @@ struct ReaderView: View {
                     Label("Ver Excalidraw textual", systemImage: "scribble.variable")
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(PocketWikiTheme.accent)
+                .buttonBorderShape(.roundedRectangle(radius: 8))
             }
         }
     }

@@ -21,18 +21,23 @@ struct ExcalidrawView: View {
                     ForEach(drawings) { page in
                         VStack(alignment: .leading, spacing: 2) {
                             Text(page.title)
+                                .foregroundStyle(PocketWikiTheme.text)
                                 .lineLimit(1)
                             Text(page.path)
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(PocketWikiTheme.muted)
                                 .lineLimit(1)
                         }
                         .tag(page.id as String?)
                     }
                 }
+                .scrollContentBackground(.hidden)
+                .background(PocketWikiTheme.bg2)
                 .frame(minWidth: 240, idealWidth: 300, maxWidth: 360)
 
-                Divider()
+                Rectangle()
+                    .fill(PocketWikiTheme.border)
+                    .frame(width: 1)
 
                 detail(page: selectedPage)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -40,6 +45,7 @@ struct ExcalidrawView: View {
             .onAppear {
                 selectedID = selectedID ?? store.selectedPageID ?? drawings.first?.id
             }
+            .background(PocketWikiTheme.appBackground)
         }
     }
 
@@ -56,9 +62,10 @@ struct ExcalidrawView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(page.path)
                         .font(.caption.monospaced())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(PocketWikiTheme.muted)
                     Text(page.title)
-                        .font(.largeTitle.bold())
+                        .font(.system(size: 34, weight: .heavy, design: .serif))
+                        .foregroundStyle(PocketWikiTheme.text)
 
                     if let summary = page.excalidraw {
                         FlowLayout(spacing: 8) {
@@ -67,14 +74,14 @@ struct ExcalidrawView: View {
                             Label("\(summary.stats.links) links", systemImage: "link")
                             if let reason = summary.fallbackReason {
                                 Label(reason, systemImage: "exclamationmark.triangle")
-                                    .foregroundStyle(.orange)
+                                    .foregroundStyle(PocketWikiTheme.warn)
                             } else {
                                 Label("cena JSON textual", systemImage: "checkmark.circle")
-                                    .foregroundStyle(.green)
+                                    .foregroundStyle(PocketWikiTheme.good)
                             }
                         }
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(PocketWikiTheme.dim)
                     }
 
                     Button {
@@ -83,21 +90,28 @@ struct ExcalidrawView: View {
                         Label("Abrir indice no leitor", systemImage: "doc.text")
                     }
                     .buttonStyle(.borderedProminent)
+                    .tint(PocketWikiTheme.accent)
+                    .buttonBorderShape(.roundedRectangle(radius: 8))
                 }
 
                 if let summary = page.excalidraw {
                     SectionCard("Preview textual", subtitle: "\(summary.texts.count) textos", systemImage: "text.alignleft") {
                         if summary.texts.isEmpty {
                             Text("sem texto extraido")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(PocketWikiTheme.muted)
                         } else {
                             LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 10)], spacing: 10) {
                                 ForEach(Array(summary.texts.prefix(80).enumerated()), id: \.offset) { _, text in
                                     Text(text)
+                                        .foregroundStyle(PocketWikiTheme.text)
                                         .frame(maxWidth: .infinity, minHeight: 54, alignment: .center)
                                         .multilineTextAlignment(.center)
                                         .padding(10)
-                                        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                                        .background(PocketWikiTheme.bg2.opacity(0.72), in: RoundedRectangle(cornerRadius: 8))
+                                        .overlay {
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .stroke(PocketWikiTheme.border, lineWidth: 1)
+                                        }
                                 }
                             }
                         }
@@ -106,12 +120,13 @@ struct ExcalidrawView: View {
                     SectionCard("Relacoes textuais", subtitle: "\(summary.relationHints.count)", systemImage: "arrow.right") {
                         if summary.relationHints.isEmpty {
                             Text("sem relacoes inferidas")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(PocketWikiTheme.muted)
                         } else {
                             VStack(alignment: .leading, spacing: 6) {
                                 ForEach(summary.relationHints.prefix(12), id: \.self) { relation in
                                     Text(relation)
                                         .font(.callout)
+                                        .foregroundStyle(PocketWikiTheme.text)
                                 }
                             }
                         }

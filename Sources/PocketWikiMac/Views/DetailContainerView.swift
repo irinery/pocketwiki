@@ -8,9 +8,11 @@ struct DetailContainerView: View {
             topBar
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .background(.bar)
+                .background(PocketWikiTheme.bg.opacity(0.9))
 
-            Divider()
+            Rectangle()
+                .fill(PocketWikiTheme.border)
+                .frame(height: 1)
 
             if store.isLoading {
                 ProgressView(store.statusMessage)
@@ -21,6 +23,7 @@ struct DetailContainerView: View {
                 content
             }
         }
+        .background(PocketWikiTheme.appBackground)
     }
 
     private var topBar: some View {
@@ -42,6 +45,7 @@ struct DetailContainerView: View {
             }
             .disabled(store.index.pages.isEmpty)
         }
+        .foregroundStyle(PocketWikiTheme.text)
     }
 
     @ViewBuilder
@@ -64,7 +68,9 @@ struct DetailContainerView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             if let page = store.selectedPage {
-                Divider()
+                Rectangle()
+                    .fill(PocketWikiTheme.border)
+                    .frame(width: 1)
                 InspectorView(store: store, page: page)
                     .frame(width: 300)
             }

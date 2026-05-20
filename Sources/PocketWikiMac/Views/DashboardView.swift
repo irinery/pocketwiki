@@ -22,16 +22,17 @@ struct DashboardView: View {
                     SectionCard("Links ausentes", subtitle: "\(store.index.missingLinks.count)", systemImage: "exclamationmark.triangle") {
                         if store.index.missingLinks.isEmpty {
                             Text("sem links quebrados")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(PocketWikiTheme.muted)
                         } else {
                             VStack(alignment: .leading, spacing: 8) {
                                 ForEach(store.index.missingLinks.sorted(by: { $0.value.count > $1.value.count }).prefix(8), id: \.key) { item in
                                     HStack {
                                         Text(item.key)
                                             .lineLimit(1)
+                                            .foregroundStyle(PocketWikiTheme.text)
                                         Spacer()
                                         Text("\(item.value.count) refs")
-                                            .foregroundStyle(.secondary)
+                                            .foregroundStyle(PocketWikiTheme.muted)
                                     }
                                     .font(.callout)
                                 }
@@ -46,6 +47,7 @@ struct DashboardView: View {
                                     store.selectTag(tag)
                                 }
                                 .buttonStyle(.bordered)
+                                .tint(PocketWikiTheme.accent2)
                                 .controlSize(.small)
                             }
                         }
@@ -68,22 +70,26 @@ struct DashboardView: View {
             }
             .padding(18)
         }
+        .background(PocketWikiTheme.appBackground)
     }
 
     private func hero(_ metrics: WikiDashboardMetrics) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
+                BrandLogoView(size: 76)
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text(store.index.sourceName)
-                        .font(.largeTitle.bold())
+                        .font(.system(size: 34, weight: .heavy, design: .serif))
+                        .foregroundStyle(PocketWikiTheme.text)
                         .lineLimit(2)
                     Text("Visao executiva da wiki local: densidade, hubs, buracos de documentacao e paginas recentes.")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(PocketWikiTheme.dim)
                 }
                 Spacer()
                 Text("\(metrics.healthScore)/100")
                     .font(.system(size: 34, weight: .bold, design: .rounded))
-                    .foregroundStyle(metrics.healthScore >= 80 ? .green : metrics.healthScore >= 55 ? .orange : .red)
+                    .foregroundStyle(metrics.healthScore >= 80 ? PocketWikiTheme.good : metrics.healthScore >= 55 ? PocketWikiTheme.warn : PocketWikiTheme.bad)
             }
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
@@ -94,14 +100,14 @@ struct DashboardView: View {
             }
         }
         .padding(18)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .pocketWikiCard(hero: true)
     }
 
     private func pageList(_ pages: [WikiPage], meta: @escaping (WikiPage) -> String) -> some View {
         Group {
             if pages.isEmpty {
-                Text("nada encontrado")
-                    .foregroundStyle(.secondary)
+                    Text("nada encontrado")
+                    .foregroundStyle(PocketWikiTheme.muted)
             } else {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(pages) { page in
@@ -141,11 +147,11 @@ struct DensityMiniMap: View {
     }
 
     private func color(for page: WikiPage) -> Color {
-        if !page.missingLinks.isEmpty { return .red.opacity(0.75) }
+        if !page.missingLinks.isEmpty { return PocketWikiTheme.bad.opacity(0.75) }
         let value = density(page)
-        if value >= 12 { return .orange.opacity(0.8) }
-        if value >= 5 { return .blue.opacity(0.7) }
-        if value > 0 { return .green.opacity(0.55) }
-        return .secondary.opacity(0.25)
+        if value >= 12 { return PocketWikiTheme.accent.opacity(0.82) }
+        if value >= 5 { return PocketWikiTheme.accent2.opacity(0.72) }
+        if value > 0 { return PocketWikiTheme.good.opacity(0.56) }
+        return PocketWikiTheme.muted.opacity(0.25)
     }
 }

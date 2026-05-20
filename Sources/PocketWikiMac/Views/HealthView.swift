@@ -11,9 +11,10 @@ struct HealthView: View {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Saude da wiki: \(metrics.healthScore)/100")
-                        .font(.largeTitle.bold())
+                        .font(.system(size: 34, weight: .heavy, design: .serif))
+                        .foregroundStyle(PocketWikiTheme.text)
                     Text("Nota heuristica para priorizar links quebrados, paginas isoladas, orfas, sem resumo e conteudo antigo.")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(PocketWikiTheme.dim)
 
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
                         MetricTile(title: "Links quebrados", value: "\(metrics.missingDestinations)", systemImage: "exclamationmark.triangle")
@@ -23,12 +24,12 @@ struct HealthView: View {
                     }
                 }
                 .padding(18)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                .pocketWikiCard(hero: true)
 
                 SectionCard("Revisao", subtitle: "fila acionavel", systemImage: "checklist") {
                     if issues.isEmpty {
                         Text("Nada critico encontrado. Mantem revisao periodica de paginas antigas e hubs.")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(PocketWikiTheme.muted)
                     } else {
                         VStack(alignment: .leading, spacing: 12) {
                             ForEach(issues) { issue in
@@ -44,7 +45,7 @@ struct HealthView: View {
                             ForEach(store.index.loadIssues, id: \.self) { issue in
                                 Text(issue)
                                     .font(.caption)
-                                    .foregroundStyle(.red)
+                                    .foregroundStyle(PocketWikiTheme.bad)
                             }
                         }
                     }
@@ -52,6 +53,7 @@ struct HealthView: View {
             }
             .padding(18)
         }
+        .background(PocketWikiTheme.appBackground)
     }
 
     private func issueView(_ issue: WikiHealthIssue) -> some View {
@@ -59,6 +61,7 @@ struct HealthView: View {
             HStack {
                 Text(issue.title)
                     .font(.headline)
+                    .foregroundStyle(PocketWikiTheme.text)
                 Spacer()
                 Text(issue.priority.label)
                     .font(.caption.monospaced())
@@ -67,7 +70,7 @@ struct HealthView: View {
 
             Text(issue.detail)
                 .font(.callout)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(PocketWikiTheme.dim)
 
             FlowLayout(spacing: 8) {
                 ForEach(issue.pageIDs, id: \.self) { id in
@@ -81,14 +84,18 @@ struct HealthView: View {
             }
         }
         .padding(12)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .background(PocketWikiTheme.bg2.opacity(0.72), in: RoundedRectangle(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(PocketWikiTheme.border, lineWidth: 1)
+        }
     }
 
     private func color(_ priority: WikiHealthIssue.Priority) -> Color {
         switch priority {
-        case .high: .red
-        case .medium: .orange
-        case .low: .secondary
+        case .high: PocketWikiTheme.bad
+        case .medium: PocketWikiTheme.warn
+        case .low: PocketWikiTheme.muted
         }
     }
 }

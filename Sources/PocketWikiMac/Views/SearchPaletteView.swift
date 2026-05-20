@@ -8,17 +8,21 @@ struct SearchPaletteView: View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(PocketWikiTheme.accent)
                 TextField("Digite para abrir pagina, path, resumo ou tag...", text: $store.searchText)
                     .textFieldStyle(.plain)
+                    .foregroundStyle(PocketWikiTheme.text)
                 Button("Fechar") {
                     dismiss()
                 }
                 .keyboardShortcut(.escape)
             }
             .padding()
+            .background(PocketWikiTheme.bg)
 
-            Divider()
+            Rectangle()
+                .fill(PocketWikiTheme.border)
+                .frame(height: 1)
 
             List(store.searchResults) { result in
                 Button {
@@ -27,24 +31,27 @@ struct SearchPaletteView: View {
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: "doc.text")
-                            .foregroundStyle(.tint)
+                            .foregroundStyle(PocketWikiTheme.accent)
                             .frame(width: 18)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(result.title)
+                                .foregroundStyle(PocketWikiTheme.text)
                                 .lineLimit(1)
                             Text(result.path)
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(PocketWikiTheme.muted)
                                 .lineLimit(1)
                         }
                         Spacer()
                         Text(result.reason)
                             .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(PocketWikiTheme.accent2)
                     }
                 }
                 .buttonStyle(.plain)
             }
+            .scrollContentBackground(.hidden)
         }
+        .background(PocketWikiTheme.bg2)
     }
 }

@@ -10,6 +10,8 @@ struct ContentView: View {
         } detail: {
             DetailContainerView(store: store)
         }
+        .tint(PocketWikiTheme.accent)
+        .preferredColorScheme(.dark)
         .sheet(isPresented: $store.showSearchPalette) {
             SearchPaletteView(store: store)
                 .frame(minWidth: 620, minHeight: 520)

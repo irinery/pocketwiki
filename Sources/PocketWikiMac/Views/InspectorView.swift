@@ -10,9 +10,10 @@ struct InspectorView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Inspector")
                         .font(.headline)
+                        .foregroundStyle(PocketWikiTheme.text)
                     Text(page.path)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(PocketWikiTheme.muted)
                         .lineLimit(2)
                         .textSelection(.enabled)
                 }
@@ -29,11 +30,12 @@ struct InspectorView: View {
                 SectionCard("Tags", systemImage: "tag") {
                     if page.tags.isEmpty {
                         Text("sem tags")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(PocketWikiTheme.muted)
                     } else {
                         FlowLayout(spacing: 6) {
                             ForEach(page.tags, id: \.self) { tag in
                                 Button("#\(tag)") { store.selectTag(tag) }
+                                    .tint(PocketWikiTheme.accent2)
                                     .controlSize(.small)
                             }
                         }
@@ -46,12 +48,12 @@ struct InspectorView: View {
                 SectionCard("Ausentes", systemImage: "exclamationmark.triangle") {
                     if page.missingLinks.isEmpty {
                         Label("nenhum link quebrado", systemImage: "checkmark.circle")
-                            .foregroundStyle(.green)
+                            .foregroundStyle(PocketWikiTheme.good)
                     } else {
                         VStack(alignment: .leading, spacing: 6) {
                             ForEach(page.missingLinks) { link in
                                 Text(link.label)
-                                    .foregroundStyle(.red)
+                                    .foregroundStyle(PocketWikiTheme.bad)
                                     .lineLimit(1)
                             }
                         }
@@ -60,16 +62,17 @@ struct InspectorView: View {
             }
             .padding(14)
         }
-        .background(.thinMaterial)
+        .background(PocketWikiTheme.bg2.opacity(0.96))
     }
 
     private func metric(_ label: String, _ value: String) -> some View {
         HStack {
             Text(label)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(PocketWikiTheme.muted)
             Spacer()
             Text(value)
                 .fontWeight(.semibold)
+                .foregroundStyle(PocketWikiTheme.text)
                 .lineLimit(1)
         }
         .font(.caption)
@@ -79,7 +82,7 @@ struct InspectorView: View {
         SectionCard(title, subtitle: "\(ids.count)", systemImage: image) {
             if ids.isEmpty {
                 Text("nada encontrado")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(PocketWikiTheme.muted)
             } else {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(ids.prefix(12), id: \.self) { id in

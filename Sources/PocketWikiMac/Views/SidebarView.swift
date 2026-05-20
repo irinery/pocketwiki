@@ -19,8 +19,10 @@ struct SidebarView: View {
                 }
             }
             .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
             .searchable(text: $store.searchText, placement: .sidebar, prompt: "Buscar / filtrar")
         }
+        .background(PocketWikiTheme.bg2)
         .toolbar {
             ToolbarItemGroup {
                 Button {
@@ -46,15 +48,14 @@ struct SidebarView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
-                Image(systemName: "books.vertical")
-                    .font(.title2)
-                    .foregroundStyle(.tint)
+                BrandLogoView(size: 74)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("PocketWiki")
-                        .font(.headline)
+                        .font(.system(size: 20, weight: .heavy, design: .serif))
+                        .foregroundStyle(PocketWikiTheme.text)
                     Text(store.index.sourceName)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(PocketWikiTheme.muted)
                         .lineLimit(1)
                 }
                 Spacer()
@@ -67,26 +68,35 @@ struct SidebarView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
+            .tint(PocketWikiTheme.accent)
+            .buttonBorderShape(.roundedRectangle(radius: 8))
 
             Text(store.statusMessage)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(PocketWikiTheme.muted)
                 .lineLimit(2)
+        }
+        .padding(12)
+        .background(PocketWikiTheme.panel.opacity(0.72), in: RoundedRectangle(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(PocketWikiTheme.border, lineWidth: 1)
         }
     }
 
     private func sidebarRow(_ page: WikiPage) -> some View {
         HStack(spacing: 10) {
             Image(systemName: page.kind == .excalidraw ? "scribble.variable" : "doc.text")
-                .foregroundStyle(page.missingLinks.isEmpty ? Color.secondary : Color.red)
+                .foregroundStyle(page.missingLinks.isEmpty ? PocketWikiTheme.dim : PocketWikiTheme.bad)
                 .frame(width: 16)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(page.title)
+                    .foregroundStyle(PocketWikiTheme.text)
                     .lineLimit(1)
                 Text(page.path)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(PocketWikiTheme.muted)
                     .lineLimit(1)
             }
         }
