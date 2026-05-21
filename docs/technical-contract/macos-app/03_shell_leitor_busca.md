@@ -8,6 +8,7 @@ Responsabilidades explícitas:
 - criar layout responsivo com sidebar e área de detalhe;
 - listar páginas com filtro e busca;
 - abrir página selecionada no leitor;
+- renderizar Markdown com renderer SwiftUI dedicado, preservando headings, listas, tabelas, task lists, blockquotes, code blocks e links;
 - exibir metadados, tags, backlinks, outlinks e links ausentes;
 - oferecer palette/busca global por título, path, resumo e tags.
 
@@ -44,6 +45,16 @@ dado:    Markdown com HTML `<script>`
 quando:  o leitor renderiza o conteúdo
 então:   o texto de script não é executado nem vira controle interativo
 
+TESTE UI-06
+dado:    página cujo primeiro `# heading` é igual ao título apresentado no cabeçalho
+quando:  o leitor renderiza o conteúdo
+então:   o heading duplicado é removido do corpo e o restante do Markdown é preservado
+
+TESTE UI-07
+dado:    janela com área de detalhe estreita
+quando:  uma página está selecionada
+então:   o inspector sai da coluna fixa e fica acessível por botão como painel lateral deslizante
+
 ## 2.3 — Implementação
 
 Estruturas:
@@ -78,10 +89,15 @@ Limites:
 - sidebar mantém uma linha de título e uma linha de path;
 - palette mostra no máximo 30 resultados;
 - inspector mostra no máximo 12 backlinks e 12 outlinks.
+- leitor usa `MarkdownUI` em SwiftUI nativo, sem `WebView`;
+- wiki-links resolvidos viram URLs internas `pocketwiki://page/<id>`;
+- links ausentes viram destaque textual e não navegam.
+- inspector fixo só aparece quando a área de detalhe tem largura suficiente;
+- em largura estreita, o inspector vira drawer sobreposto acionado pelo botão de informação.
 
 Regras de falha:
 - seleção inválida volta para primeira página disponível;
-- Markdown que falha na conversão cai para texto plano;
+- Markdown inválido deve degradar como texto exibível pelo renderer, sem execução de HTML/script;
 - link externo abre pelo sistema somente se tiver esquema `http` ou `https`.
 
 ## 2.4 — Entrega mínima

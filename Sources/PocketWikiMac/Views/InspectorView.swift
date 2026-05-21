@@ -3,16 +3,25 @@ import SwiftUI
 struct InspectorView: View {
     @Bindable var store: WikiAppStore
     let page: WikiPage
+    var showsHeader = true
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Inspector")
-                        .font(.headline)
-                        .foregroundStyle(PocketWikiTheme.text)
+                if showsHeader {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Inspector")
+                            .font(.headline)
+                            .foregroundStyle(PocketWikiTheme.text)
+                        Text(page.path)
+                            .font(.caption)
+                            .foregroundStyle(PocketWikiTheme.muted)
+                            .lineLimit(2)
+                            .textSelection(.enabled)
+                    }
+                } else {
                     Text(page.path)
-                        .font(.caption)
+                        .font(.caption.monospaced())
                         .foregroundStyle(PocketWikiTheme.muted)
                         .lineLimit(2)
                         .textSelection(.enabled)

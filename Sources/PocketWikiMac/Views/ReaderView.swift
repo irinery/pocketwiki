@@ -1,3 +1,4 @@
+import MarkdownUI
 import SwiftUI
 
 struct ReaderView: View {
@@ -79,14 +80,10 @@ struct ReaderView: View {
     }
 
     private func markdown(_ page: WikiPage) -> some View {
-        let markdown = WikiMarkdownFormatter.markdownForDisplay(page: page, index: store.index)
-        let attributed = (try? AttributedString(markdown: markdown)) ?? AttributedString(markdown)
-
-        return Text(attributed)
-            .font(.body)
-            .foregroundStyle(PocketWikiTheme.text)
-            .lineSpacing(4)
+        Markdown(WikiMarkdownFormatter.markdownForDisplay(page: page, index: store.index))
+            .markdownTheme(.pocketWiki)
             .textSelection(.enabled)
+            .tint(PocketWikiTheme.accent)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -125,7 +122,11 @@ struct ReaderView: View {
     }
 
     private func handleOpenURL(_ url: URL) -> OpenURLAction.Result {
-        guard url.scheme == "pocketwiki", url.host == "page" else {
+        guard url.scheme?.lowercased() == "pocketwiki", url.host == "page" else {
+            let scheme = url.scheme?.lowercased()
+            guard scheme == "http" || scheme == "https" else {
+                return .handled
+            }
             return .systemAction
         }
         let id = url.path.dropFirst().removingPercentEncoding ?? String(url.path.dropFirst())

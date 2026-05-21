@@ -8,6 +8,13 @@ struct ExcalidrawView: View {
         store.index.pages.filter { $0.kind == .excalidraw }
     }
 
+    private var selectedPage: WikiPage? {
+        if let selectedID, let page = store.index.page(id: selectedID), page.kind == .excalidraw {
+            return page
+        }
+        return drawings.first
+    }
+
     var body: some View {
         if drawings.isEmpty {
             EmptyStateView(
@@ -15,57 +22,49 @@ struct ExcalidrawView: View {
                 message: "A aba mostra arquivos `.excalidraw` e `.excalidraw.md` reconhecidos pelo parser textual.",
                 systemImage: "scribble.variable"
             )
-        } else {
-            HStack(spacing: 0) {
-                List(selection: $selectedID) {
-                    ForEach(drawings) { page in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(page.title)
-                                .foregroundStyle(PocketWikiTheme.text)
-                                .lineLimit(1)
-                            Text(page.path)
-                                .font(.caption)
-                                .foregroundStyle(PocketWikiTheme.muted)
-                                .lineLimit(1)
-                        }
-                        .tag(page.id as String?)
+        } else if let page = selectedPage {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    header(page)
+
+                    if let summary = page.excalidraw {
+                        preview(summary)
+                        relations(summary)
                     }
                 }
-                .scrollContentBackground(.hidden)
-                .background(PocketWikiTheme.bg2)
-                .frame(minWidth: 240, idealWidth: 300, maxWidth: 360)
-
-                Rectangle()
-                    .fill(PocketWikiTheme.border)
-                    .frame(width: 1)
-
-                detail(page: selectedPage)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(22)
+                .frame(maxWidth: 1120, alignment: .topLeading)
+                .frame(maxWidth: .infinity, alignment: .top)
             }
+            .background(PocketWikiTheme.appBackground)
             .onAppear {
                 selectedID = selectedID ?? store.selectedPageID ?? drawings.first?.id
             }
-            .background(PocketWikiTheme.appBackground)
         }
     }
 
-    private var selectedPage: WikiPage {
-        if let selectedID, let page = store.index.page(id: selectedID), page.kind == .excalidraw {
-            return page
-        }
-        return drawings[0]
-    }
+    private func header(_ page: WikiPage) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 16) {
+                Image(systemName: "scribble.variable")
+                    .font(.system(size: 34))
+                    .foregroundStyle(PocketWikiTheme.purple)
+                    .frame(width: 56, height: 56)
+                    .background(PocketWikiTheme.bg3, in: RoundedRectangle(cornerRadius: 8))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(PocketWikiTheme.border, lineWidth: 1)
+                    }
 
-    private func detail(page: WikiPage) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 7) {
                     Text(page.path)
                         .font(.caption.monospaced())
                         .foregroundStyle(PocketWikiTheme.muted)
+                        .textSelection(.enabled)
                     Text(page.title)
                         .font(.system(size: 34, weight: .heavy, design: .serif))
                         .foregroundStyle(PocketWikiTheme.text)
+                        .lineLimit(2)
 
                     if let summary = page.excalidraw {
                         FlowLayout(spacing: 8) {
@@ -83,57 +82,94 @@ struct ExcalidrawView: View {
                         .font(.caption)
                         .foregroundStyle(PocketWikiTheme.dim)
                     }
+                }
+
+                Spacer(minLength: 16)
+
+                VStack(alignment: .trailing, spacing: 10) {
+                    Picker("", selection: bindingSelectedID) {
+                        ForEach(drawings) { drawing in
+                            Text(drawing.title).tag(drawing.id)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 240)
 
                     Button {
                         store.selectPage(page.id, tab: .reader)
                     } label: {
-                        Label("Abrir indice no leitor", systemImage: "doc.text")
+                        Label("Abrir indice", systemImage: "doc.text")
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(PocketWikiTheme.accent)
                     .buttonBorderShape(.roundedRectangle(radius: 8))
+                    .tint(PocketWikiTheme.accent)
                 }
+            }
+        }
+        .padding(18)
+        .pocketWikiCard(hero: true)
+    }
 
-                if let summary = page.excalidraw {
-                    SectionCard("Preview textual", subtitle: "\(summary.texts.count) textos", systemImage: "text.alignleft") {
-                        if summary.texts.isEmpty {
-                            Text("sem texto extraido")
-                                .foregroundStyle(PocketWikiTheme.muted)
-                        } else {
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 10)], spacing: 10) {
-                                ForEach(Array(summary.texts.prefix(80).enumerated()), id: \.offset) { _, text in
-                                    Text(text)
-                                        .foregroundStyle(PocketWikiTheme.text)
-                                        .frame(maxWidth: .infinity, minHeight: 54, alignment: .center)
-                                        .multilineTextAlignment(.center)
-                                        .padding(10)
-                                        .background(PocketWikiTheme.bg2.opacity(0.72), in: RoundedRectangle(cornerRadius: 8))
-                                        .overlay {
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .stroke(PocketWikiTheme.border, lineWidth: 1)
-                                        }
-                                }
-                            }
+    private var bindingSelectedID: Binding<String> {
+        Binding(
+            get: { selectedID ?? drawings.first?.id ?? "" },
+            set: { selectedID = $0 }
+        )
+    }
+
+    private func preview(_ summary: ExcalidrawSummary) -> some View {
+        SectionCard("Preview textual", subtitle: "\(summary.texts.count) textos extraidos", systemImage: "text.alignleft") {
+            if summary.texts.isEmpty {
+                Text("sem texto extraido")
+                    .foregroundStyle(PocketWikiTheme.muted)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(Array(summary.texts.prefix(32).enumerated()), id: \.offset) { _, text in
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: "text.quote")
+                                .foregroundStyle(PocketWikiTheme.accent)
+                                .frame(width: 18)
+                            Text(text)
+                                .foregroundStyle(PocketWikiTheme.text)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding(10)
+                        .background(PocketWikiTheme.bg2.opacity(0.66), in: RoundedRectangle(cornerRadius: 8))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(PocketWikiTheme.border, lineWidth: 1)
                         }
                     }
 
-                    SectionCard("Relacoes textuais", subtitle: "\(summary.relationHints.count)", systemImage: "arrow.right") {
-                        if summary.relationHints.isEmpty {
-                            Text("sem relacoes inferidas")
-                                .foregroundStyle(PocketWikiTheme.muted)
-                        } else {
-                            VStack(alignment: .leading, spacing: 6) {
-                                ForEach(summary.relationHints.prefix(12), id: \.self) { relation in
-                                    Text(relation)
-                                        .font(.callout)
-                                        .foregroundStyle(PocketWikiTheme.text)
-                                }
-                            }
-                        }
+                    if summary.texts.count > 32 {
+                        Text("+ \(summary.texts.count - 32) textos ocultos no preview")
+                            .font(.caption)
+                            .foregroundStyle(PocketWikiTheme.muted)
                     }
                 }
             }
-            .padding(18)
+        }
+    }
+
+    private func relations(_ summary: ExcalidrawSummary) -> some View {
+        SectionCard("Relacoes textuais", subtitle: "\(summary.relationHints.count)", systemImage: "arrow.right") {
+            if summary.relationHints.isEmpty {
+                Text("sem relacoes inferidas")
+                    .foregroundStyle(PocketWikiTheme.muted)
+            } else {
+                DisclosureGroup("Ver relacoes") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(summary.relationHints.prefix(24), id: \.self) { relation in
+                            Text(relation)
+                                .foregroundStyle(PocketWikiTheme.text)
+                                .textSelection(.enabled)
+                        }
+                    }
+                    .padding(.top, 8)
+                }
+                .tint(PocketWikiTheme.accent)
+            }
         }
     }
 }

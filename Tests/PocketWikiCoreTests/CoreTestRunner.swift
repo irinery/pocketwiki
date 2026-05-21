@@ -42,7 +42,9 @@ struct CoreTestRunner {
             ("excalidraw invalid fallback", testInvalidExcalidraw),
             ("excalidraw preview clamp source", testExcalidrawPreviewLimitSource),
             ("analytics", testAnalytics),
-            ("timeline", testTimeline)
+            ("timeline", testTimeline),
+            ("markdown strips duplicate title", testMarkdownStripsDuplicateTitle),
+            ("markdown display links", testMarkdownDisplayLinks)
         ]
 
         for (name, test) in tests {
@@ -221,6 +223,30 @@ struct CoreTestRunner {
         ], sourceName: "Test")
 
         try expect(WikiAnalytics.timelinePages(in: index).map(\.slug) == ["new", "old"], "timeline order failed")
+    }
+
+    static func testMarkdownStripsDuplicateTitle() throws {
+        let index = WikiIndexer().buildIndex(files: [
+            makeFile(path: "A.md", content: "# Titulo\n\nTexto comum\n\n- item\n\n```sh\necho ok\n```")
+        ], sourceName: "Test")
+        let page = try require(index.page(id: "a"), "page a missing")
+        let display = WikiMarkdownFormatter.markdownForDisplay(page: page, index: index)
+
+        try expect(!display.hasPrefix("# Titulo"), "duplicate title heading was not stripped")
+        try expect(display.contains("Texto comum"), "markdown body was stripped unexpectedly")
+        try expect(display.contains("```sh\necho ok\n```"), "code block was stripped unexpectedly")
+    }
+
+    static func testMarkdownDisplayLinks() throws {
+        let index = WikiIndexer().buildIndex(files: [
+            makeFile(path: "A.md", content: "# A\nIr para [[B|pagina B]] e [[C]]"),
+            makeFile(path: "B.md", content: "# B")
+        ], sourceName: "Test")
+        let page = try require(index.page(id: "a"), "page a missing")
+        let display = WikiMarkdownFormatter.markdownForDisplay(page: page, index: index)
+
+        try expect(display.contains("[pagina B](pocketwiki://page/b)"), "resolved wiki link was not converted")
+        try expect(display.contains("**C**"), "missing wiki link was not highlighted")
     }
 
     private static func makeFile(path: String, content: String, kind: WikiFile.Kind = .markdown) -> WikiFile {
