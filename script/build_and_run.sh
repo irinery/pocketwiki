@@ -2,7 +2,8 @@
 set -euo pipefail
 
 MODE="${1:-run}"
-APP_NAME="PocketWikiMac"
+PRODUCT_NAME="PocketWikiMac"
+APP_NAME="PocketWiki"
 BUNDLE_ID="com.irinery.PocketWikiMac"
 MIN_SYSTEM_VERSION="14.0"
 
@@ -16,11 +17,12 @@ APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
+pkill -x "$PRODUCT_NAME" >/dev/null 2>&1 || true
 
 swift build --package-path "$ROOT_DIR"
-BUILD_BINARY="$(swift build --package-path "$ROOT_DIR" --show-bin-path)/$APP_NAME"
+BUILD_BINARY="$(swift build --package-path "$ROOT_DIR" --show-bin-path)/$PRODUCT_NAME"
 
-rm -rf "$APP_BUNDLE"
+rm -rf "$APP_BUNDLE" "$DIST_DIR/$PRODUCT_NAME.app"
 mkdir -p "$APP_MACOS" "$APP_RESOURCES"
 cp "$BUILD_BINARY" "$APP_BINARY"
 chmod +x "$APP_BINARY"
@@ -45,6 +47,8 @@ cat >"$INFO_PLIST" <<PLIST
   <string>$BUNDLE_ID</string>
   <key>CFBundleName</key>
   <string>$APP_NAME</string>
+  <key>CFBundleDisplayName</key>
+  <string>$APP_NAME</string>
   <key>CFBundleIconFile</key>
   <string>PocketWikiMac</string>
   <key>CFBundlePackageType</key>
@@ -53,8 +57,17 @@ cat >"$INFO_PLIST" <<PLIST
   <string>$MIN_SYSTEM_VERSION</string>
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsLocalNetworking</key>
+    <true/>
+  </dict>
   <key>NSHumanReadableCopyright</key>
   <string>PocketWiki local app</string>
+  <key>PocketWikiRootPath</key>
+  <string>$ROOT_DIR</string>
+  <key>PocketWikiEnvPath</key>
+  <string>$ROOT_DIR/.env</string>
 </dict>
 </plist>
 PLIST

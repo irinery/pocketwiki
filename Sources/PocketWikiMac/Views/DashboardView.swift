@@ -98,6 +98,9 @@ struct DashboardView: View {
                 DashboardActionTile(icon: "waveform.path.ecg", title: "Saude", subtitle: "Fila de acao") {
                     store.selectedTab = .health
                 }
+                DashboardActionTile(icon: "sparkles", title: "IA", subtitle: "LM Studio") {
+                    store.selectedTab = .localAI
+                }
             }
         }
     }

@@ -10,6 +10,7 @@
 | 4 | `04_dashboard_saude_tempo.md` | Dashboard, saúde e timeline | `02_core_indexacao.md` | sim |
 | 5 | `05_excalidraw_textual.md` | Excalidraw textual/fallback | `02_core_indexacao.md` | sim |
 | 6 | `06_ferramentas_adiadas.md` | Itens dificuldade 4+ anotados e não implementados | nenhuma | sim |
+| 7 | `07_ia_local_lmstudio.md` | IA local com LM Studio, streaming e contexto selecionável | `02_core_indexacao.md`, `03_shell_leitor_busca.md` | sim |
 
 ## Convenções globais
 
@@ -17,8 +18,8 @@
 | --- | --- |
 | Plataforma mínima | macOS 14.0 |
 | Linguagem | Swift 6 |
-| Empacotamento | SwiftPM com executável GUI `PocketWikiMac` |
-| Bundle local | `dist/PocketWikiMac.app` |
+| Empacotamento | SwiftPM com produto `PocketWikiMac` e bundle local `PocketWiki` |
+| Bundle local | `dist/PocketWiki.app` |
 | Bundle ID | `com.irinery.PocketWikiMac` |
 | Fonte padrão | pasta local escolhida pelo usuário |
 | Persistência de acesso | security-scoped bookmark em `UserDefaults` |
@@ -28,16 +29,17 @@
 | Datas | `Date` em UTC internamente; exibição via locale do sistema |
 | Slug | minúsculo, sem diacríticos, `/` preservado, espaços viram `-`, extensão removida |
 | Markdown | renderização local sem executar HTML, scripts ou conteúdo remoto |
+| IA local | LM Studio/OpenAI-compatible em endpoint loopback, sem cloud por padrão |
 
 ## Definition of Done global
 
 | Critério | Medida objetiva |
 | --- | --- |
-| Contrato | todos os arquivos `00` a `06` existem e seguem as seções obrigatórias |
+| Contrato | todos os arquivos `00` a `07` existem e seguem as seções obrigatórias |
 | Branch | desenvolvimento feito em `codex/pocketwiki-macos-app` |
 | App | `swift build` compila `PocketWikiMac` sem erro |
-| Launcher | `./script/build_and_run.sh --verify` cria bundle e encontra processo `PocketWikiMac` |
+| Launcher | `./script/build_and_run.sh --verify` cria bundle e encontra processo `PocketWiki` |
 | Segurança | bookmark é criado/restaurado e acesso à pasta chama `startAccessingSecurityScopedResource()` quando aplicável |
 | Indexação | testes cobrem slug, frontmatter, tags, links, arquivos ignorados e Excalidraw textual |
 | UI | telas de dificuldade 1-3 estão navegáveis via SwiftUI, sem WebView |
-| Itens 4+ | grafo, IA streaming e render oficial Excalidraw estão documentados como adiados |
+| Itens 4+ | grafo e render oficial Excalidraw seguem adiados; IA local possui contrato próprio |

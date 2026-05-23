@@ -2,7 +2,7 @@
 
 ## 2.1 — O que é
 
-Cria o app macOS nativo `PocketWikiMac`, o pacote SwiftPM, o launcher local e a camada de acesso seguro à pasta da wiki.
+Cria o app macOS nativo `PocketWiki`, o pacote SwiftPM, o launcher local e a camada de acesso seguro à pasta da wiki.
 
 Responsabilidades explícitas:
 - criar executável GUI SwiftUI com `WindowGroup`;
@@ -27,7 +27,7 @@ então:   o produto `PocketWikiMac` compila sem erro
 TESTE SCAFFOLD-02
 dado:    o launcher `script/build_and_run.sh`
 quando:  `./script/build_and_run.sh --verify` é executado
-então:   `dist/PocketWikiMac.app` é criado e o processo `PocketWikiMac` fica ativo
+então:   `dist/PocketWiki.app` é criado e o processo `PocketWiki` fica ativo
 
 TESTE SCAFFOLD-03
 dado:    uma URL de pasta autorizada
@@ -69,8 +69,9 @@ Tabela de decisão:
 
 Limites:
 - `LSMinimumSystemVersion`: `14.0`;
-- processo: `PocketWikiMac`;
-- bundle: `dist/PocketWikiMac.app`;
+- produto SwiftPM: `PocketWikiMac`;
+- processo: `PocketWiki`;
+- bundle: `dist/PocketWiki.app`;
 - timeout de smoke após abrir app: 1 segundo.
 
 Regras de falha:

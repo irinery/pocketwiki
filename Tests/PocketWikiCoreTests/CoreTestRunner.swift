@@ -44,7 +44,13 @@ struct CoreTestRunner {
             ("analytics", testAnalytics),
             ("timeline", testTimeline),
             ("markdown strips duplicate title", testMarkdownStripsDuplicateTitle),
-            ("markdown display links", testMarkdownDisplayLinks)
+            ("markdown display links", testMarkdownDisplayLinks),
+            ("local ai endpoint policy", testLocalAIEndpointPolicy),
+            ("local ai runtime configuration", testLocalAIRuntimeConfiguration),
+            ("local ai model parsing", testLocalAIModelParsing),
+            ("local ai chat parsing", testLocalAIChatParsing),
+            ("local ai context builder", testLocalAIContextBuilder),
+            ("local ai automatic context", testLocalAIAutomaticContext)
         ]
 
         for (name, test) in tests {
@@ -247,6 +253,162 @@ struct CoreTestRunner {
 
         try expect(display.contains("[pagina B](pocketwiki://page/b)"), "resolved wiki link was not converted")
         try expect(display.contains("**C**"), "missing wiki link was not highlighted")
+    }
+
+    static func testLocalAIEndpointPolicy() throws {
+        let chatURL = try LocalAIEndpointPolicy.endpointURL(
+            baseURL: "http://127.0.0.1:1234/v1",
+            path: "chat/completions"
+        )
+        try expect(chatURL.absoluteString == "http://127.0.0.1:1234/v1/chat/completions", "chat endpoint url failed")
+
+        let rootModelsURL = try LocalAIEndpointPolicy.endpointURL(
+            baseURL: "http://127.0.0.1:1234",
+            path: "models"
+        )
+        try expect(rootModelsURL.absoluteString == "http://127.0.0.1:1234/v1/models", "lm studio root endpoint was not normalized to /v1")
+
+        try expect(LocalAIEndpointPolicy.isAllowedLocalBaseURL(URL(string: "http://localhost:1234/v1")!), "localhost blocked")
+        try expect(LocalAIEndpointPolicy.isAllowedLocalBaseURL(URL(string: "http://[::1]:1234/v1")!), "ipv6 loopback blocked")
+        try expect(LocalAIEndpointPolicy.isAllowedLocalBaseURL(URL(string: "http://192.168.2.20:1234/v1")!), "private lan endpoint blocked")
+        try expect(LocalAIEndpointPolicy.isAllowedLocalBaseURL(URL(string: "http://10.0.0.10:1234/v1")!), "private 10 endpoint blocked")
+        try expect(LocalAIEndpointPolicy.isAllowedLocalBaseURL(URL(string: "http://172.20.1.2:1234/v1")!), "private 172 endpoint blocked")
+        try expect(LocalAIEndpointPolicy.isAllowedLocalBaseURL(URL(string: "http://pocketwiki.local:1234/v1")!), "mdns endpoint blocked")
+        try expect(!LocalAIEndpointPolicy.isAllowedLocalBaseURL(URL(string: "https://example.com/v1")!), "remote endpoint accepted")
+        try expect(!LocalAIEndpointPolicy.isAllowedLocalBaseURL(URL(string: "http://8.8.8.8:1234/v1")!), "public ipv4 endpoint accepted")
+
+        do {
+            _ = try LocalAIEndpointPolicy.normalizedBaseURL("https://example.com/v1")
+            throw TestFailure.failed("remote endpoint did not throw")
+        } catch LocalAIEndpointPolicyError.nonLocalEndpoint {
+            // expected
+        }
+    }
+
+    static func testLocalAIRuntimeConfiguration() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let envURL = tempDir.appendingPathComponent(".env")
+        try """
+        LM_STUDIO_BASE_URL="http://localhost:1234/v1"
+        LM_STUDIO_API_KEY='secret-token'
+        LM_STUDIO_MODEL=qwen-chat
+        """.write(to: envURL, atomically: true, encoding: .utf8)
+
+        let config = LocalAIRuntimeConfigurationLoader.load(environment: [
+            "POCKETWIKI_ENV_PATH": envURL.path
+        ])
+
+        try expect(config.baseURL == "http://localhost:1234/v1", "runtime base url failed")
+        try expect(config.apiKey == "secret-token", "runtime token failed")
+        try expect(config.modelID == "qwen-chat", "runtime model failed")
+        try expect(config.hasToken, "runtime token flag failed")
+    }
+
+    static func testLocalAIModelParsing() throws {
+        let models = try LMStudioClient.parseModelsResponse(Data("""
+        {
+          "models": [
+            {"name":"qwen-chat","type":"llm"},
+            {"id":"nomic-embed-text","type":"embedding"},
+            "plain-chat"
+          ]
+        }
+        """.utf8))
+
+        try expect(models.map(\.id) == ["qwen-chat", "plain-chat"], "flexible model parser failed")
+
+        let openAIModels = try LMStudioClient.parseModelsResponse(Data("""
+        {"data":[{"id":"openai/gpt-oss-20b","owned_by":"lmstudio"}]}
+        """.utf8))
+        try expect(openAIModels.map(\.id) == ["openai/gpt-oss-20b"], "openai model parser failed")
+    }
+
+    static func testLocalAIChatParsing() throws {
+        let streamed = try LMStudioClient.parseChatCompletionResponse(Data("""
+        {"model":"qwen","choices":[{"delta":{"content":"oi"},"finish_reason":null}]}
+        """.utf8))
+        try expect(streamed.content == "oi", "streaming chat content failed")
+        try expect(streamed.modelID == "qwen", "streaming chat model failed")
+
+        let plain = try LMStudioClient.parseChatCompletionResponse(Data("""
+        {"model":"qwen","choices":[{"message":{"content":"resposta final"},"finish_reason":"stop"}],"usage":{"prompt_tokens":2,"completion_tokens":3,"total_tokens":5}}
+        """.utf8))
+        try expect(plain.content == "resposta final", "non-stream chat content failed")
+        try expect(plain.finishReason == "stop", "non-stream finish reason failed")
+        try expect(plain.usageSummary == "prompt 2 · resposta 3 · total 5", "non-stream usage failed")
+    }
+
+    static func testLocalAIContextBuilder() throws {
+        let index = WikiIndexer().buildIndex(files: [
+            makeFile(path: "A.md", content: "# A\nConteudo A\n[[B]]"),
+            makeFile(path: "B.md", content: "# B\nConteudo B"),
+            makeFile(path: "C.md", content: "# C\nConteudo C")
+        ], sourceName: "Test")
+
+        let linked = LocalAIContextBuilder.build(
+            index: index,
+            selectedPageID: "a",
+            scope: .linkedPages,
+            maxCharacters: 3_000
+        )
+        try expect(linked.includedPaths == ["A.md", "B.md"], "linked context selected wrong pages")
+        try expect(linked.body.contains("Conteudo A") && linked.body.contains("Conteudo B"), "linked context missing page body")
+        try expect(!linked.body.contains("Conteudo C"), "linked context leaked unrelated page")
+
+        let longIndex = WikiIndexer().buildIndex(files: [
+            makeFile(path: "Long.md", content: "# Long\n" + String(repeating: "texto ", count: 1_000))
+        ], sourceName: "Test")
+        let fitted = LocalAIContextBuilder.build(
+            index: longIndex,
+            selectedPageID: "long",
+            scope: .currentPage,
+            maxCharacters: 1_500
+        )
+        try expect(fitted.characters <= 1_500, "context was not truncated")
+        try expect(fitted.body.contains("contexto truncado"), "truncation marker missing")
+    }
+
+    static func testLocalAIAutomaticContext() throws {
+        let index = WikiIndexer().buildIndex(files: [
+            makeFile(path: "Rede.md", content: "# Rede\nVLAN IoT no MikroTik com DNS e DHCP."),
+            makeFile(path: "Receitas.md", content: "# Receitas\nBolo de cenoura.")
+        ], sourceName: "Test")
+
+        let context = LocalAIContextBuilder.build(
+            index: index,
+            selectedPageID: nil,
+            scope: .automatic,
+            maxCharacters: 4_000,
+            question: "Como esta a VLAN IoT no roteador?"
+        )
+        try expect(context.mode == .wiki, "automatic context should use wiki mode")
+        try expect(context.includedPaths == ["Rede.md"], "automatic context selected wrong page")
+        try expect(context.body.contains("VLAN IoT"), "automatic context missing relevant excerpt")
+
+        let general = LocalAIContextBuilder.build(
+            index: index,
+            selectedPageID: nil,
+            scope: .automatic,
+            maxCharacters: 4_000,
+            question: "oi"
+        )
+        try expect(general.mode == .general, "simple greeting should not load wiki context")
+        try expect(general.includedPaths.isEmpty, "general context should not include pages")
+
+        let noMatch = LocalAIContextBuilder.build(
+            index: index,
+            selectedPageID: nil,
+            scope: .automatic,
+            maxCharacters: 4_000,
+            question: "Como configuro proxmox com ceph?"
+        )
+        try expect(noMatch.mode == .wiki, "no-match wiki question should stay grounded to index")
+        try expect(noMatch.includedPaths.isEmpty, "no-match context should not invent included pages")
+        try expect(noMatch.body.contains("Indice base da wiki"), "no-match context should include index snapshot")
+        try expect(noMatch.body.contains("Nenhuma pagina passou"), "no-match context should state no page passed relevance")
     }
 
     private static func makeFile(path: String, content: String, kind: WikiFile.Kind = .markdown) -> WikiFile {

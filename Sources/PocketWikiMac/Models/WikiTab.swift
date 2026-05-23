@@ -2,6 +2,7 @@ import Foundation
 
 enum WikiTab: String, CaseIterable, Identifiable, Sendable {
     case dashboard
+    case localAI
     case reader
     case excalidraw
     case health
@@ -12,6 +13,7 @@ enum WikiTab: String, CaseIterable, Identifiable, Sendable {
     var title: String {
         switch self {
         case .dashboard: "Dashboard"
+        case .localAI: "IA"
         case .reader: "Leitor"
         case .excalidraw: "Excalidraw"
         case .health: "Saude"
@@ -22,6 +24,7 @@ enum WikiTab: String, CaseIterable, Identifiable, Sendable {
     var systemImage: String {
         switch self {
         case .dashboard: "rectangle.grid.2x2"
+        case .localAI: "sparkles"
         case .reader: "doc.text"
         case .excalidraw: "scribble.variable"
         case .health: "waveform.path.ecg"

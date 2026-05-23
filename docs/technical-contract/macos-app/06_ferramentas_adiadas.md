@@ -7,11 +7,10 @@ Registro explícito do que tem dificuldade `4/5` ou maior e não deve ser implem
 Responsabilidades explícitas:
 - documentar itens adiados;
 - preservar espaço arquitetural para implementação futura;
-- impedir que a primeira branch tente resolver grafo, IA streaming ou renderer oficial.
+- impedir que a branch tente resolver grafo visual ou renderer oficial.
 
 Não é responsabilidade deste componente:
 - implementar qualquer item listado;
-- criar APIs definitivas para rede/IA;
 - escolher bibliotecas futuras.
 
 ## 2.2 — Testes obrigatórios
@@ -24,7 +23,7 @@ então:   não existe tela ativa de grafo interativo
 TESTE DEFER-02
 dado:    app macOS compilado
 quando:  a tela de leitor é aberta
-então:   não existe chamada de rede para LM Studio
+então:   não existe renderização de grafo visual interativo embutida
 
 TESTE DEFER-03
 dado:    arquivo Excalidraw válido
@@ -40,9 +39,6 @@ deferred:
   graph:
     difficulty: 4
     reason: "layout visual, pan/zoom, colisão, clique e responsividade exigem motor próprio ou biblioteca dedicada"
-  local_ai_streaming:
-    difficulty: 4
-    reason: "seleção de contexto, streaming, estados parciais, erros de rede e privacidade precisam contrato próprio"
   excalidraw_official_render:
     difficulty: 5
     reason: "renderer atual depende de JavaScript/@excalidraw/utils; equivalente Swift fiel não existe no projeto"
@@ -53,11 +49,10 @@ Tabela de decisão:
 | Pedido futuro | Caminho |
 | --- | --- |
 | grafo visual | nova fase com canvas/layout dedicado |
-| IA local | nova fase com cliente HTTP e contrato de privacidade |
 | Excalidraw fiel | avaliar WebAssembly/JS bridge ou renderer nativo separado |
 
 Limites:
-- nenhum desses itens entra na branch inicial;
+- nenhum desses itens entra nesta rodada;
 - UI pode mencionar que a capacidade está adiada, sem botão quebrado.
 
 Regras de falha:
@@ -70,3 +65,5 @@ Regras de falha:
 - lista documentada de itens `4/5+`
 - ausência de implementação ativa desses itens
 - todos os testes `DEFER-01` a `DEFER-03` passando
+
+Nota de evolução: IA local/LM Studio saiu da lista de adiados e foi promovida para a fase `07_ia_local_lmstudio.md`.

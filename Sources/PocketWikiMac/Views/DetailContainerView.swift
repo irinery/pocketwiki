@@ -158,6 +158,8 @@ struct DetailContainerView: View {
             HealthView(store: store)
         case .timeline:
             TimelineView(store: store)
+        case .localAI:
+            LocalAIView(store: store)
         }
     }
 
