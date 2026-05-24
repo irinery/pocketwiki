@@ -4,9 +4,11 @@ import SwiftUI
 
 struct LocalAIChatPanel: View {
     @Bindable var chat: LocalAIChatSession
+    let index: WikiIndex
     let connectionLabel: String
     let contextScope: LocalAIContextScope
     let canSend: Bool
+    let onOpenPage: (String) -> Void
     let onSend: () -> Void
     let onCancel: () -> Void
     let onReset: () -> Void
@@ -25,6 +27,14 @@ struct LocalAIChatPanel: View {
 
             composer
         }
+        .environment(\.openURL, OpenURLAction { url in
+            guard url.scheme?.lowercased() == "pocketwiki", url.host == "page" else {
+                return .systemAction
+            }
+            let id = url.path.dropFirst().removingPercentEncoding ?? String(url.path.dropFirst())
+            onOpenPage(id)
+            return .handled
+        })
         .pocketWikiCard()
     }
 
@@ -69,7 +79,7 @@ struct LocalAIChatPanel: View {
                         LocalAIEmptyConversationView()
                     } else {
                         ForEach(chat.messages) { message in
-                            LocalAIMessageBubble(message: message)
+                            LocalAIMessageBubble(message: message, index: index)
                                 .id(message.id)
                         }
                     }
@@ -223,11 +233,29 @@ private struct LocalAIPromptTextView: NSViewRepresentable {
 
         override func keyDown(with event: NSEvent) {
             let isReturn = event.keyCode == 36 || event.keyCode == 76
-            if isReturn, !event.modifierFlags.contains(.shift) {
+            let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            if isReturn, !modifiers.contains(.shift) {
                 onSubmit?()
                 return
             }
             super.keyDown(with: event)
+        }
+
+        override func insertNewline(_ sender: Any?) {
+            if Self.currentEventHasShift {
+                super.insertNewline(sender)
+            } else {
+                onSubmit?()
+            }
+        }
+
+        override func insertNewlineIgnoringFieldEditor(_ sender: Any?) {
+            insertNewline(sender)
+        }
+
+        private static var currentEventHasShift: Bool {
+            guard let event = NSApp.currentEvent else { return false }
+            return event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.shift)
         }
     }
 }
@@ -251,6 +279,8 @@ private struct LocalAIEmptyConversationView: View {
 
 private struct LocalAIMessageBubble: View {
     let message: LocalAIChatMessage
+    let index: WikiIndex
+    @State private var reasoningExpanded = false
 
     private var isUser: Bool {
         message.role == .user
@@ -272,8 +302,9 @@ private struct LocalAIMessageBubble: View {
                         .foregroundStyle(PocketWikiTheme.text)
                         .textSelection(.enabled)
                 } else {
-                    Markdown(message.content.isEmpty ? "..." : message.content)
+                    Markdown(markdownContent)
                         .markdownTheme(.pocketWiki)
+                        .tint(PocketWikiTheme.accent)
                         .textSelection(.enabled)
                 }
 
@@ -318,15 +349,74 @@ private struct LocalAIMessageBubble: View {
         }
     }
 
+    private var markdownContent: String {
+        LocalAIResponseLinkifier.linkify(message.content.isEmpty ? "..." : message.content, index: index)
+    }
+
     private var reasoning: some View {
-        DisclosureGroup(message.isStreaming ? "Pensando" : "Raciocinio do modelo") {
-            Text(message.reasoning)
-                .font(.caption.monospaced())
-                .foregroundStyle(PocketWikiTheme.dim)
-                .textSelection(.enabled)
-                .padding(.top, 6)
+        VStack(alignment: .leading, spacing: 7) {
+            Button {
+                withAnimation(.snappy(duration: 0.18)) {
+                    reasoningExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 7) {
+                    Image(systemName: reasoningExpanded ? "chevron.down" : "chevron.right")
+                        .font(.caption2.weight(.bold))
+                    if message.isStreaming {
+                        ThinkingWaveText("Pensamento")
+                    } else {
+                        Text("Pensamento")
+                            .font(.caption.weight(.semibold))
+                    }
+                    Spacer(minLength: 0)
+                }
+                .foregroundStyle(PocketWikiTheme.accent2)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(reasoningExpanded ? "Recolher pensamento" : "Expandir pensamento")
+
+            if reasoningExpanded {
+                Text(message.reasoning)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(PocketWikiTheme.dim)
+                    .textSelection(.enabled)
+                    .padding(9)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(PocketWikiTheme.bg.opacity(0.7), in: RoundedRectangle(cornerRadius: 8))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(PocketWikiTheme.accent2.opacity(0.25), lineWidth: 1)
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
-        .tint(PocketWikiTheme.accent2)
-        .font(.caption)
+    }
+}
+
+private struct ThinkingWaveText: View {
+    let text: String
+
+    init(_ text: String) {
+        self.text = text
+    }
+
+    var body: some View {
+        SwiftUI.TimelineView(.animation(minimumInterval: 0.08)) { timeline in
+            let phase = timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.35) / 1.35
+            HStack(spacing: 0) {
+                ForEach(Array(text.enumerated()), id: \.offset) { index, character in
+                    let progress = Double(index) / Double(max(1, text.count - 1))
+                    let distance = abs(progress - phase)
+                    let glow = max(0, 1 - distance * 5)
+                    Text(String(character))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.white.opacity(0.45 + glow * 0.55))
+                        .shadow(color: PocketWikiTheme.accent2.opacity(glow), radius: 5, x: 0, y: 0)
+                }
+            }
+        }
+        .frame(height: 16, alignment: .leading)
     }
 }

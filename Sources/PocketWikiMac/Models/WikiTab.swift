@@ -5,8 +5,10 @@ enum WikiTab: String, CaseIterable, Identifiable, Sendable {
     case localAI
     case reader
     case excalidraw
+    case map
     case health
     case timeline
+    case server
 
     var id: String { rawValue }
 
@@ -16,8 +18,10 @@ enum WikiTab: String, CaseIterable, Identifiable, Sendable {
         case .localAI: "IA"
         case .reader: "Leitor"
         case .excalidraw: "Excalidraw"
+        case .map: "Mapa"
         case .health: "Saude"
         case .timeline: "Tempo"
+        case .server: "Servidor"
         }
     }
 
@@ -27,8 +31,23 @@ enum WikiTab: String, CaseIterable, Identifiable, Sendable {
         case .localAI: "sparkles"
         case .reader: "doc.text"
         case .excalidraw: "scribble.variable"
+        case .map: "point.3.connected.trianglepath.dotted"
         case .health: "waveform.path.ecg"
         case .timeline: "clock"
+        case .server: "server.rack"
+        }
+    }
+
+    var iconKind: PocketWikiIconKind {
+        switch self {
+        case .dashboard: .dashboard
+        case .localAI: .ai
+        case .reader: .reader
+        case .excalidraw: .draw
+        case .map: .map
+        case .health: .health
+        case .timeline: .timeline
+        case .server: .server
         }
     }
 }

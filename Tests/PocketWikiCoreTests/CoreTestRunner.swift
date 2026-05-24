@@ -49,8 +49,17 @@ struct CoreTestRunner {
             ("local ai runtime configuration", testLocalAIRuntimeConfiguration),
             ("local ai model parsing", testLocalAIModelParsing),
             ("local ai chat parsing", testLocalAIChatParsing),
+            ("local ai remote proxy endpoint", testLocalAIRemoteProxyEndpoint),
             ("local ai context builder", testLocalAIContextBuilder),
-            ("local ai automatic context", testLocalAIAutomaticContext)
+            ("local ai automatic context", testLocalAIAutomaticContext),
+            ("local ai manual context", testLocalAIManualContext),
+            ("local ai response linkifier", testLocalAIResponseLinkifier),
+            ("server configuration", testServerConfiguration),
+            ("server routes", testServerRoutes),
+            ("server files payload", testServerFilesPayload),
+            ("remote wiki decode", testRemoteWikiDecode),
+            ("sidebar explorer", testSidebarExplorer),
+            ("desktop tabs include map and server", testDesktopTabs)
         ]
 
         for (name, test) in tests {
@@ -341,6 +350,14 @@ struct CoreTestRunner {
         try expect(plain.usageSummary == "prompt 2 · resposta 3 · total 5", "non-stream usage failed")
     }
 
+    static func testLocalAIRemoteProxyEndpoint() throws {
+        let modelsURL = try LocalAIEndpointPolicy.endpointURL(baseURL: "http://100.80.1.2/api/ai", path: "models")
+        try expect(modelsURL.absoluteString == "http://100.80.1.2/api/ai/models", "remote proxy models url failed")
+
+        let chatURL = try LocalAIEndpointPolicy.endpointURL(baseURL: "http://pocketwiki.local/api/ai", path: "chat/completions")
+        try expect(chatURL.absoluteString == "http://pocketwiki.local/api/ai/chat", "remote proxy chat url failed")
+    }
+
     static func testLocalAIContextBuilder() throws {
         let index = WikiIndexer().buildIndex(files: [
             makeFile(path: "A.md", content: "# A\nConteudo A\n[[B]]"),
@@ -409,6 +426,148 @@ struct CoreTestRunner {
         try expect(noMatch.includedPaths.isEmpty, "no-match context should not invent included pages")
         try expect(noMatch.body.contains("Indice base da wiki"), "no-match context should include index snapshot")
         try expect(noMatch.body.contains("Nenhuma pagina passou"), "no-match context should state no page passed relevance")
+    }
+
+    static func testLocalAIManualContext() throws {
+        let index = WikiIndexer().buildIndex(files: [
+            makeFile(path: "Rede.md", content: "# Rede\nVLAN IoT no MikroTik."),
+            makeFile(path: "Camera.md", content: "# Camera\nScrypted e HomeKit.")
+        ], sourceName: "Test")
+        let manual = LocalAIManualContextSource(
+            title: "extra.txt",
+            path: "/tmp/extra.txt",
+            content: "Contexto extra escolhido manualmente."
+        )
+
+        let context = LocalAIContextBuilder.build(
+            index: index,
+            selectedPageID: nil,
+            scope: .automatic,
+            maxCharacters: 4_000,
+            question: "Como esta a VLAN IoT?",
+            manualSources: [manual],
+            excludedPaths: ["Rede.md"]
+        )
+
+        try expect(!context.includedPaths.contains("Rede.md"), "excluded wiki path leaked into context")
+        try expect(context.manualPaths == ["/tmp/extra.txt"], "manual path missing")
+        try expect(context.includedPaths.contains("/tmp/extra.txt"), "manual included path missing")
+        try expect(context.body.contains("Contexto extra escolhido manualmente."), "manual body missing")
+    }
+
+    static func testLocalAIResponseLinkifier() throws {
+        let index = WikiIndexer().buildIndex(files: [
+            makeFile(path: "wiki/index.md", content: "# Index"),
+            makeFile(path: "raw/skill_chatgpt_markdown.md", content: "# Skill")
+        ], sourceName: "Test")
+        let linked = LocalAIResponseLinkifier.linkify("""
+        - **Path:** wiki/index.md
+        - Path: raw/skill_chatgpt_markdown.md
+        - Path: missing.md
+        """, index: index)
+
+        try expect(linked.contains("**Path:** [wiki/index.md](pocketwiki://page/index)"), "bold path link failed")
+        try expect(linked.contains("Path: [raw/skill_chatgpt_markdown.md](pocketwiki://page/raw/skill_chatgpt_markdown)"), "plain path link failed")
+        try expect(linked.contains("Path: missing.md"), "missing path should stay plain")
+    }
+
+    static func testServerConfiguration() throws {
+        let config = PocketWikiServerConfiguration.load(environment: [
+            "POCKETWIKI_PORT": "9090",
+            "POCKETWIKI_BIND_HOST": "127.0.0.1",
+            "POCKETWIKI_PUBLIC_HOSTS": "pocketwiki.local,desk",
+            "POCKETWIKI_MDNS": "false",
+            "POCKETWIKI_REFERENCE_READONLY": "false",
+            "LM_STUDIO_BASE_URL": "http://localhost:1234/v1/",
+            "LM_STUDIO_MODEL": "qwen"
+        ])
+
+        try expect(config.port == 9090, "server port parse failed")
+        try expect(config.bindHost == "127.0.0.1", "bind host parse failed")
+        try expect(config.publicHosts == ["pocketwiki.local", "desk.local"], "public host normalization failed")
+        try expect(!config.mdnsEnabled, "mdns bool parse failed")
+        try expect(!config.referenceReadonly, "readonly bool parse failed")
+        try expect(config.lmStudioBaseURL == "http://localhost:1234/v1", "lm studio slash trim failed")
+        try expect(config.lmStudioModel == "qwen", "lm studio model parse failed")
+    }
+
+    static func testServerRoutes() throws {
+        let routes = PocketWikiRouteBuilder.build(
+            port: 80,
+            bindHost: "0.0.0.0",
+            publicHosts: ["pocketwiki.local"],
+            addresses: ["192.168.1.20", "100.80.1.2", "8.8.8.8"]
+        )
+
+        try expect(routes.portless, "portless route failed")
+        try expect(routes.local == ["http://localhost", "http://127.0.0.1"], "local route failed")
+        try expect(routes.mdns == ["http://pocketwiki.local"], "mdns route failed")
+        try expect(routes.lan.contains("http://192.168.1.20"), "lan route failed")
+        try expect(routes.tailscale == ["http://100.80.1.2"], "tailscale route failed")
+    }
+
+    static func testServerFilesPayload() throws {
+        let source = PocketWikiServedSource(
+            rootName: "Wiki",
+            source: "desktop",
+            configured: true,
+            readonly: true,
+            available: true,
+            status: "ready",
+            files: [makeFile(path: "A.md", content: "# A")]
+        )
+        let payload = PocketWikiFilesPayload(source: source)
+        let data = try JSONEncoder().encode(payload)
+        let json = try require(String(data: data, encoding: .utf8), "files payload json missing")
+
+        try expect(json.contains(#""rootName":"Wiki""#), "files payload root missing")
+        try expect(json.contains(#""path":"A.md""#), "files payload path missing")
+        try expect(json.contains(##""content":"# A""##), "files payload content missing")
+    }
+
+    static func testRemoteWikiDecode() throws {
+        let source = try RemoteWikiClient.decodeWikiFilesResponse(Data("""
+        {
+          "rootName":"Remote",
+          "readonly":true,
+          "source":"env",
+          "configured":true,
+          "available":true,
+          "status":"ready",
+          "files":[
+            {"path":"A.md","name":"A.md","size":5,"type":"text/markdown","updated":1000,"content":"# A"},
+            {"path":"asset.png","name":"asset.png","size":2,"type":"image/png","updated":1000,"content":null}
+          ]
+        }
+        """.utf8))
+
+        try expect(source.rootName == "Remote", "remote root failed")
+        try expect(source.files.count == 1, "remote non-indexable file was not filtered")
+        try expect(source.files[0].relativePath == "A.md", "remote file path failed")
+        try expect(source.files[0].modifiedAt == Date(timeIntervalSince1970: 1), "remote timestamp failed")
+    }
+
+    static func testSidebarExplorer() throws {
+        let index = WikiIndexer().buildIndex(files: [
+            makeFile(path: "A.md", content: "# A\n[[B]] #infra"),
+            makeFile(path: "B.md", content: "# B\n[[Missing]]")
+        ], sourceName: "Test")
+
+        let sections = WikiSidebarExplorer.sections(index: index, selectedPageID: "a", query: "")
+        try expect(sections.map(\.title).contains("Atual"), "sidebar current section missing")
+        try expect(sections.map(\.title).contains("Relacionadas"), "sidebar related section missing")
+        try expect(sections.flatMap(\.items).contains { $0.title == "#infra" }, "sidebar tags missing")
+
+        let search = WikiSidebarExplorer.sections(index: index, selectedPageID: nil, query: "missing")
+        try expect(search.count == 1 && search[0].title == "Busca", "sidebar search mode failed")
+    }
+
+    static func testDesktopTabs() throws {
+        let tabs = WikiTab.allCases
+        try expect(tabs.contains(.map), "map tab missing")
+        try expect(tabs.contains(.server), "server tab missing")
+        try expect(WikiTab.map.iconKind == .map, "map icon kind failed")
+        try expect(WikiTab.server.iconKind == .server, "server icon kind failed")
     }
 
     private static func makeFile(path: String, content: String, kind: WikiFile.Kind = .markdown) -> WikiFile {

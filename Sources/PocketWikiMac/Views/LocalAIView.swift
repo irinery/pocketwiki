@@ -32,8 +32,15 @@ struct LocalAIView: View {
         return manual.isEmpty ? runtimeAPIKey : manual
     }
 
+    private var effectiveBaseURL: String {
+        store.remoteAIProxyBaseURL ?? baseURL
+    }
+
     private var connectionLabel: String {
-        chat.availableModels.isEmpty ? "desconectado" : "LM Studio conectado"
+        if store.remoteAIProxyBaseURL != nil, !chat.availableModels.isEmpty {
+            return "IA via servidor remoto"
+        }
+        return chat.availableModels.isEmpty ? "desconectado" : "LM Studio conectado"
     }
 
     var body: some View {
@@ -49,9 +56,11 @@ struct LocalAIView: View {
             } chat: {
                 LocalAIChatPanel(
                     chat: chat,
+                    index: store.index,
                     connectionLabel: connectionLabel,
                     contextScope: contextScope,
                     canSend: canSendPrompt,
+                    onOpenPage: { store.selectPage($0, tab: .reader) },
                     onSend: sendPrompt,
                     onCancel: chat.cancel,
                     onReset: resetGroundedChat,
@@ -72,9 +81,16 @@ struct LocalAIView: View {
                         availableModels: chat.availableModels,
                         runtimeTokenLoaded: runtimeTokenLoaded,
                         isStreaming: chat.isStreaming,
-                        contextSummary: contextSummaryText,
-                        contextSourceCount: chat.lastContext?.includedPaths.count ?? 0,
+                        contextNotice: chat.lastContext?.notice,
+                        autoContextPaths: autoContextPaths,
+                        manualSources: chat.manualSources,
+                        excludedContextPaths: chat.excludedContextPaths,
+                        contextSourceCount: activeContextSourceCount,
                         onRefreshModels: refreshModelSelection,
+                        onAddContextFiles: addContextFiles,
+                        onRemoveManualSource: chat.removeManualSource,
+                        onExcludeContextPath: chat.excludeContextPath,
+                        onRestoreContextPath: chat.restoreContextPath,
                         onClose: { sidePanel.wrappedValue = nil }
                     )
                 }
@@ -89,28 +105,21 @@ struct LocalAIView: View {
         !chat.prompt.pocketTrimmed.isEmpty && !modelID.pocketTrimmed.isEmpty
     }
 
-    private var contextSummaryText: String {
-        guard let context = chat.lastContext else {
-            return "sem contexto carregado"
-        }
+    private var autoContextPaths: [String] {
+        guard let context = chat.lastContext else { return [] }
+        let manual = Set(context.manualPaths)
+        return context.includedPaths.filter { !manual.contains($0) }
+    }
 
-        var lines: [String] = []
-        if let notice = context.notice, !notice.isEmpty {
-            lines.append(notice)
-        }
-        if context.includedPaths.isEmpty {
-            lines.append("sem paginas consultadas")
-        } else {
-            lines.append(contentsOf: context.includedPaths)
-        }
-        return lines.joined(separator: "\n")
+    private var activeContextSourceCount: Int {
+        autoContextPaths.filter { !chat.excludedContextPaths.contains($0) }.count + chat.manualSources.count
     }
 
     private func sendPrompt() {
         guard canSendPrompt else { return }
         normalizeBaseURLPreference()
         chat.send(
-            baseURL: baseURL,
+            baseURL: effectiveBaseURL,
             apiKey: effectiveAPIKey,
             modelID: modelID,
             temperature: temperature,
@@ -126,6 +135,19 @@ struct LocalAIView: View {
         contextScopeRaw = LocalAIContextScope.automatic.rawValue
         temperature = 0.2
         sidePanel.wrappedValue = .context
+    }
+
+    @MainActor
+    private func addContextFiles() {
+        do {
+            let sources = try LocalAIContextFilePicker.pickFiles()
+            chat.addManualSources(sources)
+            if !sources.isEmpty {
+                sidePanel.wrappedValue = .context
+            }
+        } catch {
+            chat.errorMessage = error.localizedDescription
+        }
     }
 
     @MainActor
@@ -153,7 +175,7 @@ struct LocalAIView: View {
     private func refreshModelSelection() async {
         normalizeBaseURLPreference()
         let selected = await chat.refreshModels(
-            baseURL: baseURL,
+            baseURL: effectiveBaseURL,
             apiKey: effectiveAPIKey,
             preferredModelID: modelID,
             configuredModelID: configuredModelID
@@ -166,6 +188,7 @@ struct LocalAIView: View {
     }
 
     private func normalizeBaseURLPreference() {
+        guard store.remoteAIProxyBaseURL == nil else { return }
         guard let normalized = try? LocalAIEndpointPolicy.normalizedBaseURL(baseURL) else { return }
         let value = normalized.absoluteString
         if baseURL != value {

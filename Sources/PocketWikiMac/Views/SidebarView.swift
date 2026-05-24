@@ -4,16 +4,19 @@ struct SidebarView: View {
     @Bindable var store: WikiAppStore
 
     var body: some View {
+        let sections = WikiSidebarExplorer.sections(index: store.index, selectedPageID: store.selectedPageID, query: store.searchText)
+
         VStack(spacing: 0) {
             header
                 .padding()
 
-            List(selection: $store.selectedPageID) {
-                if !store.index.pages.isEmpty {
-                    Section("Paginas") {
-                        ForEach(store.filteredPages) { page in
-                            sidebarRow(page)
-                                .tag(page.id as String?)
+            List {
+                if !sections.isEmpty {
+                    ForEach(sections) { section in
+                        Section(section.title) {
+                            ForEach(section.items) { item in
+                                sidebarItemRow(item)
+                            }
                         }
                     }
                 }
@@ -36,11 +39,6 @@ struct SidebarView: View {
                 } label: {
                     Label("Busca", systemImage: "command")
                 }
-            }
-        }
-        .onChange(of: store.selectedPageID) { _, newValue in
-            if newValue != nil, store.selectedTab == .dashboard {
-                store.selectedTab = .reader
             }
         }
     }
@@ -84,21 +82,41 @@ struct SidebarView: View {
         }
     }
 
-    private func sidebarRow(_ page: WikiPage) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: page.kind == .excalidraw ? "scribble.variable" : "doc.text")
-                .foregroundStyle(page.missingLinks.isEmpty ? PocketWikiTheme.dim : PocketWikiTheme.bad)
-                .frame(width: 16)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(page.title)
-                    .foregroundStyle(PocketWikiTheme.text)
-                    .lineLimit(1)
-                Text(page.path)
-                    .font(.caption)
-                    .foregroundStyle(PocketWikiTheme.muted)
-                    .lineLimit(1)
+    private func sidebarItemRow(_ item: WikiSidebarItem) -> some View {
+        Button {
+            switch item.kind {
+            case .page(let id):
+                store.selectPage(id, tab: store.selectedTab == .map ? .map : .reader)
+            case .tag(let tag):
+                store.selectTag(tag)
             }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: item.icon)
+                    .foregroundStyle(item.isWarning ? PocketWikiTheme.bad : PocketWikiTheme.dim)
+                    .frame(width: 16)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.title)
+                        .foregroundStyle(PocketWikiTheme.text)
+                        .lineLimit(1)
+                    Text(item.detail)
+                        .font(.caption)
+                        .foregroundStyle(PocketWikiTheme.muted)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .listRowBackground(rowBackground(for: item))
+    }
+
+    private func rowBackground(for item: WikiSidebarItem) -> Color {
+        guard case .page(let id) = item.kind, id == store.selectedPageID else {
+            return Color.clear
+        }
+        return PocketWikiTheme.accent.opacity(0.14)
     }
 }

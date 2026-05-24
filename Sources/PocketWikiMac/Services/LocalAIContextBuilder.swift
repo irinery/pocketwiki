@@ -33,19 +33,24 @@ enum LocalAIContextBuilder {
         selectedPageID: String?,
         scope: LocalAIContextScope,
         maxCharacters: Int,
-        question: String = ""
+        question: String = "",
+        manualSources: [LocalAIManualContextSource] = [],
+        excludedPaths: Set<String> = []
     ) -> LocalAIContextPayload {
         if scope == .automatic {
-            return buildAutomatic(
+            let context = buildAutomatic(
                 question: question,
                 index: index,
                 selectedPageID: selectedPageID,
-                maxCharacters: maxCharacters
+                maxCharacters: maxCharacters,
+                excludedPaths: excludedPaths
             )
+            return addingManualSources(manualSources, to: context, maxCharacters: maxCharacters)
         }
 
         let limit = max(1_500, maxCharacters)
         let pages = pagesForScope(index: index, selectedPageID: selectedPageID, scope: scope)
+            .filter { !excludedPaths.contains($0.path) }
         let body: String
 
         switch scope {
@@ -60,21 +65,24 @@ enum LocalAIContextBuilder {
         }
 
         let fitted = fit(body, maxCharacters: limit)
-        return LocalAIContextPayload(
+        let context = LocalAIContextPayload(
             mode: .wiki,
             title: scope.title,
             body: fitted,
             includedPaths: pages.map(\.path),
+            manualPaths: [],
             characters: fitted.count,
             notice: nil
         )
+        return addingManualSources(manualSources, to: context, maxCharacters: maxCharacters)
     }
 
     static func buildAutomatic(
         question: String,
         index: WikiIndex,
         selectedPageID: String?,
-        maxCharacters: Int
+        maxCharacters: Int,
+        excludedPaths: Set<String> = []
     ) -> LocalAIContextPayload {
         let cleanQuestion = singleLine(question)
         let scope = classify(cleanQuestion)
@@ -84,6 +92,7 @@ enum LocalAIContextBuilder {
                 title: "Geral",
                 body: "",
                 includedPaths: [],
+                manualPaths: [],
                 characters: 0,
                 notice: index.pages.isEmpty ? "Nenhuma pagina da wiki esta carregada agora." : nil
             )
@@ -94,6 +103,7 @@ enum LocalAIContextBuilder {
                 title: "Geral",
                 body: "",
                 includedPaths: [],
+                manualPaths: [],
                 characters: 0,
                 notice: "Nenhuma pagina da wiki esta carregada agora."
             )
@@ -114,6 +124,7 @@ enum LocalAIContextBuilder {
 
         let indexSnapshot = groundingIndexSnapshot(index, maxCharacters: min(2_200, max(900, maxCharacters / 5)))
         let selected = highConfidenceSelection(Array(candidates), maxPages: scope.maxPages)
+            .filter { !excludedPaths.contains($0.path) }
         guard !selected.isEmpty else {
             let indexText = compactIndexResults(Array(candidates), maxCharacters: scope.indexBudget)
             let body = """
@@ -138,6 +149,7 @@ enum LocalAIContextBuilder {
                 title: "Auto",
                 body: fitted,
                 includedPaths: [],
+                manualPaths: [],
                 characters: fitted.count,
                 notice: "Indice consultado, mas nenhuma pagina passou no corte de relevancia."
             )
@@ -171,8 +183,42 @@ enum LocalAIContextBuilder {
             title: "Auto",
             body: fitted,
             includedPaths: selected.map(\.path),
+            manualPaths: [],
             characters: fitted.count,
             notice: nil
+        )
+    }
+
+    static func addingManualSources(
+        _ sources: [LocalAIManualContextSource],
+        to context: LocalAIContextPayload,
+        maxCharacters: Int
+    ) -> LocalAIContextPayload {
+        guard !sources.isEmpty else { return context }
+
+        let manualBody = sources.map { source in
+            """
+            # \(source.title)
+            Path: \(source.path)
+
+            \(source.content)
+            """
+        }
+        .joined(separator: "\n\n---\n\n")
+
+        let body = context.body.isEmpty
+            ? "Contexto adicionado manualmente:\n\n\(manualBody)"
+            : "\(context.body)\n\n---\n\nContexto adicionado manualmente:\n\n\(manualBody)"
+        let fitted = fit(body, maxCharacters: maxCharacters)
+        let manualPaths = sources.map(\.path)
+        return LocalAIContextPayload(
+            mode: .wiki,
+            title: context.title,
+            body: fitted,
+            includedPaths: uniqueStrings(context.includedPaths + manualPaths),
+            manualPaths: manualPaths,
+            characters: fitted.count,
+            notice: context.notice
         )
     }
 
@@ -254,6 +300,15 @@ enum LocalAIContextBuilder {
         return pages.filter { page in
             if seen.contains(page.id) { return false }
             seen.insert(page.id)
+            return true
+        }
+    }
+
+    private static func uniqueStrings(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        return values.filter { value in
+            if seen.contains(value) { return false }
+            seen.insert(value)
             return true
         }
     }

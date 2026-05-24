@@ -10,9 +10,10 @@ struct DetailContainerView: View {
     var body: some View {
         GeometryReader { proxy in
             let isCompactInspector = proxy.size.width < inlineInspectorBreakpoint
+            let usesCompactTabs = proxy.size.width < 1120
 
             VStack(spacing: 0) {
-                topBar(isCompactInspector: isCompactInspector)
+                topBar(isCompactInspector: isCompactInspector, usesCompactTabs: usesCompactTabs)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
                     .background(PocketWikiTheme.bg.opacity(0.9))
@@ -39,59 +40,30 @@ struct DetailContainerView: View {
             .onChange(of: store.selectedPageID) { _, _ in
                 inspectorDrawerPresented = false
             }
+            .onChange(of: store.selectedTab) { _, _ in
+                if !showsPageInspector {
+                    inspectorDrawerPresented = false
+                }
+            }
         }
     }
 
-    private func topBar(isCompactInspector: Bool) -> some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 12) {
-                tabPicker
-                    .frame(maxWidth: 560)
+    private func topBar(isCompactInspector: Bool, usesCompactTabs: Bool) -> some View {
+        HStack(spacing: 10) {
+            WikiTabStrip(selection: $store.selectedTab, showsLabels: !usesCompactTabs)
+                .layoutPriority(1)
 
-                Spacer(minLength: 12)
+            Spacer(minLength: 8)
 
-                inspectorButton(isCompactInspector: isCompactInspector, showsText: true)
-            }
-
-            HStack(spacing: 10) {
-                tabMenu
-
-                Spacer(minLength: 8)
-
-                inspectorButton(isCompactInspector: isCompactInspector, showsText: false)
-            }
+            ServerStatusPill(store: store, showsDetail: false)
+            inspectorButton(isCompactInspector: isCompactInspector, showsText: false)
         }
         .foregroundStyle(PocketWikiTheme.text)
     }
 
-    private var tabPicker: some View {
-        Picker("", selection: $store.selectedTab) {
-            ForEach(WikiTab.allCases) { tab in
-                Label(tab.title, systemImage: tab.systemImage).tag(tab)
-            }
-        }
-        .labelsHidden()
-        .pickerStyle(.segmented)
-    }
-
-    private var tabMenu: some View {
-        Menu {
-            Picker("Aba", selection: $store.selectedTab) {
-                ForEach(WikiTab.allCases) { tab in
-                    Label(tab.title, systemImage: tab.systemImage).tag(tab)
-                }
-            }
-        } label: {
-            Label(store.selectedTab.title, systemImage: store.selectedTab.systemImage)
-        }
-        .menuStyle(.button)
-        .buttonStyle(.bordered)
-        .buttonBorderShape(.roundedRectangle(radius: 8))
-    }
-
     @ViewBuilder
     private func inspectorButton(isCompactInspector: Bool, showsText: Bool) -> some View {
-        if isCompactInspector, store.selectedPage != nil {
+        if isCompactInspector, showsPageInspector {
             Button {
                 withAnimation(.snappy(duration: 0.22)) {
                     inspectorDrawerPresented.toggle()
@@ -117,7 +89,7 @@ struct DetailContainerView: View {
                 selectedTabView
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                if !isCompactInspector, let page = store.selectedPage {
+                if !isCompactInspector, showsPageInspector, let page = store.selectedPage {
                     Rectangle()
                         .fill(PocketWikiTheme.border)
                         .frame(width: 1)
@@ -126,7 +98,7 @@ struct DetailContainerView: View {
                 }
             }
 
-            if isCompactInspector, inspectorDrawerPresented, let page = store.selectedPage {
+            if isCompactInspector, inspectorDrawerPresented, showsPageInspector, let page = store.selectedPage {
                 Color.black.opacity(0.42)
                     .ignoresSafeArea()
                     .onTapGesture {
@@ -145,6 +117,16 @@ struct DetailContainerView: View {
         .animation(.snappy(duration: 0.22), value: inspectorDrawerPresented)
     }
 
+    private var showsPageInspector: Bool {
+        guard store.selectedPage != nil else { return false }
+        switch store.selectedTab {
+        case .reader, .excalidraw, .map:
+            return true
+        case .dashboard, .localAI, .health, .timeline, .server:
+            return false
+        }
+    }
+
     @ViewBuilder
     private var selectedTabView: some View {
         switch store.selectedTab {
@@ -154,12 +136,16 @@ struct DetailContainerView: View {
             ReaderView(store: store)
         case .excalidraw:
             ExcalidrawView(store: store)
+        case .map:
+            MapView(store: store)
         case .health:
             HealthView(store: store)
         case .timeline:
             TimelineView(store: store)
         case .localAI:
             LocalAIView(store: store)
+        case .server:
+            ServerView(store: store)
         }
     }
 

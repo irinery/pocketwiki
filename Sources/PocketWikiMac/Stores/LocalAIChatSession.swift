@@ -11,7 +11,10 @@ final class LocalAIChatSession {
     var errorMessage: String?
     var availableModels: [LocalAIModel] = []
     var lastContext: LocalAIContextPayload?
+    var manualSources: [LocalAIManualContextSource] = []
+    var excludedContextPaths: Set<String> = []
     var messagesRevision = 0
+    var contextRevision = 0
 
     private let client: LMStudioClient
     private var streamTask: Task<Void, Never>?
@@ -60,7 +63,9 @@ final class LocalAIChatSession {
             selectedPageID: selectedPageID,
             scope: contextScope,
             maxCharacters: maxContextCharacters,
-            question: userText
+            question: userText,
+            manualSources: manualSources,
+            excludedPaths: excludedContextPaths
         )
         let userMessage = LocalAIChatMessage(role: .user, content: userText)
         let assistantMessage = LocalAIChatMessage(role: .assistant, content: "", modelID: modelID, isStreaming: true)
@@ -140,8 +145,39 @@ final class LocalAIChatSession {
         prompt = ""
         errorMessage = nil
         lastContext = nil
+        excludedContextPaths.removeAll()
         statusMessage = "Reset aplicado. Proxima resposta volta a consultar o indice da wiki."
+        contextRevision += 1
         messagesRevision += 1
+    }
+
+    func addManualSources(_ sources: [LocalAIManualContextSource]) {
+        guard !sources.isEmpty else { return }
+        var seen = Set(manualSources.map(\.path))
+        for source in sources where seen.insert(source.path).inserted {
+            manualSources.append(source)
+        }
+        statusMessage = "\(manualSources.count) fonte(s) manuais no contexto."
+        contextRevision += 1
+    }
+
+    func removeManualSource(id: UUID) {
+        manualSources.removeAll { $0.id == id }
+        statusMessage = manualSources.isEmpty ? "Contexto manual removido." : "\(manualSources.count) fonte(s) manuais no contexto."
+        contextRevision += 1
+    }
+
+    func excludeContextPath(_ path: String) {
+        guard !path.pocketTrimmed.isEmpty else { return }
+        excludedContextPaths.insert(path)
+        statusMessage = "Fonte removida do proximo contexto: \(path)"
+        contextRevision += 1
+    }
+
+    func restoreContextPath(_ path: String) {
+        excludedContextPaths.remove(path)
+        statusMessage = "Fonte restaurada no contexto: \(path)"
+        contextRevision += 1
     }
 
     private func append(_ delta: LocalAIStreamDelta, to assistantID: UUID) {
