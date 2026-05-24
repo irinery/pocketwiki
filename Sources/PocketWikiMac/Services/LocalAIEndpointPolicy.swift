@@ -28,6 +28,8 @@ enum LocalAIEndpointPolicy {
         let cleanPath = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         if cleanPath.isEmpty {
             components.path = "/v1"
+        } else if cleanPath == "api/ai" {
+            components.path = "/api/ai"
         } else {
             components.path = "/" + cleanPath
         }
@@ -44,7 +46,10 @@ enum LocalAIEndpointPolicy {
         }
 
         let basePath = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let suffix = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        var suffix = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        if basePath == "api/ai", suffix == "chat/completions" {
+            suffix = "chat"
+        }
         components.path = "/" + [basePath, suffix].filter { !$0.isEmpty }.joined(separator: "/")
 
         guard let url = components.url else {
@@ -81,6 +86,7 @@ enum LocalAIEndpointPolicy {
             || first == 169 && second == 254
             || first == 172 && (16...31 ~= second)
             || first == 192 && second == 168
+            || first == 100 && (64...127 ~= second)
     }
 
     private static func isAllowedIPv6Host(_ host: String) -> Bool {

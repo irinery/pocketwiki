@@ -13,27 +13,53 @@ final class WikiAppStore {
     var statusMessage = "Abra uma pasta com Markdown ou Excalidraw."
     var errorMessage: String?
     var showSearchPalette = false
+    var sourceMode: WikiSourceMode = .none
+
+    var serverMode: PocketWikiServerMode = .localMac
+    var serverStatus: PocketWikiServerStatus = .stopped
+    var serverConfiguration = PocketWikiServerConfiguration.load()
+    var serverLogs: [PocketWikiServerLogEntry] = []
+    var remoteServerURLText = UserDefaults.standard.string(forKey: "PocketWikiMac.remoteServerURL") ?? "http://pocketwiki.local"
+    var remoteConnectionMessage = "Nenhum servidor remoto conectado."
 
     private let folderPicker: WikiFolderPicker
     private let bookmarkStore: WikiBookmarkStore
     private let folderLoader: WikiFolderLoader
     private let indexer: WikiIndexer
+    private let remoteClient: RemoteWikiClient
     private var currentSourceURL: URL?
+    private var currentFiles: [WikiFile] = []
+    private var localServer: PocketWikiHTTPServer?
 
     init(
         folderPicker: WikiFolderPicker = WikiFolderPicker(),
         bookmarkStore: WikiBookmarkStore = WikiBookmarkStore(),
         folderLoader: WikiFolderLoader = WikiFolderLoader(),
-        indexer: WikiIndexer = WikiIndexer()
+        indexer: WikiIndexer = WikiIndexer(),
+        remoteClient: RemoteWikiClient = RemoteWikiClient()
     ) {
         self.folderPicker = folderPicker
         self.bookmarkStore = bookmarkStore
         self.folderLoader = folderLoader
         self.indexer = indexer
+        self.remoteClient = remoteClient
     }
 
     var selectedPage: WikiPage? {
         index.page(id: selectedPageID)
+    }
+
+    var serverIndicatorTitle: String {
+        serverStatus.title
+    }
+
+    var serverIndicatorDetail: String {
+        serverStatus.detail
+    }
+
+    var remoteAIProxyBaseURL: String? {
+        guard case .remoteServer(let url) = sourceMode else { return nil }
+        return url.appendingPathComponent("api/ai").absoluteString
     }
 
     var filteredPages: [WikiPage] {
@@ -95,8 +121,13 @@ final class WikiAppStore {
     }
 
     func reloadCurrentSource() async {
-        guard let currentSourceURL else { return }
-        await loadSource(url: currentSourceURL, persistBookmark: false)
+        switch sourceMode {
+        case .remoteServer:
+            await connectRemoteServer()
+        default:
+            guard let currentSourceURL else { return }
+            await loadSource(url: currentSourceURL, persistBookmark: false)
+        }
     }
 
     func selectPage(_ id: String, tab: WikiTab = .reader) {
@@ -108,6 +139,96 @@ final class WikiAppStore {
 
     func selectTag(_ tag: String) {
         searchText = "#\(tag)"
+    }
+
+    func startLocalServer() async {
+        serverMode = .localMac
+        serverStatus = .starting
+        appendServerLog(PocketWikiServerLogEntry(level: .info, message: "Iniciando servidor desktop..."))
+
+        localServer?.stop()
+        let configuration = serverConfiguration
+        let server = PocketWikiHTTPServer(
+            configuration: configuration,
+            sourceProvider: { [weak self] in
+                await self?.servedSourceSnapshot(configuration: configuration) ?? .unavailable()
+            },
+            log: { [weak self] entry in
+                Task { @MainActor in self?.appendServerLog(entry) }
+            }
+        )
+        localServer = server
+
+        do {
+            let routes = try await server.start()
+            serverStatus = .running(routes)
+            if let urlText = routes.preferredURL, let url = URL(string: urlText) {
+                sourceMode = .localServer(url)
+            }
+        } catch {
+            localServer = nil
+            serverStatus = .failed(error.localizedDescription)
+            appendServerLog(PocketWikiServerLogEntry(level: .error, message: error.localizedDescription))
+        }
+    }
+
+    func stopLocalServer() {
+        localServer?.stop()
+        localServer = nil
+        serverStatus = .stopped
+        if case .localServer = sourceMode {
+            sourceMode = currentSourceURL.map { .localFolder($0) } ?? .none
+        }
+        appendServerLog(PocketWikiServerLogEntry(level: .info, message: "Servidor desktop desligado."))
+    }
+
+    func toggleLocalServer() async {
+        if case .running = serverStatus {
+            stopLocalServer()
+        } else {
+            await startLocalServer()
+        }
+    }
+
+    func connectRemoteServer() async {
+        serverMode = .external
+        errorMessage = nil
+        remoteConnectionMessage = "Conectando..."
+        appendServerLog(PocketWikiServerLogEntry(level: .info, message: "Conectando em \(remoteServerURLText.pocketTrimmed)..."))
+
+        do {
+            let result = try await remoteClient.connect(to: remoteServerURLText)
+            UserDefaults.standard.set(result.baseURL.absoluteString, forKey: "PocketWikiMac.remoteServerURL")
+            remoteServerURLText = result.baseURL.absoluteString
+            applyLoadedFiles(
+                files: result.source.files,
+                sourceName: result.source.rootName,
+                loadIssues: [],
+                selectedMode: .remoteServer(result.baseURL),
+                status: "\(result.source.files.count) paginas remotas carregadas"
+            )
+            serverStatus = .remoteConnected(result.baseURL)
+            remoteConnectionMessage = "Conectado em \(result.baseURL.absoluteString)"
+            appendServerLog(PocketWikiServerLogEntry(level: .info, message: remoteConnectionMessage))
+        } catch {
+            serverStatus = .failed(error.localizedDescription)
+            remoteConnectionMessage = error.localizedDescription
+            errorMessage = error.localizedDescription
+            appendServerLog(PocketWikiServerLogEntry(level: .error, message: "Conexao remota falhou: \(error.localizedDescription)"))
+        }
+    }
+
+    func disconnectRemoteServer() {
+        guard case .remoteServer = sourceMode else { return }
+        sourceMode = .none
+        index = .empty
+        currentFiles = []
+        currentSourceURL = nil
+        selectedPageID = nil
+        selectedTab = .server
+        serverStatus = localServer == nil ? .stopped : serverStatus
+        remoteConnectionMessage = "Servidor remoto desconectado."
+        appendServerLog(PocketWikiServerLogEntry(level: .info, message: remoteConnectionMessage))
     }
 
     private func loadSource(url: URL, persistBookmark: Bool) async {
@@ -128,16 +249,65 @@ final class WikiAppStore {
             }
 
             let loaded = try folderLoader.loadFiles(from: url)
-            let nextIndex = indexer.buildIndex(files: loaded.files, sourceName: url.lastPathComponent, loadIssues: loaded.issues)
-            index = nextIndex
+            applyLoadedFiles(
+                files: loaded.files,
+                sourceName: url.lastPathComponent,
+                loadIssues: loaded.issues,
+                selectedMode: .localFolder(url),
+                status: "\(loaded.files.count) paginas carregadas"
+            )
             currentSourceURL = url
-            selectedPageID = nextIndex.homePage?.id
-            selectedTab = .dashboard
-            statusMessage = "\(nextIndex.pages.count) paginas carregadas"
         } catch {
             errorMessage = "Falha ao carregar \(url.lastPathComponent): \(error.localizedDescription)"
         }
 
         isLoading = false
+    }
+
+    private func applyLoadedFiles(files: [WikiFile], sourceName: String, loadIssues: [String], selectedMode: WikiSourceMode, status: String) {
+        let nextIndex = indexer.buildIndex(files: files, sourceName: sourceName, loadIssues: loadIssues)
+        currentFiles = files
+        index = nextIndex
+        sourceMode = selectedMode
+        selectedPageID = nextIndex.homePage?.id
+        selectedTab = selectedMode == .none ? .server : .dashboard
+        statusMessage = status
+    }
+
+    private func servedSourceSnapshot(configuration: PocketWikiServerConfiguration) async -> PocketWikiServedSource {
+        if !currentFiles.isEmpty {
+            return PocketWikiServedSource(
+                rootName: index.sourceName,
+                source: sourceMode.title,
+                configured: true,
+                readonly: true,
+                available: true,
+                status: "ready",
+                files: currentFiles
+            )
+        }
+
+        let referenceURL = configuration.resolvedReferenceURL
+        do {
+            let loaded = try folderLoader.loadFiles(from: referenceURL)
+            return PocketWikiServedSource(
+                rootName: referenceURL.lastPathComponent,
+                source: "env",
+                configured: true,
+                readonly: configuration.referenceReadonly,
+                available: true,
+                status: "ready",
+                files: loaded.files
+            )
+        } catch {
+            return .unavailable(rootName: referenceURL.lastPathComponent, status: "missing")
+        }
+    }
+
+    private func appendServerLog(_ entry: PocketWikiServerLogEntry) {
+        serverLogs.append(entry)
+        if serverLogs.count > 240 {
+            serverLogs.removeFirst(serverLogs.count - 240)
+        }
     }
 }

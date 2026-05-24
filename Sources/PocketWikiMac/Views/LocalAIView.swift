@@ -32,8 +32,15 @@ struct LocalAIView: View {
         return manual.isEmpty ? runtimeAPIKey : manual
     }
 
+    private var effectiveBaseURL: String {
+        store.remoteAIProxyBaseURL ?? baseURL
+    }
+
     private var connectionLabel: String {
-        chat.availableModels.isEmpty ? "desconectado" : "LM Studio conectado"
+        if store.remoteAIProxyBaseURL != nil, !chat.availableModels.isEmpty {
+            return "IA via servidor remoto"
+        }
+        return chat.availableModels.isEmpty ? "desconectado" : "LM Studio conectado"
     }
 
     var body: some View {
@@ -110,7 +117,7 @@ struct LocalAIView: View {
         guard canSendPrompt else { return }
         normalizeBaseURLPreference()
         chat.send(
-            baseURL: baseURL,
+            baseURL: effectiveBaseURL,
             apiKey: effectiveAPIKey,
             modelID: modelID,
             temperature: temperature,
@@ -153,7 +160,7 @@ struct LocalAIView: View {
     private func refreshModelSelection() async {
         normalizeBaseURLPreference()
         let selected = await chat.refreshModels(
-            baseURL: baseURL,
+            baseURL: effectiveBaseURL,
             apiKey: effectiveAPIKey,
             preferredModelID: modelID,
             configuredModelID: configuredModelID
@@ -166,6 +173,7 @@ struct LocalAIView: View {
     }
 
     private func normalizeBaseURLPreference() {
+        guard store.remoteAIProxyBaseURL == nil else { return }
         guard let normalized = try? LocalAIEndpointPolicy.normalizedBaseURL(baseURL) else { return }
         let value = normalized.absoluteString
         if baseURL != value {

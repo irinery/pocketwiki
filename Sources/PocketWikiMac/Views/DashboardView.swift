@@ -68,41 +68,7 @@ struct DashboardView: View {
     }
 
     private func dashboardHeader(_ metrics: WikiDashboardMetrics) -> some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .top, spacing: 16) {
-                hero(metrics)
-                    .frame(maxWidth: .infinity)
-                quickActions
-                    .frame(width: 360)
-            }
-
-            VStack(alignment: .leading, spacing: 16) {
-                hero(metrics)
-                quickActions
-            }
-        }
-    }
-
-    private var quickActions: some View {
-        SectionCard("Acoes rapidas", subtitle: "atalhos", systemImage: "bolt") {
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                DashboardActionTile(icon: "command", title: "Busca", subtitle: "Abrir palette") {
-                    store.showSearchPalette = true
-                }
-                DashboardActionTile(icon: "doc.text", title: "Leitor", subtitle: "Pagina atual") {
-                    store.selectedTab = .reader
-                }
-                DashboardActionTile(icon: "scribble.variable", title: "Desenhos", subtitle: "Excalidraw") {
-                    store.selectedTab = .excalidraw
-                }
-                DashboardActionTile(icon: "waveform.path.ecg", title: "Saude", subtitle: "Fila de acao") {
-                    store.selectedTab = .health
-                }
-                DashboardActionTile(icon: "sparkles", title: "IA", subtitle: "LM Studio") {
-                    store.selectedTab = .localAI
-                }
-            }
-        }
+        hero(metrics)
     }
 
     private func missingLinksList() -> some View {
@@ -200,50 +166,6 @@ struct DashboardView: View {
                 }
             }
         }
-    }
-}
-
-struct DashboardActionTile: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-    let action: () -> Void
-    @State private var isHovering = false
-
-    var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                Image(systemName: icon)
-                    .font(.title3)
-                    .foregroundStyle(PocketWikiTheme.accent)
-                    .frame(width: 34, height: 34)
-                    .background(PocketWikiTheme.bg3, in: RoundedRectangle(cornerRadius: 8))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(PocketWikiTheme.border, lineWidth: 1)
-                    }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.headline)
-                        .foregroundStyle(PocketWikiTheme.text)
-                        .lineLimit(1)
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(PocketWikiTheme.muted)
-                        .lineLimit(1)
-                }
-            }
-            .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
-            .padding(12)
-            .background((isHovering ? PocketWikiTheme.accent.opacity(0.10) : PocketWikiTheme.bg2.opacity(0.68)), in: RoundedRectangle(cornerRadius: 8))
-            .overlay {
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(isHovering ? PocketWikiTheme.accent.opacity(0.7) : PocketWikiTheme.border, lineWidth: 1)
-            }
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovering = $0 }
     }
 }
 

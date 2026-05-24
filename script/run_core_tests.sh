@@ -17,11 +17,16 @@ swiftc \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/LocalAIRuntimeConfiguration.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/LocalAIContextBuilder.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/LMStudioClient.swift \
+  "$ROOT_DIR"/Sources/PocketWikiMac/Services/PocketWikiRouteBuilder.swift \
+  "$ROOT_DIR"/Sources/PocketWikiMac/Services/PocketWikiServerConfiguration.swift \
+  "$ROOT_DIR"/Sources/PocketWikiMac/Services/PocketWikiServerPayloads.swift \
+  "$ROOT_DIR"/Sources/PocketWikiMac/Services/RemoteWikiClient.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/WikiTextParser.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/ExcalidrawParser.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/WikiIndexer.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/WikiFolderLoader.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/WikiAnalytics.swift \
+  "$ROOT_DIR"/Sources/PocketWikiMac/Services/WikiSidebarExplorer.swift \
   "$ROOT_DIR"/Tests/PocketWikiCoreTests/CoreTestRunner.swift \
   -o "$BIN"
 

@@ -46,10 +46,11 @@ struct DetailContainerView: View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 12) {
                 tabPicker
-                    .frame(maxWidth: 560)
+                    .frame(maxWidth: 760)
 
                 Spacer(minLength: 12)
 
+                ServerStatusPill(store: store, showsDetail: true)
                 inspectorButton(isCompactInspector: isCompactInspector, showsText: true)
             }
 
@@ -58,6 +59,7 @@ struct DetailContainerView: View {
 
                 Spacer(minLength: 8)
 
+                ServerStatusPill(store: store, showsDetail: false)
                 inspectorButton(isCompactInspector: isCompactInspector, showsText: false)
             }
         }
@@ -65,13 +67,7 @@ struct DetailContainerView: View {
     }
 
     private var tabPicker: some View {
-        Picker("", selection: $store.selectedTab) {
-            ForEach(WikiTab.allCases) { tab in
-                Label(tab.title, systemImage: tab.systemImage).tag(tab)
-            }
-        }
-        .labelsHidden()
-        .pickerStyle(.segmented)
+        WikiTabStrip(selection: $store.selectedTab)
     }
 
     private var tabMenu: some View {
@@ -154,12 +150,16 @@ struct DetailContainerView: View {
             ReaderView(store: store)
         case .excalidraw:
             ExcalidrawView(store: store)
+        case .map:
+            MapView(store: store)
         case .health:
             HealthView(store: store)
         case .timeline:
             TimelineView(store: store)
         case .localAI:
             LocalAIView(store: store)
+        case .server:
+            ServerView(store: store)
         }
     }
 

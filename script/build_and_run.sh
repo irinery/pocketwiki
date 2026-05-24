@@ -13,6 +13,7 @@ APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
 APP_CONTENTS="$APP_BUNDLE/Contents"
 APP_MACOS="$APP_CONTENTS/MacOS"
 APP_RESOURCES="$APP_CONTENTS/Resources"
+APP_WEB="$APP_RESOURCES/Web"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 
@@ -23,7 +24,7 @@ swift build --package-path "$ROOT_DIR"
 BUILD_BINARY="$(swift build --package-path "$ROOT_DIR" --show-bin-path)/$PRODUCT_NAME"
 
 rm -rf "$APP_BUNDLE" "$DIST_DIR/$PRODUCT_NAME.app"
-mkdir -p "$APP_MACOS" "$APP_RESOURCES"
+mkdir -p "$APP_MACOS" "$APP_RESOURCES" "$APP_WEB"
 cp "$BUILD_BINARY" "$APP_BINARY"
 chmod +x "$APP_BINARY"
 
@@ -34,6 +35,14 @@ if [ -d "$RESOURCE_BUNDLE" ]; then
 fi
 if [ -f "$ROOT_DIR/Sources/PocketWikiMac/Resources/PocketWikiMac.icns" ]; then
   cp "$ROOT_DIR/Sources/PocketWikiMac/Resources/PocketWikiMac.icns" "$APP_RESOURCES/PocketWikiMac.icns"
+fi
+for file in wiki-cockpit.html offline.html manifest.webmanifest sw.js favicon.ico favicon.png; do
+  if [ -f "$ROOT_DIR/$file" ]; then
+    cp "$ROOT_DIR/$file" "$APP_WEB/$file"
+  fi
+done
+if [ -d "$ROOT_DIR/assets" ]; then
+  cp -R "$ROOT_DIR/assets" "$APP_WEB/assets"
 fi
 
 cat >"$INFO_PLIST" <<PLIST
