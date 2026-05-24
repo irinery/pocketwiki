@@ -41,5 +41,5 @@
 | Launcher | `./script/build_and_run.sh --verify` cria bundle e encontra processo `PocketWiki` |
 | Segurança | bookmark é criado/restaurado e acesso à pasta chama `startAccessingSecurityScopedResource()` quando aplicável |
 | Indexação | testes cobrem slug, frontmatter, tags, links, arquivos ignorados e Excalidraw textual |
-| UI | telas de dificuldade 1-3 estão navegáveis via SwiftUI, sem WebView |
-| Itens 4+ | grafo e render oficial Excalidraw seguem adiados; IA local possui contrato próprio |
+| UI | telas principais estão navegáveis via SwiftUI; Excalidraw usa WebView isolado |
+| Itens 4+ | grafo segue adiado; Excalidraw oficial e IA local possuem contrato próprio |

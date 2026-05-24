@@ -27,6 +27,8 @@ swiftc \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/PocketWikiRouteBuilder.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/PocketWikiServerConfiguration.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/PocketWikiServerPayloads.swift \
+  "$ROOT_DIR"/Sources/PocketWikiMac/Services/ExcalidrawEditorResourceResolver.swift \
+  "$ROOT_DIR"/Sources/PocketWikiMac/Services/WikiFilePathResolver.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/RemoteWikiClient.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/WikiTextParser.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/ExcalidrawParser.swift \
@@ -50,6 +52,8 @@ test -f "$INFO_PLIST"
 test -f "$APP_BUNDLE/Contents/Resources/Web/wiki-cockpit.html"
 test -f "$APP_BUNDLE/Contents/Resources/Web/assets/favicon.png"
 test -f "$APP_BUNDLE/PocketWikiMac_PocketWikiMac.bundle/wiki-review.md"
+test -f "$APP_BUNDLE/PocketWikiMac_PocketWikiMac.bundle/ExcalidrawEditor/index.html"
+test -f "$APP_BUNDLE/PocketWikiMac_PocketWikiMac.bundle/ExcalidrawEditor/THIRD_PARTY_NOTICES.md"
 
 plutil -extract NSLocalNetworkUsageDescription raw -o - "$INFO_PLIST" >/dev/null
 plutil -extract NSBonjourServices xml1 -o - "$INFO_PLIST" | grep -q "_http._tcp"

@@ -20,6 +20,7 @@ INFO_PLIST="$APP_CONTENTS/Info.plist"
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 pkill -x "$PRODUCT_NAME" >/dev/null 2>&1 || true
 
+npm --prefix "$ROOT_DIR" run build:excalidraw
 swift build --package-path "$ROOT_DIR"
 BUILD_BINARY="$(swift build --package-path "$ROOT_DIR" --show-bin-path)/$PRODUCT_NAME"
 

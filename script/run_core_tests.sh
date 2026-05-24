@@ -21,6 +21,8 @@ swiftc \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/PocketWikiRouteBuilder.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/PocketWikiServerConfiguration.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/PocketWikiServerPayloads.swift \
+  "$ROOT_DIR"/Sources/PocketWikiMac/Services/ExcalidrawEditorResourceResolver.swift \
+  "$ROOT_DIR"/Sources/PocketWikiMac/Services/WikiFilePathResolver.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/RemoteWikiClient.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/WikiTextParser.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/ExcalidrawParser.swift \
