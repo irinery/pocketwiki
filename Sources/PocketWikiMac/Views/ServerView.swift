@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct ServerView: View {
@@ -89,6 +90,15 @@ struct ServerView: View {
                         .buttonStyle(.bordered)
                         .buttonBorderShape(.roundedRectangle(radius: 8))
                         .disabled(isLocalServerRunning)
+
+                        Button {
+                            openWebRoute()
+                        } label: {
+                            Label("Abrir web", systemImage: "safari")
+                        }
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.roundedRectangle(radius: 8))
+                        .disabled(activeRoutes == nil)
                     }
 
                     configFields
@@ -296,5 +306,11 @@ struct ServerView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm:ss"
         return formatter.string(from: date)
+    }
+
+    private func openWebRoute() {
+        let route = activeRoutes?.local.first ?? activeRoutes?.mdns.first
+        guard let route, let url = URL(string: route) else { return }
+        NSWorkspace.shared.open(url)
     }
 }

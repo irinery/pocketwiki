@@ -2,35 +2,46 @@ import SwiftUI
 
 struct WikiTabStrip: View {
     @Binding var selection: WikiTab
+    var showsLabels = true
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(WikiTab.allCases) { tab in
-                    Button {
-                        selection = tab
-                    } label: {
-                        HStack(spacing: 6) {
-                            PocketWikiIcon(kind: tab.iconKind, size: 16)
-                            Text(tab.title)
-                                .font(.callout.weight(selection == tab ? .semibold : .medium))
-                                .lineLimit(1)
-                        }
-                        .padding(.horizontal, 10)
-                        .frame(height: 30)
-                        .foregroundStyle(selection == tab ? PocketWikiTheme.bg : PocketWikiTheme.dim)
-                        .background(selection == tab ? PocketWikiTheme.accent : PocketWikiTheme.bg2.opacity(0.72), in: RoundedRectangle(cornerRadius: 8))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(selection == tab ? PocketWikiTheme.accent.opacity(0.4) : PocketWikiTheme.border, lineWidth: 1)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .help(tab.title)
+        tabRow(showsLabels: showsLabels)
+            .animation(.snappy(duration: 0.18), value: showsLabels)
+    }
+
+    private func tabRow(showsLabels: Bool) -> some View {
+        HStack(spacing: 6) {
+            ForEach(WikiTab.allCases) { tab in
+                tabButton(tab, showsLabel: showsLabels)
+            }
+        }
+        .padding(1)
+    }
+
+    private func tabButton(_ tab: WikiTab, showsLabel: Bool) -> some View {
+        Button {
+            selection = tab
+        } label: {
+            HStack(spacing: showsLabel ? 6 : 0) {
+                PocketWikiIcon(kind: tab.iconKind, size: 16)
+                if showsLabel {
+                    Text(tab.title)
+                        .font(.callout.weight(selection == tab ? .semibold : .medium))
+                        .lineLimit(1)
                 }
             }
-            .padding(1)
+            .frame(width: showsLabel ? nil : 32, height: 30)
+            .padding(.horizontal, showsLabel ? 10 : 0)
+            .foregroundStyle(selection == tab ? PocketWikiTheme.bg : PocketWikiTheme.dim)
+            .background(selection == tab ? PocketWikiTheme.accent : PocketWikiTheme.bg2.opacity(0.72), in: RoundedRectangle(cornerRadius: 8))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(selection == tab ? PocketWikiTheme.accent.opacity(0.4) : PocketWikiTheme.border, lineWidth: 1)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 8))
         }
+        .buttonStyle(.plain)
+        .help(tab.title)
     }
 }
 

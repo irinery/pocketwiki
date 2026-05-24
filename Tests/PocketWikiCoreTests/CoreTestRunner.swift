@@ -52,6 +52,8 @@ struct CoreTestRunner {
             ("local ai remote proxy endpoint", testLocalAIRemoteProxyEndpoint),
             ("local ai context builder", testLocalAIContextBuilder),
             ("local ai automatic context", testLocalAIAutomaticContext),
+            ("local ai manual context", testLocalAIManualContext),
+            ("local ai response linkifier", testLocalAIResponseLinkifier),
             ("server configuration", testServerConfiguration),
             ("server routes", testServerRoutes),
             ("server files payload", testServerFilesPayload),
@@ -426,6 +428,49 @@ struct CoreTestRunner {
         try expect(noMatch.body.contains("Nenhuma pagina passou"), "no-match context should state no page passed relevance")
     }
 
+    static func testLocalAIManualContext() throws {
+        let index = WikiIndexer().buildIndex(files: [
+            makeFile(path: "Rede.md", content: "# Rede\nVLAN IoT no MikroTik."),
+            makeFile(path: "Camera.md", content: "# Camera\nScrypted e HomeKit.")
+        ], sourceName: "Test")
+        let manual = LocalAIManualContextSource(
+            title: "extra.txt",
+            path: "/tmp/extra.txt",
+            content: "Contexto extra escolhido manualmente."
+        )
+
+        let context = LocalAIContextBuilder.build(
+            index: index,
+            selectedPageID: nil,
+            scope: .automatic,
+            maxCharacters: 4_000,
+            question: "Como esta a VLAN IoT?",
+            manualSources: [manual],
+            excludedPaths: ["Rede.md"]
+        )
+
+        try expect(!context.includedPaths.contains("Rede.md"), "excluded wiki path leaked into context")
+        try expect(context.manualPaths == ["/tmp/extra.txt"], "manual path missing")
+        try expect(context.includedPaths.contains("/tmp/extra.txt"), "manual included path missing")
+        try expect(context.body.contains("Contexto extra escolhido manualmente."), "manual body missing")
+    }
+
+    static func testLocalAIResponseLinkifier() throws {
+        let index = WikiIndexer().buildIndex(files: [
+            makeFile(path: "wiki/index.md", content: "# Index"),
+            makeFile(path: "raw/skill_chatgpt_markdown.md", content: "# Skill")
+        ], sourceName: "Test")
+        let linked = LocalAIResponseLinkifier.linkify("""
+        - **Path:** wiki/index.md
+        - Path: raw/skill_chatgpt_markdown.md
+        - Path: missing.md
+        """, index: index)
+
+        try expect(linked.contains("**Path:** [wiki/index.md](pocketwiki://page/index)"), "bold path link failed")
+        try expect(linked.contains("Path: [raw/skill_chatgpt_markdown.md](pocketwiki://page/raw/skill_chatgpt_markdown)"), "plain path link failed")
+        try expect(linked.contains("Path: missing.md"), "missing path should stay plain")
+    }
+
     static func testServerConfiguration() throws {
         let config = PocketWikiServerConfiguration.load(environment: [
             "POCKETWIKI_PORT": "9090",
@@ -455,7 +500,7 @@ struct CoreTestRunner {
         )
 
         try expect(routes.portless, "portless route failed")
-        try expect(routes.local == ["http://localhost"], "local route failed")
+        try expect(routes.local == ["http://localhost", "http://127.0.0.1"], "local route failed")
         try expect(routes.mdns == ["http://pocketwiki.local"], "mdns route failed")
         try expect(routes.lan.contains("http://192.168.1.20"), "lan route failed")
         try expect(routes.tailscale == ["http://100.80.1.2"], "tailscale route failed")

@@ -165,6 +165,7 @@ final class WikiAppStore {
             if let urlText = routes.preferredURL, let url = URL(string: urlText) {
                 sourceMode = .localServer(url)
             }
+            await verifyLocalServer(routes: routes)
         } catch {
             localServer = nil
             serverStatus = .failed(error.localizedDescription)
@@ -308,6 +309,45 @@ final class WikiAppStore {
         serverLogs.append(entry)
         if serverLogs.count > 240 {
             serverLogs.removeFirst(serverLogs.count - 240)
+        }
+    }
+
+    private func verifyLocalServer(routes: PocketWikiRouteSnapshot) async {
+        let localURLText = routes.local.first { $0.contains("127.0.0.1") } ?? routes.local.first
+        guard let localURLText,
+              let configURL = URL(string: localURLText)?.appendingPathComponent("api/config"),
+              let webURL = URL(string: localURLText) else {
+            return
+        }
+
+        do {
+            var configRequest = URLRequest(url: configURL)
+            configRequest.timeoutInterval = 3
+            var webRequest = URLRequest(url: webURL)
+            webRequest.timeoutInterval = 3
+
+            let (_, configResponse) = try await URLSession.shared.data(for: configRequest)
+            let configStatus = (configResponse as? HTTPURLResponse)?.statusCode ?? 0
+            let (_, webResponse) = try await URLSession.shared.data(for: webRequest)
+            let webStatus = (webResponse as? HTTPURLResponse)?.statusCode ?? 0
+
+            if 200..<300 ~= configStatus, 200..<300 ~= webStatus {
+                appendServerLog(PocketWikiServerLogEntry(level: .info, message: "Self-check OK em \(localURLText)."))
+            } else {
+                let message = "Self-check retornou web \(webStatus), api/config \(configStatus)."
+                serverStatus = .failed(message)
+                localServer?.stop()
+                localServer = nil
+                sourceMode = currentSourceURL.map { .localFolder($0) } ?? .none
+                appendServerLog(PocketWikiServerLogEntry(level: .error, message: message))
+            }
+        } catch {
+            let message = "Self-check local falhou: \(error.localizedDescription)"
+            serverStatus = .failed(message)
+            localServer?.stop()
+            localServer = nil
+            sourceMode = currentSourceURL.map { .localFolder($0) } ?? .none
+            appendServerLog(PocketWikiServerLogEntry(level: .error, message: message))
         }
     }
 }

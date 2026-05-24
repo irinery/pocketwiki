@@ -85,8 +85,25 @@ struct LocalAIContextPayload: Hashable, Sendable {
     let title: String
     let body: String
     let includedPaths: [String]
+    let manualPaths: [String]
     let characters: Int
     let notice: String?
+}
+
+struct LocalAIManualContextSource: Identifiable, Hashable, Sendable {
+    let id: UUID
+    let title: String
+    let path: String
+    let content: String
+    let characters: Int
+
+    init(id: UUID = UUID(), title: String, path: String, content: String) {
+        self.id = id
+        self.title = title
+        self.path = path
+        self.content = content
+        self.characters = content.count
+    }
 }
 
 struct LocalAIModel: Identifiable, Hashable, Sendable {

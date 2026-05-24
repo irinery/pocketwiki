@@ -35,6 +35,7 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
     private let mdnsResponder: PocketWikiMDNSResponder
     private var listener: NWListener?
     private var webRoot: URL?
+    private var handlers: [UUID: PocketWikiHTTPConnectionHandler] = [:]
 
     init(
         configuration: PocketWikiServerConfiguration,
@@ -56,7 +57,7 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
         webRoot = root
 
         let parameters = NWParameters.tcp
-        if let localEndpoint = localEndpoint(port: port) {
+        if let localEndpoint = localEndpoint() {
             parameters.requiredLocalEndpoint = localEndpoint
         }
 
@@ -92,14 +93,16 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
 
     func stop() {
         mdnsResponder.stop()
+        handlers.values.forEach { $0.cancel() }
+        handlers.removeAll()
         listener?.cancel()
         listener = nil
     }
 
-    private func localEndpoint(port: NWEndpoint.Port) -> NWEndpoint? {
+    private func localEndpoint() -> NWEndpoint? {
         let host = configuration.bindHost.pocketTrimmed.lowercased()
         guard !host.isEmpty, host != "0.0.0.0", host != "::" else { return nil }
-        return .hostPort(host: NWEndpoint.Host(host), port: port)
+        return .hostPort(host: NWEndpoint.Host(host), port: .any)
     }
 
     private func handle(_ connection: NWConnection) {
@@ -108,7 +111,13 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
                 return PocketWikiHTTPResponse(status: 503, body: Data("server_unavailable".utf8), contentType: "text/plain; charset=utf-8")
             }
             return await self.route(request)
+        } onFinish: { [weak self] id in
+            guard let server = self else { return }
+            server.queue.async {
+                server.handlers[id] = nil
+            }
         }
+        handlers[handler.id] = handler
         handler.start(queue: queue)
     }
 
@@ -308,16 +317,21 @@ private final class ListenerStartBox: @unchecked Sendable {
 }
 
 private final class PocketWikiHTTPConnectionHandler: @unchecked Sendable {
+    let id = UUID()
+
     private let connection: NWConnection
     private let route: @Sendable (PocketWikiHTTPRequest) async -> PocketWikiHTTPResponse
+    private let onFinish: @Sendable (UUID) -> Void
     private var buffer = Data()
 
     init(
         connection: NWConnection,
-        route: @escaping @Sendable (PocketWikiHTTPRequest) async -> PocketWikiHTTPResponse
+        route: @escaping @Sendable (PocketWikiHTTPRequest) async -> PocketWikiHTTPResponse,
+        onFinish: @escaping @Sendable (UUID) -> Void
     ) {
         self.connection = connection
         self.route = route
+        self.onFinish = onFinish
     }
 
     func start(queue: DispatchQueue) {
@@ -326,37 +340,45 @@ private final class PocketWikiHTTPConnectionHandler: @unchecked Sendable {
     }
 
     private func receive() {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { [weak self] data, _, _, error in
-            guard let self else { return }
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { data, _, _, error in
             if error != nil {
-                connection.cancel()
+                self.finish()
                 return
             }
             if let data, !data.isEmpty {
-                buffer.append(data)
+                self.buffer.append(data)
             }
             do {
-                if let request = try PocketWikiHTTPRequest.parse(buffer) {
+                if let request = try PocketWikiHTTPRequest.parse(self.buffer) {
                     Task {
-                        let response = await route(request)
-                        send(response)
+                        let response = await self.route(request)
+                        self.send(response)
                     }
-                } else if buffer.count > 2 * 1024 * 1024 {
-                    send(PocketWikiHTTPResponse(status: 413, body: Data("request_too_large".utf8), contentType: "text/plain; charset=utf-8"))
+                } else if self.buffer.count > 2 * 1024 * 1024 {
+                    self.send(PocketWikiHTTPResponse(status: 413, body: Data("request_too_large".utf8), contentType: "text/plain; charset=utf-8"))
                 } else {
-                    receive()
+                    self.receive()
                 }
             } catch {
-                send(PocketWikiHTTPResponse(status: 400, body: Data("bad_request".utf8), contentType: "text/plain; charset=utf-8"))
+                self.send(PocketWikiHTTPResponse(status: 400, body: Data("bad_request".utf8), contentType: "text/plain; charset=utf-8"))
             }
         }
     }
 
     private func send(_ response: PocketWikiHTTPResponse) {
         let data = response.encoded()
-        connection.send(content: data, completion: .contentProcessed { [connection] _ in
-            connection.cancel()
+        connection.send(content: data, completion: .contentProcessed { _ in
+            self.finish()
         })
+    }
+
+    private func finish() {
+        connection.cancel()
+        onFinish(id)
+    }
+
+    func cancel() {
+        finish()
     }
 }
 

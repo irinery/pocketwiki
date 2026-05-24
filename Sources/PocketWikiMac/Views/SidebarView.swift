@@ -41,11 +41,6 @@ struct SidebarView: View {
                 }
             }
         }
-        .onChange(of: store.selectedPageID) { _, newValue in
-            if newValue != nil, store.selectedTab == .dashboard {
-                store.selectedTab = .reader
-            }
-        }
     }
 
     private var header: some View {

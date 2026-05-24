@@ -61,9 +61,16 @@ struct LocalAISidePanelContent: View {
     let availableModels: [LocalAIModel]
     let runtimeTokenLoaded: Bool
     let isStreaming: Bool
-    let contextSummary: String
+    let contextNotice: String?
+    let autoContextPaths: [String]
+    let manualSources: [LocalAIManualContextSource]
+    let excludedContextPaths: Set<String>
     let contextSourceCount: Int
     let onRefreshModels: () async -> Void
+    let onAddContextFiles: () -> Void
+    let onRemoveManualSource: (UUID) -> Void
+    let onExcludeContextPath: (String) -> Void
+    let onRestoreContextPath: (String) -> Void
     let onClose: () -> Void
 
     var body: some View {
@@ -140,14 +147,122 @@ struct LocalAISidePanelContent: View {
             systemImage: "doc.text",
             close: onClose
         ) {
-            ScrollView {
-                Text(contextSummary)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Button(action: onAddContextFiles) {
+                        Label("Adicionar", systemImage: "plus")
+                    }
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.roundedRectangle(radius: 8))
+                    .controlSize(.small)
+                    .disabled(isStreaming)
+
+                    if !excludedContextPaths.isEmpty {
+                        Text("\(excludedContextPaths.count) removida(s)")
+                            .font(.caption.monospaced())
+                            .foregroundStyle(PocketWikiTheme.warn)
+                    }
+                }
+
+                if let contextNotice, !contextNotice.isEmpty {
+                    Text(contextNotice)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(PocketWikiTheme.warn)
+                }
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if autoContextPaths.isEmpty, manualSources.isEmpty, excludedContextPaths.isEmpty {
+                            Text("sem contexto carregado")
+                                .font(.caption.monospaced())
+                                .foregroundStyle(PocketWikiTheme.muted)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+
+                        ForEach(autoContextPaths, id: \.self) { path in
+                            LocalAIContextSourceRow(
+                                title: path,
+                                subtitle: excludedContextPaths.contains(path) ? "removida do proximo envio" : "fonte selecionada pela busca",
+                                systemImage: "doc.text",
+                                isRemoved: excludedContextPaths.contains(path),
+                                actionTitle: excludedContextPaths.contains(path) ? "Restaurar" : "Remover",
+                                actionSystemImage: excludedContextPaths.contains(path) ? "arrow.uturn.backward" : "minus.circle",
+                                action: {
+                                    if excludedContextPaths.contains(path) {
+                                        onRestoreContextPath(path)
+                                    } else {
+                                        onExcludeContextPath(path)
+                                    }
+                                }
+                            )
+                        }
+
+                        ForEach(manualSources) { source in
+                            LocalAIContextSourceRow(
+                                title: source.title,
+                                subtitle: "\(source.path) · \(source.characters) chars",
+                                systemImage: "paperclip",
+                                isRemoved: false,
+                                actionTitle: "Remover",
+                                actionSystemImage: "minus.circle",
+                                action: { onRemoveManualSource(source.id) }
+                            )
+                        }
+                    }
+                    .animation(.snappy(duration: 0.18), value: autoContextPaths)
+                    .animation(.snappy(duration: 0.18), value: manualSources)
+                    .animation(.snappy(duration: 0.18), value: excludedContextPaths)
+                }
+                .frame(maxHeight: 230)
+            }
+        }
+    }
+}
+
+private struct LocalAIContextSourceRow: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    let isRemoved: Bool
+    let actionTitle: String
+    let actionSystemImage: String
+    let action: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: systemImage)
+                .foregroundStyle(isRemoved ? PocketWikiTheme.warn : PocketWikiTheme.accent2)
+                .frame(width: 16)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
                     .font(.caption.monospaced())
-                    .foregroundStyle(PocketWikiTheme.muted)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .foregroundStyle(isRemoved ? PocketWikiTheme.muted : PocketWikiTheme.text)
+                    .strikethrough(isRemoved, color: PocketWikiTheme.warn)
+                    .lineLimit(1)
+                    .textSelection(.enabled)
+                Text(subtitle)
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(isRemoved ? PocketWikiTheme.warn : PocketWikiTheme.muted)
+                    .lineLimit(2)
                     .textSelection(.enabled)
             }
-            .frame(maxHeight: 190)
+
+            Spacer(minLength: 4)
+
+            Button(action: action) {
+                Image(systemName: actionSystemImage)
+                    .frame(width: 24, height: 24)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(isRemoved ? PocketWikiTheme.good : PocketWikiTheme.bad)
+            .help(actionTitle)
+        }
+        .padding(8)
+        .background(isRemoved ? PocketWikiTheme.warn.opacity(0.08) : PocketWikiTheme.bg.opacity(0.72), in: RoundedRectangle(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(isRemoved ? PocketWikiTheme.warn.opacity(0.38) : PocketWikiTheme.border, lineWidth: 1)
         }
     }
 }

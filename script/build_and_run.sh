@@ -71,6 +71,12 @@ cat >"$INFO_PLIST" <<PLIST
     <key>NSAllowsLocalNetworking</key>
     <true/>
   </dict>
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>PocketWiki publica e acessa servidores locais na sua rede.</string>
+  <key>NSBonjourServices</key>
+  <array>
+    <string>_http._tcp</string>
+  </array>
   <key>NSHumanReadableCopyright</key>
   <string>PocketWiki local app</string>
   <key>PocketWikiRootPath</key>
@@ -86,6 +92,8 @@ open_app() {
 }
 
 case "$MODE" in
+  --bundle|bundle)
+    ;;
   run)
     open_app
     ;;
@@ -106,7 +114,7 @@ case "$MODE" in
     pgrep -x "$APP_NAME" >/dev/null
     ;;
   *)
-    echo "usage: $0 [run|--debug|--logs|--telemetry|--verify]" >&2
+    echo "usage: $0 [run|--bundle|--debug|--logs|--telemetry|--verify]" >&2
     exit 2
     ;;
 esac

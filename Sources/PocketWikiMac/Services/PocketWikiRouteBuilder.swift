@@ -17,7 +17,10 @@ enum PocketWikiRouteBuilder {
             port: port,
             bindHost: bindHost,
             portless: port == 80,
-            local: [formatHTTPURL(host: "localhost", port: port)],
+            local: [
+                formatHTTPURL(host: "localhost", port: port),
+                formatHTTPURL(host: "127.0.0.1", port: port)
+            ],
             mdns: publicHosts.map { formatHTTPURL(host: $0, port: port) },
             lan: lan + other,
             tailscale: tailscale

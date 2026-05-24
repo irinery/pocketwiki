@@ -7,58 +7,13 @@ struct DashboardView: View {
         let metrics = WikiAnalytics.metrics(for: store.index)
         let hubs = store.index.pages.sorted { $0.connectivityScore > $1.connectivityScore }.filter { $0.connectivityScore >= 4 }
         let orphans = WikiAnalytics.orphanPages(in: store.index)
-        let recent = WikiAnalytics.timelinePages(in: store.index).prefix(8)
-        let tags = store.index.tagIndex.sorted { $0.value.count > $1.value.count }.prefix(18)
+        let recent = Array(WikiAnalytics.timelinePages(in: store.index).prefix(8))
+        let tags = Array(store.index.tagIndex.sorted { $0.value.count > $1.value.count }.prefix(18))
 
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 dashboardHeader(metrics)
-
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: 16) {
-                        SectionCard("Densidade", subtitle: "links por nota", systemImage: "square.grid.3x3") {
-                            DensityMiniMap(pages: store.index.pages) { id in
-                                store.selectPage(id)
-                            }
-                        }
-                        .frame(minWidth: 430)
-
-                        SectionCard("Recentes", subtitle: "por data", systemImage: "clock") {
-                            pageList(Array(recent), meta: { PocketFormatters.date($0.updatedAt) })
-                        }
-                        .frame(width: 360)
-                    }
-
-                    VStack(alignment: .leading, spacing: 16) {
-                        SectionCard("Densidade", subtitle: "links por nota", systemImage: "square.grid.3x3") {
-                            DensityMiniMap(pages: store.index.pages) { id in
-                                store.selectPage(id)
-                            }
-                        }
-
-                        SectionCard("Recentes", subtitle: "por data", systemImage: "clock") {
-                            pageList(Array(recent), meta: { PocketFormatters.date($0.updatedAt) })
-                        }
-                    }
-                }
-
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 340), spacing: 16)], alignment: .leading, spacing: 16) {
-                    SectionCard("Hubs", subtitle: "\(hubs.count)", systemImage: "point.3.connected.trianglepath.dotted") {
-                        pageList(Array(hubs.prefix(8)), meta: { "\($0.backlinks.count) back · \($0.outlinks.count) out" })
-                    }
-
-                    SectionCard("Links ausentes", subtitle: "\(store.index.missingLinks.count)", systemImage: "exclamationmark.triangle") {
-                        missingLinksList()
-                    }
-
-                    SectionCard("Tags", subtitle: "\(tags.count)", systemImage: "tag") {
-                        tagsList(Array(tags))
-                    }
-
-                    SectionCard("Orfaos", subtitle: "\(orphans.count)", systemImage: "link.badge.plus") {
-                        pageList(Array(orphans.prefix(8)), meta: { $0.folder.isEmpty ? "raiz" : $0.folder })
-                    }
-                }
+                dashboardSections(hubs: hubs, orphans: orphans, recent: recent, tags: tags)
             }
             .padding(22)
             .frame(maxWidth: 1360, alignment: .topLeading)
@@ -69,6 +24,83 @@ struct DashboardView: View {
 
     private func dashboardHeader(_ metrics: WikiDashboardMetrics) -> some View {
         hero(metrics)
+    }
+
+    private func dashboardSections(hubs: [WikiPage], orphans: [WikiPage], recent: [WikiPage], tags: [(key: String, value: [String])]) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            densitySection()
+
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        recentSection(recent)
+                        hubsSection(hubs)
+                    }
+                    .frame(minWidth: 420, maxWidth: .infinity, alignment: .topLeading)
+
+                    VStack(alignment: .leading, spacing: 16) {
+                        missingLinksSection()
+                        orphansSection(orphans)
+                        tagsSection(tags)
+                    }
+                    .frame(minWidth: 360, maxWidth: 440, alignment: .topLeading)
+                }
+
+                VStack(alignment: .leading, spacing: 16) {
+                    recentSection(recent)
+                    missingLinksSection()
+                    hubsSection(hubs)
+                    orphansSection(orphans)
+                    tagsSection(tags)
+                }
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private func densitySection() -> some View {
+        SectionCard("Densidade", subtitle: "links por nota", systemImage: "square.grid.3x3") {
+            DensityMiniMap(pages: store.index.pages) { id in
+                store.selectPage(id)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private func recentSection(_ recent: [WikiPage]) -> some View {
+        SectionCard("Recentes", subtitle: "por data", systemImage: "clock") {
+            pageList(recent, meta: { PocketFormatters.date($0.updatedAt) })
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private func hubsSection(_ hubs: [WikiPage]) -> some View {
+        SectionCard("Hubs", subtitle: "\(hubs.count)", systemImage: "point.3.connected.trianglepath.dotted") {
+            pageList(Array(hubs.prefix(8)), meta: { "\($0.backlinks.count) back · \($0.outlinks.count) out" })
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private func missingLinksSection() -> some View {
+        SectionCard("Links ausentes", subtitle: "\(store.index.missingLinks.count)", systemImage: "exclamationmark.triangle") {
+            missingLinksList()
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private func orphansSection(_ orphans: [WikiPage]) -> some View {
+        SectionCard("Orfaos", subtitle: "\(orphans.count)", systemImage: "link.badge.plus") {
+            pageList(Array(orphans.prefix(8)), meta: { $0.folder.isEmpty ? "raiz" : $0.folder })
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private func tagsSection(_ tags: [(key: String, value: [String])]) -> some View {
+        SectionCard("Tags", subtitle: "\(tags.count)", systemImage: "tag") {
+            tagsList(tags)
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     private func missingLinksList() -> some View {
@@ -174,20 +206,22 @@ struct DensityMiniMap: View {
     let open: (String) -> Void
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 12), spacing: 5)], spacing: 5) {
-            ForEach(pages.sorted { density($0) > density($1) }) { page in
-                Button {
-                    open(page.id)
-                } label: {
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(color(for: page))
-                        .frame(height: 12)
-                        .help("\(page.title)\n\(page.backlinks.count) back · \(page.outlinks.count) out · \(page.missingLinks.count) ausentes")
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 12), spacing: 5)], spacing: 5) {
+                ForEach(pages.sorted { density($0) > density($1) }) { page in
+                    Button {
+                        open(page.id)
+                    } label: {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(color(for: page))
+                            .frame(height: 12)
+                            .help("\(page.title)\n\(page.backlinks.count) back · \(page.outlinks.count) out · \(page.missingLinks.count) ausentes")
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
-        .frame(minHeight: 90, alignment: .top)
+        .frame(minHeight: 118, maxHeight: 240, alignment: .top)
     }
 
     private func density(_ page: WikiPage) -> Int {
