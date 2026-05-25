@@ -4,10 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "clean:generated-duplicates": "find Sources/PocketWikiMac/Resources/ExcalidrawEditor -type f -name '* [0-9].*' -delete 2>/dev/null || true",
     "build:excalidraw-renderer": "esbuild src/excalidraw-renderer.js --bundle --format=esm --target=es2020 --minify --outfile=assets/excalidraw-renderer.js && cp node_modules/lz-string/libs/lz-string.min.js assets/lz-string.min.js",
     "build:excalidraw-desktop": "vite build --config vite.excalidraw.config.mjs",
     "test:excalidraw-desktop": "node src/excalidraw-desktop/document.test.mjs",
-    "build:excalidraw": "npm run build:excalidraw-renderer && npm run test:excalidraw-desktop && npm run build:excalidraw-desktop",
+    "build:excalidraw": "npm run clean:generated-duplicates && npm run build:excalidraw-renderer && npm run test:excalidraw-desktop && npm run build:excalidraw-desktop && npm run clean:generated-duplicates",
+    "build:graph-view": "mkdir -p Sources/PocketWikiMac/Resources/GraphView && cp src/graph-view/index.html Sources/PocketWikiMac/Resources/GraphView/index.html && esbuild src/graph-view/graph-core.ts --bundle --format=esm --target=es2020 --outfile=Sources/PocketWikiMac/Resources/GraphView/graph-core.js && esbuild src/graph-view/layout-worker.ts --bundle --format=esm --target=es2020 --outfile=Sources/PocketWikiMac/Resources/GraphView/layout-worker.js && esbuild src/graph-view/main.ts --bundle --format=iife --target=es2020 --outfile=Sources/PocketWikiMac/Resources/GraphView/graph.js",
+    "test:graph-view": "node --test src/graph-view/*.test.mjs",
     "start": "node server.mjs",
     "start:lan80": "POCKETWIKI_PORT=80 node server.mjs"
   },

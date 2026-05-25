@@ -2,15 +2,39 @@ import SwiftUI
 
 struct MapView: View {
     @Bindable var store: WikiAppStore
+    @State private var graphScope: WikiGraphScope = .local
+    @State private var graphDepth = 1.0
+    @State private var graphSearch = ""
+    private let maxVisibleGraphNodes = 500
 
     var body: some View {
         let page = store.selectedPage
+        let graph = WikiGraphSnapshot.build(index: store.index, selectedPageID: store.selectedPageID)
+        let filterConfig = FilterConfig(
+            scope: graphScope,
+            depth: Int(graphDepth),
+            selectedNodeID: store.selectedPageID,
+            searchTerm: graphSearch
+        )
+        let filteredGraph = graph.filtered(using: filterConfig, maxNodes: maxVisibleGraphNodes)
         let hubs = store.index.pages.sorted { $0.connectivityScore > $1.connectivityScore }.prefix(10)
         let missing = store.index.pages.filter { !$0.missingLinks.isEmpty }.prefix(10)
 
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                header(page)
+                header(page, graph: graph, filteredGraph: filteredGraph)
+
+                WikiGraphPanel(
+                    graph: graph,
+                    filteredGraph: filteredGraph,
+                    filterConfig: filterConfig,
+                    selectedPageID: store.selectedPageID,
+                    scope: $graphScope,
+                    depth: $graphDepth,
+                    search: $graphSearch
+                ) { pageID in
+                    store.selectPage(pageID, tab: .map)
+                }
 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 340), spacing: 16)], alignment: .leading, spacing: 16) {
                     SectionCard("Pagina atual", subtitle: page?.title ?? "nenhuma", systemImage: "scope") {
@@ -51,7 +75,24 @@ struct MapView: View {
         .background(PocketWikiTheme.appBackground)
     }
 
-    private func header(_ page: WikiPage?) -> some View {
+    private func header(_ page: WikiPage?, graph: WikiGraphSnapshot, filteredGraph: FilteredSnapshot) -> some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .center, spacing: 14) {
+                headerIntro(page)
+                Spacer()
+                headerMetrics(graph, filteredGraph: filteredGraph)
+            }
+
+            VStack(alignment: .leading, spacing: 14) {
+                headerIntro(page)
+                headerMetrics(graph, filteredGraph: filteredGraph)
+            }
+        }
+        .padding(18)
+        .pocketWikiCard(hero: true)
+    }
+
+    private func headerIntro(_ page: WikiPage?) -> some View {
         HStack(alignment: .center, spacing: 14) {
             PocketWikiIcon(kind: .map, size: 36)
                 .foregroundStyle(PocketWikiTheme.accent)
@@ -66,14 +107,24 @@ struct MapView: View {
                 Text("Mapa")
                     .font(.system(size: 30, weight: .heavy, design: .serif))
                     .foregroundStyle(PocketWikiTheme.text)
-                Text(page.map { "Relações de \($0.title)" } ?? "Mapa textual da wiki, sem grafo visual pesado.")
+                Text(page.map { "Grafo de relacoes de \($0.title)" } ?? "Grafo de interconexoes entre arquivos da wiki.")
                     .foregroundStyle(PocketWikiTheme.dim)
                     .lineLimit(2)
             }
-            Spacer()
         }
-        .padding(18)
-        .pocketWikiCard(hero: true)
+    }
+
+    private func headerMetrics(_ graph: WikiGraphSnapshot, filteredGraph: FilteredSnapshot) -> some View {
+        HStack(spacing: 10) {
+            MetricTile(title: "Nos", value: "\(filteredGraph.nodes.count)", systemImage: "circle.grid.cross")
+                .frame(width: 132)
+            MetricTile(title: "Links", value: "\(filteredGraph.edges.count)", systemImage: "arrow.right")
+                .frame(width: 132)
+            if graph.truncated {
+                MetricTile(title: "Limite", value: "ativo", systemImage: "scissors")
+                    .frame(width: 132)
+            }
+        }
     }
 
     private func relationStats(_ page: WikiPage) -> some View {
