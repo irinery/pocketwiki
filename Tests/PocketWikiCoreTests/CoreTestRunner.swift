@@ -36,11 +36,16 @@ struct CoreTestRunner {
             ("missing links", testMissingLinks),
             ("folder eligibility", testFolderEligibility),
             ("file size limit", testFileSizeLimit),
+            ("excalidraw size limit", testExcalidrawSizeLimit),
+            ("oversized excalidraw load issue", testOversizedExcalidrawLoadIssue),
+            ("excalidraw editor resource resolver", testExcalidrawEditorResourceResolver),
             ("extension kind", testKindRecognition),
             ("excalidraw json", testExcalidrawJSON),
+            ("excalidraw markdown json fence", testExcalidrawMarkdownJSONFence),
             ("excalidraw markdown fallback", testExcalidrawMarkdownFallback),
             ("excalidraw invalid fallback", testInvalidExcalidraw),
             ("excalidraw preview clamp source", testExcalidrawPreviewLimitSource),
+            ("safe wiki file path", testSafeWikiFilePath),
             ("analytics", testAnalytics),
             ("timeline", testTimeline),
             ("markdown strips duplicate title", testMarkdownStripsDuplicateTitle),
@@ -160,6 +165,65 @@ struct CoreTestRunner {
         try expect(!loader.isEligible(relativePath: "Grande.md", isDirectory: false, sizeBytes: WikiFolderLoader.maxFileSizeBytes + 1), "large file accepted")
     }
 
+    static func testExcalidrawSizeLimit() throws {
+        let loader = WikiFolderLoader()
+        try expect(loader.isEligible(
+            relativePath: "Grande.excalidraw",
+            isDirectory: false,
+            sizeBytes: WikiFolderLoader.maxFileSizeBytes + 1
+        ), "excalidraw above markdown limit rejected")
+        try expect(!loader.isEligible(
+            relativePath: "Imenso.excalidraw",
+            isDirectory: false,
+            sizeBytes: WikiFolderLoader.maxExcalidrawFileSizeBytes + 1
+        ), "oversized excalidraw accepted")
+    }
+
+    static func testOversizedExcalidrawLoadIssue() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PocketWikiCoreTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let url = root.appendingPathComponent("Imenso.excalidraw")
+        FileManager.default.createFile(atPath: url.path, contents: nil)
+        let handle = try FileHandle(forWritingTo: url)
+        try handle.truncate(atOffset: UInt64(WikiFolderLoader.maxExcalidrawFileSizeBytes + 1))
+        try handle.close()
+
+        let loaded = try WikiFolderLoader().loadFiles(from: root)
+        try expect(loaded.files.isEmpty, "oversized excalidraw loaded")
+        try expect(loaded.issues.contains { $0.contains("excalidraw ignorado por tamanho") && $0.contains("Imenso.excalidraw") }, "oversized issue missing")
+    }
+
+    static func testExcalidrawEditorResourceResolver() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PocketWikiExcalidrawResolver-\(UUID().uuidString)", isDirectory: true)
+        let assets = root.appendingPathComponent("assets", isDirectory: true)
+        try FileManager.default.createDirectory(at: assets, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try "<html></html>".write(to: root.appendingPathComponent("index.html"), atomically: true, encoding: .utf8)
+        try "console.log('ok')".write(to: assets.appendingPathComponent("index.js"), atomically: true, encoding: .utf8)
+        let resolver = ExcalidrawEditorResourceResolver(root: root)
+
+        let indexURL = try require(URL(string: "pocketwiki-excalidraw://bundle/index.html"), "index resource url failed")
+        let index = try resolver.resolve(indexURL)
+        try expect(index.mimeType == "text/html", "index mime failed")
+        try expect(String(data: index.data, encoding: .utf8) == "<html></html>", "index data failed")
+
+        let assetURL = try require(URL(string: "pocketwiki-excalidraw://bundle/assets/index.js"), "asset resource url failed")
+        let asset = try resolver.resolve(assetURL)
+        try expect(asset.mimeType == "text/javascript", "js mime failed")
+
+        do {
+            _ = try resolver.relativePath(for: try require(URL(string: "pocketwiki-excalidraw://bundle/../secret.js"), "escape url failed"))
+            throw TestFailure.failed("resource path escape accepted")
+        } catch ExcalidrawEditorResourceError.invalidPath {
+            // expected
+        }
+    }
+
     static func testKindRecognition() throws {
         let loader = WikiFolderLoader()
         try expect(loader.kind(for: "a.md") == .markdown, "md kind failed")
@@ -200,6 +264,27 @@ struct CoreTestRunner {
         try expect(summary.fallbackReason == "fallback textual", "fallback reason failed")
     }
 
+    static func testExcalidrawMarkdownJSONFence() throws {
+        let file = makeFile(
+            path: "Mapa.excalidraw.md",
+            content: """
+            # Mapa
+
+            ## Drawing
+
+            ```json
+            {"type":"excalidraw","elements":[{"id":"1","type":"text","rawText":"Firewall [[Rede]]"}]}
+            ```
+            """,
+            kind: .excalidrawMarkdown
+        )
+
+        let summary = ExcalidrawParser.summary(file: file)
+        try expect(summary.texts == ["Firewall [[Rede]]"], "json fence text failed")
+        try expect(summary.links.first?.target == "Rede", "json fence link failed")
+        try expect(summary.fallbackReason == nil, "json fence should not fallback")
+    }
+
     static func testInvalidExcalidraw() throws {
         let summary = ExcalidrawParser.summary(file: makeFile(path: "Quebrado.excalidraw", content: "{", kind: .excalidraw))
         try expect(summary.texts.isEmpty, "invalid excalidraw should be empty")
@@ -211,6 +296,26 @@ struct CoreTestRunner {
         let summary = ExcalidrawParser.summary(file: makeFile(path: "Grande.excalidraw.md", content: lines, kind: .excalidrawMarkdown))
         try expect(summary.texts.count == 100, "source text count failed")
         try expect(Array(summary.texts.prefix(80)).count == 80, "preview clamp source failed")
+    }
+
+    static func testSafeWikiFilePath() throws {
+        let root = URL(fileURLWithPath: "/tmp/PocketWikiRoot", isDirectory: true)
+        let valid = try WikiFilePathResolver.fileURL(root: root, relativePath: "drawings/Mapa.excalidraw")
+        try expect(valid.path == "/tmp/PocketWikiRoot/drawings/Mapa.excalidraw", "safe path failed")
+
+        do {
+            _ = try WikiFilePathResolver.fileURL(root: root, relativePath: "../escape.excalidraw")
+            throw TestFailure.failed("path escape accepted")
+        } catch WikiFilePathResolverError.invalidRelativePath {
+            // expected
+        }
+
+        do {
+            _ = try WikiFilePathResolver.fileURL(root: root, relativePath: "/tmp/escape.excalidraw")
+            throw TestFailure.failed("absolute path accepted")
+        } catch WikiFilePathResolverError.invalidRelativePath {
+            // expected
+        }
     }
 
     static func testAnalytics() throws {

@@ -1,21 +1,24 @@
-# 05 — Excalidraw Textual
+# 05 — Excalidraw Desktop
 
 ## 2.1 — O que é
 
-Suporte inicial a arquivos Excalidraw sem renderer oficial, usando fallback textual seguro e indexável.
+Suporte a arquivos Excalidraw no app macOS com duas camadas bem separadas:
+
+- índice textual Swift seguro e pesquisável;
+- viewer/editor oficial Excalidraw em bundle web isolado via `WKWebView`.
 
 Responsabilidades explícitas:
 - reconhecer `.excalidraw` e `.excalidraw.md`;
 - extrair textos de cenas JSON quando possível;
 - extrair textos de Markdown Excalidraw quando JSON completo não existir;
 - inferir links wiki presentes em textos;
-- exibir preview textual e metadados.
+- exibir e editar cenas Excalidraw com `@excalidraw/excalidraw`;
+- salvar alterações em wiki local;
+- abrir fonte remota em modo somente leitura.
 
 Não é responsabilidade deste componente:
-- renderizar cena Excalidraw fiel;
 - interpretar imagens embutidas;
-- executar renderer JavaScript;
-- editar desenhos.
+- colaboração online/E2EE/share links do excalidraw.com.
 
 ## 2.2 — Testes obrigatórios
 
@@ -38,6 +41,16 @@ TESTE DRAW-04
 dado:    arquivo Excalidraw com mais de 80 textos
 quando:  o preview textual é exibido
 então:   apenas os primeiros 80 textos aparecem no preview
+
+TESTE DRAW-05
+dado:    `.excalidraw.md` com fence `json`
+quando:  o arquivo é indexado
+então:   o parser extrai textos e links sem fallback
+
+TESTE DRAW-06
+dado:    path de salvamento com `..` ou absoluto
+quando:  o app tenta resolver o destino
+então:   a escrita é rejeitada antes de tocar no filesystem
 
 ## 2.3 — Implementação
 
@@ -81,6 +94,8 @@ Regras de falha:
 
 - `ExcalidrawParser`
 - `ExcalidrawView`
+- `ExcalidrawWebView`
+- bundle `Sources/PocketWikiMac/Resources/ExcalidrawEditor/`
 - integração com `WikiIndexer`
-- testes `DRAW-01` a `DRAW-04`
-- todos os testes `DRAW-01` a `DRAW-04` passando
+- testes `DRAW-01` a `DRAW-06`
+- todos os testes `DRAW-01` a `DRAW-06` passando

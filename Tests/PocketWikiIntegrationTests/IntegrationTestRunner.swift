@@ -30,7 +30,8 @@ struct IntegrationTestRunner {
         let tests: [(String, () async throws -> Void)] = [
             ("native server http contract", testNativeServerHTTPContract),
             ("remote client against native server", testRemoteClientAgainstNativeServer),
-            ("web runtime assets", testWebRuntimeAssets)
+            ("web runtime assets", testWebRuntimeAssets),
+            ("excalidraw editor bundle resolver", testExcalidrawEditorBundleResolver)
         ]
 
         for (name, test) in tests {
@@ -108,6 +109,31 @@ struct IntegrationTestRunner {
         try expect(root.appendingPathComponent("wiki-cockpit.html").path.hasSuffix("wiki-cockpit.html"), "web root did not resolve cockpit")
         try expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("assets/favicon.png").path), "favicon asset missing")
         try expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("sw.js").path), "service worker missing")
+    }
+
+    static func testExcalidrawEditorBundleResolver() async throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Sources/PocketWikiMac/Resources/ExcalidrawEditor", isDirectory: true)
+        let assets = root.appendingPathComponent("assets", isDirectory: true)
+        try expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("index.html").path), "excalidraw index missing")
+
+        let resolver = ExcalidrawEditorResourceResolver(root: root)
+        let indexURL = try require(URL(string: "pocketwiki-excalidraw://bundle/index.html"), "excalidraw index url failed")
+        let index = try resolver.resolve(indexURL)
+        try expect(index.mimeType == "text/html", "excalidraw index mime failed")
+        try expect(String(data: index.data, encoding: .utf8)?.contains("PocketWiki Excalidraw") == true, "excalidraw index title missing")
+
+        let assetNames = try FileManager.default.contentsOfDirectory(atPath: assets.path)
+        let js = try require(assetNames.first { $0.hasSuffix(".js") }, "excalidraw js asset missing")
+        let css = try require(assetNames.first { $0.hasSuffix(".css") }, "excalidraw css asset missing")
+        let font = try require(assetNames.first { $0.hasSuffix(".woff2") }, "excalidraw font asset missing")
+
+        let jsResource = try resolver.resolve(try require(URL(string: "pocketwiki-excalidraw://bundle/assets/\(js)"), "js url failed"))
+        let cssResource = try resolver.resolve(try require(URL(string: "pocketwiki-excalidraw://bundle/assets/\(css)"), "css url failed"))
+        let fontResource = try resolver.resolve(try require(URL(string: "pocketwiki-excalidraw://bundle/assets/\(font)"), "font url failed"))
+        try expect(jsResource.mimeType == "text/javascript", "excalidraw js mime failed")
+        try expect(cssResource.mimeType == "text/css", "excalidraw css mime failed")
+        try expect(fontResource.mimeType == "font/woff2", "excalidraw font mime failed")
     }
 
     private static func withRunningServer(_ body: (URL, PocketWikiHTTPServer, IntegrationLogSink) async throws -> Void) async throws {

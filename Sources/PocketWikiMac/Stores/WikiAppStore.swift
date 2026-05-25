@@ -1,6 +1,27 @@
 import AppKit
 import Foundation
 import Observation
+import UniformTypeIdentifiers
+
+enum ExcalidrawDocumentPersistenceError: Error, LocalizedError {
+    case noLocalSource
+    case readonlySource
+    case invalidExtension
+    case fileExists
+
+    var errorDescription: String? {
+        switch self {
+        case .noLocalSource:
+            "Nenhuma pasta local aberta."
+        case .readonlySource:
+            "Fonte atual esta em modo somente leitura."
+        case .invalidExtension:
+            "Arquivo precisa ser .excalidraw ou .excalidraw.md."
+        case .fileExists:
+            "Arquivo ja existe."
+        }
+    }
+}
 
 @MainActor
 @Observable
@@ -60,6 +81,15 @@ final class WikiAppStore {
     var remoteAIProxyBaseURL: String? {
         guard case .remoteServer(let url) = sourceMode else { return nil }
         return url.appendingPathComponent("api/ai").absoluteString
+    }
+
+    var canEditExcalidrawDocuments: Bool {
+        switch sourceMode {
+        case .localFolder, .localServer:
+            return currentSourceURL != nil
+        case .none, .remoteServer:
+            return false
+        }
     }
 
     var filteredPages: [WikiPage] {
@@ -139,6 +169,71 @@ final class WikiAppStore {
 
     func selectTag(_ tag: String) {
         searchText = "#\(tag)"
+    }
+
+    func rawContent(for page: WikiPage) -> String? {
+        currentFiles.first { $0.relativePath == page.path }?.content
+    }
+
+    func saveExcalidrawDocument(path: String, content: String) async throws {
+        guard canEditExcalidrawDocuments else {
+            throw ExcalidrawDocumentPersistenceError.readonlySource
+        }
+        guard isExcalidrawPath(path) else {
+            throw ExcalidrawDocumentPersistenceError.invalidExtension
+        }
+        guard let currentSourceURL else {
+            throw ExcalidrawDocumentPersistenceError.noLocalSource
+        }
+
+        let didStartScope = currentSourceURL.startAccessingSecurityScopedResource()
+        defer {
+            if didStartScope {
+                currentSourceURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        let destination = try WikiFilePathResolver.fileURL(root: currentSourceURL, relativePath: path)
+        try content.write(to: destination, atomically: true, encoding: .utf8)
+        try reloadLocalSourceAfterWrite(root: currentSourceURL, selectingPath: path, status: "Excalidraw salvo")
+    }
+
+    func createExcalidrawDocument(near page: WikiPage?) async throws -> WikiPage? {
+        guard canEditExcalidrawDocuments else {
+            throw ExcalidrawDocumentPersistenceError.readonlySource
+        }
+        guard let currentSourceURL else {
+            throw ExcalidrawDocumentPersistenceError.noLocalSource
+        }
+
+        let folder = page?.folder ?? ""
+        let path = try nextExcalidrawPath(root: currentSourceURL, folder: folder)
+        let content = Self.blankExcalidrawContent(title: WikiTextParser.baseName(path))
+
+        let didStartScope = currentSourceURL.startAccessingSecurityScopedResource()
+        defer {
+            if didStartScope {
+                currentSourceURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        let destination = try WikiFilePathResolver.fileURL(root: currentSourceURL, relativePath: path)
+        try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try content.write(to: destination, atomically: true, encoding: .utf8)
+        try reloadLocalSourceAfterWrite(root: currentSourceURL, selectingPath: path, status: "Novo Excalidraw criado")
+        return index.page(id: WikiTextParser.pathToSlug(path))
+    }
+
+    func exportPlainExcalidraw(content: String, suggestedName: String) async throws {
+        let panel = NSSavePanel()
+        panel.canCreateDirectories = true
+        panel.allowedContentTypes = [UTType(filenameExtension: "excalidraw") ?? .json]
+        panel.nameFieldStringValue = suggestedName.hasSuffix(".excalidraw") ? suggestedName : "\(suggestedName).excalidraw"
+        panel.title = "Salvar Excalidraw"
+        panel.message = "Exporta a cena atual como arquivo .excalidraw JSON."
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        try content.write(to: url, atomically: true, encoding: .utf8)
     }
 
     func startLocalServer() async {
@@ -273,6 +368,61 @@ final class WikiAppStore {
         selectedPageID = nextIndex.homePage?.id
         selectedTab = selectedMode == .none ? .server : .dashboard
         statusMessage = status
+    }
+
+    private func reloadLocalSourceAfterWrite(root: URL, selectingPath: String, status: String) throws {
+        let loaded = try folderLoader.loadFiles(from: root)
+        let selectedID = WikiTextParser.pathToSlug(selectingPath)
+        let previousTab = selectedTab
+        let previousMode = sourceMode
+        let nextIndex = indexer.buildIndex(files: loaded.files, sourceName: root.lastPathComponent, loadIssues: loaded.issues)
+
+        currentFiles = loaded.files
+        index = nextIndex
+        if case .localServer(let url) = previousMode {
+            sourceMode = .localServer(url)
+        } else {
+            sourceMode = .localFolder(root)
+        }
+        selectedPageID = nextIndex.page(id: selectedID)?.id ?? nextIndex.homePage?.id
+        selectedTab = selectedPageID == nil ? .dashboard : previousTab
+        statusMessage = status
+    }
+
+    private func nextExcalidrawPath(root: URL, folder: String) throws -> String {
+        for number in 1...999 {
+            let suffix = number == 1 ? "" : " \(number)"
+            let name = "Novo Desenho\(suffix).excalidraw"
+            let path = folder.isEmpty ? name : "\(folder)/\(name)"
+            let url = try WikiFilePathResolver.fileURL(root: root, relativePath: path)
+            if !FileManager.default.fileExists(atPath: url.path) {
+                return path
+            }
+        }
+        throw ExcalidrawDocumentPersistenceError.fileExists
+    }
+
+    private func isExcalidrawPath(_ path: String) -> Bool {
+        let lower = path.lowercased()
+        return lower.hasSuffix(".excalidraw") || lower.hasSuffix(".excalidraw.md")
+    }
+
+    private static func blankExcalidrawContent(title: String) -> String {
+        """
+        {
+          "type": "excalidraw",
+          "version": 2,
+          "source": "https://github.com/irinery/PocketWiki",
+          "elements": [],
+          "appState": {
+            "name": "\(title)",
+            "theme": "dark",
+            "viewBackgroundColor": "#ffffff"
+          },
+          "files": {}
+        }
+
+        """
     }
 
     private func servedSourceSnapshot(configuration: PocketWikiServerConfiguration) async -> PocketWikiServedSource {

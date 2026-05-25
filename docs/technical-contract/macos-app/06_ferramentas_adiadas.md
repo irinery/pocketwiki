@@ -7,7 +7,7 @@ Registro explícito do que tem dificuldade `4/5` ou maior e não deve ser implem
 Responsabilidades explícitas:
 - documentar itens adiados;
 - preservar espaço arquitetural para implementação futura;
-- impedir que a branch tente resolver grafo visual ou renderer oficial.
+- impedir que a branch tente resolver grafo visual interativo.
 
 Não é responsabilidade deste componente:
 - implementar qualquer item listado;
@@ -25,11 +25,6 @@ dado:    app macOS compilado
 quando:  a tela de leitor é aberta
 então:   não existe renderização de grafo visual interativo embutida
 
-TESTE DEFER-03
-dado:    arquivo Excalidraw válido
-quando:  a tela Excalidraw é aberta
-então:   o preview exibido é textual/fallback, não renderer oficial fiel
-
 ## 2.3 — Implementação
 
 Itens adiados:
@@ -39,9 +34,6 @@ deferred:
   graph:
     difficulty: 4
     reason: "layout visual, pan/zoom, colisão, clique e responsividade exigem motor próprio ou biblioteca dedicada"
-  excalidraw_official_render:
-    difficulty: 5
-    reason: "renderer atual depende de JavaScript/@excalidraw/utils; equivalente Swift fiel não existe no projeto"
 ```
 
 Tabela de decisão:
@@ -49,7 +41,6 @@ Tabela de decisão:
 | Pedido futuro | Caminho |
 | --- | --- |
 | grafo visual | nova fase com canvas/layout dedicado |
-| Excalidraw fiel | avaliar WebAssembly/JS bridge ou renderer nativo separado |
 
 Limites:
 - nenhum desses itens entra nesta rodada;
@@ -64,6 +55,6 @@ Regras de falha:
 
 - lista documentada de itens `4/5+`
 - ausência de implementação ativa desses itens
-- todos os testes `DEFER-01` a `DEFER-03` passando
+- todos os testes `DEFER-01` a `DEFER-02` passando
 
-Nota de evolução: IA local/LM Studio saiu da lista de adiados e foi promovida para a fase `07_ia_local_lmstudio.md`.
+Nota de evolução: IA local/LM Studio saiu da lista de adiados e foi promovida para a fase `07_ia_local_lmstudio.md`. Excalidraw oficial saiu da lista de adiados e foi promovido para a fase `05_excalidraw_textual.md`.

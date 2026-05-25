@@ -2,6 +2,8 @@ import Foundation
 
 struct WikiFolderLoader {
     static let maxFileSizeBytes = 5 * 1024 * 1024
+    static let maxMarkdownFileSizeBytes = maxFileSizeBytes
+    static let maxExcalidrawFileSizeBytes = 50 * 1024 * 1024
 
     private let fileManager: FileManager
 
@@ -22,8 +24,9 @@ struct WikiFolderLoader {
 
         if parts.contains(where: shouldIgnoreComponent) { return false }
         if isDirectory { return true }
-        if let sizeBytes, sizeBytes > Self.maxFileSizeBytes { return false }
-        return kind(for: normalized) != nil
+        guard let kind = kind(for: normalized) else { return false }
+        if let sizeBytes, sizeBytes > Self.maxFileSizeBytes(for: kind) { return false }
+        return true
     }
 
     func kind(for relativePath: String) -> WikiFile.Kind? {
@@ -47,6 +50,7 @@ struct WikiFolderLoader {
             let isDirectory = values.isDirectory == true
 
             guard isEligible(relativePath: relativePath, isDirectory: isDirectory, sizeBytes: values.fileSize) else {
+                appendIgnoredFileIssueIfNeeded(relativePath: relativePath, isDirectory: isDirectory, sizeBytes: values.fileSize, issues: &issues)
                 continue
             }
 
@@ -73,8 +77,41 @@ struct WikiFolderLoader {
         }
     }
 
+    private func appendIgnoredFileIssueIfNeeded(relativePath: String, isDirectory: Bool, sizeBytes: Int?, issues: inout [String]) {
+        let parts = relativePath.replacingOccurrences(of: "\\", with: "/").split(separator: "/").map(String.init)
+        guard !parts.contains(where: shouldIgnoreComponent) else { return }
+        guard !isDirectory,
+              let kind = kind(for: relativePath),
+              isExcalidrawKind(kind),
+              let sizeBytes,
+              sizeBytes > Self.maxFileSizeBytes(for: kind) else {
+            return
+        }
+
+        let limitMB = Self.maxFileSizeBytes(for: kind) / 1024 / 1024
+        issues.append("excalidraw ignorado por tamanho acima de \(limitMB) MB: \(relativePath)")
+    }
+
     private func shouldIgnoreComponent(_ component: String) -> Bool {
         if component.hasPrefix(".") { return true }
         return ["node_modules", "dist", "build"].contains(component)
+    }
+
+    private func isExcalidrawKind(_ kind: WikiFile.Kind) -> Bool {
+        switch kind {
+        case .excalidraw, .excalidrawMarkdown:
+            return true
+        case .markdown:
+            return false
+        }
+    }
+
+    private static func maxFileSizeBytes(for kind: WikiFile.Kind) -> Int {
+        switch kind {
+        case .excalidraw, .excalidrawMarkdown:
+            return maxExcalidrawFileSizeBytes
+        case .markdown:
+            return maxMarkdownFileSizeBytes
+        }
     }
 }

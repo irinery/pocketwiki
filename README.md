@@ -39,17 +39,19 @@ O fluxo atual:
 - descompacta blocos `## Drawing` com fence `compressed-json` usando LZString
 - interpreta fences `json` quando o Obsidian grava a cena sem compressao
 - renderiza a cena completa em SVG com `@excalidraw/utils` (`exportToSvg`)
+- no app macOS, abre um editor Excalidraw completo via `WKWebView` usando `@excalidraw/excalidraw`
+- salva alterações direto na wiki local com botao Salvar, `Cmd+S` e autosave; fontes remotas ficam em modo somente leitura
 - usa fallback textual quando so existem `Text Elements` disponiveis
 - mostra se a visualizacao veio de `cena completa` ou `fallback textual`
 - extrai textos, links, tags e relacoes por setas/bindings para busca, mapa, saude e contexto da IA
 
-O renderer oficial fica empacotado localmente e so carrega quando a aba Excalidraw e aberta. Para gerar ou atualizar o bundle:
+O renderer oficial web e o editor desktop ficam empacotados localmente e so carregam quando a aba Excalidraw e aberta. Para gerar ou atualizar os bundles:
 
 ```sh
 npm run build:excalidraw
 ```
 
-Esse comando atualiza `assets/excalidraw-renderer.js` e `assets/lz-string.min.js`. Rode depois de `npm install` ou quando mexer em `src/excalidraw-renderer.js`.
+Esse comando atualiza `assets/excalidraw-renderer.js`, `assets/lz-string.min.js` e `Sources/PocketWikiMac/Resources/ExcalidrawEditor/`. Rode depois de `npm install` ou quando mexer em `src/excalidraw-renderer.js` ou `src/excalidraw-desktop/`.
 
 O servidor tambem serve `.excalidraw` com content-type `application/vnd.excalidraw+json`, entao esses arquivos entram no mesmo fluxo de leitura, busca e indexacao dos Markdown.
 

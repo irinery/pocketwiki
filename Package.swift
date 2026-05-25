@@ -21,7 +21,10 @@ let package = Package(
             ],
             path: "Sources/PocketWikiMac",
             resources: [
-                .process("Resources")
+                .process("Resources/PocketWikiMac.icns"),
+                .process("Resources/wiki-review.md"),
+                .process("Resources/pocketwiki-logo.png"),
+                .copy("Resources/ExcalidrawEditor")
             ]
         )
     ],
