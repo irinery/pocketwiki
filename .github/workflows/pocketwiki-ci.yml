@@ -11,7 +11,7 @@ on:
 jobs:
   macos:
     name: Build and test macOS app
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 25
 
     steps:

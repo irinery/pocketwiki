@@ -74,6 +74,25 @@ npm install
 npm run build:excalidraw
 ```
 
+## Instalador macOS
+
+A versao desktop macOS fica disponivel em `.dmg` nas [releases do GitHub](https://github.com/irinery/pocketwiki/releases/latest).
+
+Para gerar o instalador localmente:
+
+```sh
+./script/build_macos_dmg.sh
+```
+
+O arquivo sai em `dist/release/PocketWiki-<versao>-macOS-universal.dmg`, junto com o `.sha256`. Para publicar uma release baixavel no GitHub, crie e envie uma tag:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Por enquanto a build e assinada ad-hoc. Se o macOS bloquear na primeira abertura, use clique direito em `PocketWiki.app` e depois `Abrir`.
+
 ## Rodar no PC
 
 O PocketWiki precisa ficar servido no PC. Deixe este comando rodando no terminal:
