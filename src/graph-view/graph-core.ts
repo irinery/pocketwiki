@@ -84,17 +84,17 @@ export const GRAPH_LIMITS = {
 
 export const GRAPH_COLORS = {
   background: "#080a0d",
-  grid: "rgba(51, 66, 86, 0.13)",
-  edge: "rgba(134, 239, 172, 0.11)",
-  edgeActive: "rgba(134, 239, 172, 0.58)",
-  text: "#e7edf5",
-  dim: "#93a1b5",
-  defaultNode: "#4ade80",
-  selectedNode: "#f59e0b",
-  neighborNode: "#86efac",
-  isolatedNode: "#6b7280",
-  oversizedNode: "#ef4444",
-  searchNode: "#72d6ff"
+  grid: "rgba(47, 47, 47, 0.36)",
+  edge: "rgba(47, 47, 47, 0.55)",
+  edgeActive: "rgba(149, 149, 149, 0.75)",
+  text: "#d7d7d7",
+  dim: "#959595",
+  defaultNode: "#2F2F2F",
+  selectedNode: "#959595",
+  neighborNode: "#2F2F2F",
+  isolatedNode: "#2F2F2F",
+  oversizedNode: "#2F2F2F",
+  searchNode: "#2F2F2F"
 } as const;
 
 export function clamp(value: number, min: number, max: number): number {

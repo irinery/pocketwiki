@@ -14,17 +14,17 @@
   };
   var GRAPH_COLORS = {
     background: "#080a0d",
-    grid: "rgba(51, 66, 86, 0.13)",
-    edge: "rgba(134, 239, 172, 0.11)",
-    edgeActive: "rgba(134, 239, 172, 0.58)",
-    text: "#e7edf5",
-    dim: "#93a1b5",
-    defaultNode: "#4ade80",
-    selectedNode: "#f59e0b",
-    neighborNode: "#86efac",
-    isolatedNode: "#6b7280",
-    oversizedNode: "#ef4444",
-    searchNode: "#72d6ff"
+    grid: "rgba(47, 47, 47, 0.36)",
+    edge: "rgba(47, 47, 47, 0.55)",
+    edgeActive: "rgba(149, 149, 149, 0.75)",
+    text: "#d7d7d7",
+    dim: "#959595",
+    defaultNode: "#2F2F2F",
+    selectedNode: "#959595",
+    neighborNode: "#2F2F2F",
+    isolatedNode: "#2F2F2F",
+    oversizedNode: "#2F2F2F",
+    searchNode: "#2F2F2F"
   };
   function clamp(value, min, max) {
     return Math.min(max, Math.max(min, value));
@@ -201,6 +201,10 @@
   }
 
   // src/graph-view/renderer.ts
+  var DRAG_INERTIA_FRAMES = 42;
+  var DRAG_DAMPING = 0.88;
+  var DRAG_MAX_SPEED = 18;
+  var LAYOUT_EASING = 0.22;
   var GraphRenderer = class {
     constructor(canvas2) {
       __publicField(this, "canvas");
@@ -210,6 +214,8 @@
       __publicField(this, "nodeById", /* @__PURE__ */ new Map());
       __publicField(this, "selectedId", null);
       __publicField(this, "hoverId", null);
+      __publicField(this, "interactionFocusId", null);
+      __publicField(this, "interactionFrames", 0);
       __publicField(this, "raf", 0);
       __publicField(this, "viewport", { x: 0, y: 0, zoom: 1, width: 1, height: 1 });
       __publicField(this, "dpr", 1);
@@ -228,10 +234,17 @@
         const initial = old ?? stableInitialPosition(node, index, snapshot.nodes.length, selectedId);
         return {
           ...node,
-          x: initial.x,
-          y: initial.y,
+          x: old?.x ?? initial.x,
+          y: old?.y ?? initial.y,
           targetX: old?.targetX ?? initial.x,
           targetY: old?.targetY ?? initial.y,
+          vx: old?.vx ?? 0,
+          vy: old?.vy ?? 0,
+          inertiaFrames: old?.inertiaFrames ?? 0,
+          pinned: old?.pinned ?? false,
+          dragging: old?.dragging ?? false,
+          lastImpulse: old?.lastImpulse ?? 0,
+          pinBeforeDrag: old?.pinBeforeDrag ?? false,
           radius: nodeRadius(node)
         };
       });
@@ -250,6 +263,7 @@
       for (const layoutNode of layoutNodes) {
         const node = this.nodeById.get(layoutNode.id);
         if (!node) continue;
+        if (node.dragging || node.pinned || node.inertiaFrames > 0) continue;
         if (Number.isFinite(layoutNode.x) && Number.isFinite(layoutNode.y)) {
           node.targetX = layoutNode.x;
           node.targetY = layoutNode.y;
@@ -257,13 +271,62 @@
       }
       this.requestDraw();
     }
-    updateNodePosition(id, point) {
+    beginNodeDrag(id) {
       const node = this.nodeById.get(id);
       if (!node) return;
+      node.pinBeforeDrag = node.pinned;
+      node.dragging = true;
+      node.pinned = true;
+      node.vx = 0;
+      node.vy = 0;
+      node.inertiaFrames = 0;
+      node.targetX = node.x;
+      node.targetY = node.y;
+      this.interactionFocusId = id;
+      this.interactionFrames = DRAG_INERTIA_FRAMES;
+      this.requestDraw();
+    }
+    dragNodeTo(id, point) {
+      const node = this.nodeById.get(id);
+      if (!node) return;
+      const dx = point.x - node.x;
+      const dy = point.y - node.y;
       node.x = point.x;
       node.y = point.y;
       node.targetX = point.x;
       node.targetY = point.y;
+      node.vx = dx;
+      node.vy = dy;
+      node.lastImpulse = Math.hypot(dx, dy);
+      this.injectDragImpulse(node, dx, dy);
+      this.interactionFocusId = id;
+      this.interactionFrames = DRAG_INERTIA_FRAMES;
+      this.requestDraw();
+    }
+    endNodeDrag(id, keepPinned) {
+      const node = this.nodeById.get(id);
+      if (!node) return;
+      node.dragging = false;
+      node.pinned = keepPinned || node.pinBeforeDrag;
+      node.pinBeforeDrag = false;
+      node.vx = 0;
+      node.vy = 0;
+      node.inertiaFrames = 0;
+      node.targetX = node.x;
+      node.targetY = node.y;
+      this.interactionFocusId = id;
+      this.interactionFrames = DRAG_INERTIA_FRAMES;
+      this.requestDraw();
+    }
+    unpinNode(id) {
+      const node = this.nodeById.get(id);
+      if (!node) return;
+      node.dragging = false;
+      node.pinned = false;
+      node.pinBeforeDrag = false;
+      node.inertiaFrames = 0;
+      node.targetX = node.x;
+      node.targetY = node.y;
       this.requestDraw();
     }
     resize() {
@@ -346,6 +409,28 @@
     stepVisualPositions() {
       let moving = false;
       for (const node of this.nodes) {
+        if (node.dragging || node.pinned) {
+          node.vx *= 0.35;
+          node.vy *= 0.35;
+          continue;
+        }
+        if (node.inertiaFrames > 0) {
+          node.vx = clamp(node.vx * DRAG_DAMPING, -DRAG_MAX_SPEED, DRAG_MAX_SPEED);
+          node.vy = clamp(node.vy * DRAG_DAMPING, -DRAG_MAX_SPEED, DRAG_MAX_SPEED);
+          node.x += node.vx;
+          node.y += node.vy;
+          node.inertiaFrames -= 1;
+          if (node.inertiaFrames > 0 && (Math.abs(node.vx) > 0.03 || Math.abs(node.vy) > 0.03)) {
+            moving = true;
+          } else {
+            node.vx = 0;
+            node.vy = 0;
+            node.inertiaFrames = 0;
+            node.targetX = node.x;
+            node.targetY = node.y;
+          }
+          continue;
+        }
         const dx = node.targetX - node.x;
         const dy = node.targetY - node.y;
         if (Math.abs(dx) < 0.08 && Math.abs(dy) < 0.08) {
@@ -353,11 +438,31 @@
           node.y = node.targetY;
           continue;
         }
-        node.x += dx * 0.22;
-        node.y += dy * 0.22;
+        node.x += dx * LAYOUT_EASING;
+        node.y += dy * LAYOUT_EASING;
         moving = true;
       }
+      if (this.interactionFrames > 0) {
+        this.interactionFrames -= 1;
+        if (this.interactionFrames > 0) {
+          moving = true;
+        } else {
+          this.interactionFocusId = null;
+        }
+      }
       return moving;
+    }
+    injectDragImpulse(source, dx, dy) {
+      if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) return;
+      const connected = this.edges.map((edge) => edge.source === source ? edge.target : edge.target === source ? edge.source : null).filter((node) => Boolean(node) && !node.dragging && !node.pinned);
+      const degreeScale = clamp(24 / Math.max(24, connected.length), 0.32, 1);
+      const followFactor = clamp(0.58 * degreeScale, 0.24, 0.58);
+      source.lastImpulse = Math.hypot(dx, dy);
+      for (const target of connected) {
+        target.vx = clamp(target.vx + dx * followFactor, -DRAG_MAX_SPEED, DRAG_MAX_SPEED);
+        target.vy = clamp(target.vy + dy * followFactor, -DRAG_MAX_SPEED, DRAG_MAX_SPEED);
+        target.inertiaFrames = DRAG_INERTIA_FRAMES;
+      }
     }
     draw() {
       const ctx = this.ctx;
@@ -392,15 +497,17 @@
       const source = worldToScreen(edge.source, this.viewport);
       const target = worldToScreen(edge.target, this.viewport);
       if (!this.segmentVisible(source, target, 80)) return;
-      const focusId = this.hoverId || this.selectedId;
+      const focusId = this.interactionFocusId || this.hoverId || this.selectedId;
       const active = !focusId || edge.source.node_id === focusId || edge.target.node_id === focusId;
-      ctx.globalAlpha = active ? 1 : 0.22;
+      ctx.globalAlpha = this.interactionFocusId ? active ? 0.62 : 0.08 : active ? 0.82 : 0.16;
       ctx.strokeStyle = active ? GRAPH_COLORS.edgeActive : GRAPH_COLORS.edge;
-      ctx.lineWidth = active ? 1.15 : 0.55;
+      ctx.lineWidth = active ? 0.9 : 0.45;
+      if (edge.type === "missing") ctx.setLineDash([5, 7]);
       ctx.beginPath();
       ctx.moveTo(source.x, source.y);
       ctx.lineTo(target.x, target.y);
       ctx.stroke();
+      ctx.setLineDash([]);
       ctx.globalAlpha = 1;
     }
     drawNode(ctx, node, activeIds) {
@@ -410,29 +517,23 @@
       const selected = node.node_id === this.selectedId;
       const hovered = node.node_id === this.hoverId;
       const active = activeIds.size === 0 || activeIds.has(node.node_id);
-      const color = this.nodeColor(node);
-      if (nodeDegree(node) >= 12 || selected || hovered) {
-        ctx.globalAlpha = selected || hovered ? 0.48 : 0.18;
-        ctx.fillStyle = selected ? GRAPH_COLORS.selectedNode : color;
-        ctx.beginPath();
-        ctx.arc(point.x, point.y, radius + (selected ? 12 : 8), 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 1;
-      }
+      const color = selected || hovered ? GRAPH_COLORS.selectedNode : this.nodeColor(node);
       ctx.globalAlpha = active ? 1 : 0.28;
       const gradient = ctx.createRadialGradient(point.x - radius * 0.25, point.y - radius * 0.35, 1, point.x, point.y, radius);
       gradient.addColorStop(0, color);
-      gradient.addColorStop(1, "rgba(74, 222, 128, 0.18)");
+      gradient.addColorStop(1, selected || hovered ? "rgba(149, 149, 149, 0.34)" : "rgba(47, 47, 47, 0.72)");
       ctx.fillStyle = gradient;
       ctx.beginPath();
       ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
-      ctx.strokeStyle = selected ? GRAPH_COLORS.selectedNode : "rgba(231, 237, 245, 0.24)";
+      ctx.strokeStyle = selected || hovered ? GRAPH_COLORS.selectedNode : "rgba(149, 149, 149, 0.32)";
       ctx.lineWidth = selected ? 2 : 0.85;
+      if (!selected && !hovered && (node.status === "orphan_target" || node.status === "oversized")) ctx.setLineDash([3, 4]);
       ctx.beginPath();
       ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.setLineDash([]);
     }
     drawLabels(ctx, activeIds) {
       if (this.viewport.zoom < 0.3) return;
@@ -472,7 +573,7 @@
         ctx.fillStyle = "rgba(8, 10, 13, 0.82)";
         roundRect(ctx, box.x, box.y, box.width, box.height, 7);
         ctx.fill();
-        ctx.strokeStyle = "rgba(51, 66, 86, 0.72)";
+        ctx.strokeStyle = "rgba(149, 149, 149, 0.48)";
         ctx.stroke();
       }
       ctx.fillStyle = prominent ? GRAPH_COLORS.text : GRAPH_COLORS.dim;
@@ -487,7 +588,7 @@
       return this.viewport.zoom > 1.65;
     }
     activeIds() {
-      const id = this.hoverId || this.selectedId;
+      const id = this.interactionFocusId || this.hoverId || this.selectedId;
       if (!id) return /* @__PURE__ */ new Set();
       const ids = /* @__PURE__ */ new Set([id]);
       for (const edge of this.edges) {
@@ -546,6 +647,7 @@
     worker: null,
     requestId: 0,
     draggingNode: null,
+    dragWasPinned: false,
     dragMoved: false,
     panning: null,
     lastPointer: null,
@@ -626,8 +728,7 @@
       return;
     }
     renderer.updateLayout(message.nodes.map((node) => {
-      const pinned = state.pinned.get(node.id);
-      return pinned ? { id: node.id, x: pinned.x, y: pinned.y } : node;
+      return node;
     }));
     if (state.pendingCenterId) {
       renderer.centerOn(state.pendingCenterId);
@@ -676,7 +777,9 @@
     const node = renderer.getNodeAt(point);
     if (node) {
       state.draggingNode = node;
+      state.dragWasPinned = state.pinned.has(node.node_id);
       state.panning = null;
+      renderer.beginNodeDrag(node.node_id);
       canvas.style.cursor = "grabbing";
     } else {
       state.draggingNode = null;
@@ -701,7 +804,8 @@
       state.dragMoved = state.dragMoved || pointerMoved(state.lastPointer, point);
       const world = renderer.screenToWorld(point);
       state.pinned.set(state.draggingNode.node_id, world);
-      renderer.updateNodePosition(state.draggingNode.node_id, world);
+      renderer.dragNodeTo(state.draggingNode.node_id, world);
+      state.lastPointer = point;
       return;
     }
     if (state.panning && state.lastPointer) {
@@ -717,8 +821,13 @@
   canvas.addEventListener("pointerup", (event) => {
     const point = screenPoint(event);
     const clickedNode = renderer.getNodeAt(point);
+    const draggedNode = state.draggingNode;
     state.pointers.delete(event.pointerId);
     state.pinchDistance = 0;
+    if (draggedNode) {
+      renderer.endNodeDrag(draggedNode.node_id, state.dragMoved);
+      if (!state.dragMoved && !state.dragWasPinned) state.pinned.delete(draggedNode.node_id);
+    }
     if (!state.dragMoved && clickedNode) {
       renderer.setSelected(clickedNode.node_id);
       updateDetails(clickedNode);
@@ -730,6 +839,7 @@
       updateDetails(null);
     }
     state.draggingNode = null;
+    state.dragWasPinned = false;
     state.panning = null;
     state.lastPointer = null;
     state.dragMoved = false;
@@ -737,7 +847,9 @@
   });
   canvas.addEventListener("pointercancel", (event) => {
     state.pointers.delete(event.pointerId);
+    if (state.draggingNode) renderer.endNodeDrag(state.draggingNode.node_id, state.dragMoved);
     state.draggingNode = null;
+    state.dragWasPinned = false;
     state.panning = null;
     state.lastPointer = null;
     state.dragMoved = false;
@@ -746,6 +858,7 @@
     const node = renderer.getNodeAt(screenPoint(event));
     if (!node) return;
     state.pinned.delete(node.node_id);
+    renderer.unpinNode(node.node_id);
     post("diagnostic", { message: `node unpinned: ${node.node_id}` });
     startLayout();
   });

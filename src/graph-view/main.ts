@@ -42,6 +42,7 @@ const state = {
   worker: null as Worker | null,
   requestId: 0,
   draggingNode: null as PositionedNode | null,
+  dragWasPinned: false,
   dragMoved: false,
   panning: null as { x: number; y: number } | null,
   lastPointer: null as Point | null,
@@ -132,8 +133,7 @@ function handleLayoutMessage(message: LayoutMessage): void {
   }
 
   renderer.updateLayout(message.nodes.map((node) => {
-    const pinned = state.pinned.get(node.id);
-    return pinned ? { id: node.id, x: pinned.x, y: pinned.y } : node;
+    return node;
   }));
   if (state.pendingCenterId) {
     renderer.centerOn(state.pendingCenterId);
@@ -190,7 +190,9 @@ canvas.addEventListener("pointerdown", (event) => {
   const node = renderer.getNodeAt(point);
   if (node) {
     state.draggingNode = node;
+    state.dragWasPinned = state.pinned.has(node.node_id);
     state.panning = null;
+    renderer.beginNodeDrag(node.node_id);
     canvas.style.cursor = "grabbing";
   } else {
     state.draggingNode = null;
@@ -218,7 +220,8 @@ canvas.addEventListener("pointermove", (event) => {
     state.dragMoved = state.dragMoved || pointerMoved(state.lastPointer, point);
     const world = renderer.screenToWorld(point);
     state.pinned.set(state.draggingNode.node_id, world);
-    renderer.updateNodePosition(state.draggingNode.node_id, world);
+    renderer.dragNodeTo(state.draggingNode.node_id, world);
+    state.lastPointer = point;
     return;
   }
 
@@ -237,8 +240,14 @@ canvas.addEventListener("pointermove", (event) => {
 canvas.addEventListener("pointerup", (event) => {
   const point = screenPoint(event);
   const clickedNode = renderer.getNodeAt(point);
+  const draggedNode = state.draggingNode;
   state.pointers.delete(event.pointerId);
   state.pinchDistance = 0;
+
+  if (draggedNode) {
+    renderer.endNodeDrag(draggedNode.node_id, state.dragMoved);
+    if (!state.dragMoved && !state.dragWasPinned) state.pinned.delete(draggedNode.node_id);
+  }
 
   if (!state.dragMoved && clickedNode) {
     renderer.setSelected(clickedNode.node_id);
@@ -252,6 +261,7 @@ canvas.addEventListener("pointerup", (event) => {
   }
 
   state.draggingNode = null;
+  state.dragWasPinned = false;
   state.panning = null;
   state.lastPointer = null;
   state.dragMoved = false;
@@ -260,7 +270,9 @@ canvas.addEventListener("pointerup", (event) => {
 
 canvas.addEventListener("pointercancel", (event) => {
   state.pointers.delete(event.pointerId);
+  if (state.draggingNode) renderer.endNodeDrag(state.draggingNode.node_id, state.dragMoved);
   state.draggingNode = null;
+  state.dragWasPinned = false;
   state.panning = null;
   state.lastPointer = null;
   state.dragMoved = false;
@@ -270,6 +282,7 @@ canvas.addEventListener("dblclick", (event) => {
   const node = renderer.getNodeAt(screenPoint(event));
   if (!node) return;
   state.pinned.delete(node.node_id);
+  renderer.unpinNode(node.node_id);
   post("diagnostic", { message: `node unpinned: ${node.node_id}` });
   startLayout();
 });
