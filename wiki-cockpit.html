@@ -168,8 +168,9 @@ button{cursor:pointer;color:inherit}
 @media(max-width:430px){.density-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.density-map{max-height:190px;overflow:hidden}}
 </style>
 <style>
-.graph-legend{display:grid;gap:4px;line-height:1.35}.graph-legend div{display:flex;align-items:center;gap:7px}.dot.current{background:#f0c36a;box-shadow:0 0 0 3px rgba(240,195,106,.14)}.dot.hub{background:#72d6ff}.dot.linked{background:#9aa8ba}.dot.orphan{background:#7bd88f}.dot.missing{background:#ff8080}.graph-panel{background:radial-gradient(circle at 50% 45%,rgba(114,214,255,.055),transparent 44%),linear-gradient(180deg,rgba(9,12,17,.96),rgba(5,7,10,.98))}.graph-tools .btn{background:rgba(21,27,36,.9)}
-@media(max-width:430px){.nav{padding:5px 8px 8px}.nav-item{min-width:92px;max-width:112px;min-height:38px;display:grid;grid-template-columns:1fr;padding:7px 9px}.nav-ico,.nav-badge{display:none}.nav-name{display:block;font-size:10.5px;line-height:1.2;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.graph-legend{display:none}.drawing-tools{grid-template-columns:1fr}.drawing-tools .btn{min-height:36px}}
+.graph-panel{background:linear-gradient(180deg,rgba(9,12,17,.98),rgba(5,7,10,.99));overflow:hidden}.graph-panel:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 50% 45%,rgba(149,149,149,.055),transparent 42%);pointer-events:none}.graph-toolbar{position:absolute;left:14px;top:14px;right:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;z-index:3;pointer-events:none}.graph-toolbar>*{pointer-events:auto}.graph-tools{display:none}.graph-scope{display:inline-flex;border:1px solid var(--border);background:rgba(15,19,25,.88);border-radius:12px;padding:3px}.graph-scope button{border:0;background:transparent;color:var(--dim);font-family:var(--mono);font-size:10px;border-radius:9px;padding:6px 9px;cursor:pointer}.graph-scope button.active{background:rgba(149,149,149,.16);color:#d7d7d7}.graph-depth{display:inline-flex;align-items:center;gap:7px;height:32px;border:1px solid var(--border);background:rgba(15,19,25,.88);border-radius:12px;padding:0 9px;font-family:var(--mono);font-size:10px;color:var(--dim)}.graph-depth input{width:86px;accent-color:#959595}.graph-depth.disabled{opacity:.42}.graph-search{height:32px;min-width:180px;width:min(260px,30vw);border:1px solid var(--border);border-radius:12px;background:rgba(15,19,25,.88);color:var(--text);outline:none;padding:0 10px;font-family:var(--mono);font-size:11px}.graph-search:focus{border-color:#959595}.graph-stats{position:absolute;left:14px;bottom:14px;z-index:3;border:1px solid var(--border);background:rgba(15,19,25,.82);border-radius:12px;padding:8px 10px;font-family:var(--mono);font-size:10px;color:var(--muted);backdrop-filter:blur(10px)}.graph-detail{position:absolute;right:14px;top:14px;width:min(300px,32vw);max-height:calc(100% - 112px);overflow:auto;z-index:3;border:1px solid var(--border);background:rgba(15,19,25,.84);border-radius:14px;padding:12px;backdrop-filter:blur(12px);box-shadow:0 12px 30px rgba(0,0,0,.2)}.graph-detail-title{font-weight:800;font-size:13px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.graph-detail-meta{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:5px}.graph-detail-section{margin-top:12px}.graph-detail-section b{display:block;font-family:var(--mono);font-size:10px;color:#959595;letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px}.graph-link-list{display:flex;flex-direction:column;gap:5px}.graph-link-list button{width:100%;text-align:left;border:1px solid var(--border);background:rgba(255,255,255,.025);color:var(--dim);border-radius:10px;padding:6px 7px;font-family:var(--mono);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.graph-link-list button:hover{border-color:#959595;color:#d7d7d7}.graph-legend{position:absolute;right:14px;bottom:14px;z-index:3;display:grid;gap:4px;line-height:1.35}.graph-legend div{display:flex;align-items:center;gap:7px}.dot.current{background:#959595;box-shadow:0 0 0 3px rgba(149,149,149,.14)}.dot.hub,.dot.linked,.dot.orphan,.dot.missing{background:#2F2F2F;border:1px solid #959595}.graph-toolbar .btn{background:rgba(21,27,36,.9)}
+@media(max-width:700px){.graph-toolbar{right:10px;left:10px;top:10px}.graph-search{width:100%;min-width:0}.graph-detail{left:10px;right:10px;top:auto;bottom:48px;width:auto;max-height:34%;padding:10px}.graph-stats{left:10px;bottom:10px}.graph-legend{display:none}}
+@media(max-width:430px){.nav{padding:5px 8px 8px}.nav-item{min-width:92px;max-width:112px;min-height:38px;display:grid;grid-template-columns:1fr;padding:7px 9px}.nav-ico,.nav-badge{display:none}.nav-name{display:block;font-size:10.5px;line-height:1.2;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.graph-depth input{width:68px}.drawing-tools{grid-template-columns:1fr}.drawing-tools .btn{min-height:36px}}
 </style>
 <style>
 .ai-reasoning{margin:0 0 10px;border:1px solid rgba(114,214,255,.24);background:rgba(114,214,255,.045);border-radius:12px;overflow:hidden;white-space:normal}.ai-reasoning summary{cursor:pointer;list-style:none;font-family:var(--mono);font-size:10px;color:var(--accent2);padding:8px 10px;display:flex;align-items:center;justify-content:space-between;gap:10px}.ai-reasoning summary::-webkit-details-marker{display:none}.ai-reasoning summary:after{content:"abrir";color:var(--muted);font-size:9px}.ai-reasoning[open] summary:after{content:"fechar"}.ai-reasoning.warn{border-color:rgba(240,195,106,.45);background:rgba(240,195,106,.055)}.ai-reasoning.warn summary{color:var(--warn)}.ai-reasoning.live{border-color:rgba(114,214,255,.42);background:rgba(114,214,255,.065)}.ai-reasoning.live summary{color:var(--accent2)}.ai-reasoning pre{margin:0;border-top:1px solid rgba(255,255,255,.08);padding:10px;white-space:pre-wrap;font-family:var(--mono);font-size:11px;line-height:1.55;color:var(--dim);max-height:260px;overflow:auto}.ai-reasoning-meta{display:block;border-top:1px solid rgba(255,255,255,.06);padding:7px 10px;font-family:var(--mono);font-size:9px;color:var(--muted)}.ai-thinking,.ai-thinking-word{font-family:var(--mono);color:var(--accent2);letter-spacing:.02em;animation:thinking-word-glow 1.2s ease-in-out infinite}.ai-thinking{display:inline-flex;align-items:center;font-size:11px}.ai-thinking-word{font-size:10px}@keyframes thinking-word-glow{0%,100%{text-shadow:0 0 0 rgba(114,214,255,0);filter:brightness(.8)}50%{text-shadow:0 0 8px rgba(114,214,255,.78),0 0 18px rgba(114,214,255,.34);filter:brightness(1.28)}}
@@ -275,7 +276,7 @@ button{cursor:pointer;color:inherit}
       <div class="panel" id="panel-dashboard"><div class="scroll"><div class="dashboard" id="dashboard"></div></div></div>
       <div class="panel" id="panel-reader"><div class="scroll"><div class="reader-layout"><article class="reader-card"><div id="reader"></div></article><aside class="outline" id="outline"></aside></div></div></div>
       <div class="panel" id="panel-excalidraw"><div class="scroll"><div class="excalidraw" id="excalidraw"></div></div></div>
-      <div class="panel" id="panel-graph"><div class="graph-panel"><canvas id="graph-canvas"></canvas><div class="graph-tools"><button class="btn small" onclick="fitGraph()" data-icon="target"><span class="btn-text">Centralizar</span></button><button class="btn small" onclick="toggleGraphMode()" id="graph-mode-btn" data-icon="graph"><span class="btn-text">Todos</span></button><button class="btn small" onclick="randomPage()" data-icon="random"><span class="btn-text">Aleatória</span></button></div><div class="tooltip" id="graph-tooltip"></div><div class="graph-legend" id="graph-legend"><div><span class="dot current"></span>Atual</div><div><span class="dot hub"></span>Hub</div><div><span class="dot linked"></span>Conectada</div><div><span class="dot orphan"></span>Sem entrada</div><div><span class="dot missing"></span>Destino ausente</div></div></div></div>
+      <div class="panel" id="panel-graph"><div class="graph-panel"><canvas id="graph-canvas"></canvas><div class="graph-toolbar"><button class="btn small" onclick="fitGraph()" data-icon="target"><span class="btn-text">Centralizar</span></button><div class="graph-scope"><button id="graph-global-btn" onclick="setGraphScope('global')" type="button">Global</button><button id="graph-local-btn" onclick="setGraphScope('local')" type="button">Local</button></div><label class="graph-depth" id="graph-depth-wrap">Prof <input id="graph-depth" type="range" min="1" max="10" value="1" oninput="setGraphDepth(this.value)"><span id="graph-depth-value">1</span></label><input class="graph-search" id="graph-search" placeholder="Buscar no mapa" autocomplete="off" spellcheck="false" oninput="setGraphSearch(this.value)"><button class="btn small" onclick="randomPage()" data-icon="random"><span class="btn-text">Aleatória</span></button></div><div class="graph-stats" id="graph-stats"></div><div class="tooltip" id="graph-tooltip"></div><div class="graph-detail" id="graph-detail"></div><div class="graph-legend" id="graph-legend"><div><span class="dot current"></span>Atual</div><div><span class="dot hub"></span>Hub</div><div><span class="dot linked"></span>Conectada</div><div><span class="dot orphan"></span>Sem entrada</div><div><span class="dot missing"></span>Destino ausente</div></div></div></div>
       <div class="panel" id="panel-health"><div class="scroll"><div class="health" id="health"></div></div></div>
       <div class="panel" id="panel-timeline"><div class="scroll"><div class="timeline" id="timeline"></div></div></div>
       <div class="panel" id="panel-ai"><div class="scroll"><div class="ai" id="ai"></div></div></div>
@@ -345,7 +346,10 @@ const state = {
   activePanel: 'welcome',
   filter: 'all',
   query: '',
-  graphMode: 'all',
+  graphMode: 'local',
+  graphDepth: 1,
+  graphSearch: '',
+  graphSelectedId: null,
   graph: { nodes: [], edges: [], nodeMap: new Map() },
   selectedExcalidraw: null,
   drawingQuery: '',
@@ -1354,7 +1358,7 @@ function ingestContent(path, content, size, type, lastModified){
 
 function resetState(name){
   state.pages.clear(); state.rawFiles.clear(); state.excalidraws.clear(); state.missingLinks.clear(); state.aliasIndex.clear(); state.titleIndex.clear(); state.tagIndex.clear();
-  state.currentPage = null; state.query = ''; state.filter = 'all'; state.dirName = name; state.selectedExcalidraw = null; state.drawingQuery = '';
+  state.currentPage = null; state.query = ''; state.filter = 'all'; state.graphMode = 'local'; state.graphDepth = 1; state.graphSearch = ''; state.graphSelectedId = null; state.dirName = name; state.selectedExcalidraw = null; state.drawingQuery = '';
   $('#side-search').value = '';
   $('#wiki-sub').innerHTML = '<strong>carregando</strong> arquivos...';
 }
@@ -1483,7 +1487,7 @@ function switchPanel(name){
   $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.panel === name));
   if (name !== 'graph') stopGraph();
   state.activePanel = name;
-  if (name === 'graph') setTimeout(() => { renderGraph(); fitGraph(false); renderGraph(); }, 60);
+  if (name === 'graph') setTimeout(() => renderGraph({ fit: true }), 60);
   if (name === 'dashboard') renderDashboard();
   if (name === 'excalidraw') renderExcalidrawPanel();
   if (name === 'health') renderHealth();
@@ -1509,6 +1513,10 @@ function openPage(slug, opts = {}){
   } else if (!opts.silentPanel) switchPanel('reader');
   else if (state.activePanel === 'welcome') switchPanel('dashboard');
   localStorage.setItem('pocketwiki:last', slug);
+  if (state.activePanel === 'graph') {
+    state.graphSelectedId = slug;
+    scheduleGraphRefresh({ keepView:true });
+  }
 }
 
 function renderReader(page){
@@ -2348,40 +2356,111 @@ async function askWikiReview(){
 
 // Graph
 let graphAnim = null;
+let graphWorker = null;
+let graphWorkerBlobUrl = '';
+let graphRequestId = 0;
+let graphViewKey = '';
+let graphRefreshRaf = 0;
+let graphLayoutRunning = false;
+let graphBound = false;
+let graphDpr = 1;
 let graphPan = {x:0,y:0};
 let graphZoom = 1;
 let graphDrag = null;
 let graphHover = null;
+let graphPinned = new Map();
+let graphInteractionFocusId = null;
+let graphInteractionFrames = 0;
+let graphVisibleCache = { nodes: [], edges: [], selectedId: null, effectiveScope: 'global' };
+const GRAPH_MAX_VISIBLE = 500;
+const GRAPH_WORLD_MIN = -5200;
+const GRAPH_WORLD_MAX = 5200;
+const GRAPH_DRAG_INERTIA_FRAMES = 42;
+const GRAPH_DRAG_DAMPING = .88;
+const GRAPH_DRAG_MAX_SPEED = 18;
+const GRAPH_LAYOUT_EASING = .22;
 
 function stopGraph(){
   if (graphAnim) {
     cancelAnimationFrame(graphAnim);
     graphAnim = null;
   }
+  if (graphRefreshRaf) {
+    cancelAnimationFrame(graphRefreshRaf);
+    graphRefreshRaf = 0;
+  }
+  if (graphWorker) {
+    graphWorker.postMessage({ type:'cancel' });
+    graphWorker.terminate();
+    graphWorker = null;
+  }
+  graphLayoutRunning = false;
   graphDrag = null;
   graphHover = null;
+  graphInteractionFocusId = null;
+  graphInteractionFrames = 0;
+  $('#graph-tooltip')?.classList.remove('visible');
 }
 
 function buildGraph(){
+  stopGraph();
   const nodes = [];
   const edges = [];
   const nodeMap = new Map();
+  const seenEdges = new Set();
   for (const p of state.pages.values()) {
+    if (nodes.length >= 5000) break;
     const score = pageScore(p);
     const type = graphPageType(p, score);
-    const node = { id:p.slug, label:p.title, type, page:p, x:0,y:0,vx:0,vy:0, r: graphRadius(type, score) };
+    const degreeIn = p.backlinks?.size || 0;
+    const degreeOut = (p.outlinks?.length || 0) + (p.missing?.length || 0);
+    const node = {
+      id:p.slug, label:p.title, type, status:'active', page:p, folder:p.folder || '',
+      degreeIn, degreeOut, incomingIds:[], outgoingIds:[], missing:false,
+      x:0,y:0,targetX:0,targetY:0,vx:0,vy:0,inertiaFrames:0,pinned:false,dragging:false,pinBeforeDrag:false,lastImpulse:0,
+      r: graphRadius(type, degreeIn + degreeOut)
+    };
     nodes.push(node); nodeMap.set(p.slug,node);
   }
   for (const [key, m] of state.missingLinks.entries()) {
-    const node = { id:'missing:'+key, label:m.label, type:'missing', x:0,y:0,vx:0,vy:0,r:6 };
+    if (nodes.length >= 5000) break;
+    const degreeIn = m.from?.size || 0;
+    const node = {
+      id:'missing:'+key, label:m.label, type:'missing', status:'orphan_target', page:null, folder:'',
+      degreeIn, degreeOut:0, incomingIds:[...(m.from || [])], outgoingIds:[], missing:true,
+      x:0,y:0,targetX:0,targetY:0,vx:0,vy:0,inertiaFrames:0,pinned:false,dragging:false,pinBeforeDrag:false,lastImpulse:0,
+      r:graphRadius('missing', degreeIn)
+    };
     nodes.push(node); nodeMap.set(node.id,node);
   }
+  function addGraphEdge(source, target, missing, label = ''){
+    if (!nodeMap.has(source) || !nodeMap.has(target)) return;
+    const key = `${source}\u0000${target}`;
+    if (seenEdges.has(key)) return;
+    seenEdges.add(key);
+    edges.push({ source, target, missing, label });
+    const s = nodeMap.get(source), t = nodeMap.get(target);
+    s.outgoingIds.push(target);
+    t.incomingIds.push(source);
+  }
   for (const p of state.pages.values()) {
-    for (const l of p.outlinks) edges.push({ source:p.slug, target:l.resolved, missing:false });
-    for (const l of p.missing) edges.push({ source:p.slug, target:'missing:'+slugify(l.target), missing:true });
+    let linkCount = 0;
+    for (const l of p.outlinks) {
+      if (linkCount >= 200) break;
+      addGraphEdge(p.slug, l.resolved, false, l.label || l.target || '');
+      linkCount++;
+    }
+    for (const l of p.missing) {
+      if (linkCount >= 200) break;
+      addGraphEdge(p.slug, 'missing:'+slugify(l.target), true, l.label || l.target || '');
+      linkCount++;
+    }
   }
   state.graph = { nodes, edges, nodeMap };
-  initGraph();
+  graphPinned.clear();
+  initGraphPositions(nodes);
+  graphViewKey = '';
+  graphVisibleCache = { nodes: [], edges: [], selectedId: null, effectiveScope: 'global' };
 }
 
 function graphPageType(page, score = pageScore(page)){
@@ -2390,22 +2469,16 @@ function graphPageType(page, score = pageScore(page)){
   return 'page';
 }
 
-function graphRadius(type, score = 0){
-  if (type === 'hub') return 10;
-  if (type === 'missing') return 7;
-  if (type === 'orphan') return 7;
-  return Math.max(6, Math.min(9, 6 + score * .35));
+function graphRadius(type, degree = 0){
+  const base = type === 'missing' ? 4 : type === 'orphan' ? 4.3 : 4.8;
+  return Math.max(4, Math.min(18, base + Math.sqrt(Math.max(0, degree) + 1) * 1.65));
 }
 
-function initGraph(){
-  const nodes = state.graph.nodes;
-  const r = Math.min(420, 120 + nodes.length * 7);
+function initGraphPositions(nodes = state.graph.nodes){
   nodes.forEach((n,i)=>{
-    const a = stableAngle(n.id, i, nodes.length);
-    const ring = n.type === 'hub' ? r * .45 : n.type === 'missing' ? r * 1.05 : n.type === 'orphan' ? r * .95 : r * .72;
-    n.x = Math.cos(a) * ring;
-    n.y = Math.sin(a) * ring;
-    n.vx=0; n.vy=0;
+    const point = graphInitialPosition(n, i, nodes.length);
+    n.x = point.x; n.y = point.y; n.targetX = point.x; n.targetY = point.y;
+    n.vx=0; n.vy=0; n.inertiaFrames=0;
   });
 }
 
@@ -2416,145 +2489,626 @@ function stableAngle(id, index = 0, total = 1){
   return ((hash % 10000) / 10000 + index / Math.max(1, total) * .17) * Math.PI * 2;
 }
 
-function graphVisible(){
-  if (state.graphMode === 'all' || !state.currentPage) return { nodes:state.graph.nodes, edges:state.graph.edges };
-  const keep = new Set([state.currentPage]);
-  const page = state.pages.get(state.currentPage);
-  if (page) {
-    page.outlinks.forEach(l=>keep.add(l.resolved));
-    page.missing.forEach(l=>keep.add('missing:'+slugify(l.target)));
-    page.backlinks.forEach(s=>keep.add(s));
+function hashGraph(value){
+  let hash = 2166136261;
+  const text = String(value || '');
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
   }
-  return { nodes: state.graph.nodes.filter(n=>keep.has(n.id)), edges: state.graph.edges.filter(e=>keep.has(e.source) && keep.has(e.target)) };
+  return hash >>> 0;
 }
 
-function renderGraph(){
+function graphInitialPosition(node, index, total){
+  const selected = graphSelectedId();
+  if (node.id === selected) return {x:0,y:0};
+  const folderAngle = (hashGraph(node.folder || 'root') / 4294967296) * Math.PI * 2;
+  const nodeOffset = ((hashGraph(node.id) % 1024) / 1024 - .5) * .95;
+  const angle = folderAngle + nodeOffset;
+  const degree = graphDegree(node);
+  const ring = 190 + Math.sqrt(index + 1) * 38 + Math.min(310, total * .42);
+  const hubPull = Math.max(0, Math.min(220, degree * 8));
+  const radius = graphClamp(ring - hubPull, 90, 1800);
+  return { x:Math.cos(angle) * radius, y:Math.sin(angle) * radius };
+}
+
+function graphDegree(node){
+  return Math.max(0, Number(node?.degreeIn || 0) + Number(node?.degreeOut || 0));
+}
+
+function graphClamp(value, min, max){
+  return Math.min(max, Math.max(min, value));
+}
+
+function graphSelectedId(){
+  if (state.graphSelectedId === false) return null;
+  return state.graphSelectedId || state.currentPage || null;
+}
+
+function graphVisible(){
+  const selectedId = graphSelectedId();
+  const canLocal = state.graphMode === 'local' && selectedId && state.graph.nodeMap.has(selectedId);
+  const effectiveScope = canLocal ? 'local' : 'global';
+  let keep = effectiveScope === 'local'
+    ? graphBfsVisibleIds(selectedId, state.graphDepth)
+    : new Set(state.graph.nodes.map(n => n.id));
+  if (keep.size > GRAPH_MAX_VISIBLE) keep = graphCapVisibleIds(keep, selectedId, GRAPH_MAX_VISIBLE);
+  const edges = state.graph.edges.filter(e => keep.has(e.source) && keep.has(e.target));
+  const nodes = state.graph.nodes.filter(n => keep.has(n.id));
+  graphApplyHighlights(nodes, edges, selectedId, state.graphSearch);
+  return { nodes, edges, selectedId, effectiveScope };
+}
+
+function graphBfsVisibleIds(rootId, maxDepth){
+  const visited = new Set([rootId]);
+  const queue = [[rootId, 0]];
+  const adjacency = new Map();
+  for (const e of state.graph.edges) {
+    if (!adjacency.has(e.source)) adjacency.set(e.source, []);
+    if (!adjacency.has(e.target)) adjacency.set(e.target, []);
+    adjacency.get(e.source).push(e.target);
+    adjacency.get(e.target).push(e.source);
+  }
+  const limit = graphClamp(Number(maxDepth) || 1, 1, 10);
+  for (let index = 0; index < queue.length; index++) {
+    const [id, depth] = queue[index];
+    if (depth >= limit) continue;
+    for (const next of adjacency.get(id) || []) {
+      if (visited.has(next)) continue;
+      visited.add(next);
+      queue.push([next, depth + 1]);
+    }
+  }
+  return visited;
+}
+
+function graphCapVisibleIds(ids, selectedId, maxNodes){
+  const search = normalizeGraphSearch(state.graphSearch);
+  const ordered = state.graph.nodes.filter(n => ids.has(n.id)).sort((a,b) => {
+    const sa = graphNodePriority(a, selectedId, search);
+    const sb = graphNodePriority(b, selectedId, search);
+    if (sa !== sb) return sb - sa;
+    return a.label.localeCompare(b.label, undefined, { sensitivity:'base' });
+  });
+  return new Set(ordered.slice(0, Math.max(1, maxNodes)).map(n => n.id));
+}
+
+function graphNodePriority(node, selectedId, search){
+  let score = graphDegree(node) * 80 + (node.degreeIn || 0) * 25;
+  if (node.id === selectedId) score += 100000;
+  if (search && node.label.toLowerCase().includes(search)) score += 50000;
+  if (node.type === 'hub') score += 8000;
+  if (node.type === 'missing') score -= 1200;
+  return score;
+}
+
+function normalizeGraphSearch(value){
+  return String(value || '').trim().slice(0, 200).toLowerCase();
+}
+
+function graphApplyHighlights(nodes, edges, selectedId, searchValue){
+  const search = normalizeGraphSearch(searchValue);
+  const neighbors = new Set();
+  if (selectedId) {
+    for (const e of state.graph.edges) {
+      if (e.source === selectedId) neighbors.add(e.target);
+      if (e.target === selectedId) neighbors.add(e.source);
+    }
+  }
+  for (const node of nodes) {
+    node.highlight = node.id === selectedId ? 'selected'
+      : search && node.label.toLowerCase().includes(search) ? 'search'
+      : neighbors.has(node.id) ? 'neighbor'
+      : 'default';
+  }
+}
+
+function renderGraph(options = {}){
   const canvas = $('#graph-canvas');
   const panel = $('#panel-graph');
-  const tooltip = $('#graph-tooltip');
   if (!canvas || !panel.classList.contains('active')) return;
-  const rect = panel.getBoundingClientRect();
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-  canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-  canvas.style.width = rect.width + 'px';
-  canvas.style.height = rect.height + 'px';
-  const ctx = canvas.getContext('2d');
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-  if (graphAnim) cancelAnimationFrame(graphAnim);
+  ensureGraphEvents(canvas);
+  resizeGraphCanvas(canvas);
+  refreshGraphView(options);
+  requestGraphFrame();
+}
+
+function scheduleGraphRefresh(options = {}){
+  if (state.activePanel !== 'graph') return;
+  if (graphRefreshRaf) cancelAnimationFrame(graphRefreshRaf);
+  graphRefreshRaf = requestAnimationFrame(() => {
+    graphRefreshRaf = 0;
+    refreshGraphView(options);
+    requestGraphFrame();
+  });
+}
+
+function refreshGraphView(options = {}){
+  graphVisibleCache = graphVisible();
+  updateGraphControls();
+  updateGraphDetail();
+  const key = graphLayoutKey(graphVisibleCache);
+  if (key !== graphViewKey || options.forceLayout) {
+    graphViewKey = key;
+    if (options.fit || !options.keepView) fitGraph(false, graphVisibleCache);
+    startGraphLayout(graphVisibleCache);
+  } else if (options.fit) {
+    fitGraph(false, graphVisibleCache);
+  }
+  if (options.centerSearch) centerGraphSearchResult();
+}
+
+function graphLayoutKey(visible){
+  return [
+    visible.effectiveScope,
+    state.graphDepth,
+    visible.selectedId || '',
+    visible.nodes.map(n => n.id).join('|'),
+    visible.edges.length
+  ].join('\n');
+}
+
+function ensureGraphEvents(canvas){
+  if (graphBound) return;
+  graphBound = true;
+  canvas.addEventListener('pointerdown', graphPointerDown);
+  canvas.addEventListener('pointermove', graphPointerMove);
+  canvas.addEventListener('pointerup', graphPointerUp);
+  canvas.addEventListener('pointercancel', graphPointerCancel);
+  canvas.addEventListener('mouseleave', () => {
+    graphHover = null;
+    $('#graph-tooltip')?.classList.remove('visible');
+    requestGraphFrame();
+  });
+  canvas.addEventListener('dblclick', event => {
+    const node = hitGraphNode(graphScreenPoint(event));
+    if (!node) return;
+    graphUnpinNode(node);
+    startGraphLayout(graphVisibleCache);
+    showToast('No liberado no mapa');
+  });
+  canvas.addEventListener('wheel', event => {
+    event.preventDefault();
+    const point = graphScreenPoint(event);
+    const before = graphScreenToWorld(point);
+    graphZoom = graphClamp(graphZoom * Math.exp(-event.deltaY * .0011), .12, 3.4);
+    const rect = canvas.getBoundingClientRect();
+    graphPan.x = point.x - rect.width / 2 - before.x * graphZoom;
+    graphPan.y = point.y - rect.height / 2 - before.y * graphZoom;
+    requestGraphFrame();
+  }, { passive:false });
+}
+
+function resizeGraphCanvas(canvas = $('#graph-canvas')){
+  if (!canvas) return { width:1, height:1 };
+  const rect = canvas.parentElement.getBoundingClientRect();
+  graphDpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  const width = Math.max(1, Math.floor(rect.width * graphDpr));
+  const height = Math.max(1, Math.floor(rect.height * graphDpr));
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+  }
+  return { width:rect.width, height:rect.height };
+}
+
+function requestGraphFrame(){
+  if (graphAnim) return;
+  graphAnim = requestAnimationFrame(drawGraphFrame);
+}
+
+function drawGraphFrame(){
   graphAnim = null;
-  const visible = graphVisible();
-  layoutGraph(visible.nodes, visible.edges, rect);
+  const canvas = $('#graph-canvas');
+  const panel = $('#panel-graph');
+  if (!canvas || !panel.classList.contains('active')) return;
+  const rect = resizeGraphCanvas(canvas);
+  const ctx = canvas.getContext('2d', { alpha:false });
+  ctx.setTransform(graphDpr,0,0,graphDpr,0,0);
+  const moving = stepGraphVisual();
+  ctx.fillStyle = '#080a0d';
+  ctx.fillRect(0,0,rect.width,rect.height);
+  drawGraphGrid(ctx, rect);
+  const activeIds = graphActiveIds();
+  for (const edge of graphVisibleCache.edges) drawGraphEdge(ctx, edge, rect, activeIds);
+  for (const node of graphVisibleCache.nodes) drawGraphNode(ctx, node, rect, activeIds);
+  drawGraphLabels(ctx, rect, activeIds);
+  if (moving || graphLayoutRunning || graphDrag) requestGraphFrame();
+}
 
-  function draw(){
-    const w = rect.width, h = rect.height;
-    const { nodes, edges } = graphVisible();
-    ctx.clearRect(0,0,w,h);
-    ctx.save(); ctx.translate(w/2+graphPan.x,h/2+graphPan.y); ctx.scale(graphZoom,graphZoom);
-    for (const e of edges) {
-      const s=state.graph.nodeMap.get(e.source), t=state.graph.nodeMap.get(e.target); if(!s||!t) continue;
-      ctx.beginPath(); ctx.moveTo(s.x,s.y); ctx.lineTo(t.x,t.y); ctx.strokeStyle = e.missing ? 'rgba(255,128,128,.42)' : 'rgba(147,161,181,.22)'; ctx.lineWidth = e.missing ? 1.6 : 1; ctx.stroke();
+function stepGraphVisual(){
+  let moving = false;
+  for (const node of graphVisibleCache.nodes) {
+    if (node.dragging || node.pinned) {
+      node.vx *= .35;
+      node.vy *= .35;
+      continue;
     }
-    for (const n of nodes) {
-      const c = graphColor(n); const active = n.id === state.currentPage || n === graphHover;
-      if (active) { ctx.beginPath(); ctx.arc(n.x,n.y,n.r+9,0,Math.PI*2); ctx.fillStyle = graphColor(n, .22); ctx.fill(); }
-      ctx.beginPath(); ctx.arc(n.x,n.y,n.r,0,Math.PI*2); ctx.fillStyle = c + (active ? 'ee' : '99'); ctx.fill(); ctx.strokeStyle = c; ctx.lineWidth = 1.5; ctx.stroke();
-      const showLabel = active || n.id === state.currentPage || (state.graphMode !== 'all' && graphZoom > .75) || (n.type === 'hub' && graphZoom > 1.25);
-      if (showLabel) {
-        ctx.fillStyle = active ? '#e7edf5' : 'rgba(213,224,238,.86)';
-        ctx.font = `${active?'700 ':''}${Math.max(10,11/Math.sqrt(Math.max(.5, graphZoom)))}px JetBrains Mono`;
-        ctx.textAlign='center';
-        ctx.fillText(n.label, n.x, n.y+n.r+15);
+
+    if (node.inertiaFrames > 0) {
+      node.vx = graphClamp(node.vx * GRAPH_DRAG_DAMPING, -GRAPH_DRAG_MAX_SPEED, GRAPH_DRAG_MAX_SPEED);
+      node.vy = graphClamp(node.vy * GRAPH_DRAG_DAMPING, -GRAPH_DRAG_MAX_SPEED, GRAPH_DRAG_MAX_SPEED);
+      node.x += node.vx;
+      node.y += node.vy;
+      node.inertiaFrames -= 1;
+      if (node.inertiaFrames > 0 && (Math.abs(node.vx) > .03 || Math.abs(node.vy) > .03)) {
+        moving = true;
+      } else {
+        node.vx = 0;
+        node.vy = 0;
+        node.inertiaFrames = 0;
+        node.targetX = node.x;
+        node.targetY = node.y;
       }
+      continue;
     }
-    ctx.restore();
+
+    const dx = node.targetX - node.x;
+    const dy = node.targetY - node.y;
+    if (Math.abs(dx) < .08 && Math.abs(dy) < .08) {
+      node.x = node.targetX;
+      node.y = node.targetY;
+      continue;
+    }
+    node.x += dx * GRAPH_LAYOUT_EASING;
+    node.y += dy * GRAPH_LAYOUT_EASING;
+    moving = true;
   }
-  draw();
-
-  function toWorld(e){ return { x:(e.offsetX-rect.width/2-graphPan.x)/graphZoom, y:(e.offsetY-rect.height/2-graphPan.y)/graphZoom }; }
-  function hit(w){
-    const nodes = graphVisible().nodes; let best=null, bd=18/graphZoom;
-    for (const n of nodes){ const d=Math.hypot(n.x-w.x,n.y-w.y); if(d<bd){bd=d; best=n;} }
-    return best;
+  if (graphInteractionFrames > 0) {
+    graphInteractionFrames -= 1;
+    if (graphInteractionFrames > 0) moving = true;
+    else graphInteractionFocusId = null;
   }
-  let down = null;
-  canvas.onmousedown = e => { const w=toWorld(e); const h=hit(w); down={x:e.offsetX,y:e.offsetY}; graphDrag = h ? {node:h, ox:w.x-h.x, oy:w.y-h.y} : {pan:true, px:e.offsetX-graphPan.x, py:e.offsetY-graphPan.y}; };
-  canvas.onmousemove = e => { const w=toWorld(e); if(graphDrag?.node){graphDrag.node.x=w.x-graphDrag.ox; graphDrag.node.y=w.y-graphDrag.oy; graphDrag.node.vx=0; graphDrag.node.vy=0;} else if(graphDrag?.pan){graphPan.x=e.offsetX-graphDrag.px; graphPan.y=e.offsetY-graphDrag.py;} graphHover=hit(w); if(graphHover){tooltip.textContent=graphTooltip(graphHover); tooltip.style.left=e.offsetX+'px'; tooltip.style.top=e.offsetY+'px'; tooltip.classList.add('visible'); canvas.style.cursor='pointer';} else {tooltip.classList.remove('visible'); canvas.style.cursor=graphDrag?'grabbing':'grab';} draw(); };
-  canvas.onmouseup = e => { const moved = down ? Math.hypot(e.offsetX-down.x,e.offsetY-down.y) : 99; const node = graphDrag?.node; graphDrag=null; if(node && moved < 5){ if(node.type==='missing') showToast(`Link ausente: ${node.label}`); else openPage(node.id); } };
-  canvas.onmouseleave = () => { graphDrag=null; graphHover=null; tooltip.classList.remove('visible'); draw(); };
-  canvas.onwheel = e => { e.preventDefault(); const f=e.deltaY<0?1.1:.9; graphZoom=Math.max(.18,Math.min(4,graphZoom*f)); draw(); };
+  return moving;
 }
 
-function layoutGraph(nodes, edges, rect){
-  if (!nodes.length) return;
-  if (state.graphMode !== 'all' && state.currentPage) return layoutNeighborhoodGraph(nodes, edges, rect);
-
-  const maxR = Math.max(150, Math.min(rect.width, rect.height) * .42);
-  const buckets = {
-    hub:nodes.filter(n => n.type === 'hub'),
-    page:nodes.filter(n => n.type === 'page'),
-    orphan:nodes.filter(n => n.type === 'orphan'),
-    missing:nodes.filter(n => n.type === 'missing')
-  };
-  placeRing(buckets.hub, maxR * .34);
-  placeRing(buckets.page, maxR * .66);
-  placeRing(buckets.orphan, maxR * .9);
-  placeRing(buckets.missing, maxR * 1.08, Math.PI / 5);
+function graphInjectDragImpulse(source, dx, dy){
+  if (Math.abs(dx) < .01 && Math.abs(dy) < .01) return;
+  source.lastImpulse = Math.hypot(dx, dy);
+  const connected = graphVisibleCache.edges
+    .map(edge => edge.source === source.id ? edge.target : edge.target === source.id ? edge.source : null)
+    .filter(Boolean)
+    .map(id => state.graph.nodeMap.get(id))
+    .filter(node => node && !node.dragging && !node.pinned);
+  const degreeScale = graphClamp(24 / Math.max(24, connected.length), .32, 1);
+  const followFactor = graphClamp(.58 * degreeScale, .24, .58);
+  graphInteractionFocusId = source.id;
+  graphInteractionFrames = GRAPH_DRAG_INERTIA_FRAMES;
+  for (const target of connected) {
+    target.vx = graphClamp(target.vx + dx * followFactor, -GRAPH_DRAG_MAX_SPEED, GRAPH_DRAG_MAX_SPEED);
+    target.vy = graphClamp(target.vy + dy * followFactor, -GRAPH_DRAG_MAX_SPEED, GRAPH_DRAG_MAX_SPEED);
+    target.inertiaFrames = GRAPH_DRAG_INERTIA_FRAMES;
+  }
 }
 
-function layoutNeighborhoodGraph(nodes, edges, rect){
-  const center = state.graph.nodeMap.get(state.currentPage);
-  const page = state.pages.get(state.currentPage);
-  if (!center || !page) return placeRing(nodes, Math.max(150, Math.min(rect.width, rect.height) * .38));
-  center.x = 0; center.y = 0;
-  const left = [...page.backlinks].map(slug => state.graph.nodeMap.get(slug)).filter(Boolean);
-  const right = page.outlinks.map(link => state.graph.nodeMap.get(link.resolved)).filter(Boolean);
-  const missing = page.missing.map(link => state.graph.nodeMap.get('missing:'+slugify(link.target))).filter(Boolean);
-  const linked = nodes.filter(n => n !== center && !left.includes(n) && !right.includes(n) && !missing.includes(n));
-  const radius = Math.max(130, Math.min(rect.width, rect.height) * .28);
-  placeArc(left, radius, Math.PI * .72, Math.PI * 1.28);
-  placeArc(right, radius, -Math.PI * .28, Math.PI * .28);
-  placeArc(missing, radius * 1.25, -Math.PI * .18, Math.PI * .18);
-  placeRing(linked, radius * 1.45);
+function drawGraphGrid(ctx, rect){
+  const step = 64 * graphZoom;
+  if (step < 22) return;
+  const offsetX = ((rect.width / 2 + graphPan.x) % step + step) % step;
+  const offsetY = ((rect.height / 2 + graphPan.y) % step + step) % step;
+  ctx.strokeStyle = 'rgba(47,47,47,.36)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x = offsetX; x < rect.width; x += step) { ctx.moveTo(x,0); ctx.lineTo(x,rect.height); }
+  for (let y = offsetY; y < rect.height; y += step) { ctx.moveTo(0,y); ctx.lineTo(rect.width,y); }
+  ctx.stroke();
 }
 
-function placeRing(nodes, radius, offset = 0){
-  nodes.forEach((node, index) => {
-    const angle = offset + stableAngle(node.id, index, nodes.length);
-    node.x = Math.cos(angle) * radius;
-    node.y = Math.sin(angle) * radius;
-  });
+function drawGraphEdge(ctx, edge, rect, activeIds){
+  const source = state.graph.nodeMap.get(edge.source);
+  const target = state.graph.nodeMap.get(edge.target);
+  if (!source || !target) return;
+  const a = graphWorldToScreen(source, rect);
+  const b = graphWorldToScreen(target, rect);
+  if (!graphSegmentVisible(a, b, rect, 80)) return;
+  const focusId = graphInteractionFocusId || graphHover?.id || graphSelectedId();
+  const active = !focusId || edge.source === focusId || edge.target === focusId;
+  ctx.globalAlpha = graphInteractionFocusId ? (active ? .62 : .08) : (active ? .82 : .16);
+  ctx.strokeStyle = active ? 'rgba(149,149,149,.75)' : 'rgba(47,47,47,.55)';
+  ctx.lineWidth = edge.missing ? 1.05 : active ? .9 : .45;
+  if (edge.missing) ctx.setLineDash([5, 7]);
+  ctx.beginPath();
+  ctx.moveTo(a.x,a.y);
+  ctx.lineTo(b.x,b.y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
 }
 
-function placeArc(nodes, radius, start, end){
-  if (!nodes.length) return;
-  nodes.forEach((node, index) => {
-    const t = nodes.length === 1 ? .5 : index / (nodes.length - 1);
-    const angle = start + (end - start) * t;
-    node.x = Math.cos(angle) * radius;
-    node.y = Math.sin(angle) * radius;
-  });
+function drawGraphNode(ctx, node, rect, activeIds){
+  const point = graphWorldToScreen(node, rect);
+  const radius = Math.max(2.8, node.r * graphZoom);
+  if (!graphPointVisible(point, rect, radius + 24)) return;
+  const selected = node.id === graphSelectedId();
+  const hovered = graphHover && graphHover.id === node.id;
+  const active = !activeIds.size || activeIds.has(node.id);
+  const color = graphColor(node);
+  ctx.globalAlpha = active ? 1 : .3;
+  const gradient = ctx.createRadialGradient(point.x - radius * .25, point.y - radius * .35, 1, point.x, point.y, Math.max(2, radius));
+  gradient.addColorStop(0, color);
+  gradient.addColorStop(1, selected || hovered ? 'rgba(149,149,149,.34)' : 'rgba(47,47,47,.72)');
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = selected || hovered ? '#959595' : 'rgba(149,149,149,.32)';
+  ctx.lineWidth = selected ? 2 : .85;
+  if (!selected && !hovered && (node.type === 'missing' || node.status === 'oversized')) ctx.setLineDash([3, 4]);
+  ctx.beginPath();
+  ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
 }
 
-function graphColor(node, alpha){
-  const current = node.id === state.currentPage;
-  const hex = current ? '#f0c36a' : node.type === 'hub' ? '#72d6ff' : node.type === 'missing' ? '#ff8080' : node.type === 'orphan' ? '#7bd88f' : '#9aa8ba';
-  if (alpha == null) return hex;
-  const n = parseInt(hex.slice(1), 16);
-  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${alpha})`;
+function drawGraphLabels(ctx, rect, activeIds){
+  if (graphZoom < .32) return;
+  const candidates = graphVisibleCache.nodes.filter(n => graphShouldLabel(n, activeIds)).sort((a,b) => {
+    const pa = (a.id === graphSelectedId() || a === graphHover || a.highlight === 'search') ? 1 : 0;
+    const pb = (b.id === graphSelectedId() || b === graphHover || b.highlight === 'search') ? 1 : 0;
+    if (pa !== pb) return pb - pa;
+    return graphDegree(b) - graphDegree(a);
+  }).slice(0, graphZoom > 1.15 ? 110 : 60);
+  const boxes = [];
+  for (const node of candidates) {
+    const point = graphWorldToScreen(node, rect);
+    if (!graphPointVisible(point, rect, 80)) continue;
+    const prominent = node.id === graphSelectedId() || node === graphHover || node.highlight === 'search';
+    const box = graphLabelBox(ctx, node, point, prominent);
+    if (!prominent && boxes.some(item => graphBoxesOverlap(item, box))) continue;
+    graphDrawLabel(ctx, node, box, prominent);
+    boxes.push(box);
+  }
+}
+
+function graphShouldLabel(node, activeIds){
+  if (node.id === graphSelectedId() || node === graphHover || node.highlight === 'search') return true;
+  if (graphZoom > .5 && activeIds.has(node.id)) return true;
+  if (graphZoom > .72 && graphDegree(node) >= 10) return true;
+  if (graphZoom > 1.18 && graphDegree(node) >= 3) return true;
+  return graphZoom > 1.65;
+}
+
+function graphLabelBox(ctx, node, point, prominent){
+  const text = node.label.length > 44 ? node.label.slice(0, 41) + '...' : node.label;
+  const fontSize = prominent ? 12 : 10.5;
+  ctx.font = `${prominent ? 700 : 500} ${fontSize}px Inter, system-ui, sans-serif`;
+  const width = ctx.measureText(text).width;
+  return { x:point.x - width / 2 - 6, y:point.y + node.r * graphZoom + 9, width:width + 12, height:fontSize + 8, text, fontSize };
+}
+
+function graphDrawLabel(ctx, node, box, prominent){
+  ctx.font = `${prominent ? 700 : 500} ${box.fontSize}px Inter, system-ui, sans-serif`;
+  if (prominent) {
+    ctx.fillStyle = 'rgba(8,10,13,.82)';
+    graphRoundRect(ctx, box.x, box.y, box.width, box.height, 7);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(149,149,149,.48)';
+    ctx.stroke();
+  }
+  ctx.fillStyle = prominent ? '#d7d7d7' : 'rgba(149,149,149,.9)';
+  ctx.fillText(box.text, box.x + 6, box.y + 3 + box.fontSize);
+}
+
+function graphRoundRect(ctx, x, y, width, height, radius){
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + width, y, x + width, y + height, radius);
+  ctx.arcTo(x + width, y + height, x, y + height, radius);
+  ctx.arcTo(x, y + height, x, y, radius);
+  ctx.arcTo(x, y, x + width, y, radius);
+  ctx.closePath();
+}
+
+function graphBoxesOverlap(a, b){
+  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+}
+
+function graphColor(node){
+  if (node.id === graphSelectedId() || node === graphHover || node.highlight === 'selected') return '#959595';
+  return '#2F2F2F';
+}
+
+function graphActiveIds(){
+  const id = graphHover?.id || graphSelectedId();
+  const ids = new Set();
+  if (!id) return ids;
+  ids.add(id);
+  for (const e of graphVisibleCache.edges) {
+    if (e.source === id) ids.add(e.target);
+    if (e.target === id) ids.add(e.source);
+  }
+  return ids;
+}
+
+function graphWorldToScreen(point, rect){
+  return { x:rect.width / 2 + graphPan.x + point.x * graphZoom, y:rect.height / 2 + graphPan.y + point.y * graphZoom };
+}
+
+function graphScreenToWorld(point){
+  const rect = $('#graph-canvas').getBoundingClientRect();
+  return { x:(point.x - rect.width / 2 - graphPan.x) / graphZoom, y:(point.y - rect.height / 2 - graphPan.y) / graphZoom };
+}
+
+function graphScreenPoint(event){
+  const rect = $('#graph-canvas').getBoundingClientRect();
+  return { x:event.clientX - rect.left, y:event.clientY - rect.top };
+}
+
+function graphPointVisible(point, rect, margin){
+  return point.x >= -margin && point.y >= -margin && point.x <= rect.width + margin && point.y <= rect.height + margin;
+}
+
+function graphSegmentVisible(a, b, rect, margin){
+  return Math.max(a.x,b.x) >= -margin && Math.max(a.y,b.y) >= -margin && Math.min(a.x,b.x) <= rect.width + margin && Math.min(a.y,b.y) <= rect.height + margin;
+}
+
+function hitGraphNode(point){
+  const rect = $('#graph-canvas').getBoundingClientRect();
+  let best = null, bestScore = -Infinity;
+  for (const node of graphVisibleCache.nodes) {
+    const screen = graphWorldToScreen(node, rect);
+    const radius = Math.max(10, node.r * graphZoom + 6);
+    const distance = Math.hypot(point.x - screen.x, point.y - screen.y);
+    if (distance > radius) continue;
+    const score = (node.degreeIn || 0) * 1000 + graphDegree(node) * 20 - distance;
+    if (score > bestScore) { best = node; bestScore = score; }
+  }
+  return best;
+}
+
+function graphBeginNodeDrag(node){
+  node.pinBeforeDrag = !!node.pinned;
+  node.dragging = true;
+  node.pinned = true;
+  node.vx = 0;
+  node.vy = 0;
+  node.inertiaFrames = 0;
+  node.targetX = node.x;
+  node.targetY = node.y;
+  graphInteractionFocusId = node.id;
+  graphInteractionFrames = GRAPH_DRAG_INERTIA_FRAMES;
+}
+
+function graphDragNodeTo(node, point){
+  const dx = point.x - node.x;
+  const dy = point.y - node.y;
+  node.x = point.x;
+  node.y = point.y;
+  node.targetX = point.x;
+  node.targetY = point.y;
+  node.vx = dx;
+  node.vy = dy;
+  graphPinned.set(node.id, {x:node.x, y:node.y});
+  graphInjectDragImpulse(node, dx, dy);
+  graphInteractionFocusId = node.id;
+  graphInteractionFrames = GRAPH_DRAG_INERTIA_FRAMES;
+}
+
+function graphEndNodeDrag(node, keepPinned){
+  if (!node) return;
+  node.dragging = false;
+  node.pinned = !!keepPinned || !!node.pinBeforeDrag;
+  node.pinBeforeDrag = false;
+  node.vx = 0;
+  node.vy = 0;
+  node.inertiaFrames = 0;
+  node.targetX = node.x;
+  node.targetY = node.y;
+  graphInteractionFocusId = node.id;
+  graphInteractionFrames = GRAPH_DRAG_INERTIA_FRAMES;
+  if (node.pinned) graphPinned.set(node.id, {x:node.x, y:node.y});
+  else graphPinned.delete(node.id);
+}
+
+function graphUnpinNode(node){
+  if (!node) return;
+  node.dragging = false;
+  node.pinned = false;
+  node.pinBeforeDrag = false;
+  node.inertiaFrames = 0;
+  node.targetX = node.x;
+  node.targetY = node.y;
+  graphPinned.delete(node.id);
+}
+
+function graphPointerDown(event){
+  const canvas = $('#graph-canvas');
+  canvas.setPointerCapture?.(event.pointerId);
+  const point = graphScreenPoint(event);
+  const node = hitGraphNode(point);
+  graphHover = node;
+  if (node) {
+    const world = graphScreenToWorld(point);
+    graphBeginNodeDrag(node);
+    graphDrag = { type:'node', node, wasPinned:graphPinned.has(node.id), offset:{x:world.x - node.x, y:world.y - node.y}, start:point, moved:false };
+  } else {
+    graphDrag = { type:'pan', start:point, panStart:{...graphPan}, moved:false };
+  }
+  canvas.style.cursor = 'grabbing';
+  requestGraphFrame();
+}
+
+function graphPointerMove(event){
+  const canvas = $('#graph-canvas');
+  const point = graphScreenPoint(event);
+  if (graphDrag) {
+    graphDrag.moved = graphDrag.moved || Math.hypot(point.x - graphDrag.start.x, point.y - graphDrag.start.y) > 4;
+    if (graphDrag.type === 'node') {
+      const world = graphScreenToWorld(point);
+      const node = graphDrag.node;
+      graphDragNodeTo(node, {x:world.x - graphDrag.offset.x, y:world.y - graphDrag.offset.y});
+    } else {
+      graphPan.x = graphDrag.panStart.x + point.x - graphDrag.start.x;
+      graphPan.y = graphDrag.panStart.y + point.y - graphDrag.start.y;
+    }
+    requestGraphFrame();
+    return;
+  }
+  graphHover = hitGraphNode(point);
+  updateGraphTooltip(point);
+  canvas.style.cursor = graphHover ? 'pointer' : 'grab';
+  requestGraphFrame();
+}
+
+function graphPointerUp(event){
+  const point = graphScreenPoint(event);
+  const node = hitGraphNode(point);
+  const wasClick = graphDrag && !graphDrag.moved;
+  const draggedNode = graphDrag?.type === 'node' ? graphDrag.node : null;
+  if (draggedNode) graphEndNodeDrag(draggedNode, graphDrag.moved);
+  if (wasClick && node) {
+    if (node.type === 'missing') {
+      state.graphSelectedId = node.id;
+      updateGraphDetail();
+      showToast(`Link ausente: ${node.label}`);
+    } else {
+      state.graphSelectedId = node.id;
+      openPage(node.id, { silentPanel:true });
+      scheduleGraphRefresh({ keepView:true });
+    }
+  } else if (wasClick && !node) {
+    state.graphSelectedId = false;
+    updateGraphDetail();
+    scheduleGraphRefresh({ keepView:true });
+  }
+  graphDrag = null;
+  $('#graph-canvas').style.cursor = 'grab';
+  requestGraphFrame();
+}
+
+function graphPointerCancel(){
+  if (graphDrag?.type === 'node') graphEndNodeDrag(graphDrag.node, graphDrag.moved);
+  graphDrag = null;
+  requestGraphFrame();
+}
+
+function updateGraphTooltip(point){
+  const tooltip = $('#graph-tooltip');
+  if (!tooltip) return;
+  if (!graphHover) {
+    tooltip.classList.remove('visible');
+    return;
+  }
+  tooltip.textContent = graphTooltip(graphHover);
+  tooltip.style.left = point.x + 'px';
+  tooltip.style.top = point.y + 'px';
+  tooltip.classList.add('visible');
 }
 
 function graphTooltip(node){
   if (node.type === 'missing') return `${node.label} · destino ausente`;
   const page = node.page;
   if (!page) return node.label;
-  const role = node.id === state.currentPage ? 'atual' : node.type === 'hub' ? 'hub' : node.type === 'orphan' ? 'sem entrada' : 'conectada';
+  const role = node.id === graphSelectedId() ? 'atual' : node.type === 'hub' ? 'hub' : node.type === 'orphan' ? 'sem entrada' : 'conectada';
   return `${node.label} · ${role} · ${page.backlinks.size} back / ${page.outlinks.length} out`;
 }
 
-function fitGraph(show=true){
+function fitGraph(show=true, visible = null){
   const panel = $('#panel-graph');
-  const nodes = graphVisible().nodes;
+  const nodes = (visible || graphVisibleCache || graphVisible()).nodes;
   if (!panel || !nodes.length) {
     graphPan = {x:0,y:0};
     graphZoom = 1;
@@ -2562,26 +3116,258 @@ function fitGraph(show=true){
     return;
   }
   const rect = panel.getBoundingClientRect();
-  const xs = nodes.map(n => n.x);
-  const ys = nodes.map(n => n.y);
+  const xs = nodes.map(n => Number.isFinite(n.targetX) ? n.targetX : n.x);
+  const ys = nodes.map(n => Number.isFinite(n.targetY) ? n.targetY : n.y);
   const minX = Math.min(...xs), maxX = Math.max(...xs);
   const minY = Math.min(...ys), maxY = Math.max(...ys);
-  const width = Math.max(120, maxX - minX + 80);
-  const height = Math.max(120, maxY - minY + 80);
-  const zoom = Math.min(1.25, Math.max(.28, Math.min((rect.width - 120) / width, (rect.height - 130) / height)));
+  const width = Math.max(120, maxX - minX + 120);
+  const height = Math.max(120, maxY - minY + 120);
+  const zoom = Math.min(1.18, Math.max(.16, Math.min((rect.width - 140) / width, (rect.height - 150) / height)));
   const cx = (minX + maxX) / 2;
   const cy = (minY + maxY) / 2;
   graphZoom = Number.isFinite(zoom) ? zoom : 1;
   graphPan = { x:-cx * graphZoom, y:-cy * graphZoom };
-  if (state.activePanel === 'graph') setTimeout(renderGraph, 0);
+  if (state.activePanel === 'graph') requestGraphFrame();
   if(show) showToast('Mapa centralizado');
 }
+
 function toggleGraphMode(){
-  state.graphMode = state.graphMode === 'all' ? 'neighborhood' : 'all';
-  $('#graph-mode-btn').innerHTML = `${icon('graph')}<span class="btn-text">${state.graphMode === 'all' ? 'Todos' : 'Vizinhança'}</span>`;
-  fitGraph(false);
-  renderGraph();
-  showToast(state.graphMode === 'all' ? 'Mostrando toda a wiki' : 'Mostrando vizinhança da página atual');
+  setGraphScope(state.graphMode === 'global' ? 'local' : 'global');
+}
+
+function setGraphScope(scope){
+  state.graphMode = scope === 'local' ? 'local' : 'global';
+  scheduleGraphRefresh({ fit:true, forceLayout:true });
+  showToast(state.graphMode === 'local' ? 'Mostrando vizinhanca local' : 'Mostrando toda a wiki');
+}
+
+function setGraphDepth(value){
+  state.graphDepth = graphClamp(Math.round(Number(value) || 1), 1, 10);
+  scheduleGraphRefresh({ fit:true, forceLayout:true });
+}
+
+function setGraphSearch(value){
+  const term = String(value || '').slice(0, 200);
+  state.graphSearch = term;
+  const input = $('#graph-search');
+  if (input && input.value !== term) input.value = term;
+  scheduleGraphRefresh({ keepView:true, centerSearch:true });
+}
+
+function updateGraphControls(){
+  const selected = graphSelectedId();
+  const effectiveLocal = state.graphMode === 'local' && selected && state.graph.nodeMap.has(selected);
+  $('#graph-global-btn')?.classList.toggle('active', !effectiveLocal);
+  $('#graph-local-btn')?.classList.toggle('active', !!effectiveLocal);
+  const depth = $('#graph-depth');
+  const depthWrap = $('#graph-depth-wrap');
+  if (depth) { depth.value = String(state.graphDepth); depth.disabled = !effectiveLocal; }
+  depthWrap?.classList.toggle('disabled', !effectiveLocal);
+  const depthValue = $('#graph-depth-value');
+  if (depthValue) depthValue.textContent = String(state.graphDepth);
+  const search = $('#graph-search');
+  if (search && search.value !== state.graphSearch) search.value = state.graphSearch;
+  const stats = $('#graph-stats');
+  if (stats) stats.textContent = `${graphVisibleCache.nodes.length} nos / ${graphVisibleCache.edges.length} links · ${effectiveLocal ? 'Local' : 'Global'} · ${graphLayoutRunning ? 'layout' : 'pronto'}`;
+}
+
+function centerGraphSearchResult(){
+  const term = normalizeGraphSearch(state.graphSearch);
+  if (!term) return;
+  const match = graphVisibleCache.nodes.find(n => n.label.toLowerCase().includes(term));
+  if (!match) return;
+  const rect = $('#graph-canvas')?.getBoundingClientRect();
+  if (!rect) return;
+  graphPan = { x:-(Number.isFinite(match.targetX) ? match.targetX : match.x) * graphZoom, y:-(Number.isFinite(match.targetY) ? match.targetY : match.y) * graphZoom };
+}
+
+function updateGraphDetail(){
+  const detail = $('#graph-detail');
+  if (!detail) return;
+  const selected = graphSelectedId();
+  const node = selected ? state.graph.nodeMap.get(selected) : null;
+  detail.replaceChildren();
+  const title = document.createElement('div');
+  title.className = 'graph-detail-title';
+  title.textContent = node ? node.label : 'Nenhum no selecionado';
+  detail.appendChild(title);
+  const meta = document.createElement('div');
+  meta.className = 'graph-detail-meta';
+  meta.textContent = node ? `${node.degreeIn || 0} backlinks / ${node.degreeOut || 0} outlinks` : 'Selecione um no no mapa';
+  detail.appendChild(meta);
+  if (!node) return;
+  graphAppendDetailSection(detail, 'Backlinks', node.incomingIds || []);
+  graphAppendDetailSection(detail, 'Outlinks', node.outgoingIds || []);
+}
+
+function graphAppendDetailSection(root, titleText, ids){
+  const section = document.createElement('div');
+  section.className = 'graph-detail-section';
+  const title = document.createElement('b');
+  title.textContent = titleText;
+  section.appendChild(title);
+  const list = document.createElement('div');
+  list.className = 'graph-link-list';
+  const sliced = ids.slice(0, 10);
+  if (!sliced.length) {
+    const empty = document.createElement('div');
+    empty.className = 'graph-detail-meta';
+    empty.textContent = 'nenhum';
+    list.appendChild(empty);
+  }
+  for (const id of sliced) {
+    const target = state.graph.nodeMap.get(id);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = target?.label || id;
+    button.addEventListener('click', () => {
+      if (!target) return;
+      state.graphSelectedId = target.id;
+      if (target.type !== 'missing') openPage(target.id, { silentPanel:true });
+      scheduleGraphRefresh({ keepView:true });
+    });
+    list.appendChild(button);
+  }
+  section.appendChild(list);
+  root.appendChild(section);
+}
+
+function startGraphLayout(visible){
+  if (!visible?.nodes?.length) return;
+  graphRequestId += 1;
+  const requestId = graphRequestId;
+  if (graphWorker) {
+    graphWorker.postMessage({ type:'cancel' });
+    graphWorker.terminate();
+    graphWorker = null;
+  }
+  try {
+    graphWorker = new Worker(graphWorkerUrl());
+    graphLayoutRunning = true;
+    graphWorker.onmessage = event => applyGraphLayout(event.data);
+    graphWorker.onerror = () => { graphLayoutRunning = false; updateGraphControls(); };
+    graphWorker.postMessage({
+      type:'start',
+      requestId,
+      selectedId:visible.selectedId,
+      nodes:visible.nodes.map(n => ({ id:n.id, x:n.targetX, y:n.targetY, radius:n.r, degree:graphDegree(n), highlight:n.highlight, pinned:graphPinned.get(n.id) || null })),
+      edges:visible.edges.map(e => ({ source:e.source, target:e.target })),
+      pinned:Object.fromEntries(graphPinned)
+    });
+    updateGraphControls();
+  } catch {
+    graphLayoutRunning = false;
+    updateGraphControls();
+  }
+}
+
+function applyGraphLayout(message){
+  if (!message || message.requestId !== graphRequestId) return;
+  for (const item of message.nodes || []) {
+    const node = state.graph.nodeMap.get(item.id);
+    if (!node) continue;
+    if (node.dragging || node.pinned || node.inertiaFrames > 0) continue;
+    const pinned = graphPinned.get(item.id);
+    const x = pinned?.x ?? item.x;
+    const y = pinned?.y ?? item.y;
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+      node.targetX = graphClamp(x, GRAPH_WORLD_MIN, GRAPH_WORLD_MAX);
+      node.targetY = graphClamp(y, GRAPH_WORLD_MIN, GRAPH_WORLD_MAX);
+    }
+  }
+  graphLayoutRunning = message.status === 'running';
+  updateGraphControls();
+  requestGraphFrame();
+}
+
+function graphWorkerUrl(){
+  if (graphWorkerBlobUrl) return graphWorkerBlobUrl;
+  const source = `
+var token = 0;
+self.onmessage = function(event){
+  var data = event.data || {};
+  if (data.type === 'cancel') { token++; return; }
+  if (data.type === 'start') { token++; run(data, token); }
+};
+function clamp(v,min,max){ return Math.min(max, Math.max(min, v)); }
+function run(message, current){
+  var pinned = message.pinned || {};
+  var nodes = (message.nodes || []).map(function(n, index){
+    var pin = pinned[n.id] || n.pinned;
+    var x = Number(pin && pin.x != null ? pin.x : n.x);
+    var y = Number(pin && pin.y != null ? pin.y : n.y);
+    if (!isFinite(x) || !isFinite(y)) {
+      var a = (index / Math.max(1, message.nodes.length)) * Math.PI * 2;
+      x = Math.cos(a) * 260; y = Math.sin(a) * 260;
+    }
+    return { id:n.id, x:x, y:y, vx:0, vy:0, radius:Number(n.radius)||5, degree:Number(n.degree)||0, highlight:n.highlight || 'default', pinned:!!pin };
+  });
+  var byId = Object.create(null);
+  nodes.forEach(function(n){ byId[n.id] = n; });
+  var edges = (message.edges || []).map(function(e){ return { source:byId[e.source], target:byId[e.target] }; }).filter(function(e){ return e.source && e.target; });
+  var iteration = 0, alpha = 1, started = Date.now();
+  publish(message.requestId, 'running', iteration, nodes);
+  function batch(){
+    if (current !== token) return;
+    for (var i = 0; i < 4 && iteration < 660; i++) { tick(nodes, edges, alpha); alpha *= .987; iteration++; }
+    var velocity = averageVelocity(nodes);
+    var timedOut = Date.now() - started > 9000;
+    var done = timedOut || iteration >= 660 || alpha < .012 || velocity < .014;
+    publish(message.requestId, done ? (timedOut ? 'timeout' : 'converged') : 'running', iteration, nodes);
+    if (!done) setTimeout(batch, 0);
+  }
+  setTimeout(batch, 0);
+}
+function tick(nodes, edges, alpha){
+  var charge = clamp(2300 + nodes.length * 9, 2300, 6800);
+  for (var i = 0; i < nodes.length; i++) {
+    var a = nodes[i];
+    for (var j = i + 1; j < nodes.length; j++) {
+      var b = nodes[j];
+      var dx = a.x - b.x, dy = a.y - b.y;
+      var distSq = Math.max(36, dx*dx + dy*dy);
+      var dist = Math.sqrt(distSq);
+      var force = charge * alpha / distSq;
+      var min = a.radius + b.radius + 30;
+      if (dist < min) force += ((min - dist) / min) * 3.2 * alpha;
+      var fx = dx / dist * force, fy = dy / dist * force;
+      if (!a.pinned) { a.vx += fx; a.vy += fy; }
+      if (!b.pinned) { b.vx -= fx; b.vy -= fy; }
+    }
+  }
+  var ideal = clamp(165 + nodes.length * .28, 165, 340);
+  for (var e = 0; e < edges.length; e++) {
+    var source = edges[e].source, target = edges[e].target;
+    var sx = target.x - source.x, sy = target.y - source.y;
+    var distance = Math.max(.1, Math.sqrt(sx*sx + sy*sy));
+    var desired = ideal + (source.radius + target.radius) * 2.6;
+    var spring = (distance - desired) * .014 * alpha;
+    var x = sx / distance * spring, y = sy / distance * spring;
+    if (!source.pinned) { source.vx += x; source.vy += y; }
+    if (!target.pinned) { target.vx -= x; target.vy -= y; }
+  }
+  for (var n = 0; n < nodes.length; n++) {
+    var node = nodes[n];
+    if (node.pinned) { node.vx = 0; node.vy = 0; continue; }
+    var gravity = node.highlight === 'selected' ? .03 : node.degree >= 12 ? .009 : .0038;
+    node.vx -= node.x * gravity * alpha;
+    node.vy -= node.y * gravity * alpha;
+    node.vx *= .86; node.vy *= .86;
+    node.x = clamp(node.x + clamp(node.vx, -18, 18), -5200, 5200);
+    node.y = clamp(node.y + clamp(node.vy, -18, 18), -5200, 5200);
+  }
+}
+function averageVelocity(nodes){
+  if (!nodes.length) return 0;
+  var total = 0;
+  for (var i = 0; i < nodes.length; i++) total += Math.abs(nodes[i].vx) + Math.abs(nodes[i].vy);
+  return total / nodes.length;
+}
+function publish(requestId, status, iteration, nodes){
+  self.postMessage({ type:'layout', requestId:requestId, status:status, iteration:iteration, nodes:nodes.map(function(n){ return { id:n.id, x:n.x, y:n.y }; }) });
+}`;
+  graphWorkerBlobUrl = URL.createObjectURL(new Blob([source], { type:'text/javascript' }));
+  return graphWorkerBlobUrl;
 }
 
 function randomPage(){ const pages=[...state.pages.values()].filter(p=>!p.isSpecial); if(!pages.length) return; openPage(pages[Math.floor(Math.random()*pages.length)].slug); }
@@ -3937,7 +4723,7 @@ $('#copy-modal-copy').addEventListener('click', async () => {
 });
 $('#copy-modal').addEventListener('click', e => { if (e.target.id === 'copy-modal') closeCopyFallback(); });
 document.addEventListener('keydown', e => { const k=e.key.toLowerCase(); if((e.metaKey||e.ctrlKey) && k==='k'){ e.preventDefault(); openPalette(); } if(k==='escape'){ closePalette(); closeCopyFallback(); $('#search-overlay').classList.remove('visible'); }});
-window.addEventListener('resize', () => { if(state.activePanel==='graph') renderGraph(); });
+window.addEventListener('resize', () => { if(state.activePanel==='graph') { resizeGraphCanvas(); requestGraphFrame(); } });
 
 if (window.marked?.setOptions) marked.setOptions({ gfm:true, breaks:false, mangle:false, headerIds:false });
 

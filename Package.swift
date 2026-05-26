@@ -24,6 +24,7 @@ let package = Package(
                 .process("Resources/PocketWikiMac.icns"),
                 .process("Resources/wiki-review.md"),
                 .process("Resources/pocketwiki-logo.png"),
+                .process("Resources/GraphView"),
                 .copy("Resources/ExcalidrawEditor")
             ]
         )

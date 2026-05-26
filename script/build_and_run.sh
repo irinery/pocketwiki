@@ -21,6 +21,7 @@ pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 pkill -x "$PRODUCT_NAME" >/dev/null 2>&1 || true
 
 npm --prefix "$ROOT_DIR" run build:excalidraw
+npm --prefix "$ROOT_DIR" run build:graph-view
 swift build --package-path "$ROOT_DIR"
 BUILD_BINARY="$(swift build --package-path "$ROOT_DIR" --show-bin-path)/$PRODUCT_NAME"
 

@@ -44,7 +44,7 @@ struct WikiPage: Identifiable, Hashable, Sendable {
     }
 }
 
-enum WikiHealthClass: String, Sendable {
+enum WikiHealthClass: String, Codable, Sendable {
     case good
     case warn
     case bad

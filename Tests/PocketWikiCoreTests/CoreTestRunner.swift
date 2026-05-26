@@ -64,6 +64,12 @@ struct CoreTestRunner {
             ("server files payload", testServerFilesPayload),
             ("remote wiki decode", testRemoteWikiDecode),
             ("sidebar explorer", testSidebarExplorer),
+            ("graph local filter", testGraphLocalFilter),
+            ("graph orphan targets", testGraphOrphanTargets),
+            ("graph global limit", testGraphGlobalLimitKeepsSelection),
+            ("graph deduplicates edges", testGraphDeduplicatesEdges),
+            ("graph truncates high fanout", testGraphTruncatesHighFanout),
+            ("graph oversized node", testGraphOversizedNode),
             ("desktop tabs include map and server", testDesktopTabs)
         ]
 
@@ -667,6 +673,99 @@ struct CoreTestRunner {
         try expect(search.count == 1 && search[0].title == "Busca", "sidebar search mode failed")
     }
 
+    static func testGraphLocalFilter() throws {
+        let index = WikiIndexer().buildIndex(files: [
+            makeFile(path: "A.md", content: "# A\n[[B]]"),
+            makeFile(path: "B.md", content: "# B\n[[C]]"),
+            makeFile(path: "C.md", content: "# C\n[[D]]"),
+            makeFile(path: "D.md", content: "# D\n[[A]]"),
+            makeFile(path: "E.md", content: "# E")
+        ], sourceName: "Test")
+
+        let graph = WikiGraphSnapshot.build(index: index, selectedPageID: "b")
+        let local = graph.filtered(using: FilterConfig(scope: .local, depth: 1, selectedNodeID: "b", searchTerm: ""))
+        let ids = Set(local.nodes.map(\.id))
+
+        try expect(graph.focusPageID == "b", "graph focus missing")
+        try expect(ids == ["a", "b", "c"], "local depth 1 selected wrong nodes: \(ids)")
+        try expect(local.edges.map(\.id) == ["a->b", "b->c"], "local depth 1 edges failed")
+        try expect(graph.adjacentIDs(to: "b") == ["a", "c"], "graph adjacency failed")
+
+        let depth2 = graph.filtered(using: FilterConfig(scope: .local, depth: 2, selectedNodeID: "b", searchTerm: ""))
+        try expect(Set(depth2.nodes.map(\.id)) == ["a", "b", "c", "d"], "local depth 2 failed")
+    }
+
+    static func testGraphOrphanTargets() throws {
+        let index = WikiIndexer().buildIndex(files: [
+            makeFile(path: "A.md", content: "# A\n[[Nao Existe]]")
+        ], sourceName: "Test")
+
+        let graph = WikiGraphSnapshot.build(index: index, selectedPageID: "a")
+        let orphan = try require(graph.nodes.first { $0.status == .orphanTarget }, "orphan target missing")
+
+        try expect(orphan.id == "missing/nao-existe", "orphan id failed")
+        try expect(orphan.degreeIn == 1 && orphan.degreeOut == 0, "orphan degree failed")
+        try expect(graph.edges.map(\.id) == ["a->missing/nao-existe"], "orphan edge failed")
+    }
+
+    static func testGraphGlobalLimitKeepsSelection() throws {
+        let index = WikiIndexer().buildIndex(files: [
+            makeFile(path: "Hub.md", content: "# Hub\n[[A]] [[B]] [[C]]"),
+            makeFile(path: "A.md", content: "# A\n[[Hub]]"),
+            makeFile(path: "B.md", content: "# B\n[[Hub]]"),
+            makeFile(path: "C.md", content: "# C"),
+            makeFile(path: "Selected.md", content: "# Selected")
+        ], sourceName: "Test")
+
+        let graph = WikiGraphSnapshot.build(index: index, selectedPageID: "selected", scope: .global, maxNodes: 2)
+        let ids = Set(graph.nodes.map(\.id))
+
+        try expect(graph.nodes.count == 2, "global graph limit failed")
+        try expect(ids.contains("selected"), "global graph dropped selected page")
+        try expect(ids.contains("hub"), "global graph should keep strongest hub")
+    }
+
+    static func testGraphDeduplicatesEdges() throws {
+        let index = WikiIndexer().buildIndex(files: [
+            makeFile(path: "A.md", content: "# A\n[[B]] [[B|bee]]"),
+            makeFile(path: "B.md", content: "# B")
+        ], sourceName: "Test")
+
+        let graph = WikiGraphSnapshot.build(index: index, selectedPageID: "a", scope: .global, maxNodes: 10)
+
+        try expect(graph.edges.map(\.id) == ["a->b"], "graph duplicated repeated edge")
+        try expect(graph.nodes.first { $0.id == "a" }?.visibleDegree == 1, "visible source degree failed")
+        try expect(graph.nodes.first { $0.id == "b" }?.visibleDegree == 1, "visible target degree failed")
+    }
+
+    static func testGraphTruncatesHighFanout() throws {
+        let targets = (0..<205).map { "T\($0)" }
+        let files = [makeFile(path: "A.md", content: "# A\n" + targets.map { "[[\($0)]]" }.joined(separator: " "))] +
+            targets.map { makeFile(path: "\($0).md", content: "# \($0)") }
+        let index = WikiIndexer().buildIndex(files: files, sourceName: "Test")
+
+        let graph = WikiGraphSnapshot.build(index: index, selectedPageID: "a")
+        let source = try require(graph.nodes.first { $0.id == "a" }, "source node missing")
+
+        try expect(source.truncated, "high fanout source was not truncated")
+        try expect(graph.edges.filter { $0.source == "a" }.count == WikiGraphSnapshot.maxLinksPerNode, "fanout edge limit failed")
+    }
+
+    static func testGraphOversizedNode() throws {
+        let index = WikiIndexer().buildIndex(files: [
+            makeFile(
+                path: "Grande.md",
+                content: "# Grande",
+                sizeBytes: WikiGraphSnapshot.oversizedThresholdBytes + 1
+            )
+        ], sourceName: "Test")
+
+        let graph = WikiGraphSnapshot.build(index: index, selectedPageID: "grande")
+        let node = try require(graph.nodes.first { $0.id == "grande" }, "oversized node missing")
+
+        try expect(node.status == .oversized, "oversized node status failed")
+    }
+
     static func testDesktopTabs() throws {
         let tabs = WikiTab.allCases
         try expect(tabs.contains(.map), "map tab missing")
@@ -675,10 +774,10 @@ struct CoreTestRunner {
         try expect(WikiTab.server.iconKind == .server, "server icon kind failed")
     }
 
-    private static func makeFile(path: String, content: String, kind: WikiFile.Kind = .markdown) -> WikiFile {
+    private static func makeFile(path: String, content: String, kind: WikiFile.Kind = .markdown, sizeBytes: Int? = nil) -> WikiFile {
         WikiFile(
             relativePath: path,
-            sizeBytes: content.utf8.count,
+            sizeBytes: sizeBytes ?? content.utf8.count,
             modifiedAt: Date(timeIntervalSince1970: 0),
             content: content,
             kind: kind

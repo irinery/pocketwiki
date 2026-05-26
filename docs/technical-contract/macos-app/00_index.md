@@ -11,6 +11,7 @@
 | 5 | `05_excalidraw_textual.md` | Excalidraw textual/fallback | `02_core_indexacao.md` | sim |
 | 6 | `06_ferramentas_adiadas.md` | Itens dificuldade 4+ anotados e não implementados | nenhuma | sim |
 | 7 | `07_ia_local_lmstudio.md` | IA local com LM Studio, streaming e contexto selecionável | `02_core_indexacao.md`, `03_shell_leitor_busca.md` | sim |
+| 8 | `08_mapa_grafo.md` | Grafo visual interativo na aba Mapa | `02_core_indexacao.md`, `03_shell_leitor_busca.md` | sim |
 
 ## Convenções globais
 
@@ -42,4 +43,4 @@
 | Segurança | bookmark é criado/restaurado e acesso à pasta chama `startAccessingSecurityScopedResource()` quando aplicável |
 | Indexação | testes cobrem slug, frontmatter, tags, links, arquivos ignorados e Excalidraw textual |
 | UI | telas principais estão navegáveis via SwiftUI; Excalidraw usa WebView isolado |
-| Itens 4+ | grafo segue adiado; Excalidraw oficial e IA local possuem contrato próprio |
+| Itens 4+ | grafo, Excalidraw oficial e IA local possuem contrato próprio |
