@@ -8,7 +8,6 @@ struct SidebarView: View {
 
         VStack(spacing: 0) {
             header
-                .padding()
 
             List {
                 if !sections.isEmpty {
@@ -23,63 +22,82 @@ struct SidebarView: View {
             }
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
-            .searchable(text: $store.searchText, placement: .sidebar, prompt: "Buscar / filtrar")
         }
-        .background(PocketWikiTheme.bg2)
-        .toolbar {
-            ToolbarItemGroup {
-                Button {
-                    Task { await store.openFolder() }
-                } label: {
-                    Label("Abrir pasta", systemImage: "folder")
-                }
-
-                Button {
-                    store.showSearchPalette = true
-                } label: {
-                    Label("Busca", systemImage: "command")
-                }
-            }
-        }
+        .background(.ultraThinMaterial)
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
-                BrandLogoView(size: 74)
-                VStack(alignment: .leading, spacing: 2) {
+                BrandLogoView(size: 52)
+                VStack(alignment: .leading, spacing: 3) {
                     Text("PocketWiki")
-                        .font(.system(size: 20, weight: .heavy, design: .serif))
+                        .font(.system(size: 21, weight: .bold, design: .rounded))
                         .foregroundStyle(PocketWikiTheme.text)
-                    Text(store.index.sourceName)
-                        .font(.caption.monospaced())
-                        .foregroundStyle(PocketWikiTheme.muted)
-                        .lineLimit(1)
+                    Text(sourceSummary)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(store.index.pages.isEmpty ? PocketWikiTheme.muted : PocketWikiTheme.accent)
+                        .lineLimit(2)
                 }
                 Spacer()
             }
+            .padding(.leading, 62)
 
             Button {
                 Task { await store.openFolder() }
             } label: {
                 Label("Abrir pasta da wiki", systemImage: "folder.badge.plus")
+                    .font(.callout.weight(.semibold))
                     .frame(maxWidth: .infinity)
+                    .frame(height: 36)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(PocketWikiTheme.accent)
-            .buttonBorderShape(.roundedRectangle(radius: 8))
+            .buttonStyle(.plain)
+            .foregroundStyle(PocketWikiTheme.text)
+            .pocketWikiGlass(cornerRadius: 14, tint: PocketWikiTheme.accent.opacity(0.24), interactive: true)
 
-            Text(store.statusMessage)
-                .font(.caption)
+            searchField
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 14)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(PocketWikiTheme.border)
+                .frame(height: 1)
+        }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
                 .foregroundStyle(PocketWikiTheme.muted)
-                .lineLimit(2)
+
+            TextField("Buscar / filtrar", text: $store.searchText)
+                .textFieldStyle(.plain)
+                .foregroundStyle(PocketWikiTheme.text)
+
+            Button {
+                store.showSearchPalette = true
+            } label: {
+                Text("⌘K")
+                    .font(.caption2.monospaced().weight(.semibold))
+                    .foregroundStyle(PocketWikiTheme.muted)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(PocketWikiTheme.bg.opacity(0.36), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .help("Abrir busca global")
         }
-        .padding(12)
-        .background(PocketWikiTheme.panel.opacity(0.72), in: RoundedRectangle(cornerRadius: 8))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(PocketWikiTheme.border, lineWidth: 1)
-        }
+        .padding(.horizontal, 11)
+        .frame(height: 38)
+        .pocketWikiSurface(cornerRadius: 14)
+    }
+
+    private var sourceSummary: String {
+        guard !store.index.pages.isEmpty else { return "nenhuma wiki carregada" }
+        let drawings = store.index.pages.filter { $0.kind == .excalidraw }.count
+        return "\(store.index.pages.count) páginas · \(drawings) desenhos"
     }
 
     private func sidebarItemRow(_ item: WikiSidebarItem) -> some View {
@@ -107,16 +125,20 @@ struct SidebarView: View {
                 }
                 Spacer(minLength: 0)
             }
-            .contentShape(Rectangle())
+            .padding(.vertical, 3)
+            .padding(.horizontal, 8)
+            .background(rowBackground(for: item), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
-        .listRowBackground(rowBackground(for: item))
+        .listRowInsets(EdgeInsets(top: 1, leading: 8, bottom: 1, trailing: 8))
+        .listRowBackground(Color.clear)
     }
 
     private func rowBackground(for item: WikiSidebarItem) -> Color {
         guard case .page(let id) = item.kind, id == store.selectedPageID else {
             return Color.clear
         }
-        return PocketWikiTheme.accent.opacity(0.14)
+        return PocketWikiTheme.accent.opacity(0.16)
     }
 }

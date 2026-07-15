@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DetailContainerView: View {
     @Bindable var store: WikiAppStore
+    @Binding var columnVisibility: NavigationSplitViewVisibility
     @SceneStorage("PocketWikiMac.inspectorDrawerPresented") private var inspectorDrawerPresented = false
 
     private let inlineInspectorBreakpoint: CGFloat = 1080
@@ -10,17 +11,21 @@ struct DetailContainerView: View {
     var body: some View {
         GeometryReader { proxy in
             let isCompactInspector = proxy.size.width < inlineInspectorBreakpoint
-            let usesCompactTabs = proxy.size.width < 1120
+            let usesCompactTabs = proxy.size.width < 980
+            let showsBreadcrumb = proxy.size.width >= 1040
 
             VStack(spacing: 0) {
-                topBar(isCompactInspector: isCompactInspector, usesCompactTabs: usesCompactTabs)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(PocketWikiTheme.bg.opacity(0.9))
-
-                Rectangle()
-                    .fill(PocketWikiTheme.border)
-                    .frame(height: 1)
+                topBar(
+                    isCompactInspector: isCompactInspector,
+                    usesCompactTabs: usesCompactTabs,
+                    showsBreadcrumb: showsBreadcrumb
+                )
+                    .padding(.horizontal, 14)
+                    .frame(height: 48)
+                    .pocketWikiGlass(cornerRadius: 20)
+                    .padding(.horizontal, 14)
+                    .padding(.top, 10)
+                    .padding(.bottom, 8)
 
                 if store.isLoading {
                     ProgressView(store.statusMessage)
@@ -31,7 +36,7 @@ struct DetailContainerView: View {
                     content(isCompactInspector: isCompactInspector, availableWidth: proxy.size.width)
                 }
             }
-            .background(PocketWikiTheme.appBackground)
+            .background(PocketWikiAmbientBackground())
             .onChange(of: isCompactInspector) { _, compact in
                 if !compact {
                     inspectorDrawerPresented = false
@@ -48,17 +53,63 @@ struct DetailContainerView: View {
         }
     }
 
-    private func topBar(isCompactInspector: Bool, usesCompactTabs: Bool) -> some View {
+    private func topBar(isCompactInspector: Bool, usesCompactTabs: Bool, showsBreadcrumb: Bool) -> some View {
         HStack(spacing: 10) {
-            WikiTabStrip(selection: $store.selectedTab, showsLabels: !usesCompactTabs)
-                .layoutPriority(1)
+            if columnVisibility == .detailOnly {
+                Color.clear
+                    .frame(width: 54, height: 1)
+            }
 
-            Spacer(minLength: 8)
+            sidebarButton
+
+            if showsBreadcrumb {
+                breadcrumb
+                Spacer(minLength: 8)
+            }
+
+            WikiTabStrip(selection: $store.selectedTab, showsLabels: !usesCompactTabs)
+                .layoutPriority(2)
+
+            if !showsBreadcrumb {
+                Spacer(minLength: 8)
+            }
 
             ServerStatusPill(store: store, showsDetail: false)
             inspectorButton(isCompactInspector: isCompactInspector, showsText: false)
         }
         .foregroundStyle(PocketWikiTheme.text)
+    }
+
+    private var sidebarButton: some View {
+        Button {
+            withAnimation(.snappy(duration: 0.22)) {
+                columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
+            }
+        } label: {
+            Image(systemName: "sidebar.left")
+                .frame(width: 30, height: 30)
+        }
+        .buttonStyle(.plain)
+        .pocketWikiSurface(cornerRadius: 12, tint: PocketWikiTheme.accent2)
+        .help(columnVisibility == .detailOnly ? "Abrir barra lateral" : "Fechar barra lateral")
+    }
+
+    private var breadcrumb: some View {
+        HStack(spacing: 5) {
+            Text(store.index.sourceName)
+                .foregroundStyle(PocketWikiTheme.accent)
+                .fontWeight(.semibold)
+
+            Text("/")
+                .foregroundStyle(PocketWikiTheme.muted)
+
+            Text(store.selectedPage?.path ?? store.selectedTab.title)
+                .foregroundStyle(PocketWikiTheme.muted)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .font(.caption)
+        .frame(minWidth: 100, maxWidth: 190, alignment: .leading)
     }
 
     @ViewBuilder
@@ -75,8 +126,9 @@ struct DetailContainerView: View {
                     Image(systemName: inspectorDrawerPresented ? "sidebar.right" : "info.circle")
                 }
             }
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.roundedRectangle(radius: 8))
+            .buttonStyle(.plain)
+            .frame(width: 32, height: 32)
+            .pocketWikiGlass(cornerRadius: 13, interactive: true)
             .controlSize(.small)
             .help(inspectorDrawerPresented ? "Fechar informacoes" : "Abrir informacoes")
         }
@@ -170,7 +222,7 @@ struct DetailContainerView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
-            .background(PocketWikiTheme.bg2.opacity(0.98))
+            .background(.ultraThinMaterial)
 
             Rectangle()
                 .fill(PocketWikiTheme.border)
@@ -180,7 +232,7 @@ struct DetailContainerView: View {
         }
         .frame(width: width)
         .frame(maxHeight: .infinity)
-        .background(PocketWikiTheme.bg2)
+        .background(.regularMaterial)
         .overlay(alignment: .leading) {
             Rectangle()
                 .fill(PocketWikiTheme.border)

@@ -42,6 +42,14 @@ final class WikiAppStore {
     var serverLogs: [PocketWikiServerLogEntry] = []
     var remoteServerURLText = UserDefaults.standard.string(forKey: "PocketWikiMac.remoteServerURL") ?? "http://pocketwiki.local"
     var remoteConnectionMessage = "Nenhum servidor remoto conectado."
+    var remoteMCPEvidence: PocketWikiMCPEvidenceStatus?
+    var localAIAPIKey = ""
+    var localAIRuntimeAPIKey = ""
+    var localAIConfiguredModelID = ""
+    var localAIRuntimeTokenLoaded = false
+    var middlewareAuthClientToken = ""
+    var middlewareAuthRuntimeTokenLoaded = false
+    var localAIChatSession = LocalAIChatSession()
 
     private let folderPicker: WikiFolderPicker
     private let bookmarkStore: WikiBookmarkStore
@@ -79,8 +87,17 @@ final class WikiAppStore {
     }
 
     var remoteAIProxyBaseURL: String? {
+        nil
+    }
+
+    var remoteKernelQueryURL: String? {
         guard case .remoteServer(let url) = sourceMode else { return nil }
-        return url.appendingPathComponent("api/ai").absoluteString
+        return url.appendingPathComponent("api/kernel/query").absoluteString
+    }
+
+    var localMCPEvidence: PocketWikiMCPEvidenceStatus {
+        let rootPath = currentSourceURL?.path ?? serverConfiguration.resolvedReferenceURL.path
+        return PocketWikiMCPEvidenceStatus.make(rootPath: rootPath)
     }
 
     var canEditExcalidrawDocuments: Bool {
@@ -296,6 +313,7 @@ final class WikiAppStore {
             let result = try await remoteClient.connect(to: remoteServerURLText)
             UserDefaults.standard.set(result.baseURL.absoluteString, forKey: "PocketWikiMac.remoteServerURL")
             remoteServerURLText = result.baseURL.absoluteString
+            remoteMCPEvidence = result.config.mcpEvidence
             applyLoadedFiles(
                 files: result.source.files,
                 sourceName: result.source.rootName,
@@ -307,6 +325,7 @@ final class WikiAppStore {
             remoteConnectionMessage = "Conectado em \(result.baseURL.absoluteString)"
             appendServerLog(PocketWikiServerLogEntry(level: .info, message: remoteConnectionMessage))
         } catch {
+            remoteMCPEvidence = nil
             serverStatus = .failed(error.localizedDescription)
             remoteConnectionMessage = error.localizedDescription
             errorMessage = error.localizedDescription
@@ -320,6 +339,7 @@ final class WikiAppStore {
         index = .empty
         currentFiles = []
         currentSourceURL = nil
+        remoteMCPEvidence = nil
         selectedPageID = nil
         selectedTab = .server
         serverStatus = localServer == nil ? .stopped : serverStatus
@@ -429,6 +449,7 @@ final class WikiAppStore {
         if !currentFiles.isEmpty {
             return PocketWikiServedSource(
                 rootName: index.sourceName,
+                rootPath: currentSourceURL?.path,
                 source: sourceMode.title,
                 configured: true,
                 readonly: true,
@@ -443,6 +464,7 @@ final class WikiAppStore {
             let loaded = try folderLoader.loadFiles(from: referenceURL)
             return PocketWikiServedSource(
                 rootName: referenceURL.lastPathComponent,
+                rootPath: referenceURL.path,
                 source: "env",
                 configured: true,
                 readonly: configuration.referenceReadonly,

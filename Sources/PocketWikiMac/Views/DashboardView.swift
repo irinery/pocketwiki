@@ -169,10 +169,11 @@ struct DashboardView: View {
         HStack(alignment: .top, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(store.index.sourceName)
-                    .font(.system(size: 34, weight: .heavy, design: .serif))
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .tracking(-0.8)
                     .foregroundStyle(PocketWikiTheme.text)
                     .lineLimit(2)
-                Text("Visao executiva da wiki local: densidade, hubs, buracos de documentacao e paginas recentes.")
+                Text("Visão executiva da wiki local: densidade, hubs, buracos de documentação e páginas recentes.")
                     .foregroundStyle(PocketWikiTheme.dim)
             }
             Spacer()

@@ -71,7 +71,7 @@ struct InspectorView: View {
             }
             .padding(14)
         }
-        .background(PocketWikiTheme.bg2.opacity(0.96))
+        .background(.thinMaterial)
     }
 
     private func metric(_ label: String, _ value: String) -> some View {

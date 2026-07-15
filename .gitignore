@@ -1,6 +1,16 @@
 .env
+.env.*
+!.env.example
 .DS_Store
 node_modules/
 .pocketwiki-cache/
 .build/
 dist/
+*.p8
+*.p12
+*.cer
+*.pem
+*.key
+*.mobileprovision
+*.provisionprofile
+*.xcarchive

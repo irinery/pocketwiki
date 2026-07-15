@@ -2,10 +2,17 @@
 set -eu
 
 ROOT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
+SCRIPT_DIR="$ROOT_DIR/script"
 PRODUCT_NAME="PocketWikiMac"
 APP_NAME="PocketWiki"
 BUNDLE_ID="com.irinery.PocketWikiMac"
 MIN_SYSTEM_VERSION="14.0"
+
+# shellcheck source=script/signing.sh
+. "$SCRIPT_DIR/signing.sh"
+load_env_file "$ROOT_DIR/.env"
+load_env_file "$ROOT_DIR/.env.local"
+BUNDLE_ID="${POCKETWIKI_BUNDLE_ID:-$BUNDLE_ID}"
 
 APP_VERSION="${APP_VERSION:-}"
 if [ -z "$APP_VERSION" ]; then
@@ -13,7 +20,10 @@ if [ -z "$APP_VERSION" ]; then
 fi
 
 MACOS_ARCHS="${MACOS_ARCHS:-arm64 x86_64}"
-SIGN_IDENTITY="${SIGN_IDENTITY:--}"
+if [ -n "${SIGN_IDENTITY:-}" ] && [ -z "${POCKETWIKI_SIGNING_IDENTITY:-}" ]; then
+  POCKETWIKI_SIGNING_IDENTITY="$SIGN_IDENTITY"
+fi
+SIGN_MODE="${POCKETWIKI_SIGN_MODE:-auto}"
 BUILD_NUMBER="${BUILD_NUMBER:-$(git -C "$ROOT_DIR" rev-list --count HEAD 2>/dev/null || printf "1")}"
 
 DIST_DIR="$ROOT_DIR/dist/release"
@@ -56,6 +66,9 @@ DMG_PATH="$DIST_DIR/$DMG_NAME"
 if [ -z "${DEVELOPER_DIR:-}" ] && [ -d "/Applications/Xcode.app/Contents/Developer" ]; then
   export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
 fi
+
+[ "${POCKETWIKI_SKIP_SECRET_SCAN:-0}" = "1" ] || "$SCRIPT_DIR/scan_secrets.sh" >/dev/null
+SIGNING_IDENTITY="$(require_signing_identity "$SIGN_MODE")"
 
 need_node_deps() {
   [ ! -x "$ROOT_DIR/node_modules/.bin/vite" ] || [ ! -f "$ROOT_DIR/node_modules/lz-string/libs/lz-string.min.js" ]
@@ -106,7 +119,7 @@ rm -rf "$WORK_DIR" "$DIST_DIR"
 mkdir -p "$APP_MACOS" "$APP_RESOURCES" "$APP_WEB" "$DIST_DIR"
 cp "$BUILD_BINARY" "$APP_BINARY"
 chmod +x "$APP_BINARY"
-cp -R "$RESOURCE_BUNDLE" "$APP_RESOURCES/"
+ditto --noextattr --norsrc "$RESOURCE_BUNDLE" "$APP_RESOURCES/$(basename "$RESOURCE_BUNDLE")"
 
 if [ -f "$ROOT_DIR/Sources/PocketWikiMac/Resources/PocketWikiMac.icns" ]; then
   cp "$ROOT_DIR/Sources/PocketWikiMac/Resources/PocketWikiMac.icns" "$APP_RESOURCES/PocketWikiMac.icns"
@@ -119,7 +132,7 @@ for file in wiki-cockpit.html offline.html manifest.webmanifest sw.js favicon.ic
 done
 
 if [ -d "$ROOT_DIR/assets" ]; then
-  cp -R "$ROOT_DIR/assets" "$APP_WEB/assets"
+  ditto --noextattr --norsrc "$ROOT_DIR/assets" "$APP_WEB/assets"
 fi
 
 cat >"$INFO_PLIST" <<PLIST
@@ -169,9 +182,7 @@ for arch in $MACOS_ARCHS; do
 done
 
 echo "==> Signing app bundle"
-xattr -cr "$APP_BUNDLE"
-codesign --force --deep --sign "$SIGN_IDENTITY" "$APP_BUNDLE"
-codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
+codesign_app_bundle "$APP_BUNDLE" "$BUNDLE_ID" "$SIGNING_IDENTITY"
 
 echo "==> Creating DMG"
 RW_DMG="$WORK_DIR/$APP_NAME-rw.dmg"

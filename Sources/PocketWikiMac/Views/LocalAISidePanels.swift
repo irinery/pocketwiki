@@ -43,10 +43,10 @@ struct LocalAISideRail: View {
         .foregroundStyle(selection == panel ? PocketWikiTheme.accent : PocketWikiTheme.dim)
         .background(
             selection == panel ? PocketWikiTheme.accent.opacity(0.11) : PocketWikiTheme.bg3.opacity(0.75),
-            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
         )
         .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(selection == panel ? PocketWikiTheme.accent.opacity(0.55) : PocketWikiTheme.border, lineWidth: 1)
         }
         .help(panel.title)
@@ -55,18 +55,29 @@ struct LocalAISideRail: View {
 
 struct LocalAISidePanelContent: View {
     let panel: LocalAISidePanel
+    @Binding var providerMethodRaw: String
+    @Binding var reasoningEffortRaw: String
+    @Binding var kernelBaseURL: String
+    @Binding var middlewareAuthBaseURL: String
+    @Binding var middlewareAuthProjectID: String
+    @Binding var middlewareAuthProfileID: String
     @Binding var baseURL: String
     @Binding var modelID: String
+    @Binding var middlewareAuthToken: String
     @Binding var apiKey: String
     let availableModels: [LocalAIModel]
+    let middlewareRuntimeTokenLoaded: Bool
     let runtimeTokenLoaded: Bool
     let isStreaming: Bool
+    let providerStatusText: String
     let contextNotice: String?
     let autoContextPaths: [String]
     let manualSources: [LocalAIManualContextSource]
     let excludedContextPaths: Set<String>
     let contextSourceCount: Int
+    let onPrimaryProviderAction: () async -> Void
     let onRefreshModels: () async -> Void
+    let onOpenAdvancedSettings: () -> Void
     let onAddContextFiles: () -> Void
     let onRemoveManualSource: (UUID) -> Void
     let onExcludeContextPath: (String) -> Void
@@ -83,61 +94,120 @@ struct LocalAISidePanelContent: View {
     }
 
     private var llmPanel: some View {
-        LocalAISideCard(
-            title: "LM Studio",
-            subtitle: availableModels.isEmpty ? "offline" : "ok",
-            systemImage: "server.rack",
+        let method = LocalAIProviderMethod.value(for: providerMethodRaw)
+        return LocalAISideCard(
+            title: "IA",
+            subtitle: method.title,
+            systemImage: method.systemImage,
             close: onClose
         ) {
-            VStack(alignment: .leading, spacing: 10) {
-                LocalAIFieldLabel("Base URL")
-                TextField("", text: $baseURL)
-                    .textFieldStyle(.plain)
-                    .font(.caption.monospaced())
-                    .localAIInputChrome()
-
-                LocalAIFieldLabel("Modelo")
-                if availableModels.isEmpty {
-                    TextField("", text: $modelID)
-                        .textFieldStyle(.plain)
-                        .font(.caption.monospaced())
-                        .localAIInputChrome()
-                } else {
-                    Picker("Modelo", selection: $modelID) {
-                        ForEach(availableModels) { model in
-                            Text(model.id).tag(model.id)
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 5) {
+                    LocalAIFieldLabel("Método")
+                    Picker("", selection: $providerMethodRaw) {
+                        ForEach(LocalAIProviderMethod.allCases) { provider in
+                            Label(provider.title, systemImage: provider.systemImage)
+                                .tag(provider.rawValue)
                         }
                     }
                     .labelsHidden()
                     .pickerStyle(.menu)
-                    .controlSize(.small)
+                    .localAIInputChrome()
                 }
 
-                if !runtimeTokenLoaded {
-                    LocalAIFieldLabel("Token")
-                    SecureField("", text: $apiKey, prompt: Text("LM_STUDIO_API_KEY"))
-                        .textFieldStyle(.plain)
-                        .font(.caption.monospaced())
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        LocalAIFieldLabel("Modelo")
+                        Picker("", selection: $modelID) {
+                            ForEach(modelOptions(for: method), id: \.self) { model in
+                                Text(model).tag(model)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
                         .localAIInputChrome()
-                }
-
-                Button {
-                    Task {
-                        await onRefreshModels()
                     }
-                } label: {
-                    Label("Atualizar modelos", systemImage: "arrow.triangle.2.circlepath")
-                }
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.roundedRectangle(radius: 8))
-                .tint(PocketWikiTheme.accent)
-                .disabled(isStreaming)
+                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
 
-                Text(runtimeTokenLoaded ? "usando configuracao local do PocketWiki" : "chamada direta ao LM Studio")
+                    VStack(alignment: .leading, spacing: 5) {
+                        LocalAIFieldLabel("Raciocínio")
+                        Picker("", selection: $reasoningEffortRaw) {
+                            ForEach(LocalAIReasoningEffort.allCases) { effort in
+                                Text(effort.title).tag(effort.rawValue)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .localAIInputChrome()
+                    }
+                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                }
+
+                HStack(spacing: 8) {
+                    Button {
+                        Task { await onPrimaryProviderAction() }
+                    } label: {
+                        Label(method.primaryActionTitle, systemImage: method == .openAI ? "person.crop.circle.badge.checkmark" : "wrench.and.screwdriver")
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 38)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(PocketWikiTheme.text)
+                    .pocketWikiSurface(cornerRadius: 13, tint: PocketWikiTheme.accent)
+                    .disabled(isStreaming)
+                    .frame(minWidth: 0, maxWidth: .infinity)
+
+                    Button {
+                        Task { await onRefreshModels() }
+                    } label: {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .frame(width: 38, height: 38)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(PocketWikiTheme.accent)
+                    .pocketWikiSurface(cornerRadius: 13)
+                    .disabled(isStreaming)
+                    .help("Atualizar status")
+
+                    Button(action: onOpenAdvancedSettings) {
+                        Image(systemName: "slider.horizontal.3")
+                            .frame(width: 38, height: 38)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(PocketWikiTheme.dim)
+                    .pocketWikiSurface(cornerRadius: 13)
+                    .help("Configurações avançadas")
+                }
+
+                Text(providerStatusText.pocketTrimmed.pocketIfEmpty(method.statusFallback))
                     .font(.caption.monospaced())
                     .foregroundStyle(PocketWikiTheme.muted)
+                    .padding(.top, 1)
+                    .lineLimit(2)
             }
         }
+    }
+
+    private func modelOptions(for method: LocalAIProviderMethod) -> [String] {
+        let current = modelID.pocketTrimmed
+        let defaults: [String]
+        switch method {
+        case .openAI:
+            defaults = ["gpt-5.5"]
+        case .lmStudio:
+            defaults = availableModels.map(\.id)
+        }
+        var values: [String] = []
+        for value in ([current] + defaults).map(\.pocketTrimmed).filter({ !$0.isEmpty }) {
+            if !values.contains(value) {
+                values.append(value)
+            }
+        }
+        if !values.isEmpty {
+            return values
+        }
+        return method == .openAI ? ["gpt-5.5"] : ["modelo local"]
     }
 
     private var contextPanel: some View {
@@ -219,6 +289,164 @@ struct LocalAISidePanelContent: View {
     }
 }
 
+struct LocalAIAdvancedSettingsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    @Binding var providerMethodRaw: String
+    @Binding var reasoningEffortRaw: String
+    @Binding var kernelBaseURL: String
+    @Binding var middlewareAuthBaseURL: String
+    @Binding var middlewareAuthProjectID: String
+    @Binding var middlewareAuthProfileID: String
+    @Binding var baseURL: String
+    @Binding var modelID: String
+    @Binding var middlewareAuthToken: String
+    @Binding var apiKey: String
+    let middlewareRuntimeTokenLoaded: Bool
+    let runtimeTokenLoaded: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Label("Configurações da IA", systemImage: "slider.horizontal.3")
+                    .font(.headline)
+                    .foregroundStyle(PocketWikiTheme.text)
+
+                Spacer()
+
+                Button("Fechar") {
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+            }
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    providerSection
+                    infraSection
+                }
+                .padding(.vertical, 2)
+            }
+        }
+        .padding(18)
+        .frame(width: 540, height: 560)
+        .background(PocketWikiTheme.bg)
+    }
+
+    private var providerSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Provider", systemImage: LocalAIProviderMethod.value(for: providerMethodRaw).systemImage)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(PocketWikiTheme.text)
+
+            LocalAIFieldLabel("Método")
+            Picker("", selection: $providerMethodRaw) {
+                ForEach(LocalAIProviderMethod.allCases) { provider in
+                    Text(provider.title).tag(provider.rawValue)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 5) {
+                    LocalAIFieldLabel("Modelo")
+                    TextField("", text: $modelID, prompt: Text("gpt-5.5 ou modelo local"))
+                        .textFieldStyle(.plain)
+                        .font(.caption.monospaced())
+                        .localAIInputChrome()
+                }
+
+                VStack(alignment: .leading, spacing: 5) {
+                    LocalAIFieldLabel("Raciocínio")
+                    Picker("", selection: $reasoningEffortRaw) {
+                        ForEach(LocalAIReasoningEffort.allCases) { effort in
+                            Text(effort.title).tag(effort.rawValue)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .localAIInputChrome()
+                }
+            }
+
+            LocalAIFieldLabel("LM Studio base URL")
+            TextField("", text: $baseURL, prompt: Text("http://127.0.0.1:1234"))
+                .textFieldStyle(.plain)
+                .font(.caption.monospaced())
+                .localAIInputChrome()
+
+            LocalAIFieldLabel("LM Studio API key")
+            SecureField("", text: $apiKey, prompt: Text(runtimeTokenLoaded ? "override opcional da sessão" : "API key da sessão"))
+                .textFieldStyle(.plain)
+                .font(.caption.monospaced())
+                .localAIInputChrome()
+
+            Text("OpenAI usa login/status pelo MiddlewareAuth. LM Studio registra base URL e API key no MiddlewareAuth.")
+                .font(.caption.monospaced())
+                .foregroundStyle(PocketWikiTheme.muted)
+        }
+        .padding(14)
+        .pocketWikiCard()
+    }
+
+    private var infraSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Infra", systemImage: "network")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(PocketWikiTheme.text)
+
+            LocalAIFieldLabel("PocketKernel")
+            TextField("", text: $kernelBaseURL, prompt: Text(PocketKernelEndpointPolicy.defaultBaseURL))
+                .textFieldStyle(.plain)
+                .font(.caption.monospaced())
+                .localAIInputChrome()
+
+            LocalAIFieldLabel("MiddlewareAuth")
+            TextField("", text: $middlewareAuthBaseURL, prompt: Text(MiddlewareAuthEndpointPolicy.defaultBaseURL))
+                .textFieldStyle(.plain)
+                .font(.caption.monospaced())
+                .localAIInputChrome()
+
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 5) {
+                    LocalAIFieldLabel("Project ID")
+                    TextField("", text: $middlewareAuthProjectID, prompt: Text("acme"))
+                        .textFieldStyle(.plain)
+                        .font(.caption.monospaced())
+                        .localAIInputChrome()
+                }
+
+                VStack(alignment: .leading, spacing: 5) {
+                    LocalAIFieldLabel("Profile/User ID")
+                    TextField("", text: $middlewareAuthProfileID, prompt: Text("default"))
+                        .textFieldStyle(.plain)
+                        .font(.caption.monospaced())
+                        .localAIInputChrome()
+                }
+            }
+
+            if middlewareRuntimeTokenLoaded {
+                Text("MIDDLEWARE_CLIENT_TOKEN carregado do runtime do servidor.")
+                    .font(.caption.monospaced())
+                    .foregroundStyle(PocketWikiTheme.muted)
+            } else {
+                LocalAIFieldLabel("Middleware token")
+                SecureField("", text: $middlewareAuthToken, prompt: Text("MIDDLEWARE_CLIENT_TOKEN"))
+                    .textFieldStyle(.plain)
+                    .font(.caption.monospaced())
+                    .localAIInputChrome()
+            }
+
+            Text("Perguntas continuam saindo pelo PocketKernel Harness; estes campos só configuram auth/provider.")
+                .font(.caption.monospaced())
+                .foregroundStyle(PocketWikiTheme.muted)
+        }
+        .padding(14)
+        .pocketWikiCard()
+    }
+}
+
 private struct LocalAIContextSourceRow: View {
     let title: String
     let subtitle: String
@@ -275,7 +503,7 @@ private struct LocalAISideCard<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 8) {
                 Label(title, systemImage: systemImage)
                     .font(.headline)
@@ -290,21 +518,17 @@ private struct LocalAISideCard<Content: View>: View {
 
                 Button(action: close) {
                     Image(systemName: "xmark")
-                        .frame(width: 30, height: 30)
+                        .frame(width: 32, height: 32)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(PocketWikiTheme.dim)
-                .background(PocketWikiTheme.bg3.opacity(0.72), in: RoundedRectangle(cornerRadius: 8))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(PocketWikiTheme.border, lineWidth: 1)
-                }
+                .pocketWikiSurface(cornerRadius: 12)
                 .help("Recolher")
             }
 
             content
         }
-        .padding(14)
+        .padding(16)
         .pocketWikiCard()
     }
 }
@@ -328,11 +552,12 @@ private struct LocalAIInputChrome: ViewModifier {
     func body(content: Content) -> some View {
         content
             .padding(.horizontal, 10)
-            .padding(.vertical, 9)
+            .padding(.vertical, 7)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .foregroundStyle(PocketWikiTheme.text)
-            .background(PocketWikiTheme.bg.opacity(0.94), in: RoundedRectangle(cornerRadius: 8))
+            .background(PocketWikiTheme.bg.opacity(0.94), in: RoundedRectangle(cornerRadius: 12))
             .overlay {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: 12)
                     .stroke(PocketWikiTheme.border, lineWidth: 1)
             }
     }

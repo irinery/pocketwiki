@@ -112,11 +112,12 @@ struct LocalAIHeroView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("IA local da wiki")
-                .font(.system(size: 28, weight: .heavy))
+                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .tracking(-0.7)
                 .foregroundStyle(PocketWikiTheme.text)
                 .lineLimit(1)
 
-            Text("Chat com contexto dos Markdown carregados. A resposta sai pelo LM Studio local e o contexto e montado em cima da pagina atual, links e busca textual.")
+            Text("Provider configurado no MiddlewareAuth; resposta sempre governada pelo PocketKernel Harness.")
                 .font(.body)
                 .foregroundStyle(PocketWikiTheme.dim)
                 .lineSpacing(4)
@@ -124,20 +125,6 @@ struct LocalAIHeroView: View {
         }
         .padding(22)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(PocketWikiTheme.heroBackground)
-                .overlay(alignment: .trailing) {
-                    Circle()
-                        .fill(PocketWikiTheme.accent2.opacity(0.08))
-                        .frame(width: 260, height: 260)
-                        .blur(radius: 26)
-                        .offset(x: 74)
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(PocketWikiTheme.border, lineWidth: 1)
-                }
-        }
+        .pocketWikiCard(hero: true)
     }
 }

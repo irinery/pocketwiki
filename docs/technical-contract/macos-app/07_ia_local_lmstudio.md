@@ -1,94 +1,105 @@
-# 07 — IA com LM Studio
+# 07 — IA via PocketKernel Harness e MiddlewareAuth
 
 ## 2.1 — O que é
 
-Tela e serviço para conversar com uma IA local via LM Studio usando endpoint OpenAI-compatible.
+Tela e serviço para conversar com IA sem bypass do harness. O PocketWiki exibe um painel compacto de provider/modelo/raciocínio, guarda detalhes técnicos em diálogo avançado, configura OpenAI ou LM Studio no MiddlewareAuth quando necessário e envia toda pergunta para o PocketKernel.
+
+Fluxo obrigatório:
+
+```text
+PocketWiki UI/app ou browser
+  -> MiddlewareAuth /v1/projects/{projectId}/auth/{openai|lmstudio}/...
+  -> PocketKernel /v1/kernel
+  -> PocketKernel chama PocketWiki MCP via stdio
+  -> PocketWiki MCP devolve evidência
+  -> PocketKernel chama provider configurado
+  -> PocketKernel monta resposta governada
+```
+
+Regra crítica: PocketWiki não chama LM Studio, ChatGPT ou MiddlewareAuth para gerar resposta final. MiddlewareAuth é dono de autenticação/configuração de provider; PocketKernel é o harness obrigatório para a resposta.
 
 Responsabilidades explícitas:
-- listar modelos carregados via `GET /v1/models`;
-- enviar conversa via `POST /v1/chat/completions` com `stream: true`;
-- montar contexto automático da wiki antes de cada pergunta, com fallback para escopos manuais;
-- manter o modo `Auto` preso ao índice: perguntas sobre wiki que não encontram página relacionada ainda recebem snapshot do índice e instrução explícita para não inventar;
-- reaproveitar `LM_STUDIO_BASE_URL`, `LM_STUDIO_API_KEY`, `LM_API_TOKEN` e `LM_STUDIO_MODEL` do ambiente ou `.env`, sem persistir token em `UserDefaults`;
-- aceitar listas de modelos nos formatos `data`, `models`, array raiz, objeto com `id`/`name`/`model` ou string simples;
-- renderizar tokens parciais em lotes curtos para evitar travar SwiftUI;
-- aceitar resposta não-streaming JSON quando o LM Studio/proxy devolver `application/json` apesar de o request pedir `stream: true`;
-- renderizar `reasoning`, `finish_reason`, `usage` e modelo quando o servidor retornar esses campos;
-- enviar mensagem com `Enter` e inserir quebra de linha com `Shift+Enter`;
-- permitir cancelar resposta em andamento;
-- oferecer reset anti-alucinação, limpando conversa/contexto, voltando escopo para `Auto` e temperatura para `0.2`;
-- manter layout da aba IA fiel ao web: hero no topo, conversa como card principal, rail lateral e cards `LM Studio`/`Contexto` recolhíveis;
-- permitir LM Studio em localhost, mDNS `.local` ou rede privada;
-- bloquear endpoint público/remoto nesta fase.
+
+- chamar `POST /v1/kernel` ou `/api/kernel/query` com `{ text, channel, app_id, user_id }`;
+- usar `app_id=pocketwiki`;
+- usar `user_id` alinhado ao `profileId` escolhido na UI quando aplicável;
+- iniciar login/status OpenAI no MiddlewareAuth;
+- registrar LM Studio no MiddlewareAuth com `projectId`, `profileId`, `baseUrl` e `apiKey`;
+- expor `POCKETKERNEL_BASE_URL`, default `http://127.0.0.1:8080`;
+- expor `MIDDLEWARE_BASE_URL`, default `http://127.0.0.1:18787`;
+- expor `MIDDLEWARE_CLIENT_TOKEN` apenas no processo local/servidor, nunca no `/api/config`;
+- manter modelo como string livre, porque o contrato MiddlewareAuth aceita modelo provider-specific;
+- remover `/api/ai/chat`, `/api/ai/models` e qualquer chamada direta a `/chat/completions` no PocketWiki.
 
 Não é responsabilidade deste componente:
-- carregar, baixar ou descarregar modelos no LM Studio;
-- chamar APIs externas/cloud;
-- fazer RAG vetorial/embeddings;
-- executar ferramentas ou MCPs;
-- persistir token secreto.
+
+- persistir API key do LM Studio no PocketWiki;
+- listar modelos chamando LM Studio direto;
+- autenticar OpenAI/Codex diretamente fora do MiddlewareAuth;
+- executar MCPs direto na UI;
+- substituir contratos do MiddlewareAuth.
 
 ## 2.2 — Testes obrigatórios
 
-TESTE AI-01
-dado:    endpoint `http://127.0.0.1:1234/v1`
-quando:  o app monta URL de chat
-então:   a URL final é `/v1/chat/completions`
+TESTE AI-00
+dado:    aba IA no estado padrão
+quando:  o usuário envia pergunta
+então:   o request sai para PocketKernel `/v1/kernel` ou `/api/kernel/query`
 
-TESTE AI-01b
-dado:    endpoint `http://127.0.0.1:1234`
-quando:  o app monta URL de modelos
-então:   a URL final é `/v1/models`
+TESTE AI-01
+dado:    prompt enviado pela UI macOS
+quando:  o app monta o payload
+então:   `app_id=pocketwiki`, `channel=api` e `user_id` não vazio são enviados ao Kernel
 
 TESTE AI-02
-dado:    endpoint `https://example.com/v1`
-quando:  o usuário tenta usar a IA
-então:   o cliente rejeita antes de enviar contexto
-
-TESTE AI-02b
-dado:    endpoint `http://192.168.2.20:1234/v1`
-quando:  o usuário tenta usar a IA
-então:   o cliente aceita por ser IP de rede privada
+dado:    prompt enviado pelo cockpit web
+quando:  o browser está servido pelo PocketWiki
+então:   o request usa `/api/kernel/query`, não provider direto
 
 TESTE AI-03
-dado:    página `A` com link resolvido para `B`
-quando:  o escopo escolhido é `Links`
-então:   o contexto inclui `A` e `B`, mas não páginas sem relação
+dado:    LM Studio base URL e API key preenchidos
+quando:  o usuário clica `Configurar LM Studio`
+então:   o PocketWiki chama MiddlewareAuth em `/v1/projects/{projectId}/auth/lmstudio/api-key`
 
 TESTE AI-04
-dado:    contexto maior que o limite configurado
-quando:  o prompt é montado
-então:   o contexto é truncado e sinalizado
+dado:    `MIDDLEWARE_CLIENT_TOKEN` ausente no servidor
+quando:  o browser tenta configurar LM Studio via proxy
+então:   o servidor responde erro claro `middlewareauth_token_missing`
 
 TESTE AI-05
-dado:    resposta streaming do LM Studio
-quando:  chunks `data:` chegam
-então:   o texto da resposta é atualizado em lotes e metadados de reasoning/usage são preservados quando existirem
+dado:    API key do LM Studio vazia
+quando:  o usuário consulta status
+então:   o PocketWiki chama `/auth/lmstudio/status?profileId=...`
+
+TESTE AI-05A
+dado:    método OpenAI selecionado
+quando:  o usuário clica `Login`
+então:   o PocketWiki chama MiddlewareAuth em `/v1/projects/{projectId}/auth/openai/login`
+
+TESTE AI-05B
+dado:    método OpenAI selecionado
+quando:  o usuário clica atualizar status
+então:   o PocketWiki chama MiddlewareAuth em `/v1/projects/{projectId}/auth/openai/status?profileId=...`
 
 TESTE AI-06
-dado:    pergunta sobre termo presente em uma página da wiki
-quando:  o escopo é `Auto`
-então:   o app consulta o índice, escolhe páginas prováveis e envia só excertos relevantes
+dado:    endpoint MiddlewareAuth fora de localhost, `.local`, IP privado ou Tailscale
+quando:  o usuário tenta configurar provider
+então:   o cliente rejeita antes de enviar segredo
 
 TESTE AI-07
-dado:    `.env` com base URL, token e modelo
-quando:  a aba IA inicializa
-então:   a configuração é carregada em memória e o token não é persistido
+dado:    PocketKernel configurado com `POCKETKERNEL_WIKI_MCP_COMMAND=node` e `POCKETKERNEL_WIKI_MCP_ARGS=".../pocketwiki-mcp-server.mjs --root /wiki"`
+quando:  a UI envia pergunta operacional
+então:   a resposta governada indica `profile_used=wiki` e `missing_evidence=[]` quando há evidência confiável
 
 TESTE AI-08
-dado:    `/v1/models` retorna `models`, `data`, `name`, `id` ou string
-quando:  o cliente interpreta a resposta
-então:   modelos de chat são reconhecidos e modelos de embedding são filtrados
-
-TESTE AI-08b
-dado:    `/v1/chat/completions` retorna JSON comum com `choices[0].message.content`
-quando:  o cliente interpreta a resposta
-então:   o conteúdo é exibido em vez de erro de streaming vazio
+dado:    MCP indisponível ou sem documento confiável
+quando:  a UI envia pergunta que exige status operacional
+então:   a resposta do Kernel preserva `missing_evidence`, incluindo `contexto_requerido_indisponivel` ou `fonte_confiavel_de_status_operacional`
 
 TESTE AI-09
-dado:    pergunta de wiki sem página candidata
-quando:  o escopo é `Auto`
-então:   o contexto continua em modo wiki, inclui snapshot do índice e instrui o modelo a não preencher lacuna com conhecimento externo
+dado:    busca textual no repo
+quando:  validamos rotas/código da UI
+então:   não existem `/api/ai/chat`, `/api/ai/models`, `LM Studio direto` nem chamada direta a `/chat/completions`
 
 ## 2.3 — Implementação
 
@@ -97,95 +108,99 @@ Estruturas:
 ```yaml
 LocalAIView:
   responsabilidade: coordenar estado, preferências, bootstrap runtime e ações
-
-LocalAIWorkspaceShell:
-  responsabilidade: layout responsivo único da aba IA
-  modos:
-    - regular: hero + conversa + rail + painel lateral
-    - compact: conversa + rail/painel em overlay
-
-LocalAIChatPanel:
-  responsabilidade: cabeçalho, mensagens, composer, reset e envio
+  envia_prompt_por: LocalAIChatSession.sendViaPocketKernel
 
 LocalAISidePanelContent:
-  responsabilidade: cards recolhíveis de LM Studio e Contexto
+  responsabilidade: card IA e card Contexto
+  campos:
+    - método OpenAI ou LM Studio
+    - modelo livre
+    - raciocínio baixo, médio ou alto
+    - botões Login/Configurar, atualizar status e configurações avançadas
 
-LocalAIContextScope:
-  enum:
-    - automatic
-    - currentPage
-    - linkedPages
-    - wikiDigest
+LocalAIAdvancedSettingsSheet:
+  responsabilidade: esconder detalhes técnicos do card principal
+  campos:
+    - PocketKernel base URL
+    - MiddlewareAuth base URL
+    - projectId
+    - profileId/userId
+    - Middleware token em memória quando não vier do runtime
+    - LM Studio base URL
+    - LM Studio API key em memória
 
-LocalAIContextPayload:
-  title: String
-  body: String
-  includedPaths: [String]
-  characters: Int
+LocalAIChatSession:
+  refreshProviderStatus(...)
+  startOpenAILogin(...)
+  configureLMStudioProvider(...)
+  sendViaPocketKernel(...)
 
-LocalAIChatMessage:
-  role: enum(system, user, assistant)
-  content: String
-  isStreaming: Bool
+MiddlewareAuthClient:
+  openAIStatus(...)
+  startOpenAILogin(...)
+  configureLMStudio(...)
+  lmStudioStatus(...)
+  endpoint_default: http://127.0.0.1:18787
 
-LMStudioClient:
-  listModels(baseURL, apiKey)
-  streamChat(baseURL, apiKey, modelID, temperature, context, messages)
+PocketKernelClient:
+  query(baseURL, text, channel, appID, userID)
+  endpoint_default: http://127.0.0.1:8080/v1/kernel
+  proxy_web: /api/kernel/query
 
-LocalAIRuntimeConfigurationLoader:
-  load(environment, bundle, fileManager)
-  parseEnv(raw)
+PocketWikiHTTPServer:
+  POST /api/kernel/query
+  POST /api/middleware/openai/login
+  POST /api/middleware/openai/status
+  POST /api/middleware/lmstudio/api-key
+  POST /api/middleware/lmstudio/status
 ```
-
-Regra de arquitetura:
-- a aba IA não pode voltar a concentrar layout, prompt, networking e componentes no mesmo arquivo;
-- o root só coordena estado e ações;
-- prompt/contexto ficam em `Services`;
-- chat e painéis ficam em views dedicadas;
-- seleção lateral fica em `Models/LocalAISidePanel.swift`.
 
 Tabela de decisão:
 
-| Estado | UI |
+| Estado | Comportamento |
 | --- | --- |
-| sem modelo | campo manual de model identifier |
-| modelos encontrados | picker com modelos |
-| modelo salvo inválido | usa `LM_STUDIO_MODEL` se estiver na lista, senão usa primeiro modelo de chat |
-| LM Studio com auth | token vem de `.env`/ambiente ou campo manual em memória |
-| resposta em andamento | botão cancelar e bolha assistant streaming |
-| composer focado | `Enter` envia; `Shift+Enter` quebra linha |
-| suspeita de alucinação | botão `Reset`, volta para `Auto`, temperatura `0.2` e limpa contexto anterior |
-| painel lateral aberto | rail com `LM Studio` e `Contexto`, sem empilhar configuração acima da conversa |
-| endpoint público | erro local, sem request |
-| LM Studio offline | erro HTTP/conexão e conversa preservada |
-| pergunta simples | conversa geral, sem carregar contexto pesado |
-| pergunta sobre wiki | consulta seletiva por título, path, resumo, tags e headings, sempre com snapshot do índice |
+| pergunta enviada | sempre PocketKernel |
+| provider OpenAI selecionado | login/status via MiddlewareAuth |
+| provider LM Studio configurado | registrar no MiddlewareAuth |
+| API key vazia | consultar status no MiddlewareAuth |
+| MiddlewareAuth sem token | erro explícito, sem fallback direto |
+| PocketKernel offline | erro explícito, conversa preservada |
+| resposta Kernel com `missing_evidence=[]` | exibir resposta e metadados |
+| resposta Kernel com `missing_evidence` preenchido | exibir lacuna sem esconder |
+| modelo vazio | permitir string livre, sem bloquear harness |
+| endpoint público | rejeitar antes de enviar segredo |
 
 Limites:
-- endpoint padrão é `http://127.0.0.1:1234/v1`;
-- endpoint informado sem path, como `http://127.0.0.1:1234`, é normalizado automaticamente para `/v1`;
-- hosts aceitos: `localhost`, `.local`, loopback, RFC1918 IPv4, link-local IPv4 e IPv6 local/link-local;
-- token opcional fica em memória da sessão e não é persistido;
-- `.env` só é lido para configuração runtime local e o token não é exibido em logs;
-- contexto padrão limitado a 12.000 caracteres;
-- máximo configurável nesta fase: 32.000 caracteres;
-- conversa usa Chat Completions OpenAI-compatible, não WebView.
-- streaming atualiza SwiftUI em lotes curtos, não token a token.
+
+- PocketKernel default: `http://127.0.0.1:8080`;
+- MiddlewareAuth default: `http://127.0.0.1:18787`;
+- LM Studio default: `http://127.0.0.1:1234`;
+- projectId default: `acme`;
+- profileId default: `default`;
+- hosts aceitos: `localhost`, `.local`, loopback, RFC1918 IPv4, link-local IPv4, Tailscale IPv4 e IPv6 local/link-local;
+- API key do LM Studio fica só em memória da sessão do PocketWiki;
+- `MIDDLEWARE_CLIENT_TOKEN` pode vir de ambiente/.env do PocketWiki ou campo temporário no app macOS;
+- browser remoto usa proxy do PocketWiki e não recebe `MIDDLEWARE_CLIENT_TOKEN`.
 
 Regras de falha:
-- se não houver `modelID`, não enviar;
-- se o endpoint não for local, falhar antes de montar request;
-- se o streaming não emitir conteúdo, mostrar erro claro;
-- cancelamento interrompe o task e remove estado `isStreaming`;
+
+- se MiddlewareAuth estiver indisponível, falhar com `middlewareauth_proxy_failed`;
+- se token do MiddlewareAuth faltar, falhar com `middlewareauth_token_missing`;
+- se login OpenAI falhar, falhar explicitamente no painel sem cair para provider direto;
+- se API key do LM Studio faltar para registro, falhar com `lmstudio_api_key_missing`;
+- se PocketKernel estiver indisponível, falhar com `pocketkernel_proxy_failed`;
+- se o Kernel retornar `missing_evidence`, não transformar em sucesso silencioso;
 - histórico da conversa local não é escrito em arquivo.
 
 ## 2.4 — Entrega mínima
 
-- aba `IA`;
-- configuração de endpoint/modelo no card lateral;
-- contexto automático com card lateral de auditoria;
-- busca de modelos;
-- chat com streaming;
+- aba `IA` compacta, sem formulário inline de infraestrutura;
+- seletor de método `OpenAI`/`LM Studio`, modelo e raciocínio;
+- diálogo avançado para PocketKernel, MiddlewareAuth, projectId, profileId, LM Studio URL e API key;
+- client HTTP para `/v1/kernel`;
+- proxy web `/api/kernel/query`;
+- client/proxy MiddlewareAuth para OpenAI login/status e LM Studio status/API key;
+- card lateral de contexto;
 - cancelamento e limpeza de histórico;
-- testes `AI-01` a `AI-09` passando em core;
-- build e smoke do launcher passando.
+- docs atualizados;
+- build Swift e checks Node/MCP passando.

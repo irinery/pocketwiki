@@ -4,6 +4,7 @@ import { readFile, readdir, stat } from 'node:fs/promises';
 import { homedir, networkInterfaces } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { handleSolutionPut } from './src/solutions/solution-ingestion.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ENV_PATH = path.join(__dirname, '.env');
@@ -60,8 +61,15 @@ const server = createServer(async (req, res) => {
         referenceReadonly: runtime.reference.readonly,
         referenceAvailable: runtime.reference.available,
         referenceStatus: runtime.reference.status,
+        mcpEvidence: await mcpEvidencePayload(runtime),
         lmStudioModel: runtime.ai.model,
-        aiProxy: true
+        lmStudioBaseUrl: runtime.ai.baseUrl,
+        pocketKernelBaseUrl: runtime.kernel.baseUrl,
+        middlewareAuthBaseUrl: runtime.middlewareAuth.baseUrl,
+        middlewareAuthProjectId: runtime.middlewareAuth.projectId,
+        middlewareAuthProfileId: runtime.middlewareAuth.profileId,
+        kernelProxy: true,
+        middlewareAuthProxy: true
       });
     }
 
@@ -98,19 +106,48 @@ const server = createServer(async (req, res) => {
       return sendFile(res, path.join(__dirname, 'prompts/wiki-review.md'), 'text/markdown; charset=utf-8');
     }
 
-    if (req.method === 'GET' && url.pathname === '/api/ai/models') {
-      const runtime = await loadRuntimeConfig();
-      return proxyLmStudio(res, '/models', { method: 'GET' }, runtime.ai);
+    const solutionRoute = matchSolutionRoute(url.pathname);
+    if (req.method === 'PUT' && solutionRoute) {
+      const runtime = await loadRuntimeConfig({ inspectReference: true });
+      return handleSolutionPut(req, res, {
+        solutionId: solutionRoute.solutionId,
+        reference: runtime.reference,
+        writeToken: runtime.write.token,
+        maxRequestBytes: runtime.write.maxRequestBytes
+      });
     }
 
-    if (req.method === 'POST' && url.pathname === '/api/ai/chat') {
+    if (req.method === 'POST' && url.pathname === '/api/kernel/query') {
       const runtime = await loadRuntimeConfig();
       const body = await readJsonBody(req);
-      if (!body.model && runtime.ai.model) body.model = runtime.ai.model;
-      return proxyLmStudio(res, '/chat/completions', {
+      return proxyPocketKernel(res, {
         method: 'POST',
         body: JSON.stringify(body)
-      }, runtime.ai);
+      }, runtime.kernel);
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/middleware/lmstudio/api-key') {
+      const runtime = await loadRuntimeConfig();
+      const body = await readJsonBody(req);
+      return proxyMiddlewareLMStudioApiKey(res, body, runtime.middlewareAuth, runtime.ai);
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/middleware/lmstudio/status') {
+      const runtime = await loadRuntimeConfig();
+      const body = await readJsonBody(req);
+      return proxyMiddlewareLMStudioStatus(res, body, runtime.middlewareAuth);
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/middleware/openai/login') {
+      const runtime = await loadRuntimeConfig();
+      const body = await readJsonBody(req);
+      return proxyMiddlewareOpenAILogin(res, body, runtime.middlewareAuth);
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/middleware/openai/status') {
+      const runtime = await loadRuntimeConfig();
+      const body = await readJsonBody(req);
+      return proxyMiddlewareOpenAIStatus(res, body, runtime.middlewareAuth);
     }
 
     sendJson(res, { error: 'not_found' }, 404);
@@ -136,8 +173,9 @@ server.on('error', err => {
 });
 
 server.listen(PORT, HOST, async () => {
-  const runtime = await loadRuntimeConfig();
+  const runtime = await loadRuntimeConfig({ inspectReference: true });
   const routes = buildRoutes();
+  const mcpEvidence = await mcpEvidencePayload(runtime);
   console.log(`PocketWiki local: ${routes.local.join(', ')}`);
   for (const url of routes.mdns) console.log(`PocketWiki mDNS: ${url}`);
   for (const url of routes.lan) console.log(`PocketWiki LAN IP: ${url}`);
@@ -145,7 +183,10 @@ server.listen(PORT, HOST, async () => {
   if (!routes.portless) console.log('Sem porta na URL exige HTTP em :80, HTTPS em :443, Tailscale Serve ou reverse proxy.');
   console.log(`Bind: ${HOST}:${PORT}`);
   console.log(`Wiki reference: ${runtime.reference.name} (${runtime.reference.source})`);
-  console.log(`LM Studio: ${runtime.ai.baseUrl}`);
+  console.log(`MCP Evidence: ${mcpEvidence.status} (${mcpEvidence.transport}, PocketKernel inicia sob demanda)`);
+  console.log(`PocketKernel: ${runtime.kernel.baseUrl}`);
+  console.log(`MiddlewareAuth: ${runtime.middlewareAuth.baseUrl}`);
+  console.log(`LM Studio provider: ${runtime.ai.baseUrl}`);
   if (mdnsEnabled) startMdnsResponder(publicHosts, PORT);
 });
 
@@ -181,8 +222,41 @@ async function loadRuntimeConfig(opts = {}) {
       baseUrl: trimSlash(envValue('LM_STUDIO_BASE_URL', values, 'http://localhost:1234/v1')),
       apiKey: envValue('LM_STUDIO_API_KEY', values, '') || envValue('LM_API_TOKEN', values, ''),
       model: envValue('LM_STUDIO_MODEL', values, '')
+    },
+    kernel: {
+      baseUrl: trimSlash(envValue('POCKETKERNEL_BASE_URL', values, 'http://127.0.0.1:8080'))
+    },
+    middlewareAuth: {
+      baseUrl: trimSlash(envValue('MIDDLEWARE_BASE_URL', values, 'http://127.0.0.1:18787')),
+      clientToken: envValue('MIDDLEWARE_CLIENT_TOKEN', values, ''),
+      projectId: envValue('MIDDLEWARE_PROJECT_ID', values, '') ||
+        envValue('MCP_DEFAULT_PROJECT_ID', values, 'acme'),
+      profileId: envValue('MIDDLEWARE_LLM_PROFILE_ID', values, '') ||
+        envValue('MCP_LMSTUDIO_PROFILE_ID', values, 'default')
+    },
+    write: {
+      token: envValue('POCKETWIKI_WRITE_TOKEN', values, ''),
+      maxRequestBytes: parseRequestLimit(
+        envValue('POCKETWIKI_WRITE_MAX_BYTES', values, String(8 * 1024 * 1024)),
+        8 * 1024 * 1024
+      )
     }
   };
+}
+
+function matchSolutionRoute(pathname) {
+  const match = /^\/api\/v1\/solutions\/([^/]+)$/.exec(pathname);
+  if (!match) return null;
+  try {
+    return { solutionId: decodeURIComponent(match[1]) };
+  } catch {
+    return { solutionId: '' };
+  }
+}
+
+function parseRequestLimit(value, fallback) {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= fallback ? parsed : fallback;
 }
 
 function resolveConfiguredPath(value) {
@@ -214,6 +288,44 @@ async function inspectReferencePath(root) {
     return { available: true, status: 'ready' };
   } catch (err) {
     if (err?.code === 'ENOENT') return { available: false, status: 'missing' };
+    if (err?.code === 'EACCES' || err?.code === 'EPERM') return { available: false, status: 'permission_denied' };
+    return { available: false, status: 'unavailable' };
+  }
+}
+
+async function mcpEvidencePayload(runtime) {
+  const script = path.join(__dirname, 'src/mcp/pocketwiki-mcp-server.mjs');
+  const scriptStatus = await inspectFilePath(script);
+  const args = [script, '--root', runtime.reference.path];
+  const argsPortable = args.every(value => !/\s/.test(value));
+  let status = 'ready';
+  if (!scriptStatus.available) status = scriptStatus.status;
+  else if (!runtime.reference.available) status = runtime.reference.status;
+  else if (!argsPortable) status = 'args_require_wrapper';
+
+  return {
+    available: scriptStatus.available && runtime.reference.available && argsPortable,
+    transport: 'stdio',
+    status,
+    command: 'node',
+    args,
+    tools: ['wiki.search', 'wiki.get_document'],
+    timeoutMs: 5000,
+    maxResults: 8,
+    sameHostOnly: true,
+    argsParsing: 'space_separated',
+    argsPortable,
+    note: 'PocketKernel inicia este processo sob demanda via stdio; nao ha porta MCP separada.'
+  };
+}
+
+async function inspectFilePath(file) {
+  try {
+    const info = await stat(file);
+    if (!info.isFile()) return { available: false, status: 'not_file' };
+    return { available: true, status: 'ready' };
+  } catch (err) {
+    if (err?.code === 'ENOENT') return { available: false, status: 'mcp_script_missing' };
     if (err?.code === 'EACCES' || err?.code === 'EPERM') return { available: false, status: 'permission_denied' };
     return { available: false, status: 'unavailable' };
   }
@@ -295,25 +407,153 @@ async function listReferenceFiles(root) {
   return files;
 }
 
-async function proxyLmStudio(res, endpoint, init, aiConfig) {
-  const headers = { 'Content-Type': 'application/json' };
-  if (aiConfig?.apiKey) headers.Authorization = `Bearer ${aiConfig.apiKey}`;
-
-  const upstream = await fetch(`${aiConfig.baseUrl}${endpoint}`, {
-    ...init,
-    headers
-  });
-  res.writeHead(upstream.status, {
-    ...securityHeaders(),
-    'Content-Type': upstream.headers.get('content-type') || 'application/json; charset=utf-8',
-    'Cache-Control': 'no-store, no-transform'
-  });
-  if (!upstream.body) {
-    res.end(await upstream.text());
-    return;
+async function proxyPocketKernel(res, init, kernelConfig) {
+  let endpoint;
+  try {
+    endpoint = pocketKernelEndpoint(kernelConfig.baseUrl);
+  } catch {
+    return sendJson(res, { error: 'invalid_pocketkernel_endpoint' }, 502);
   }
-  for await (const chunk of upstream.body) res.write(Buffer.from(chunk));
-  res.end();
+
+  try {
+    const upstream = await fetch(endpoint, {
+      ...init,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      }
+    });
+    res.writeHead(upstream.status, {
+      ...securityHeaders(),
+      'Content-Type': upstream.headers.get('content-type') || 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store, no-transform'
+    });
+    res.end(await upstream.text());
+  } catch {
+    sendJson(res, { error: 'pocketkernel_proxy_failed' }, 502);
+  }
+}
+
+async function proxyMiddlewareLMStudioApiKey(res, body, middlewareConfig, aiConfig) {
+  if (!middlewareConfig.clientToken) {
+    return sendJson(res, { error: 'middlewareauth_token_missing' }, 401);
+  }
+  if (!String(body.apiKey || '').trim()) {
+    return sendJson(res, { error: 'lmstudio_api_key_missing' }, 400);
+  }
+  let endpoint;
+  try {
+    endpoint = middlewareAuthEndpoint(
+      body.middlewareBaseUrl || middlewareConfig.baseUrl,
+      `/v1/projects/${encodeURIComponent(body.projectId || middlewareConfig.projectId || 'acme')}/auth/lmstudio/api-key`
+    );
+  } catch {
+    return sendJson(res, { error: 'invalid_middlewareauth_endpoint' }, 502);
+  }
+  return proxyMiddlewareAuth(res, endpoint, middlewareConfig.clientToken, {
+    method: 'POST',
+    body: JSON.stringify({
+      profileId: body.profileId || middlewareConfig.profileId || 'default',
+      baseUrl: body.baseUrl || aiConfig.baseUrl || 'http://127.0.0.1:1234',
+      apiKey: body.apiKey
+    })
+  });
+}
+
+async function proxyMiddlewareLMStudioStatus(res, body, middlewareConfig) {
+  if (!middlewareConfig.clientToken) {
+    return sendJson(res, { error: 'middlewareauth_token_missing' }, 401);
+  }
+  const profileId = body.profileId || middlewareConfig.profileId || 'default';
+  let endpoint;
+  try {
+    endpoint = middlewareAuthEndpoint(
+      body.middlewareBaseUrl || middlewareConfig.baseUrl,
+      `/v1/projects/${encodeURIComponent(body.projectId || middlewareConfig.projectId || 'acme')}/auth/lmstudio/status`
+    );
+    endpoint.searchParams.set('profileId', profileId);
+  } catch {
+    return sendJson(res, { error: 'invalid_middlewareauth_endpoint' }, 502);
+  }
+  return proxyMiddlewareAuth(res, endpoint, middlewareConfig.clientToken, { method: 'GET' });
+}
+
+async function proxyMiddlewareOpenAILogin(res, body, middlewareConfig) {
+  if (!middlewareConfig.clientToken) {
+    return sendJson(res, { error: 'middlewareauth_token_missing' }, 401);
+  }
+  let endpoint;
+  try {
+    endpoint = middlewareAuthEndpoint(
+      body.middlewareBaseUrl || middlewareConfig.baseUrl,
+      `/v1/projects/${encodeURIComponent(body.projectId || middlewareConfig.projectId || 'acme')}/auth/openai/login`
+    );
+  } catch {
+    return sendJson(res, { error: 'invalid_middlewareauth_endpoint' }, 502);
+  }
+  return proxyMiddlewareAuth(res, endpoint, middlewareConfig.clientToken, {
+    method: 'POST',
+    body: JSON.stringify({
+      profileId: body.profileId || middlewareConfig.profileId || 'default',
+      mode: body.mode || 'device_code'
+    })
+  });
+}
+
+async function proxyMiddlewareOpenAIStatus(res, body, middlewareConfig) {
+  if (!middlewareConfig.clientToken) {
+    return sendJson(res, { error: 'middlewareauth_token_missing' }, 401);
+  }
+  const profileId = body.profileId || middlewareConfig.profileId || 'default';
+  let endpoint;
+  try {
+    endpoint = middlewareAuthEndpoint(
+      body.middlewareBaseUrl || middlewareConfig.baseUrl,
+      `/v1/projects/${encodeURIComponent(body.projectId || middlewareConfig.projectId || 'acme')}/auth/openai/status`
+    );
+    endpoint.searchParams.set('profileId', profileId);
+  } catch {
+    return sendJson(res, { error: 'invalid_middlewareauth_endpoint' }, 502);
+  }
+  return proxyMiddlewareAuth(res, endpoint, middlewareConfig.clientToken, { method: 'GET' });
+}
+
+async function proxyMiddlewareAuth(res, endpoint, clientToken, init) {
+  try {
+    const upstream = await fetch(endpoint, {
+      ...init,
+      headers: {
+        'Authorization': `Bearer ${clientToken}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      }
+    });
+    res.writeHead(upstream.status, {
+      ...securityHeaders(),
+      'Content-Type': upstream.headers.get('content-type') || 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store, no-transform'
+    });
+    res.end(await upstream.text());
+  } catch {
+    sendJson(res, { error: 'middlewareauth_proxy_failed' }, 502);
+  }
+}
+
+function middlewareAuthEndpoint(baseUrl, suffix) {
+  const url = new URL(baseUrl || 'http://127.0.0.1:18787');
+  if (!isAllowedLocalBaseUrl(url)) throw new Error('non_local_middlewareauth_endpoint');
+  const basePath = url.pathname.replace(/\/+$/, '');
+  url.pathname = [basePath, suffix.replace(/^\/+/, '')].filter(Boolean).join('/');
+  return url;
+}
+
+function pocketKernelEndpoint(baseUrl) {
+  const url = new URL(baseUrl || 'http://127.0.0.1:8080');
+  const pathName = url.pathname.replace(/\/+$/, '');
+  if (!pathName || pathName === '/') url.pathname = '/v1/kernel';
+  else if (pathName !== '/v1/kernel' && pathName !== '/api/kernel/query') url.pathname = `${pathName}/v1/kernel`;
+  else url.pathname = pathName;
+  return url.toString();
 }
 
 async function readJsonBody(req) {
@@ -392,6 +632,21 @@ function contentType(file) {
 
 function trimSlash(value) {
   return String(value || '').replace(/\/+$/, '');
+}
+
+function isAllowedLocalBaseUrl(url) {
+  if (!['http:', 'https:'].includes(url.protocol)) return false;
+  const host = url.hostname.toLowerCase();
+  if (host === 'localhost' || host.endsWith('.local')) return true;
+  if (host === '::1') return true;
+  const octets = host.split('.').map(Number);
+  if (octets.length !== 4 || octets.some(n => !Number.isInteger(n) || n < 0 || n > 255)) return false;
+  return octets[0] === 10 ||
+    octets[0] === 127 ||
+    (octets[0] === 169 && octets[1] === 254) ||
+    (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
+    (octets[0] === 192 && octets[1] === 168) ||
+    (octets[0] === 100 && octets[1] >= 64 && octets[1] <= 127);
 }
 
 function parsePublicHosts(value) {

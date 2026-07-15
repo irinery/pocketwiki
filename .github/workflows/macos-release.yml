@@ -41,6 +41,55 @@ jobs:
             echo "APP_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
           fi
 
+      - name: Configure signing
+        env:
+          APPLE_CODESIGN_CERTIFICATE_BASE64: ${{ secrets.APPLE_CODESIGN_CERTIFICATE_BASE64 }}
+          APPLE_CODESIGN_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CODESIGN_CERTIFICATE_PASSWORD }}
+          APPLE_CODESIGN_IDENTITY: ${{ secrets.APPLE_CODESIGN_IDENTITY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APPLE_CODESIGN_CERTIFICATE_BASE64:-}" ]; then
+            echo "POCKETWIKI_SIGN_MODE=adhoc" >> "$GITHUB_ENV"
+            echo "Sem certificado Apple nos secrets; usando assinatura ad-hoc."
+            exit 0
+          fi
+
+          if [ -z "${APPLE_CODESIGN_CERTIFICATE_PASSWORD:-}" ]; then
+            echo "::error::APPLE_CODESIGN_CERTIFICATE_PASSWORD precisa existir quando APPLE_CODESIGN_CERTIFICATE_BASE64 estiver configurado."
+            exit 1
+          fi
+
+          cert_path="$RUNNER_TEMP/pocketwiki-codesign.p12"
+          keychain_path="$RUNNER_TEMP/pocketwiki-signing.keychain-db"
+          keychain_password="$(uuidgen)"
+
+          printf '%s' "$APPLE_CODESIGN_CERTIFICATE_BASE64" | base64 --decode > "$cert_path"
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$cert_path" \
+            -P "$APPLE_CODESIGN_CERTIFICATE_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$keychain_path" >/dev/null
+          rm -f "$cert_path"
+
+          current_keychains="$(security list-keychains -d user | tr -d '"')"
+          # shellcheck disable=SC2086
+          security list-keychains -d user -s "$keychain_path" $current_keychains
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "$keychain_password" \
+            "$keychain_path" >/dev/null
+
+          echo "POCKETWIKI_SIGN_MODE=auto" >> "$GITHUB_ENV"
+          if [ -n "${APPLE_CODESIGN_IDENTITY:-}" ]; then
+            echo "POCKETWIKI_SIGNING_IDENTITY=$APPLE_CODESIGN_IDENTITY" >> "$GITHUB_ENV"
+          fi
+          echo "Certificado Apple carregado em keychain temporário."
+
       - name: Build DMG
         run: ./script/build_macos_dmg.sh
 
@@ -62,6 +111,6 @@ jobs:
           if ! gh release view "$tag" >/dev/null 2>&1; then
             gh release create "$tag" \
               --title "PocketWiki $tag" \
-              --notes "Build macOS universal assinada ad-hoc. Baixe o .dmg abaixo."
+              --notes "Build macOS universal gerada pela automação do GitHub. Baixe o .dmg abaixo."
           fi
           gh release upload "$tag" dist/release/*.dmg dist/release/*.dmg.sha256 --clobber

@@ -99,6 +99,7 @@ struct PocketWikiRouteSnapshot: Codable, Equatable, Hashable, Sendable {
 
 struct PocketWikiServedSource: Sendable {
     let rootName: String
+    let rootPath: String?
     let source: String
     let configured: Bool
     let readonly: Bool
@@ -106,9 +107,30 @@ struct PocketWikiServedSource: Sendable {
     let status: String
     let files: [WikiFile]
 
+    init(
+        rootName: String,
+        rootPath: String? = nil,
+        source: String,
+        configured: Bool,
+        readonly: Bool,
+        available: Bool,
+        status: String,
+        files: [WikiFile]
+    ) {
+        self.rootName = rootName
+        self.rootPath = rootPath
+        self.source = source
+        self.configured = configured
+        self.readonly = readonly
+        self.available = available
+        self.status = status
+        self.files = files
+    }
+
     static func unavailable(rootName: String = "nenhuma wiki carregada", status: String = "missing") -> PocketWikiServedSource {
         PocketWikiServedSource(
             rootName: rootName,
+            rootPath: nil,
             source: "desktop",
             configured: false,
             readonly: true,

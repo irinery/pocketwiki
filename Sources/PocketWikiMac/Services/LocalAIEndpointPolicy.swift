@@ -15,7 +15,7 @@ enum LocalAIEndpointPolicyError: Error, LocalizedError, Equatable {
 }
 
 enum LocalAIEndpointPolicy {
-    static let defaultBaseURL = "http://127.0.0.1:1234/v1"
+    static let defaultBaseURL = "http://127.0.0.1:1234"
 
     static func normalizedBaseURL(_ rawValue: String) throws -> URL {
         let value = rawValue.pocketTrimmed
@@ -26,13 +26,7 @@ enum LocalAIEndpointPolicy {
             throw LocalAIEndpointPolicyError.invalidURL
         }
         let cleanPath = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        if cleanPath.isEmpty {
-            components.path = "/v1"
-        } else if cleanPath == "api/ai" {
-            components.path = "/api/ai"
-        } else {
-            components.path = "/" + cleanPath
-        }
+        components.path = cleanPath.isEmpty || cleanPath == "v1" ? "" : "/" + cleanPath
         guard let normalized = components.url else {
             throw LocalAIEndpointPolicyError.invalidURL
         }
@@ -46,10 +40,7 @@ enum LocalAIEndpointPolicy {
         }
 
         let basePath = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        var suffix = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        if basePath == "api/ai", suffix == "chat/completions" {
-            suffix = "chat"
-        }
+        let suffix = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         components.path = "/" + [basePath, suffix].filter { !$0.isEmpty }.joined(separator: "/")
 
         guard let url = components.url else {
