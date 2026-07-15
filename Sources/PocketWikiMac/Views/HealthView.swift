@@ -11,7 +11,8 @@ struct HealthView: View {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Saude da wiki: \(metrics.healthScore)/100")
-                        .font(.system(size: 34, weight: .heavy, design: .serif))
+                        .font(.system(size: 34, weight: .bold, design: .rounded))
+                        .tracking(-0.8)
                         .foregroundStyle(PocketWikiTheme.text)
                     Text("Nota heuristica para priorizar links quebrados, paginas isoladas, orfas, sem resumo e conteudo antigo.")
                         .foregroundStyle(PocketWikiTheme.dim)
@@ -84,11 +85,7 @@ struct HealthView: View {
             }
         }
         .padding(12)
-        .background(PocketWikiTheme.bg2.opacity(0.72), in: RoundedRectangle(cornerRadius: 8))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(PocketWikiTheme.border, lineWidth: 1)
-        }
+        .pocketWikiSurface(cornerRadius: 16, tint: color(issue.priority))
     }
 
     private func color(_ priority: WikiHealthIssue.Priority) -> Color {

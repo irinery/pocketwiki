@@ -9,7 +9,7 @@
 <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png?v=3">
 <link rel="apple-touch-icon" href="/assets/favicon.png?v=3">
 <link rel="manifest" href="/manifest.webmanifest">
-<meta name="theme-color" content="#080a0d">
+<meta name="theme-color" content="#05070b">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="PocketWiki">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -87,7 +87,7 @@ button{cursor:pointer;color:inherit}
 .route-link:hover{color:var(--text)}
 .route-empty{font-family:var(--mono);font-size:11px;color:var(--muted);padding:4px 0}
 .route-note{margin-top:10px;color:var(--muted);font-size:12px;line-height:1.5}
-.field select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:11px;color:var(--text);padding:9px 10px;outline:none;font-family:var(--mono);font-size:11px}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}.field select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:11px;color:var(--text);padding:9px 10px;outline:none;font-family:var(--mono);font-size:11px}
 .field select:focus{border-color:var(--accent)}
 .ai-hint{margin-top:7px;font-family:var(--mono);font-size:10px;color:var(--muted)}
 .review-card{margin-bottom:16px}
@@ -198,14 +198,364 @@ button{cursor:pointer;color:inherit}
 #ai .ai-side-toggle .btn-text,#ai .ai-side-close .btn-text{display:none}
 #ai .ai-side-panel{min-width:0;max-height:100%;overflow:auto}
 #ai .ai-side.is-collapsed .ai-side-panel{display:none}
-#ai .ai-side-card{min-height:0;padding:14px}
-#ai .ai-side-card-title{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;margin-bottom:12px}
+#ai .ai-side-card{min-height:0;padding:16px}
+#ai .ai-side-card-title{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;margin-bottom:14px}
 #ai .ai-side-card-title small{font-family:var(--mono);font-size:10px;font-weight:500;color:var(--muted);white-space:nowrap}
 #ai .ai-side-close{width:31px;height:31px;padding:0;border-radius:10px}
 .ai-status{margin-top:10px}
+.ai-settings-box{width:min(760px,96vw)}
+.ai-settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.ai-settings-section{border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.025);padding:12px}
+.ai-settings-section h3{font-size:13px;margin-bottom:10px}
+#ai .ai-provider-card>.field{margin:0 0 10px}
+#ai .ai-provider-card .field-row{min-width:0;gap:10px;margin-bottom:12px}
+#ai .ai-provider-card .field-row .field{min-width:0;margin:0}
+#ai .ai-provider-card .field select{min-width:0;height:38px;padding:0 10px;border-radius:12px}
+#ai .ai-side-actions{display:grid;grid-template-columns:minmax(0,1fr) 40px 40px;gap:8px;align-items:stretch;min-width:0}
+#ai .ai-side-actions .btn{min-width:0;height:40px;min-height:40px;margin:0;padding:0 12px;display:inline-flex;align-items:center;gap:7px}
+#ai .ai-side-actions .btn.primary{justify-content:flex-start;overflow:hidden}
+#ai .ai-side-actions .btn.primary .btn-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#ai .ai-side-actions .btn.icon-only{width:40px;min-width:40px;padding:0;justify-content:center}
+#ai .ai-side-actions .btn.icon-only .btn-text{display:none}
+#ai .ai-provider-card .ai-status{margin:12px 0 0;padding-top:11px;border-top:1px solid rgba(255,255,255,.08);line-height:1.45;overflow-wrap:anywhere}
 @media(max-width:1180px){.ai-grid{grid-template-columns:minmax(0,1fr) auto}.ai-chat{min-height:0}}
-@media(max-width:900px){.app.ai-focus{grid-template-rows:minmax(0,1fr)}.app.ai-focus .sidebar{display:none}.app.ai-focus .topbar{min-height:48px}.app.ai-focus .crumb{display:none}.app.ai-focus .tabs{grid-template-columns:repeat(7,minmax(38px,1fr))}#panel-ai>.scroll{overflow:hidden}.ai{padding:10px;gap:0}.ai-hero{display:none}.ai-grid{position:relative;grid-template-columns:minmax(0,1fr);gap:0}.ai-chat{width:100%}#ai .ai-side,#ai .ai-side.is-open{position:absolute;right:8px;top:8px;z-index:8;display:block;width:auto;height:auto;min-width:0}#ai .ai-side-rail{display:flex;flex-direction:row;gap:6px}#ai .ai-side-toggle{width:38px;height:38px;border-radius:12px;background:rgba(8,10,13,.72);backdrop-filter:blur(10px)}#ai .ai-side-toggle .ico{width:17px;height:17px}#ai .ai-side-panel{position:absolute;right:0;top:46px;z-index:9;width:min(330px,calc(100vw - 28px));max-height:calc(100dvh - 118px);overflow:auto;background:rgba(16,21,29,.98);border-radius:14px;box-shadow:var(--shadow)}#ai .ai-side.is-collapsed .ai-side-panel{display:none}.ai-chat>.card-title{min-height:56px;padding:12px 94px 12px 12px}.ai-chat>.card-title small{display:none}.ai-messages{padding:12px 12px 0}.ai-composer{padding:10px 12px 12px}.ai-input{grid-template-columns:1fr auto}.ai-input textarea{min-height:66px;max-height:22vh}.ai-hint{display:none}}
+@media(max-width:900px){.app.ai-focus{grid-template-rows:minmax(0,1fr)}.app.ai-focus .sidebar{display:none}.app.ai-focus .topbar{min-height:48px}.app.ai-focus .crumb{display:none}.app.ai-focus .tabs{grid-template-columns:repeat(7,minmax(38px,1fr))}#panel-ai>.scroll{overflow:hidden}.ai{padding:10px;gap:0}.ai-hero{display:none}.ai-grid{position:relative;grid-template-columns:minmax(0,1fr);gap:0}.ai-chat{width:100%}#ai .ai-side,#ai .ai-side.is-open{position:absolute;right:8px;top:8px;z-index:8;display:block;width:auto;height:auto;min-width:0}#ai .ai-side-rail{display:flex;flex-direction:row;gap:6px}#ai .ai-side-toggle{width:38px;height:38px;border-radius:12px;background:rgba(8,10,13,.72);backdrop-filter:blur(10px)}#ai .ai-side-toggle .ico{width:17px;height:17px}#ai .ai-side-panel{position:absolute;right:0;top:46px;z-index:9;width:min(330px,calc(100vw - 28px));max-height:calc(100dvh - 118px);overflow:auto;background:rgba(16,21,29,.98);border-radius:14px;box-shadow:var(--shadow)}#ai .ai-side.is-collapsed .ai-side-panel{display:none}.ai-chat>.card-title{min-height:56px;padding:12px 94px 12px 12px}.ai-chat>.card-title small{display:none}.ai-messages{padding:12px 12px 0}.ai-composer{padding:10px 12px 12px}.ai-input{grid-template-columns:1fr auto}.ai-input textarea{min-height:66px;max-height:22vh}.ai-hint{display:none}.ai-settings-grid{grid-template-columns:1fr}.ai-settings-box{max-height:92dvh;overflow:auto}}
 @media(max-width:430px){.app.ai-focus .topbar{padding:6px}.ai{padding:8px}.ai-input{grid-template-columns:1fr}.ai-chat>.card-title{min-height:52px;padding-right:88px}#ai .ai-side,#ai .ai-side.is-open{right:8px;top:7px}#ai .ai-side-toggle{width:36px;height:36px}#ai .ai-side-panel{width:min(318px,calc(100vw - 24px));max-height:calc(100dvh - 110px)}}
+</style>
+<style id="pocketwiki-liquid-glass">
+:root{
+  --bg:#05070b;
+  --bg2:#09111b;
+  --bg3:#101b29;
+  --bg4:#19283a;
+  --panel:rgba(10,18,29,.76);
+  --panel2:rgba(17,31,47,.78);
+  --border:rgba(255,255,255,.10);
+  --border2:rgba(255,255,255,.18);
+  --text:#f4f7fb;
+  --dim:#b6c2d1;
+  --muted:#75859a;
+  --muted2:#4f6075;
+  --accent:#f6c85f;
+  --accent2:#73d1ff;
+  --good:#7ce3a1;
+  --warn:#ffd27a;
+  --bad:#ff8d91;
+  --purple:#b9a1ff;
+  --glass:rgba(14,23,36,.54);
+  --glass-strong:rgba(15,24,37,.72);
+  --glass-border:rgba(255,255,255,.16);
+  --shadow:0 24px 70px rgba(0,0,0,.36),inset 0 1px 0 rgba(255,255,255,.06);
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",Inter,system-ui,sans-serif;
+  --mono:"SFMono-Regular",ui-monospace,"JetBrains Mono",monospace;
+  --serif:var(--font);
+  --sidebar:294px;
+  --inspector:320px;
+  --radius:22px;
+}
+
+html,body{
+  background:
+    radial-gradient(circle at 9% 2%,rgba(68,172,232,.19),transparent 31%),
+    radial-gradient(circle at 86% 1%,rgba(246,200,95,.11),transparent 26%),
+    radial-gradient(circle at 72% 92%,rgba(143,116,255,.10),transparent 30%),
+    linear-gradient(145deg,#0b1727 0,#05070b 48%,#071019 100%);
+  color:var(--text);
+  font-family:var(--font);
+  -webkit-font-smoothing:antialiased;
+}
+
+body:before,body:after{
+  content:"";
+  position:fixed;
+  z-index:-1;
+  pointer-events:none;
+  border-radius:50%;
+  filter:blur(100px);
+  opacity:.5;
+}
+body:before{width:34vw;height:34vw;left:-12vw;top:-16vw;background:rgba(115,209,255,.18)}
+body:after{width:30vw;height:30vw;right:-10vw;bottom:-14vw;background:rgba(185,161,255,.12)}
+
+button,input,textarea,select{font-family:inherit}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid rgba(115,209,255,.82);outline-offset:2px}
+
+.app{
+  grid-template-columns:var(--sidebar) minmax(0,1fr) var(--inspector);
+  gap:10px;
+  padding:10px;
+  min-width:980px;
+  background:transparent;
+}
+
+.sidebar,.inspector,.topbar,.palette-box,.copy-box,.access-card{
+  background:linear-gradient(145deg,rgba(255,255,255,.07),rgba(255,255,255,.018) 38%),var(--glass);
+  border:1px solid var(--glass-border);
+  box-shadow:var(--shadow);
+  -webkit-backdrop-filter:blur(38px) saturate(155%);
+  backdrop-filter:blur(38px) saturate(155%);
+}
+
+.sidebar,.inspector{
+  border-radius:28px;
+  overflow:hidden;
+}
+.sidebar{border-right:1px solid var(--glass-border)}
+.inspector{border-left:1px solid var(--glass-border)}
+.main{gap:10px;min-width:0}
+.content{
+  border:1px solid rgba(255,255,255,.075);
+  border-radius:28px;
+  background:rgba(3,7,13,.40);
+  box-shadow:0 24px 80px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.035);
+  overflow:hidden;
+}
+
+.brand{padding:16px 16px 14px;border-bottom:1px solid rgba(255,255,255,.08)}
+.brand-row{gap:11px}
+.logo{width:64px;height:64px;filter:drop-shadow(0 12px 18px rgba(0,0,0,.34))}
+.brand-title{font-size:19px;font-weight:750;letter-spacing:-.035em}
+.brand-sub{font-family:var(--font);font-size:11px;letter-spacing:0;color:var(--muted);line-height:1.35}
+
+.btn,.chip,.tab,.graph-scope,.graph-depth,.graph-search,#ai .ai-side-toggle{
+  background:linear-gradient(145deg,rgba(255,255,255,.09),rgba(255,255,255,.025)),rgba(12,20,31,.54);
+  border-color:rgba(255,255,255,.13);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 8px 22px rgba(0,0,0,.14);
+  -webkit-backdrop-filter:blur(18px) saturate(145%);
+  backdrop-filter:blur(18px) saturate(145%);
+}
+.btn{min-height:38px;border-radius:15px;font-family:var(--font);font-weight:650;font-size:12px;color:var(--dim)}
+.btn:hover{border-color:rgba(246,200,95,.5);color:var(--text);transform:translateY(-1px);background-color:rgba(246,200,95,.07)}
+.btn:active,.tab:active,.chip:active{transform:scale(.975)}
+.btn.primary{
+  color:var(--text);
+  border-color:rgba(246,200,95,.42);
+  background:linear-gradient(145deg,rgba(246,200,95,.28),rgba(115,209,255,.11)),rgba(14,23,35,.65);
+}
+
+.sidebar-search{padding:13px 14px;border-bottom:1px solid rgba(255,255,255,.075)}
+.searchbox input,.ai-input textarea,.ai-field input,.ai-field select{
+  background:rgba(3,8,14,.54);
+  border:1px solid rgba(255,255,255,.11);
+  border-radius:15px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035);
+}
+.searchbox input{font-family:var(--font);font-size:12px;padding:11px 38px 11px 13px}
+.searchbox input:focus,.ai-input textarea:focus,.ai-field input:focus,.ai-field select:focus{border-color:rgba(115,209,255,.58);box-shadow:0 0 0 3px rgba(115,209,255,.08)}
+.searchbox .key{top:9px;border-color:rgba(255,255,255,.10);background:rgba(255,255,255,.055)}
+.filters{gap:7px}
+.chip{border-radius:999px;padding:6px 9px;font-family:var(--font);font-weight:600}
+.chip.active,.chip:hover{color:var(--text);border-color:rgba(246,200,95,.42);background:rgba(246,200,95,.13)}
+
+.nav{padding:10px 8px}
+.nav-section{padding:16px 10px 7px;font-family:var(--font);font-size:10px;font-weight:700;letter-spacing:.08em}
+.nav-item{margin:2px 0;padding:9px 10px;border:1px solid transparent;border-radius:14px;color:var(--dim)}
+.nav-item:hover{background:rgba(255,255,255,.055);border-color:rgba(255,255,255,.06)}
+.nav-item.active{background:linear-gradient(120deg,rgba(246,200,95,.17),rgba(115,209,255,.07));border:1px solid rgba(246,200,95,.25);color:var(--text)}
+.nav-name{font-family:var(--font);font-size:12px;font-weight:560}
+.sidebar-footer{border-top-color:rgba(255,255,255,.075)}
+
+.topbar{height:64px;flex-shrink:0;padding:0 12px 0 16px;border:1px solid var(--glass-border);border-radius:24px}
+.crumb{font-family:var(--font);font-size:12px}
+.crumb span{color:var(--accent);font-weight:700}
+.tabs{gap:3px;padding:4px;border:1px solid rgba(255,255,255,.09);border-radius:18px;background:rgba(3,8,14,.34)}
+.tab{min-height:36px;border:0;border-radius:14px;padding:8px 10px;font-family:var(--font);font-size:11px;font-weight:650;color:var(--dim);box-shadow:none;background:transparent;backdrop-filter:none}
+.tab:hover{border:0;background:rgba(255,255,255,.06);color:var(--text)}
+.tab.active{color:var(--text);border:1px solid rgba(246,200,95,.32);background:linear-gradient(145deg,rgba(246,200,95,.20),rgba(115,209,255,.07));box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 7px 18px rgba(0,0,0,.16)}
+
+.welcome{padding:26px}
+.welcome-card,.hero-card,.card,.reader-card,.outline,.inspector-card,.time-entry,.sr,.path,.ai-msg,.ai-side-card,.route-card,.excalidraw-card{
+  background:linear-gradient(145deg,rgba(255,255,255,.065),rgba(255,255,255,.018) 36%),rgba(10,18,29,.72);
+  border:1px solid rgba(255,255,255,.11);
+  box-shadow:0 18px 48px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.055);
+}
+.welcome-card{max-width:820px;border-radius:30px;padding:42px}
+.welcome-card:before{background:radial-gradient(circle,rgba(115,209,255,.17),transparent 66%)}
+.welcome-kicker{font-family:var(--font);font-weight:750;color:var(--accent);letter-spacing:.1em}
+.welcome h1{max-width:700px;font-size:46px;font-weight:760;letter-spacing:-.055em;line-height:1.01}
+.welcome p{color:var(--dim)}
+.mini-feature{border-color:rgba(255,255,255,.09);border-radius:18px;background:rgba(255,255,255,.035)}
+
+.dashboard,.health,.ai,.excalidraw{padding:22px 24px 34px}
+.hero{gap:16px;margin-bottom:16px}
+.hero-card,.card{border-radius:var(--radius)}
+.hero-card{padding:22px}
+.hero-card:after{background:radial-gradient(circle,rgba(115,209,255,.15),transparent 70%)}
+.hero-card h2{font-weight:760;letter-spacing:-.045em}
+.stat{border:1px solid rgba(255,255,255,.08);border-radius:16px;background:rgba(3,8,14,.43);box-shadow:inset 0 1px 0 rgba(255,255,255,.035)}
+.stat-num{color:var(--accent);font-weight:760}
+.quick-actions{gap:10px}
+.action-tile{border-color:rgba(255,255,255,.09);border-radius:18px;background:rgba(255,255,255,.035)}
+.action-tile:hover{border-color:rgba(246,200,95,.40);background:rgba(246,200,95,.06)}
+.list-item{border-color:rgba(255,255,255,.08);border-radius:16px;background:rgba(255,255,255,.028)}
+.list-item:hover{border-color:rgba(115,209,255,.25);background:rgba(255,255,255,.055)}
+.tag,.pill,.path-step{border-color:rgba(255,255,255,.10);background:rgba(3,8,14,.42)}
+
+.reader-layout{max-width:1200px;grid-template-columns:minmax(0,860px) 260px;padding:36px 30px 96px}
+.page-title{font-weight:760;letter-spacing:-.05em}
+.page-header{border-bottom-color:rgba(255,255,255,.10)}
+.md{color:#dfe7f1}
+.md h1,.md h2,.md h3,.md h4{font-family:var(--font);font-weight:720}
+.md h2{border-bottom-color:rgba(255,255,255,.10)}
+.md pre{background:rgba(2,6,11,.70);border-color:rgba(255,255,255,.10);border-radius:18px}
+.md code{background:rgba(115,209,255,.07);border-color:rgba(115,209,255,.13);color:var(--good)}
+.md blockquote{border-left-color:var(--accent);background:rgba(246,200,95,.06);border-radius:0 16px 16px 0}
+.outline{border-radius:20px;backdrop-filter:blur(20px)}
+
+.inspector-header{border-bottom-color:rgba(255,255,255,.075)}
+.inspector-card{border-radius:18px}
+.inspector-card h4{font-family:var(--font);font-weight:750}
+.time-entry{border-radius:20px}
+.time-entry:before{box-shadow:0 0 0 5px rgba(5,7,11,.8)}
+.palette{background:rgba(1,4,8,.58);backdrop-filter:blur(24px)}
+.palette-box{border-radius:26px}
+.palette-input{border-bottom-color:rgba(255,255,255,.09)}
+.pal-item{border-radius:16px}
+.pal-item:hover,.pal-item.active{background:rgba(255,255,255,.065)}
+.search-overlay{background:rgba(4,8,14,.72);backdrop-filter:blur(30px) saturate(140%)}
+.sr{border-radius:18px}
+
+.graph-panel{background:radial-gradient(circle at 48% 45%,rgba(115,209,255,.085),transparent 44%),rgba(3,7,12,.52)}
+.graph-toolbar .btn,.graph-scope,.graph-depth,.graph-search,.graph-stats,.graph-detail{background-color:rgba(9,17,27,.64);backdrop-filter:blur(26px) saturate(145%)}
+.graph-detail,.graph-stats{border-color:rgba(255,255,255,.12);box-shadow:var(--shadow)}
+.graph-detail{border-radius:20px}
+.graph-stats{border-radius:15px}
+
+.ai-chat,.ai-side-card{border-radius:22px}
+.ai-chat>.card-title{border-bottom-color:rgba(255,255,255,.08)}
+.ai-composer{border-top-color:rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(8,14,23,0),rgba(8,14,23,.88) 20%,rgba(8,14,23,.96))}
+.ai-input textarea{border-radius:18px;background:rgba(3,8,14,.52)}
+#ai .ai-side-toggle{border-radius:17px}
+#ai .ai-side-toggle:hover,#ai .ai-side-toggle.active{border-color:rgba(246,200,95,.42);color:var(--accent);background:rgba(246,200,95,.11)}
+#ai .ai-side-panel{border-radius:22px}
+.ai-settings-section{border-color:rgba(255,255,255,.10);border-radius:18px;background:rgba(255,255,255,.032)}
+
+.access-card,.copy-box{border-radius:30px}
+
+@media(min-width:1600px){
+  :root{--sidebar:310px;--inspector:340px}
+  .dashboard,.health,.ai{max-width:1720px}
+}
+
+@media(max-width:1400px) and (min-width:1181px){
+  .app{grid-template-columns:294px minmax(0,1fr)}
+  .inspector{display:none}
+  .dashboard,.health,.ai{max-width:1160px}
+  .hero{grid-template-columns:minmax(0,1.1fr) minmax(300px,.9fr)}
+  .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .quick-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+@media(max-width:1180px){
+  .app{grid-template-columns:278px minmax(0,1fr)}
+  .inspector{display:none}
+  .hero{grid-template-columns:1fr}
+  .reader-layout{grid-template-columns:1fr}
+  .outline{display:none}
+  .span-4,.span-5,.span-6,.span-7,.span-8{grid-column:span 12}
+  .issue-grid{grid-template-columns:1fr}
+  .welcome-grid{grid-template-columns:1fr}
+  .ai-grid{grid-template-columns:minmax(0,1fr) auto}
+}
+
+@media(max-width:900px){
+  html,body{width:100%;height:100%;overflow:hidden;overscroll-behavior:none}
+  .app{
+    width:100%;
+    height:100dvh;
+    min-width:0;
+    grid-template-columns:minmax(0,1fr);
+    grid-template-rows:auto minmax(0,1fr);
+    gap:8px;
+    padding:8px;
+  }
+  .sidebar{max-height:184px;border-radius:24px;border:1px solid var(--glass-border)}
+  .brand{padding:9px 12px;border-bottom:0}
+  .logo{width:46px;height:46px}
+  .brand-title{font-size:17px}
+  .brand-sub{font-size:10px}
+  .brand .open-actions{margin-top:0}
+  .sidebar-search{padding:6px 10px 8px}
+  .filters{display:none}
+  .searchbox input{padding-block:9px}
+  .nav{min-height:48px;max-height:52px;display:flex;gap:6px;padding:5px 9px 8px;overflow-x:auto;overflow-y:hidden}
+  .nav-section{display:none}
+  .nav-item{min-width:132px;max-width:180px;margin:0;padding:7px 9px;grid-template-columns:18px minmax(0,1fr);grid-template-rows:auto auto;border:1px solid rgba(255,255,255,.08);border-radius:14px}
+  .nav-badge{grid-column:2}
+  .sidebar-footer{display:none}
+  .main{position:relative;gap:0;min-height:0}
+  .content{height:100%;border-radius:24px}
+  .topbar,.app.ai-focus .topbar{
+    position:absolute;
+    z-index:40;
+    left:10px;
+    right:10px;
+    bottom:calc(10px + env(safe-area-inset-bottom));
+    width:auto;
+    height:62px;
+    min-height:62px;
+    padding:6px;
+    border-radius:31px;
+    background:linear-gradient(145deg,rgba(255,255,255,.10),rgba(255,255,255,.025)),rgba(10,18,29,.64);
+    box-shadow:0 22px 56px rgba(0,0,0,.46),inset 0 1px 0 rgba(255,255,255,.10);
+  }
+  .crumb{display:none}
+  .tabs,.app.ai-focus .tabs{width:100%;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;padding:0;border:0;background:transparent}
+  .tab{min-width:0;min-height:48px;padding:8px 4px;border-radius:24px}
+  .tab-label{display:none}
+  .tab .ico{width:19px;height:19px}
+  .dashboard,.health,.timeline,.reader-layout,.ai,.excalidraw{padding-bottom:96px}
+  .welcome{padding:12px 12px 88px}
+  .welcome-card{padding:24px;border-radius:26px}
+  .welcome h1{font-size:34px}
+  .hero-card,.card{border-radius:20px}
+  .ai{gap:0}
+  #ai .ai-side-panel{background:rgba(10,18,29,.82);border:1px solid rgba(255,255,255,.12);backdrop-filter:blur(30px) saturate(150%)}
+}
+
+@media(max-width:520px){
+  .app{gap:6px;padding:6px}
+  .sidebar{max-height:158px;border-radius:22px}
+  .brand{min-height:54px}
+  .brand-row{gap:8px;min-width:0}
+  .logo{width:40px;height:40px}
+  .brand-sub{display:none}
+  .brand .open-actions{display:flex;gap:6px}
+  .brand .open-actions .btn{width:40px;height:40px;min-height:40px;padding:0;border-radius:20px}
+  .brand .open-actions .btn-text{display:none}
+  .sidebar-search{padding:4px 8px 6px}
+  .searchbox input{font-size:12px;padding:9px 11px}
+  .searchbox .key{display:none}
+  .nav{padding:4px 8px 7px}
+  .nav-item{min-width:100px;max-width:126px;min-height:39px;display:grid;grid-template-columns:1fr;padding:7px 9px}
+  .nav-ico,.nav-badge{display:none}
+  .nav-name{display:block;font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .topbar,.app.ai-focus .topbar{left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom));height:60px;min-height:60px}
+  .tab{min-height:46px}
+  .dashboard,.health,.ai,.excalidraw{padding:10px 10px 92px}
+  .reader-layout,.timeline{padding:18px 13px 92px}
+  .welcome-card{padding:20px}
+  .welcome h1{font-size:30px;line-height:1.02}
+  .welcome p{font-size:14px;line-height:1.55}
+  .welcome-grid{display:none}
+  .stat-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+  .stat{padding:8px 4px;text-align:center}
+  .stat-num{font-size:19px}
+  .stat-label{font-size:8px}
+  .quick-actions{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;padding:9px}
+  .action-tile{min-height:58px;padding:8px 4px;text-align:center}
+  .action-tile b,.action-tile span:not(.action-icon){display:none}
+  .page-title{font-size:29px}
+  .route-grid{grid-template-columns:1fr}
+}
+
+@media(prefers-reduced-transparency:reduce){
+  .sidebar,.inspector,.topbar,.palette-box,.copy-box,.access-card,.btn,.chip,.graph-detail,.graph-stats{
+    background:#111a27;
+    -webkit-backdrop-filter:none;
+    backdrop-filter:none;
+  }
+}
 </style>
 </head>
 <body>
@@ -329,6 +679,40 @@ button{cursor:pointer;color:inherit}
     </div>
   </div>
 </div>
+<div class="copy-modal hidden" id="ai-settings-modal">
+  <div class="copy-box ai-settings-box">
+    <div class="copy-head">
+      <b id="ai-settings-title" data-icon="settings">Configurações da IA</b>
+      <button class="btn small" id="ai-settings-close" data-icon="close"><span class="btn-text">Fechar</span></button>
+    </div>
+    <div class="ai-settings-grid">
+      <section class="ai-settings-section">
+        <h3>Provider</h3>
+        <div class="field"><label>Método</label><select id="ai-settings-method"><option value="openai">OpenAI</option><option value="lmstudio">LM Studio</option></select></div>
+        <div class="field-row">
+          <div class="field"><label>Modelo</label><input id="ai-settings-model" spellcheck="false"></div>
+          <div class="field"><label>Raciocínio</label><select id="ai-settings-reasoning"><option value="low">Baixo</option><option value="medium">Médio</option><option value="high">Alto</option></select></div>
+        </div>
+        <div class="field"><label>LM Studio</label><input id="ai-settings-base-url" spellcheck="false" placeholder="http://127.0.0.1:1234"></div>
+        <div class="field"><label>LM Studio API key</label><input id="ai-settings-api-key" type="password" spellcheck="false" placeholder="API key da sessão"></div>
+      </section>
+      <section class="ai-settings-section">
+        <h3>Infra</h3>
+        <div class="field"><label>PocketKernel</label><input id="ai-settings-kernel-base-url" spellcheck="false" placeholder="http://127.0.0.1:8080"></div>
+        <div class="field"><label>MiddlewareAuth</label><input id="ai-settings-middleware-base-url" spellcheck="false" placeholder="http://127.0.0.1:18787"></div>
+        <div class="field-row">
+          <div class="field"><label>Project ID</label><input id="ai-settings-project-id" spellcheck="false" placeholder="acme"></div>
+          <div class="field"><label>Profile/User ID</label><input id="ai-settings-profile-id" spellcheck="false" placeholder="default"></div>
+        </div>
+        <div class="field"><label>Middleware token</label><input id="ai-settings-token" type="password" spellcheck="false" placeholder="MIDDLEWARE_CLIENT_TOKEN"></div>
+      </section>
+    </div>
+    <div class="copy-actions">
+      <button class="btn" id="ai-settings-refresh" data-icon="refresh"><span class="btn-text">Atualizar status</span></button>
+      <button class="btn primary" id="ai-settings-save" data-icon="check"><span class="btn-text">Salvar</span></button>
+    </div>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -356,12 +740,22 @@ const state = {
   dirName: 'Wiki Local',
   appConfig: null,
   routes: null,
+  sourceMode: 'none',
   ai: {
-    baseUrl: localStorage.getItem('pocketwiki:ai-base-url') || 'http://localhost:1234/v1',
+    providerMethod: localStorage.getItem('pocketwiki:ai-provider-method') || 'openai',
+    reasoning: localStorage.getItem('pocketwiki:ai-reasoning') || 'medium',
+    kernelBaseUrl: localStorage.getItem('pocketwiki:kernel-base-url') || 'http://127.0.0.1:8080',
+    kernelUserId: localStorage.getItem('pocketwiki:kernel-user-id') || 'web',
+    middlewareBaseUrl: localStorage.getItem('pocketwiki:middleware-base-url') || 'http://127.0.0.1:18787',
+    middlewareProjectId: localStorage.getItem('pocketwiki:middleware-project-id') || 'acme',
+    middlewareProfileId: localStorage.getItem('pocketwiki:middleware-profile-id') || 'default',
+    middlewareToken: '',
+    baseUrl: localStorage.getItem('pocketwiki:ai-base-url') || 'http://127.0.0.1:1234',
     apiKey: '',
-    model: localStorage.getItem('pocketwiki:ai-model') || '',
+    model: localStorage.getItem('pocketwiki:ai-model') || 'gpt-5.5',
     models: [],
     modelsBusy: false,
+    providerStatus: '',
     messages: [],
     connected: false,
     busy: false,
@@ -372,6 +766,9 @@ const state = {
 };
 
 const EXCALIDRAW_RENDERER_VERSION = '2026-05-05.3';
+const SOURCE_MODE_KEY = 'pocketwiki:source-mode';
+const SOURCE_MODE_SERVER = 'server';
+const SOURCE_MODE_BROWSER = 'browser';
 let excalidrawRendererPromise = null;
 
 localStorage.removeItem('pocketwiki:ai-api-key');
@@ -412,6 +809,7 @@ const ICONS = {
   tailscale:'<circle cx="6" cy="6" r="2"></circle><circle cx="12" cy="6" r="2"></circle><circle cx="18" cy="6" r="2"></circle><circle cx="6" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="18" cy="12" r="2"></circle><circle cx="6" cy="18" r="2"></circle><circle cx="12" cy="18" r="2"></circle><circle cx="18" cy="18" r="2"></circle>',
   mdns:'<path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><path d="M12 20h.01"></path>',
   refresh:'<path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path><path d="M3 16v5h5"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M21 8V3h-5"></path>',
+  settings:'<path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5z"></path><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .9 1.7 1.7 0 0 0-.16.75V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.16-1.61 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.9-1 1.7 1.7 0 0 0-.75-.16H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.7 8.68a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.9 1.7 1.7 0 0 0 .16-.75V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15.32 4.7a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.14.36.46.68.9.9.22.1.48.16.75.16H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z"></path>',
   server:'<rect x="3" y="4" width="18" height="8" rx="2"></rect><rect x="3" y="12" width="18" height="8" rx="2"></rect><path d="M7 8h.01"></path><path d="M7 16h.01"></path>',
   noaccess:'<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><path d="M12 8v5"></path><path d="M12 17h.01"></path>',
   close:'<path d="M18 6L6 18"></path><path d="M6 6l12 12"></path>'
@@ -1139,10 +1537,12 @@ async function loadAppConfig(){
     const config = await res.json();
     state.appConfig = config;
     if (config.lmStudioModel && !localStorage.getItem('pocketwiki:ai-model')) state.ai.model = config.lmStudioModel;
-    if (config.aiProxy) {
-      state.ai.apiKey = '';
-      localStorage.removeItem('pocketwiki:ai-api-key');
-    }
+    if (config.lmStudioBaseUrl && !localStorage.getItem('pocketwiki:ai-base-url')) state.ai.baseUrl = trimLMStudioBaseUrl(config.lmStudioBaseUrl);
+    if (config.pocketKernelBaseUrl && !localStorage.getItem('pocketwiki:kernel-base-url')) state.ai.kernelBaseUrl = config.pocketKernelBaseUrl;
+    if (config.middlewareAuthBaseUrl && !localStorage.getItem('pocketwiki:middleware-base-url')) state.ai.middlewareBaseUrl = config.middlewareAuthBaseUrl;
+    if (config.middlewareAuthProjectId && !localStorage.getItem('pocketwiki:middleware-project-id')) state.ai.middlewareProjectId = config.middlewareAuthProjectId;
+    if (config.middlewareAuthProfileId && !localStorage.getItem('pocketwiki:middleware-profile-id')) state.ai.middlewareProfileId = config.middlewareAuthProfileId;
+    localStorage.removeItem('pocketwiki:ai-api-key');
     return config;
   } catch {
     return null;
@@ -1182,6 +1582,7 @@ async function loadFromServerReference(){
       return false;
     }
     const rootName = data.rootName || state.appConfig.referenceName || 'Wiki Local';
+    setSourceMode(SOURCE_MODE_SERVER);
     resetState(rootName);
     for (const file of files) ingestVirtualFile(file);
     finalizeLoad();
@@ -1215,7 +1616,7 @@ async function openWiki(){
     if (await tryLoadStoredDirectory({ requestPermission:true })) return;
     try {
       const handle = await window.showDirectoryPicker({ mode:'read' });
-      await loadFromDirectoryHandle(handle);
+      await loadFromDirectoryHandle(handle, { sourceMode: SOURCE_MODE_BROWSER });
       return;
     } catch (err) {
       if (err && err.name === 'AbortError') return;
@@ -1280,7 +1681,7 @@ async function tryLoadStoredDirectory(opts = {}){
   if (!handle) return false;
   try {
     if (!await hasDirectoryPermission(handle, Boolean(opts.requestPermission))) return false;
-    await loadFromDirectoryHandle(handle, { persist:false, restored:true });
+    await loadFromDirectoryHandle(handle, { persist:false, restored:true, sourceMode: SOURCE_MODE_BROWSER });
     return true;
   } catch (err) {
     console.warn(err);
@@ -1290,6 +1691,7 @@ async function tryLoadStoredDirectory(opts = {}){
 
 async function loadFromDirectoryHandle(handle, opts = {}){
   if (opts.persist !== false) await saveDirectoryHandle(handle);
+  setSourceMode(opts.sourceMode || SOURCE_MODE_BROWSER);
   resetState(handle.name || 'Wiki Local');
   await walkDirectory(handle, '');
   finalizeLoad();
@@ -1310,6 +1712,7 @@ async function walkDirectory(dir, prefix){
 }
 
 async function loadFromFileList(files){
+  setSourceMode(SOURCE_MODE_BROWSER);
   resetState('Wiki Local');
   const arr = Array.from(files || []);
   for (const file of arr) {
@@ -1374,6 +1777,13 @@ function finalizeLoad(){
   if (first) openPage(first.slug, { silentPanel:true });
   switchPanel('dashboard');
   showToast(`${state.pages.size} páginas · ${drawingCount()} desenhos carregados`);
+}
+
+function setSourceMode(mode){
+  state.sourceMode = mode || 'none';
+  if (mode === SOURCE_MODE_BROWSER || mode === SOURCE_MODE_SERVER) {
+    localStorage.setItem(SOURCE_MODE_KEY, mode);
+  }
 }
 
 function buildIndexes(){
@@ -3416,7 +3826,7 @@ function paletteItems(q){
     { icon:'graph', title:'Abrir mapa', sub:'grafo de relações', kind:'ação', run:()=>switchPanel('graph') },
     { icon:'draw', title:'Abrir desenhos', sub:'diagramas e anexos visuais', kind:'ação', run:()=>switchPanel('excalidraw') },
     { icon:'health', title:'Ver saúde da wiki', sub:'links quebrados, órfãos e lacunas', kind:'ação', run:()=>switchPanel('health') },
-    { icon:'ai', title:'Abrir IA local', sub:'chat contextual via LM Studio', kind:'ação', run:()=>switchPanel('ai') },
+    { icon:'ai', title:'Abrir IA local', sub:'chat governado via PocketKernel', kind:'ação', run:()=>switchPanel('ai') },
     { icon:'random', title:'Página aleatória', sub:'modo discovery', kind:'ação', run:()=>randomPage() },
     { icon:'copy', title:'Copiar relatório', sub:'markdown da saúde da wiki', kind:'ação', run:()=>copyWikiReport() }
   ];
@@ -3439,11 +3849,11 @@ function renderAiPanel(){
   $('#ai').innerHTML = `
     <div class="hero-card ai-hero">
       <h2>IA local da wiki</h2>
-      <p>Chat com contexto dos Markdown carregados. A resposta sai pelo LM Studio local e o contexto é montado em cima da página atual, links e busca textual.</p>
+      <p>Provider via MiddlewareAuth; resposta sempre governada pelo PocketKernel Harness.</p>
     </div>
     <div class="ai-grid">
       <div class="card ai-chat">
-        <div class="card-title">${cardTitle('ai', 'Conversa', state.ai.connected ? 'LM Studio conectado' : 'desconectado')}</div>
+        <div class="card-title">${cardTitle('ai', 'Conversa', state.ai.connected ? 'pronto' : 'PocketKernel Harness')}</div>
         <div class="ai-messages" id="ai-messages"></div>
         <div class="ai-composer">
           <div class="ai-input">
@@ -3465,7 +3875,7 @@ function renderAiSide(contextLabel){
   const panel = state.ai.sideOpen;
   return `<aside class="ai-side ${panel ? 'is-open' : 'is-collapsed'}">
     <div class="ai-side-rail" aria-label="Painéis da IA">
-      <button class="ai-side-toggle ${panel === 'llm' ? 'active' : ''}" data-ai-side="llm" data-icon="server" title="LM Studio" aria-label="Abrir LM Studio"><span class="btn-text">LM Studio</span></button>
+      <button class="ai-side-toggle ${panel === 'llm' ? 'active' : ''}" data-ai-side="llm" data-icon="ai" title="Motor IA" aria-label="Abrir motor IA"><span class="btn-text">IA</span></button>
       <button class="ai-side-toggle ${panel === 'context' ? 'active' : ''}" data-ai-side="context" data-icon="reader" title="Contexto" aria-label="Abrir contexto"><span class="btn-text">Contexto</span></button>
     </div>
     <div class="ai-side-panel">
@@ -3476,17 +3886,24 @@ function renderAiSide(contextLabel){
 }
 
 function renderAiLlmCard(){
-  return `<div class="card ai-side-card">
+  const provider = aiProvider();
+  return `<div class="card ai-side-card ai-provider-card">
     <div class="ai-side-card-title">
-      <span class="card-title-text">${icon('server')}<span>LM Studio</span></span>
-      <small>${esc(state.ai.connected ? 'ok' : 'offline')}</small>
+      <span class="card-title-text">${icon(provider === 'openai' ? 'ai' : 'server')}<span>IA</span></span>
+      <small>${esc(aiProviderTitle(provider))}</small>
       <button class="btn small ai-side-close" data-ai-side-close data-icon="close" title="Recolher"><span class="btn-text">Fechar</span></button>
     </div>
-    <div class="field"><label>Base URL</label><input id="ai-base-url" value="${attr(state.ai.baseUrl)}" spellcheck="false"></div>
-    <div class="field"><label>Modelo</label><select id="ai-model">${renderAiModelOptions()}</select></div>
-    ${state.appConfig?.aiProxy ? '' : `<div class="field"><label>Token</label><input id="ai-api-key" type="password" value="${attr(state.ai.apiKey)}" placeholder="LM_STUDIO_API_KEY" spellcheck="false"></div>`}
-    <button class="btn primary" id="ai-connect" data-icon="refresh"><span class="btn-text">${state.ai.modelsBusy ? 'Consultando...' : 'Atualizar modelos'}</span></button>
-    <div class="ai-status">${state.appConfig?.aiProxy ? 'usando proxy local do PocketWiki' : 'chamada direta ao LM Studio'}</div>
+    <div class="field"><label>Método</label><select id="ai-method"><option value="openai" ${provider === 'openai' ? 'selected' : ''}>OpenAI</option><option value="lmstudio" ${provider === 'lmstudio' ? 'selected' : ''}>LM Studio</option></select></div>
+    <div class="field-row">
+      <div class="field"><label>Modelo</label><select id="ai-model">${renderAiModelOptions(provider)}</select></div>
+      <div class="field"><label>Raciocínio</label><select id="ai-reasoning">${renderAiReasoningOptions()}</select></div>
+    </div>
+    <div class="ai-side-actions">
+      <button class="btn primary" id="ai-connect" data-icon="${provider === 'openai' ? 'ai' : 'settings'}"><span class="btn-text">${provider === 'openai' ? 'Login' : 'Configurar'}</span></button>
+      <button class="btn icon-only" id="ai-refresh-status" data-icon="refresh" title="Atualizar status"><span class="btn-text">Atualizar</span></button>
+      <button class="btn icon-only" id="ai-open-settings" data-icon="settings" title="Configurações avançadas"><span class="btn-text">Configurar</span></button>
+    </div>
+    <div class="ai-status">${esc(aiProviderStatusText(provider))}</div>
   </div>`;
 }
 
@@ -3501,16 +3918,51 @@ function renderAiContextCard(contextLabel){
   </div>`;
 }
 
-function renderAiModelOptions(){
+function renderAiModelOptions(provider = aiProvider()){
   const models = chatAiModels();
+  if (provider === 'openai') {
+    const values = uniqueNonEmpty([state.ai.model, 'gpt-5.5']);
+    return values.map(id => `<option value="${attr(id)}" ${id === state.ai.model ? 'selected' : ''}>${esc(id)}</option>`).join('');
+  }
   if (!models.length) {
-    const label = state.ai.modelsBusy ? 'consultando LM Studio...' : 'clique para consultar /v1/models';
-    return `<option value="${attr(state.ai.model)}">${esc(state.ai.model || label)}</option>`;
+    const label = state.ai.modelsBusy ? 'consultando MiddlewareAuth...' : (state.ai.model || 'modelo local');
+    return `<option value="${attr(state.ai.model || label)}">${esc(state.ai.model || label)}</option>`;
   }
   return models.map(model => {
     const id = aiModelId(model);
     return `<option value="${attr(id)}" ${id === state.ai.model ? 'selected' : ''}>${esc(id)}</option>`;
   }).join('');
+}
+
+function renderAiReasoningOptions(){
+  return [
+    ['low', 'Baixo'],
+    ['medium', 'Médio'],
+    ['high', 'Alto']
+  ].map(([value, label]) => `<option value="${attr(value)}" ${value === state.ai.reasoning ? 'selected' : ''}>${esc(label)}</option>`).join('');
+}
+
+function aiProvider(){
+  return state.ai.providerMethod === 'lmstudio' ? 'lmstudio' : 'openai';
+}
+
+function aiProviderTitle(provider = aiProvider()){
+  return provider === 'lmstudio' ? 'LM Studio' : 'OpenAI';
+}
+
+function aiProviderStatusText(provider = aiProvider()){
+  if (state.ai.providerStatus) return state.ai.providerStatus;
+  return provider === 'lmstudio'
+    ? 'Configure o LM Studio no MiddlewareAuth.'
+    : 'Faça login para conectar sua conta OpenAI.';
+}
+
+function uniqueNonEmpty(values){
+  const out = [];
+  for (const value of values.map(v => String(v || '').trim()).filter(Boolean)) {
+    if (!out.includes(value)) out.push(value);
+  }
+  return out.length ? out : ['gpt-5.5'];
 }
 
 function aiModelId(model){
@@ -3529,10 +3981,12 @@ function chatAiModels(){
 
 function bindAiPanel(){
   $('#ai-connect')?.addEventListener('click', connectAi);
+  $('#ai-refresh-status')?.addEventListener('click', () => refreshAiModels());
+  $('#ai-open-settings')?.addEventListener('click', openAiSettings);
   $('#ai-send')?.addEventListener('click', () => askAi());
+  $('#ai-method')?.addEventListener('change', () => { saveAiSettings(); state.ai.providerStatus = ''; renderAiPanel(); });
+  $('#ai-reasoning')?.addEventListener('change', saveAiSettings);
   $('#ai-model')?.addEventListener('change', saveAiSettings);
-  $('#ai-base-url')?.addEventListener('change', saveAiSettings);
-  $('#ai-api-key')?.addEventListener('change', saveAiSettings);
   $('#ai-question')?.addEventListener('input', e => {
     state.ai.draft = e.target.value;
   });
@@ -3558,11 +4012,71 @@ function toggleAiSide(panel){
   renderAiPanel();
 }
 
+function openAiSettings(){
+  syncAiSettingsForm();
+  $('#ai-settings-modal').classList.remove('hidden');
+  decorateStaticIcons($('#ai-settings-modal'));
+}
+
+function closeAiSettings(){
+  $('#ai-settings-modal').classList.add('hidden');
+}
+
+function syncAiSettingsForm(){
+  const values = {
+    'ai-settings-method': aiProvider(),
+    'ai-settings-reasoning': state.ai.reasoning || 'medium',
+    'ai-settings-model': state.ai.model || (aiProvider() === 'openai' ? 'gpt-5.5' : ''),
+    'ai-settings-base-url': state.ai.baseUrl,
+    'ai-settings-api-key': state.ai.apiKey,
+    'ai-settings-kernel-base-url': state.ai.kernelBaseUrl,
+    'ai-settings-middleware-base-url': state.ai.middlewareBaseUrl,
+    'ai-settings-project-id': state.ai.middlewareProjectId,
+    'ai-settings-profile-id': state.ai.middlewareProfileId,
+    'ai-settings-token': state.ai.middlewareToken
+  };
+  for (const [id, value] of Object.entries(values)) {
+    const el = document.getElementById(id);
+    if (el) el.value = value || '';
+  }
+}
+
+function bindAiSettingsModal(){
+  $('#ai-settings-close')?.addEventListener('click', closeAiSettings);
+  $('#ai-settings-save')?.addEventListener('click', () => {
+    saveAiSettings();
+    closeAiSettings();
+    renderAiPanel();
+  });
+  $('#ai-settings-refresh')?.addEventListener('click', async () => {
+    saveAiSettings();
+    await refreshAiModels();
+  });
+  $('#ai-settings-modal')?.addEventListener('click', e => {
+    if (e.target.id === 'ai-settings-modal') closeAiSettings();
+  });
+  [
+    'ai-settings-method',
+    'ai-settings-reasoning',
+    'ai-settings-model',
+    'ai-settings-base-url',
+    'ai-settings-api-key',
+    'ai-settings-kernel-base-url',
+    'ai-settings-middleware-base-url',
+    'ai-settings-project-id',
+    'ai-settings-profile-id',
+    'ai-settings-token'
+  ].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', syncAiSettingsFromInputs);
+    document.getElementById(id)?.addEventListener('change', syncAiSettingsFromInputs);
+  });
+}
+
 function renderAiMessages(){
   const box = $('#ai-messages');
   if (!box) return;
   if (!state.ai.messages.length) {
-    box.innerHTML = '<div class="ai-msg system">Conecte o LM Studio e faça uma pergunta. O contexto será adaptado ao tipo de pedido.</div>';
+    box.innerHTML = '<div class="ai-msg system">Configure o provider no MiddlewareAuth e faça uma pergunta. A resposta passa pelo PocketKernel Harness.</div>';
     return;
   }
   box.innerHTML = state.ai.messages.map((message, index) => renderAiMessage(message, index)).join('');
@@ -3834,20 +4348,55 @@ function normalizeAiPath(value){
 }
 
 function saveAiSettings(){
-  const baseUrl = $('#ai-base-url')?.value.trim();
-  const model = $('#ai-model')?.value.trim();
-  const apiKey = $('#ai-api-key')?.value.trim();
-  if (baseUrl) state.ai.baseUrl = baseUrl;
-  if (model !== undefined) state.ai.model = model;
-  if (apiKey !== undefined) state.ai.apiKey = apiKey;
+  syncAiSettingsFromInputs();
+  localStorage.setItem('pocketwiki:ai-provider-method', state.ai.providerMethod);
+  localStorage.setItem('pocketwiki:ai-reasoning', state.ai.reasoning);
+  localStorage.setItem('pocketwiki:kernel-base-url', state.ai.kernelBaseUrl);
+  localStorage.setItem('pocketwiki:kernel-user-id', state.ai.kernelUserId);
+  localStorage.setItem('pocketwiki:middleware-base-url', state.ai.middlewareBaseUrl);
+  localStorage.setItem('pocketwiki:middleware-project-id', state.ai.middlewareProjectId);
+  localStorage.setItem('pocketwiki:middleware-profile-id', state.ai.middlewareProfileId);
   localStorage.setItem('pocketwiki:ai-base-url', state.ai.baseUrl);
   localStorage.setItem('pocketwiki:ai-model', state.ai.model);
   localStorage.removeItem('pocketwiki:ai-api-key');
 }
 
+function syncAiSettingsFromInputs(){
+  const method = $('#ai-method')?.value || $('#ai-settings-method')?.value;
+  const reasoning = $('#ai-reasoning')?.value || $('#ai-settings-reasoning')?.value;
+  const kernelBaseUrl = $('#ai-settings-kernel-base-url')?.value.trim();
+  const middlewareBaseUrl = $('#ai-settings-middleware-base-url')?.value.trim();
+  const middlewareProjectId = $('#ai-settings-project-id')?.value.trim();
+  const middlewareProfileId = $('#ai-settings-profile-id')?.value.trim();
+  const middlewareToken = $('#ai-settings-token')?.value.trim();
+  const baseUrl = $('#ai-settings-base-url')?.value.trim();
+  const model = $('#ai-model')?.value?.trim() || $('#ai-settings-model')?.value.trim();
+  const apiKeyInput = $('#ai-settings-api-key');
+  if (method) state.ai.providerMethod = method === 'lmstudio' ? 'lmstudio' : 'openai';
+  if (reasoning) state.ai.reasoning = reasoning;
+  if (kernelBaseUrl) state.ai.kernelBaseUrl = kernelBaseUrl;
+  if (middlewareBaseUrl) state.ai.middlewareBaseUrl = middlewareBaseUrl;
+  if (middlewareProjectId) state.ai.middlewareProjectId = middlewareProjectId;
+  if (middlewareProfileId) {
+    state.ai.middlewareProfileId = middlewareProfileId;
+    state.ai.kernelUserId = middlewareProfileId;
+  }
+  if (middlewareToken !== undefined) state.ai.middlewareToken = middlewareToken;
+  if (baseUrl) state.ai.baseUrl = trimLMStudioBaseUrl(baseUrl);
+  if (model !== undefined) state.ai.model = model;
+  if (apiKeyInput) state.ai.apiKey = apiKeyInput.value.trim();
+}
+
 async function connectAi(){
   saveAiSettings();
-  await refreshAiModels();
+  if (aiProvider() === 'openai') {
+    await startOpenAILogin();
+  } else if (!state.ai.apiKey) {
+    openAiSettings();
+    showToast('Informe a API key do LM Studio');
+  } else {
+    await refreshAiModels();
+  }
 }
 
 async function refreshAiModels(opts = {}){
@@ -3855,21 +4404,21 @@ async function refreshAiModels(opts = {}){
   state.ai.modelsBusy = true;
   if (!opts.silent) renderAiPanel();
   try {
-    const data = await fetchAiModels();
-    state.ai.models = Array.isArray(data) ? data : (Array.isArray(data.data) ? data.data : (Array.isArray(data.models) ? data.models : []));
-    const ids = chatAiModels().map(aiModelId).filter(Boolean);
-    const configured = state.appConfig?.lmStudioModel;
-    const saved = localStorage.getItem('pocketwiki:ai-model') || '';
-    if (state.ai.model && !ids.includes(state.ai.model)) state.ai.model = '';
-    if (!state.ai.model && saved && ids.includes(saved)) state.ai.model = saved;
-    if (!state.ai.model && configured && ids.includes(configured)) state.ai.model = configured;
-    if (!state.ai.model && ids[0]) state.ai.model = ids[0];
-    state.ai.connected = ids.length > 0;
+    const data = aiProvider() === 'openai'
+      ? await fetchMiddlewareOpenAIStatus()
+      : await fetchMiddlewareLMStudioStatusOrConfigure();
+    state.ai.models = [];
+    const configured = state.appConfig?.lmStudioModel || '';
+    if (aiProvider() === 'lmstudio' && !state.ai.model && configured) state.ai.model = configured;
+    if (!state.ai.model && aiProvider() === 'openai') state.ai.model = 'gpt-5.5';
     if (state.ai.model) localStorage.setItem('pocketwiki:ai-model', state.ai.model);
     else localStorage.removeItem('pocketwiki:ai-model');
-    if (!opts.silent) showToast(state.ai.connected ? `LM Studio conectado: ${state.ai.model}` : 'Nenhum modelo de chat carregado no LM Studio');
+    state.ai.connected = Boolean(data.authenticated);
+    state.ai.providerStatus = providerStatusFromResponse(data, aiProvider());
+    if (!opts.silent) showToast(state.ai.providerStatus);
   } catch (err) {
     state.ai.connected = false;
+    state.ai.providerStatus = formatAiError(err);
     if (!opts.silent) showToast(formatAiError(err));
   } finally {
     state.ai.modelsBusy = false;
@@ -3877,8 +4426,139 @@ async function refreshAiModels(opts = {}){
   }
 }
 
-async function fetchAiModels(){
-  const res = await fetchAi('/models', { method:'GET' });
+async function startOpenAILogin(){
+  if (state.ai.modelsBusy) return;
+  state.ai.modelsBusy = true;
+  renderAiPanel();
+  try {
+    const data = await fetchMiddlewareOpenAILogin();
+    const target = String(data.authUrl || data.verificationUrl || '').trim();
+    if (target) window.open(target, '_blank', 'noopener,noreferrer');
+    state.ai.providerStatus = data.userCode
+      ? `Login iniciado. Use o código ${data.userCode}.`
+      : 'Login OpenAI iniciado no navegador.';
+    state.ai.connected = false;
+    showToast(state.ai.providerStatus);
+  } catch (err) {
+    state.ai.providerStatus = formatAiError(err);
+    showToast(state.ai.providerStatus);
+  } finally {
+    state.ai.modelsBusy = false;
+    renderAiPanel();
+  }
+}
+
+function providerStatusFromResponse(data, provider){
+  if (provider === 'openai') {
+    if (data?.authenticated) {
+      const account = data.email || data.accountId || '';
+      const plan = data.chatgptPlanType || '';
+      const suffix = [account, plan].filter(Boolean).join(' · ');
+      return suffix ? `OpenAI autenticado: ${suffix}` : 'OpenAI autenticado no MiddlewareAuth.';
+    }
+    return 'Faça login para conectar sua conta OpenAI.';
+  }
+  if (data?.authenticated) {
+    const count = Number.isFinite(data.modelCount) ? ` · ${data.modelCount} modelo(s)` : '';
+    return `LM Studio autenticado${count}.`;
+  }
+  return 'LM Studio ainda não autenticado no MiddlewareAuth.';
+}
+
+async function fetchMiddlewareLMStudioStatusOrConfigure(){
+  const payload = {
+    middlewareBaseUrl: state.ai.middlewareBaseUrl,
+    projectId: state.ai.middlewareProjectId || 'acme',
+    profileId: state.ai.middlewareProfileId || 'default',
+    baseUrl: trimLMStudioBaseUrl(state.ai.baseUrl),
+    apiKey: state.ai.apiKey
+  };
+  const endpoint = state.ai.apiKey ? '/api/middleware/lmstudio/api-key' : '/api/middleware/lmstudio/status';
+  if (state.appConfig?.middlewareAuthProxy && location.protocol.startsWith('http')) {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  }
+  const path = state.ai.apiKey
+    ? `/v1/projects/${encodeURIComponent(payload.projectId)}/auth/lmstudio/api-key`
+    : `/v1/projects/${encodeURIComponent(payload.projectId)}/auth/lmstudio/status?profileId=${encodeURIComponent(payload.profileId)}`;
+  const res = await fetch(`${trimSlash(state.ai.middlewareBaseUrl)}${path}`, {
+    method: state.ai.apiKey ? 'POST' : 'GET',
+    headers:{
+      'Content-Type':'application/json',
+      'Accept':'application/json',
+      ...(state.ai.middlewareToken ? { Authorization:`Bearer ${state.ai.middlewareToken}` } : {})
+    },
+    body: state.ai.apiKey ? JSON.stringify({
+      profileId: payload.profileId,
+      baseUrl: payload.baseUrl,
+      apiKey: payload.apiKey
+    }) : undefined
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function fetchMiddlewareOpenAIStatus(){
+  const payload = {
+    middlewareBaseUrl: state.ai.middlewareBaseUrl,
+    projectId: state.ai.middlewareProjectId || 'acme',
+    profileId: state.ai.middlewareProfileId || 'default'
+  };
+  if (state.appConfig?.middlewareAuthProxy && location.protocol.startsWith('http')) {
+    const res = await fetch('/api/middleware/openai/status', {
+      method: 'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  }
+  const endpoint = `${trimSlash(state.ai.middlewareBaseUrl)}/v1/projects/${encodeURIComponent(payload.projectId)}/auth/openai/status?profileId=${encodeURIComponent(payload.profileId)}`;
+  const res = await fetch(endpoint, {
+    method: 'GET',
+    headers:{
+      'Accept':'application/json',
+      ...(state.ai.middlewareToken ? { Authorization:`Bearer ${state.ai.middlewareToken}` } : {})
+    }
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function fetchMiddlewareOpenAILogin(){
+  const payload = {
+    middlewareBaseUrl: state.ai.middlewareBaseUrl,
+    projectId: state.ai.middlewareProjectId || 'acme',
+    profileId: state.ai.middlewareProfileId || 'default',
+    mode: 'device_code'
+  };
+  if (state.appConfig?.middlewareAuthProxy && location.protocol.startsWith('http')) {
+    const res = await fetch('/api/middleware/openai/login', {
+      method: 'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  }
+  const endpoint = `${trimSlash(state.ai.middlewareBaseUrl)}/v1/projects/${encodeURIComponent(payload.projectId)}/auth/openai/login`;
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'Accept':'application/json',
+      ...(state.ai.middlewareToken ? { Authorization:`Bearer ${state.ai.middlewareToken}` } : {})
+    },
+    body: JSON.stringify({
+      profileId: payload.profileId,
+      mode: payload.mode
+    })
+  });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
@@ -3928,11 +4608,10 @@ async function askAi(preset){
   const question = String(preset || input?.value || '').trim();
   if (!question) return showToast('Digite uma pergunta');
   saveAiSettings();
-  if (!state.ai.model && state.ai.modelsBusy) await waitForAiModels();
-  if (!state.ai.model) {
-    try { await connectAi(); } catch { /* handled by connectAi */ }
+  if (aiProvider() === 'lmstudio' && state.ai.apiKey) {
+    await refreshAiModels({ silent:true });
+    if (!state.ai.connected) return showToast('Nao consegui configurar o LM Studio no MiddlewareAuth');
   }
-  if (!state.ai.model) return showToast('Nenhum modelo carregado no LM Studio');
   if (!preset && input) {
     input.value = '';
     state.ai.draft = '';
@@ -3945,7 +4624,7 @@ async function askAi(preset){
     reasoning:'',
     finishReason:'',
     usage:null,
-    model:state.ai.model,
+    model:'PocketKernel',
     streaming:true
   };
   state.ai.messages.push(assistantMessage);
@@ -3954,32 +4633,10 @@ async function askAi(preset){
   renderAiPanel();
 
   try {
-    const context = await buildAiContext(question);
-    const messages = context.mode === 'wiki'
-      ? [
-          {
-            role:'system',
-            content:POCKETWIKI_AI_SYSTEM_PROMPT
-          },
-          {
-            role:'user',
-            content:`Pergunta do usuário:\n${question}\n\nConsulta seletiva do PocketWiki:\n${context.text}\n\nResponda interpretando somente a consulta acima.\nSe a relação for parcial, diga que é parcial e cite os paths relacionados.\nSó diga que não achou na wiki quando a consulta não trouxer nenhuma página relacionada.`
-          }
-        ]
-      : [
-          {
-            role:'system',
-            content:POCKETWIKI_GENERAL_SYSTEM_PROMPT
-          },
-          {
-            role:'user',
-            content:`${context.notice ? `Nota do PocketWiki: ${context.notice}\n\n` : ''}${question}`
-          }
-        ];
-    const payload = { model:state.ai.model, messages, temperature:0.2, stream:true };
-    const res = await fetchAi('/chat/completions', { method:'POST', body:JSON.stringify(payload) });
+    state.ai.lastContext = [];
+    const res = await fetchPocketKernel(question);
     if (!res.ok) throw new Error(await res.text());
-    const answer = await readAiResponse(res, assistantMessage);
+    const answer = normalizePocketKernelResponse(await res.json());
     state.ai.connected = true;
     applyAiAnswer(assistantMessage, answer);
   } catch (err) {
@@ -4163,17 +4820,109 @@ function trimAiMessages(){
   }
 }
 
-async function fetchAi(endpoint, init){
-  if (state.appConfig?.aiProxy && location.protocol.startsWith('http')) {
-    const apiEndpoint = endpoint === '/models' ? '/api/ai/models' : '/api/ai/chat';
-    return fetch(apiEndpoint, {
-      ...init,
-      headers:{ 'Content-Type':'application/json' }
+async function fetchPocketKernel(question){
+  const payload = {
+    text: question,
+    channel: 'web',
+    app_id: 'pocketwiki',
+    user_id: state.ai.kernelUserId || 'web'
+  };
+  if (state.appConfig?.kernelProxy && location.protocol.startsWith('http')) {
+    return fetch('/api/kernel/query', {
+      method: 'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify(payload)
     });
   }
-  const headers = { 'Content-Type':'application/json' };
-  if (state.ai.apiKey) headers.Authorization = `Bearer ${state.ai.apiKey}`;
-  return fetch(`${trimSlash(state.ai.baseUrl)}${endpoint}`, { ...init, headers });
+  return fetch(pocketKernelEndpoint(state.ai.kernelBaseUrl), {
+    method: 'POST',
+    headers:{ 'Content-Type':'application/json', 'Accept':'application/json' },
+    body: JSON.stringify(payload)
+  });
+}
+
+function pocketKernelEndpoint(baseUrl){
+  const url = new URL(baseUrl || 'http://127.0.0.1:8080');
+  const path = url.pathname.replace(/\/+$/, '');
+  if (!path || path === '/') url.pathname = '/v1/kernel';
+  else if (path !== '/v1/kernel' && path !== '/api/kernel/query') url.pathname = `${path}/v1/kernel`;
+  else url.pathname = path;
+  return url.toString();
+}
+
+function normalizePocketKernelResponse(data){
+  const content = firstKernelText(data, [
+    ['answer'],
+    ['response'],
+    ['text'],
+    ['content'],
+    ['message'],
+    ['output'],
+    ['result', 'answer'],
+    ['result', 'response'],
+    ['result', 'text'],
+    ['result', 'content'],
+    ['data', 'answer'],
+    ['data', 'text'],
+    ['choices', 0, 'message', 'content']
+  ]);
+  const profileUsed = firstKernelText(data, [
+    ['profile_used'],
+    ['profileUsed'],
+    ['result', 'profile_used'],
+    ['result', 'profileUsed']
+  ]);
+  const missingEvidence = firstKernelArray(data, [
+    ['missing_evidence'],
+    ['missingEvidence'],
+    ['result', 'missing_evidence'],
+    ['result', 'missingEvidence']
+  ]);
+  const reasoning = [
+    'PocketKernel',
+    profileUsed ? `profile_used: ${profileUsed}` : '',
+    `missing_evidence: ${missingEvidence.length ? missingEvidence.join(', ') : '[]'}`
+  ].filter(Boolean).join('\n');
+  return {
+    content: content || JSON.stringify(data, null, 2),
+    reasoning,
+    finishReason: '',
+    usage: null,
+    model: 'PocketKernel'
+  };
+}
+
+function firstKernelText(data, paths){
+  for (const path of paths) {
+    const text = kernelTextValue(kernelValueAt(data, path)).trim();
+    if (text) return text;
+  }
+  return '';
+}
+
+function firstKernelArray(data, paths){
+  for (const path of paths) {
+    const value = kernelValueAt(data, path);
+    if (Array.isArray(value)) return value.map(kernelTextValue).map(item => item.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function kernelValueAt(data, path){
+  let current = data;
+  for (const key of path) {
+    if (current == null) return undefined;
+    current = current[key];
+  }
+  return current;
+}
+
+function kernelTextValue(value){
+  if (value == null) return '';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) return value.map(kernelTextValue).filter(Boolean).join('\n');
+  if (typeof value === 'object') return kernelTextValue(value.content ?? value.text ?? value.message);
+  return '';
 }
 
 const AI_STOP_WORDS = new Set('a o os as um uma uns umas de da do das dos e em no na nos nas por para com sem sobre entre que qual quais como quando onde porque pra pro ao aos ou se sua seu suas seus meu minha meus minhas isso esse essa estes estas aquele aquela trazer traga mostre mostra mostrar quero preciso pode poderia pagina página wiki arquivo arquivos ajuda ajudar favor favorzinho explica explique falar fale diz diga'.split(' '));
@@ -4266,26 +5015,7 @@ async function buildAiContext(question){
 }
 
 async function planAiIndexSearch(question){
-  const fallback = fallbackAiSearchPlan(question);
-  if (!state.ai.model || String(question || '').length > 1600) return fallback;
-  const messages = [
-    {
-      role:'system',
-      content:'Você transforma uma pergunta em uma consulta para o índice de uma wiki. Não responda a pergunta. Não converse. Não use introdução. Sua resposta deve começar com INTENCAO: e seguir só este formato:\nINTENCAO: <o que o usuário quer encontrar>\nBUSCAR: <termo ou conceito>; <sinônimo útil>; <outro termo>\nFOCO: <conceito|procedimento|diagnostico|lista|resumo|relacao>'
-    },
-    {
-      role:'user',
-      content:`Pergunta:\n${question}`
-    }
-  ];
-  try {
-    const payload = { model:state.ai.model, messages, temperature:0, stream:false, max_tokens:220 };
-    const res = await fetchAi('/chat/completions', { method:'POST', body:JSON.stringify(payload) });
-    if (!res.ok) return fallback;
-    return parseAiSearchPlan(normalizeAiResponse(await res.json()).content, question);
-  } catch {
-    return fallback;
-  }
+  return fallbackAiSearchPlan(question);
 }
 
 function fallbackAiSearchPlan(question){
@@ -4403,33 +5133,7 @@ function compactAiIndexResults(candidates, maxChars = 4200){
 }
 
 async function selectAiPagesFromIndex(question, plan, indexText, limits){
-  if (!shouldUseAiPageSelector(question, indexText)) return null;
-  const messages = [
-    {
-      role:'system',
-      content:'Você é a etapa "ler índice" do PocketWiki. O índice mostra páginas candidatas, mas não o conteúdo completo. Escolha só as páginas que precisam ser abertas para responder. Responda somente com paths copiados exatamente do índice, um path por linha. Escolha no máximo 4. Se nenhuma página parecer relacionada, responda NENHUM.'
-    },
-    {
-      role:'user',
-      content:`Pergunta:\n${question}\n\nInterpretação:\n${plan.intent}\n\nBuscas feitas:\n${plan.queries.map(query => `- ${query}`).join('\n') || '- sem busca'}\n\nResultado do índice:\n${indexText}\n\nPaths para abrir:`
-    }
-  ];
-  try {
-    const payload = {
-      model:state.ai.model,
-      messages,
-      temperature:0,
-      stream:false,
-      max_tokens:180
-    };
-    const res = await fetchAi('/chat/completions', { method:'POST', body:JSON.stringify(payload) });
-    if (!res.ok) return null;
-    const answer = normalizeAiResponse(await res.json()).content;
-    const parsed = parseAiPageSelection(answer);
-    return parsed.explicitNone ? [] : parsed.pages.slice(0, limits.maxPages);
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 function shouldUseAiPageSelector(question, summary){
@@ -4691,12 +5395,20 @@ function aiFold(value){
 
 function formatAiError(err){
   const text = String(err?.message || err || '');
-  if (/invalid_api_key|api token|Authorization/i.test(text)) return 'LM Studio está pedindo token. Preencha LM_STUDIO_API_KEY no .env e rode pelo servidor local, ou informe o token no painel IA.';
-  if (/Failed to fetch|NetworkError/i.test(text)) return 'Não consegui falar com o LM Studio. Confere se o server está ativo em http://localhost:1234.';
-  return `Erro no LM Studio: ${text.slice(0, 240)}`;
+  if (/middlewareauth_token_missing|MIDDLEWARE_CLIENT_TOKEN|Authorization|unauthorized/i.test(text)) return 'MiddlewareAuth recusou a chamada. Confere o MIDDLEWARE_CLIENT_TOKEN no servidor ou no painel.';
+  if (/lmstudio_api_key_missing|ERR_LMSTUDIO_API_KEY_REQUIRED/i.test(text)) return 'Informe a API key do LM Studio para registrar o provider no MiddlewareAuth.';
+  if (/ERR_LMSTUDIO|lmstudio|LM Studio/i.test(text)) return `Erro no LM Studio via MiddlewareAuth: ${text.slice(0, 240)}`;
+  if (/openai|oauth|login/i.test(text)) return `Erro no OpenAI via MiddlewareAuth: ${text.slice(0, 240)}`;
+  if (/middlewareauth_proxy_failed/i.test(text)) return 'Não consegui falar com o MiddlewareAuth em http://127.0.0.1:18787.';
+  if (/pocketkernel_proxy_failed|Failed to fetch|NetworkError/i.test(text)) return 'Não consegui falar com o PocketKernel. Confere se ele está ativo em http://127.0.0.1:8080.';
+  return `Erro no PocketKernel: ${text.slice(0, 240)}`;
 }
 
 function trimSlash(value){ return String(value || '').replace(/\/+$/, ''); }
+function trimLMStudioBaseUrl(value){
+  const clean = trimSlash(value || 'http://127.0.0.1:1234');
+  return clean.replace(/\/v1$/i, '');
+}
 
 // Events
 decorateStaticIcons();
@@ -4722,7 +5434,8 @@ $('#copy-modal-copy').addEventListener('click', async () => {
   if (await copyText(text, 'Texto copiado', 'Ainda não consegui copiar automaticamente')) closeCopyFallback();
 });
 $('#copy-modal').addEventListener('click', e => { if (e.target.id === 'copy-modal') closeCopyFallback(); });
-document.addEventListener('keydown', e => { const k=e.key.toLowerCase(); if((e.metaKey||e.ctrlKey) && k==='k'){ e.preventDefault(); openPalette(); } if(k==='escape'){ closePalette(); closeCopyFallback(); $('#search-overlay').classList.remove('visible'); }});
+bindAiSettingsModal();
+document.addEventListener('keydown', e => { const k=e.key.toLowerCase(); if((e.metaKey||e.ctrlKey) && k==='k'){ e.preventDefault(); openPalette(); } if(k==='escape'){ closePalette(); closeCopyFallback(); closeAiSettings(); $('#search-overlay').classList.remove('visible'); }});
 window.addEventListener('resize', () => { if(state.activePanel==='graph') { resizeGraphCanvas(); requestGraphFrame(); } });
 
 if (window.marked?.setOptions) marked.setOptions({ gfm:true, breaks:false, mangle:false, headerIds:false });
@@ -4733,12 +5446,16 @@ async function initApp(){
     showAccessScreen('A página abriu, mas as APIs locais do PocketWiki não responderam. Pode ser interferência de rota, DNS/mDNS, Tailscale/VPN ou o servidor reiniciando na máquina principal.');
   }
   let loaded = false;
+  const sourcePreference = localStorage.getItem(SOURCE_MODE_KEY);
   const hasServerReference = Boolean(config?.referenceConfigured || config?.referenceAvailable || (config?.referenceAvailable == null && config?.referenceName));
-  if (hasServerReference) {
+  if (sourcePreference === SOURCE_MODE_BROWSER) {
+    loaded = await tryLoadStoredDirectory();
+  }
+  if (!loaded && hasServerReference) {
     $('#footer-left').textContent = config.referenceName || 'wiki configurada';
     loaded = await loadFromServerReference();
   }
-  if (!loaded && !config?.referenceConfigured) loaded = await tryLoadStoredDirectory();
+  if (!loaded && sourcePreference !== SOURCE_MODE_BROWSER && !config?.referenceConfigured) loaded = await tryLoadStoredDirectory();
   if (loaded) hideAccessScreen();
   else if (!config?.referenceConfigured) renderDashboard();
 }

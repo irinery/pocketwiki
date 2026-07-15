@@ -9,7 +9,8 @@ struct TimelineView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Linha do tempo")
-                    .font(.system(size: 34, weight: .heavy, design: .serif))
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .tracking(-0.8)
                     .foregroundStyle(PocketWikiTheme.text)
                 Text("Ordenada por frontmatter `updated/date`, campos de data no texto ou data de modificacao do arquivo.")
                     .foregroundStyle(PocketWikiTheme.dim)
@@ -40,12 +41,8 @@ struct TimelineView: View {
                                 }
                                 Spacer(minLength: 0)
                             }
-                            .padding(12)
-                            .background(PocketWikiTheme.panel.opacity(0.86), in: RoundedRectangle(cornerRadius: 8))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(PocketWikiTheme.border, lineWidth: 1)
-                            }
+                            .padding(14)
+                            .pocketWikiSurface(cornerRadius: 18)
                         }
                         .buttonStyle(.plain)
                     }

@@ -15,7 +15,8 @@ struct WikiTabStrip: View {
                 tabButton(tab, showsLabel: showsLabels)
             }
         }
-        .padding(1)
+        .padding(4)
+        .pocketWikiSurface(cornerRadius: 16)
     }
 
     private func tabButton(_ tab: WikiTab, showsLabel: Bool) -> some View {
@@ -32,13 +33,13 @@ struct WikiTabStrip: View {
             }
             .frame(width: showsLabel ? nil : 32, height: 30)
             .padding(.horizontal, showsLabel ? 10 : 0)
-            .foregroundStyle(selection == tab ? PocketWikiTheme.bg : PocketWikiTheme.dim)
-            .background(selection == tab ? PocketWikiTheme.accent : PocketWikiTheme.bg2.opacity(0.72), in: RoundedRectangle(cornerRadius: 8))
+            .foregroundStyle(selection == tab ? PocketWikiTheme.text : PocketWikiTheme.dim)
+            .background(selection == tab ? PocketWikiTheme.accent.opacity(0.20) : Color.clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(selection == tab ? PocketWikiTheme.accent.opacity(0.4) : PocketWikiTheme.border, lineWidth: 1)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(selection == tab ? PocketWikiTheme.accent.opacity(0.42) : Color.clear, lineWidth: 1)
             }
-            .contentShape(RoundedRectangle(cornerRadius: 8))
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
         .help(tab.title)
@@ -74,11 +75,7 @@ struct ServerStatusPill: View {
             .padding(.horizontal, 10)
             .frame(height: 30)
             .foregroundStyle(PocketWikiTheme.text)
-            .background(PocketWikiTheme.bg2.opacity(0.78), in: RoundedRectangle(cornerRadius: 8))
-            .overlay {
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(statusColor.opacity(0.55), lineWidth: 1)
-            }
+            .pocketWikiSurface(cornerRadius: 13, tint: statusColor)
         }
         .buttonStyle(.plain)
         .help(store.serverIndicatorDetail)

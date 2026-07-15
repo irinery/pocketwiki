@@ -39,7 +39,8 @@ struct ReaderView: View {
                 .textSelection(.enabled)
 
             Text(page.title)
-                .font(.system(size: 38, weight: .heavy, design: .serif))
+                .font(.system(size: 38, weight: .bold, design: .rounded))
+                .tracking(-1)
                 .foregroundStyle(PocketWikiTheme.text)
                 .lineLimit(3)
                 .textSelection(.enabled)

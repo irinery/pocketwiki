@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MODE="${1:-run}"
 PRODUCT_NAME="PocketWikiMac"
 APP_NAME="PocketWiki"
-BUNDLE_ID="com.irinery.PocketWikiMac"
+BUNDLE_ID="${POCKETWIKI_BUNDLE_ID:-com.irinery.PocketWikiMac}"
 MIN_SYSTEM_VERSION="14.0"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_DIR="$ROOT_DIR/script"
 DIST_DIR="$ROOT_DIR/dist"
 APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
 APP_CONTENTS="$APP_BUNDLE/Contents"
@@ -16,6 +16,42 @@ APP_RESOURCES="$APP_CONTENTS/Resources"
 APP_WEB="$APP_RESOURCES/Web"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
+
+# shellcheck source=script/signing.sh
+. "$SCRIPT_DIR/signing.sh"
+load_env_file "$ROOT_DIR/.env"
+load_env_file "$ROOT_DIR/.env.local"
+BUNDLE_ID="${POCKETWIKI_BUNDLE_ID:-$BUNDLE_ID}"
+
+MODE="run"
+DEFAULT_SIGN_MODE="auto"
+if [ "${CI:-}" = "true" ]; then
+  DEFAULT_SIGN_MODE="adhoc"
+fi
+SIGN_MODE="${POCKETWIKI_SIGN_MODE:-$DEFAULT_SIGN_MODE}"
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --sign)
+      SIGN_MODE="${2:-}"
+      shift 2
+      ;;
+    run|--bundle|bundle|--debug|debug|--logs|logs|--telemetry|telemetry|--verify|verify)
+      MODE="$1"
+      shift
+      ;;
+    -h|--help)
+      echo "usage: $0 [run|--bundle|--debug|--logs|--telemetry|--verify] [--sign auto|adhoc|<identity-hash>]" >&2
+      exit 2
+      ;;
+    *)
+      echo "usage: $0 [run|--bundle|--debug|--logs|--telemetry|--verify] [--sign auto|adhoc|<identity-hash>]" >&2
+      exit 2
+      ;;
+  esac
+done
+
+[ "${POCKETWIKI_SKIP_SECRET_SCAN:-0}" = "1" ] || "$SCRIPT_DIR/scan_secrets.sh" >/dev/null
+SIGNING_IDENTITY="$(require_signing_identity "$SIGN_MODE")"
 
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 pkill -x "$PRODUCT_NAME" >/dev/null 2>&1 || true
@@ -33,7 +69,14 @@ chmod +x "$APP_BINARY"
 BUILD_DIR="$(swift build --package-path "$ROOT_DIR" --show-bin-path)"
 RESOURCE_BUNDLE="$BUILD_DIR/PocketWikiMac_PocketWikiMac.bundle"
 if [ -d "$RESOURCE_BUNDLE" ]; then
-  cp -R "$RESOURCE_BUNDLE" "$APP_BUNDLE/"
+  case "$MODE" in
+    --bundle|bundle)
+      ditto --noextattr --norsrc "$RESOURCE_BUNDLE" "$APP_BUNDLE/$(basename "$RESOURCE_BUNDLE")"
+      ;;
+    *)
+      ditto --noextattr --norsrc "$RESOURCE_BUNDLE" "$APP_RESOURCES/$(basename "$RESOURCE_BUNDLE")"
+      ;;
+  esac
 fi
 if [ -f "$ROOT_DIR/Sources/PocketWikiMac/Resources/PocketWikiMac.icns" ]; then
   cp "$ROOT_DIR/Sources/PocketWikiMac/Resources/PocketWikiMac.icns" "$APP_RESOURCES/PocketWikiMac.icns"
@@ -44,7 +87,7 @@ for file in wiki-cockpit.html offline.html manifest.webmanifest sw.js favicon.ic
   fi
 done
 if [ -d "$ROOT_DIR/assets" ]; then
-  cp -R "$ROOT_DIR/assets" "$APP_WEB/assets"
+  ditto --noextattr --norsrc "$ROOT_DIR/assets" "$APP_WEB/assets"
 fi
 
 cat >"$INFO_PLIST" <<PLIST
@@ -88,6 +131,14 @@ cat >"$INFO_PLIST" <<PLIST
 </dict>
 </plist>
 PLIST
+
+case "$MODE" in
+  --bundle|bundle)
+    ;;
+  *)
+    codesign_app_bundle "$APP_BUNDLE" "$BUNDLE_ID" "$SIGNING_IDENTITY"
+    ;;
+esac
 
 open_app() {
   /usr/bin/open -n "$APP_BUNDLE"

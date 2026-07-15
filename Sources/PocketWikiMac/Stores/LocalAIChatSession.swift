@@ -16,41 +16,126 @@ final class LocalAIChatSession {
     var messagesRevision = 0
     var contextRevision = 0
 
-    private let client: LMStudioClient
+    private let kernelClient: PocketKernelClient
+    private let middlewareAuthClient: MiddlewareAuthClient
     private var streamTask: Task<Void, Never>?
 
-    init(client: LMStudioClient = LMStudioClient()) {
-        self.client = client
+    init(
+        kernelClient: PocketKernelClient = PocketKernelClient(),
+        middlewareAuthClient: MiddlewareAuthClient = MiddlewareAuthClient()
+    ) {
+        self.kernelClient = kernelClient
+        self.middlewareAuthClient = middlewareAuthClient
     }
 
-    func refreshModels(baseURL: String, apiKey: String?, preferredModelID: String = "", configuredModelID: String = "") async -> String? {
+    func refreshProviderStatus(
+        method: LocalAIProviderMethod,
+        middlewareBaseURL: String,
+        clientToken: String,
+        projectID: String,
+        profileID: String
+    ) async {
         errorMessage = nil
-        statusMessage = "Buscando modelos no LM Studio..."
+        statusMessage = "Consultando MiddlewareAuth..."
         do {
-            availableModels = try await client.listModels(baseURL: baseURL, apiKey: apiKey)
-            let selectedModelID = selectModelID(
-                preferredModelID: preferredModelID,
-                configuredModelID: configuredModelID,
-                models: availableModels
-            )
-            statusMessage = availableModels.isEmpty
-                ? "Nenhum modelo retornado. Confira se o LM Studio esta com modelo carregado."
-                : "\(availableModels.count) modelo(s) encontrado(s): \(selectedModelID ?? availableModels[0].id)."
-            return selectedModelID
+            switch method {
+            case .openAI:
+                let status = try await middlewareAuthClient.openAIStatus(
+                    middlewareBaseURL: middlewareBaseURL,
+                    clientToken: clientToken,
+                    projectID: projectID,
+                    profileID: profileID
+                )
+                statusMessage = status.summary
+            case .lmStudio:
+                let status = try await middlewareAuthClient.lmStudioStatus(
+                    middlewareBaseURL: middlewareBaseURL,
+                    clientToken: clientToken,
+                    projectID: projectID,
+                    profileID: profileID
+                )
+                statusMessage = status.summary
+            }
         } catch {
             errorMessage = error.localizedDescription
-            statusMessage = "Nao foi possivel listar modelos."
+            statusMessage = "Nao foi possivel consultar o provider."
+        }
+    }
+
+    func startOpenAILogin(
+        middlewareBaseURL: String,
+        clientToken: String,
+        projectID: String,
+        profileID: String
+    ) async -> MiddlewareAuthOpenAILoginStart? {
+        errorMessage = nil
+        statusMessage = "Iniciando login OpenAI..."
+        do {
+            let login = try await middlewareAuthClient.startOpenAILogin(
+                middlewareBaseURL: middlewareBaseURL,
+                clientToken: clientToken,
+                projectID: projectID,
+                profileID: profileID
+            )
+            statusMessage = login.summary
+            return login
+        } catch {
+            errorMessage = error.localizedDescription
+            statusMessage = "Nao foi possivel iniciar login OpenAI."
             return nil
         }
     }
 
-    func send(
+    func configureLMStudioProvider(
+        middlewareBaseURL: String,
+        clientToken: String,
+        projectID: String,
+        profileID: String,
+        lmStudioBaseURL: String,
+        apiKey: String,
+        preferredModelID: String = "",
+        configuredModelID: String = ""
+    ) async -> String? {
+        errorMessage = nil
+        statusMessage = apiKey.pocketTrimmed.isEmpty
+            ? "Consultando MiddlewareAuth..."
+            : "Registrando LM Studio no MiddlewareAuth..."
+        do {
+            let status: MiddlewareAuthLMStudioStatus
+            if apiKey.pocketTrimmed.isEmpty {
+                status = try await middlewareAuthClient.lmStudioStatus(
+                    middlewareBaseURL: middlewareBaseURL,
+                    clientToken: clientToken,
+                    projectID: projectID,
+                    profileID: profileID
+                )
+            } else {
+                status = try await middlewareAuthClient.configureLMStudio(
+                    middlewareBaseURL: middlewareBaseURL,
+                    clientToken: clientToken,
+                    projectID: projectID,
+                    profileID: profileID,
+                    lmStudioBaseURL: lmStudioBaseURL,
+                    apiKey: apiKey
+                )
+            }
+
+            availableModels = []
+            let selectedModelID = preferredModelID.pocketTrimmed.pocketIfEmpty(configuredModelID.pocketTrimmed)
+            statusMessage = status.summary
+            return selectedModelID.isEmpty ? nil : selectedModelID
+        } catch {
+            errorMessage = error.localizedDescription
+            statusMessage = "Nao foi possivel configurar o provider."
+            return nil
+        }
+    }
+
+    func sendViaPocketKernel(
         baseURL: String,
-        apiKey: String?,
-        modelID: String,
-        temperature: Double,
-        contextScope: LocalAIContextScope,
-        maxContextCharacters: Int,
+        userID: String,
+        appID: String = "pocketwiki",
+        channel: String = "api",
         index: WikiIndex,
         selectedPageID: String?,
         presetPrompt: String? = nil
@@ -58,63 +143,49 @@ final class LocalAIChatSession {
         let userText = (presetPrompt ?? prompt).pocketTrimmed
         guard !userText.isEmpty, !isStreaming else { return }
 
-        let context = LocalAIContextBuilder.build(
-            index: index,
-            selectedPageID: selectedPageID,
-            scope: contextScope,
-            maxCharacters: maxContextCharacters,
-            question: userText,
-            manualSources: manualSources,
-            excludedPaths: excludedContextPaths
-        )
+        let selectedPath = selectedPageID.flatMap { index.page(id: $0)?.path }
+        let requestText = selectedPath.map { "Pagina aberta no PocketWiki: \($0)\n\nPergunta:\n\(userText)" } ?? userText
         let userMessage = LocalAIChatMessage(role: .user, content: userText)
-        let assistantMessage = LocalAIChatMessage(role: .assistant, content: "", modelID: modelID, isStreaming: true)
-        let requestMessages = [userMessage]
+        let assistantMessage = LocalAIChatMessage(role: .assistant, content: "", modelID: "PocketKernel", isStreaming: true)
         let assistantID = assistantMessage.id
 
         prompt = ""
         errorMessage = nil
-        lastContext = context
+        lastContext = LocalAIContextPayload(
+            mode: .wiki,
+            title: "PocketKernel",
+            body: "Evidencia delegada ao PocketKernel via MCP stdio.",
+            includedPaths: selectedPath.map { [$0] } ?? [],
+            manualPaths: [],
+            characters: 0,
+            notice: "O PocketKernel chama o PocketWiki MCP e governa a resposta."
+        )
         isStreaming = true
-        statusMessage = context.mode == .wiki
-            ? "Consulta seletiva: \(context.includedPaths.count) fonte(s), \(context.characters) caracteres."
-            : "Conversa geral sem contexto pesado da wiki."
+        statusMessage = "Consultando PocketKernel..."
         messages.append(userMessage)
         messages.append(assistantMessage)
         messagesRevision += 1
 
-        streamTask = Task { [client] in
+        streamTask = Task { [kernelClient] in
             do {
-                let stream = try client.streamChat(
+                let response = try await kernelClient.query(
                     baseURL: baseURL,
-                    apiKey: apiKey,
-                    modelID: modelID,
-                    temperature: temperature,
-                    context: context,
-                    messages: requestMessages
+                    text: requestText,
+                    channel: channel,
+                    appID: appID,
+                    userID: userID.pocketTrimmed.isEmpty ? "local" : userID.pocketTrimmed
                 )
-
-                var pending = LocalAIStreamDelta()
-                var lastFlush = Date()
-                for try await delta in stream {
-                    pending.content += delta.content
-                    pending.reasoning += delta.reasoning
-                    pending.finishReason = delta.finishReason ?? pending.finishReason
-                    pending.usageSummary = delta.usageSummary ?? pending.usageSummary
-                    pending.modelID = delta.modelID ?? pending.modelID
-
-                    if Date().timeIntervalSince(lastFlush) >= 0.08 {
-                        append(pending, to: assistantID)
-                        pending = LocalAIStreamDelta()
-                        lastFlush = Date()
-                    }
-                }
-                append(pending, to: assistantID)
-                finishStreaming(assistantID: assistantID, status: "Resposta concluida.")
+                replaceAssistant(
+                    assistantID: assistantID,
+                    content: response.content,
+                    reasoning: response.governanceSummary,
+                    modelID: "PocketKernel"
+                )
+                finishStreaming(assistantID: assistantID, status: "Resposta governada concluida.")
             } catch is CancellationError {
                 finishStreaming(assistantID: assistantID, status: "Resposta cancelada.")
             } catch {
-                failStreaming(assistantID: assistantID, error: error)
+                failStreaming(assistantID: assistantID, error: error, fallback: "Nao consegui obter resposta do PocketKernel.")
             }
         }
     }
@@ -193,6 +264,15 @@ final class LocalAIChatSession {
         messagesRevision += 1
     }
 
+    private func replaceAssistant(assistantID: UUID, content: String, reasoning: String, modelID: String) {
+        guard let index = messages.firstIndex(where: { $0.id == assistantID }) else { return }
+        messages[index].content = content
+        messages[index].reasoning = reasoning
+        messages[index].modelID = modelID
+        messages[index].finishReason = nil
+        messagesRevision += 1
+    }
+
     private func finishStreaming(assistantID: UUID, status: String) {
         if let index = messages.firstIndex(where: { $0.id == assistantID }) {
             messages[index].isStreaming = false
@@ -203,11 +283,11 @@ final class LocalAIChatSession {
         messagesRevision += 1
     }
 
-    private func failStreaming(assistantID: UUID, error: Error) {
+    private func failStreaming(assistantID: UUID, error: Error, fallback: String = "Nao consegui obter resposta do LM Studio.") {
         if let index = messages.firstIndex(where: { $0.id == assistantID }) {
             messages[index].isStreaming = false
             if messages[index].content.isEmpty {
-                messages[index].content = "Nao consegui obter resposta do LM Studio."
+                messages[index].content = fallback
             }
         }
         isStreaming = false

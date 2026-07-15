@@ -26,4 +26,12 @@ extension String {
         guard count > maxLength else { return self }
         return String(prefix(maxLength)).pocketTrimmed
     }
+
+    func pocketIfEmpty(_ fallback: String) -> String {
+        pocketTrimmed.isEmpty ? fallback : self
+    }
+
+    var pocketTrimmedSlash: String {
+        replacingOccurrences(of: #"/+$"#, with: "", options: .regularExpression)
+    }
 }

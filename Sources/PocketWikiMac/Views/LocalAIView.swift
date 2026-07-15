@@ -1,20 +1,22 @@
+import AppKit
 import SwiftUI
 
 struct LocalAIView: View {
     @Bindable var store: WikiAppStore
 
-    @AppStorage("PocketWikiMac.localAI.baseURL") private var baseURL = LocalAIEndpointPolicy.defaultBaseURL
+    @AppStorage("PocketWikiMac.localAI.providerMethod") private var providerMethodRaw = LocalAIProviderMethod.openAI.rawValue
+    @AppStorage("PocketWikiMac.localAI.reasoningEffort") private var reasoningEffortRaw = LocalAIReasoningEffort.medium.rawValue
+    @AppStorage("PocketWikiMac.localAI.baseURL") private var baseURL = "http://127.0.0.1:1234"
+    @AppStorage("PocketWikiMac.localAI.kernelBaseURL") private var kernelBaseURL = PocketKernelEndpointPolicy.defaultBaseURL
+    @AppStorage("PocketWikiMac.localAI.middlewareBaseURL") private var middlewareAuthBaseURL = MiddlewareAuthEndpointPolicy.defaultBaseURL
+    @AppStorage("PocketWikiMac.localAI.middlewareProjectID") private var middlewareAuthProjectID = "acme"
+    @AppStorage("PocketWikiMac.localAI.middlewareProfileID") private var middlewareAuthProfileID = "default"
     @AppStorage("PocketWikiMac.localAI.modelID") private var modelID = ""
     @AppStorage("PocketWikiMac.localAI.contextScope") private var contextScopeRaw = LocalAIContextScope.automatic.rawValue
     @AppStorage("PocketWikiMac.localAI.maxContextCharacters") private var maxContextCharacters = 12_000
     @AppStorage("PocketWikiMac.localAI.temperature") private var temperature = 0.2
     @SceneStorage("PocketWikiMac.localAI.sidePanel") private var sidePanelRaw = LocalAISidePanel.llm.rawValue
-
-    @State private var chat = LocalAIChatSession()
-    @State private var apiKey = ""
-    @State private var runtimeAPIKey = ""
-    @State private var configuredModelID = ""
-    @State private var runtimeTokenLoaded = false
+    @State private var isAdvancedSettingsPresented = false
 
     private var sidePanel: Binding<LocalAISidePanel?> {
         Binding(
@@ -27,20 +29,36 @@ struct LocalAIView: View {
         LocalAIContextScope(rawValue: contextScopeRaw) ?? .automatic
     }
 
-    private var effectiveAPIKey: String {
-        let manual = apiKey.pocketTrimmed
-        return manual.isEmpty ? runtimeAPIKey : manual
+    private var chat: LocalAIChatSession {
+        store.localAIChatSession
     }
 
-    private var effectiveBaseURL: String {
-        store.remoteAIProxyBaseURL ?? baseURL
+    private var effectiveLMStudioAPIKey: String {
+        let manual = store.localAIAPIKey.pocketTrimmed
+        return manual.isEmpty ? store.localAIRuntimeAPIKey : manual
+    }
+
+    private var effectiveKernelBaseURL: String {
+        store.remoteKernelQueryURL ?? kernelBaseURL
     }
 
     private var connectionLabel: String {
-        if store.remoteAIProxyBaseURL != nil, !chat.availableModels.isEmpty {
-            return "IA via servidor remoto"
+        store.remoteKernelQueryURL == nil ? "PocketKernel Harness" : "PocketKernel remoto"
+    }
+
+    private var providerMethod: LocalAIProviderMethod {
+        LocalAIProviderMethod.value(for: providerMethodRaw)
+    }
+
+    private var providerStatusText: String {
+        if let error = chat.errorMessage, !error.pocketTrimmed.isEmpty {
+            return error
         }
-        return chat.availableModels.isEmpty ? "desconectado" : "LM Studio conectado"
+        let status = chat.statusMessage.pocketTrimmed
+        if status.isEmpty || status == "Pronto para conversar com a IA local." {
+            return providerMethod.statusFallback
+        }
+        return status
     }
 
     var body: some View {
@@ -75,18 +93,29 @@ struct LocalAIView: View {
                 if let activePanel {
                     LocalAISidePanelContent(
                         panel: activePanel,
+                        providerMethodRaw: $providerMethodRaw,
+                        reasoningEffortRaw: $reasoningEffortRaw,
+                        kernelBaseURL: $kernelBaseURL,
+                        middlewareAuthBaseURL: $middlewareAuthBaseURL,
+                        middlewareAuthProjectID: $middlewareAuthProjectID,
+                        middlewareAuthProfileID: $middlewareAuthProfileID,
                         baseURL: $baseURL,
                         modelID: $modelID,
-                        apiKey: $apiKey,
+                        middlewareAuthToken: $store.middlewareAuthClientToken,
+                        apiKey: $store.localAIAPIKey,
                         availableModels: chat.availableModels,
-                        runtimeTokenLoaded: runtimeTokenLoaded,
+                        middlewareRuntimeTokenLoaded: store.middlewareAuthRuntimeTokenLoaded,
+                        runtimeTokenLoaded: store.localAIRuntimeTokenLoaded,
                         isStreaming: chat.isStreaming,
+                        providerStatusText: providerStatusText,
                         contextNotice: chat.lastContext?.notice,
                         autoContextPaths: autoContextPaths,
                         manualSources: chat.manualSources,
                         excludedContextPaths: chat.excludedContextPaths,
                         contextSourceCount: activeContextSourceCount,
-                        onRefreshModels: refreshModelSelection,
+                        onPrimaryProviderAction: { await runPrimaryProviderAction() },
+                        onRefreshModels: { await refreshProviderStatus() },
+                        onOpenAdvancedSettings: { isAdvancedSettingsPresented = true },
                         onAddContextFiles: addContextFiles,
                         onRemoveManualSource: chat.removeManualSource,
                         onExcludeContextPath: chat.excludeContextPath,
@@ -96,13 +125,30 @@ struct LocalAIView: View {
                 }
             }
         }
+        .sheet(isPresented: $isAdvancedSettingsPresented) {
+            LocalAIAdvancedSettingsSheet(
+                providerMethodRaw: $providerMethodRaw,
+                reasoningEffortRaw: $reasoningEffortRaw,
+                kernelBaseURL: $kernelBaseURL,
+                middlewareAuthBaseURL: $middlewareAuthBaseURL,
+                middlewareAuthProjectID: $middlewareAuthProjectID,
+                middlewareAuthProfileID: $middlewareAuthProfileID,
+                baseURL: $baseURL,
+                modelID: $modelID,
+                middlewareAuthToken: $store.middlewareAuthClientToken,
+                apiKey: $store.localAIAPIKey,
+                middlewareRuntimeTokenLoaded: store.middlewareAuthRuntimeTokenLoaded,
+                runtimeTokenLoaded: store.localAIRuntimeTokenLoaded
+            )
+        }
         .task {
             await bootstrapLocalAI()
         }
     }
 
     private var canSendPrompt: Bool {
-        !chat.prompt.pocketTrimmed.isEmpty && !modelID.pocketTrimmed.isEmpty
+        guard !chat.prompt.pocketTrimmed.isEmpty else { return false }
+        return !effectiveKernelBaseURL.pocketTrimmed.isEmpty
     }
 
     private var autoContextPaths: [String] {
@@ -117,17 +163,19 @@ struct LocalAIView: View {
 
     private func sendPrompt() {
         guard canSendPrompt else { return }
-        normalizeBaseURLPreference()
-        chat.send(
-            baseURL: effectiveBaseURL,
-            apiKey: effectiveAPIKey,
-            modelID: modelID,
-            temperature: temperature,
-            contextScope: contextScope,
-            maxContextCharacters: maxContextCharacters,
-            index: store.index,
-            selectedPageID: store.selectedPageID
-        )
+        Task {
+            if providerMethod == .lmStudio, !effectiveLMStudioAPIKey.pocketTrimmed.isEmpty {
+                await configureProvider(silent: true)
+                if chat.errorMessage != nil { return }
+            }
+            normalizeKernelBaseURLPreference()
+            chat.sendViaPocketKernel(
+                baseURL: effectiveKernelBaseURL,
+                userID: middlewareAuthProfileID,
+                index: store.index,
+                selectedPageID: store.selectedPageID
+            )
+        }
     }
 
     private func resetGroundedChat() {
@@ -153,9 +201,23 @@ struct LocalAIView: View {
     @MainActor
     private func bootstrapLocalAI() async {
         let runtime = LocalAIRuntimeConfigurationLoader.load()
-        configuredModelID = runtime.modelID
-        runtimeAPIKey = runtime.apiKey
-        runtimeTokenLoaded = runtime.hasToken
+        store.localAIConfiguredModelID = runtime.modelID
+        store.localAIRuntimeAPIKey = runtime.apiKey
+        store.localAIRuntimeTokenLoaded = runtime.hasToken
+        store.middlewareAuthClientToken = store.serverConfiguration.middlewareAuthClientToken
+        store.middlewareAuthRuntimeTokenLoaded = !store.serverConfiguration.middlewareAuthClientToken.pocketTrimmed.isEmpty
+        if kernelBaseURL.pocketTrimmed.isEmpty || kernelBaseURL == PocketKernelEndpointPolicy.defaultBaseURL {
+            kernelBaseURL = store.serverConfiguration.pocketKernelBaseURL
+        }
+        if middlewareAuthBaseURL.pocketTrimmed.isEmpty || middlewareAuthBaseURL == MiddlewareAuthEndpointPolicy.defaultBaseURL {
+            middlewareAuthBaseURL = store.serverConfiguration.middlewareAuthBaseURL
+        }
+        if middlewareAuthProjectID.pocketTrimmed.isEmpty || middlewareAuthProjectID == "acme" {
+            middlewareAuthProjectID = store.serverConfiguration.middlewareAuthProjectID
+        }
+        if middlewareAuthProfileID.pocketTrimmed.isEmpty || middlewareAuthProfileID == "default" {
+            middlewareAuthProfileID = store.serverConfiguration.middlewareAuthProfileID
+        }
 
         let runtimeBaseURL = runtime.baseURL.pocketTrimmed
         if !runtimeBaseURL.isEmpty, baseURL.pocketTrimmed.isEmpty || baseURL == LocalAIEndpointPolicy.defaultBaseURL {
@@ -164,35 +226,103 @@ struct LocalAIView: View {
         if modelID.pocketTrimmed.isEmpty, !runtime.modelID.pocketTrimmed.isEmpty {
             modelID = runtime.modelID
         }
+        if modelID.pocketTrimmed.isEmpty, providerMethod == .openAI {
+            modelID = "gpt-5.5"
+        }
         normalizeBaseURLPreference()
+    }
 
-        if chat.availableModels.isEmpty {
-            await refreshModelSelection()
+    @MainActor
+    private func runPrimaryProviderAction() async {
+        switch providerMethod {
+        case .openAI:
+            await startOpenAILogin()
+        case .lmStudio:
+            if effectiveLMStudioAPIKey.pocketTrimmed.isEmpty {
+                chat.statusMessage = "Informe base URL e API key do LM Studio nas configurações avançadas."
+                isAdvancedSettingsPresented = true
+            } else {
+                await configureProvider()
+            }
         }
     }
 
     @MainActor
-    private func refreshModelSelection() async {
+    private func refreshProviderStatus() async {
+        if providerMethod == .lmStudio, !effectiveLMStudioAPIKey.pocketTrimmed.isEmpty {
+            await configureProvider()
+            return
+        }
+        await chat.refreshProviderStatus(
+            method: providerMethod,
+            middlewareBaseURL: middlewareAuthBaseURL,
+            clientToken: store.middlewareAuthClientToken,
+            projectID: middlewareAuthProjectID,
+            profileID: middlewareAuthProfileID
+        )
+    }
+
+    @MainActor
+    private func startOpenAILogin() async {
+        guard let login = await chat.startOpenAILogin(
+            middlewareBaseURL: middlewareAuthBaseURL,
+            clientToken: store.middlewareAuthClientToken,
+            projectID: middlewareAuthProjectID,
+            profileID: middlewareAuthProfileID
+        ) else {
+            return
+        }
+        let urlText = login.authUrl?.pocketTrimmed.pocketIfEmpty(login.verificationUrl?.pocketTrimmed ?? "") ?? login.verificationUrl?.pocketTrimmed ?? ""
+        if let url = URL(string: urlText), !urlText.isEmpty {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    @MainActor
+    private func configureProvider(silent: Bool = false) async {
         normalizeBaseURLPreference()
-        let selected = await chat.refreshModels(
-            baseURL: effectiveBaseURL,
-            apiKey: effectiveAPIKey,
+        if silent {
+            chat.errorMessage = nil
+        }
+        let selected = await chat.configureLMStudioProvider(
+            middlewareBaseURL: middlewareAuthBaseURL,
+            clientToken: store.middlewareAuthClientToken,
+            projectID: middlewareAuthProjectID,
+            profileID: middlewareAuthProfileID,
+            lmStudioBaseURL: baseURL,
+            apiKey: effectiveLMStudioAPIKey,
             preferredModelID: modelID,
-            configuredModelID: configuredModelID
+            configuredModelID: store.localAIConfiguredModelID
         )
         if let selected {
             modelID = selected
-        } else if modelID.pocketTrimmed.isEmpty, !configuredModelID.pocketTrimmed.isEmpty {
-            modelID = configuredModelID
+        } else if modelID.pocketTrimmed.isEmpty, !store.localAIConfiguredModelID.pocketTrimmed.isEmpty {
+            modelID = store.localAIConfiguredModelID
         }
     }
 
     private func normalizeBaseURLPreference() {
-        guard store.remoteAIProxyBaseURL == nil else { return }
-        guard let normalized = try? LocalAIEndpointPolicy.normalizedBaseURL(baseURL) else { return }
-        let value = normalized.absoluteString
+        guard let url = URL(string: baseURL.pocketTrimmed),
+              LocalAIEndpointPolicy.isAllowedLocalBaseURL(url),
+              var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
+        let cleanPath = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        if cleanPath.isEmpty || cleanPath == "v1" {
+            components.path = ""
+        } else {
+            components.path = "/" + cleanPath
+        }
+        guard let value = components.url?.absoluteString.pocketTrimmedSlash else { return }
         if baseURL != value {
             baseURL = value
+        }
+    }
+
+    private func normalizeKernelBaseURLPreference() {
+        guard store.remoteKernelQueryURL == nil else { return }
+        guard let url = try? PocketKernelEndpointPolicy.kernelURL(kernelBaseURL) else { return }
+        let text = url.absoluteString
+        if kernelBaseURL != text {
+            kernelBaseURL = text
         }
     }
 }

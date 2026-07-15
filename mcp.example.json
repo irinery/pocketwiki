@@ -1,5 +1,13 @@
 {
   "mcpServers": {
+    "pocketwiki-evidence": {
+      "command": "node",
+      "args": [
+        "/absolute/path/to/pocketwiki/src/mcp/pocketwiki-mcp-server.mjs",
+        "--root",
+        "/absolute/path/to/reference/wiki"
+      ]
+    },
     "inery-skills": {
       "command": "npx",
       "args": [

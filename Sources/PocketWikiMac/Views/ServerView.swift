@@ -44,15 +44,11 @@ struct ServerView: View {
             PocketWikiIcon(kind: .server, size: 34)
                 .foregroundStyle(statusColor)
                 .frame(width: 48, height: 48)
-                .background(PocketWikiTheme.bg2.opacity(0.8), in: RoundedRectangle(cornerRadius: 8))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(statusColor.opacity(0.55), lineWidth: 1)
-                }
+                .pocketWikiSurface(cornerRadius: 16, tint: statusColor)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Servidor")
-                    .font(.system(size: 30, weight: .heavy, design: .serif))
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
                     .foregroundStyle(PocketWikiTheme.text)
                 Text(store.serverIndicatorDetail)
                     .foregroundStyle(PocketWikiTheme.dim)
@@ -108,6 +104,10 @@ struct ServerView: View {
             SectionCard("Rotas publicadas", subtitle: routeSubtitle, systemImage: "network") {
                 routeList
             }
+
+            SectionCard("MCP Evidence", subtitle: store.localMCPEvidence.status, systemImage: "point.3.connected.trianglepath.dotted") {
+                mcpEvidencePanel(store.localMCPEvidence, allowCopy: true)
+            }
         }
     }
 
@@ -150,6 +150,16 @@ struct ServerView: View {
                     Text(store.statusMessage)
                         .font(.callout)
                         .foregroundStyle(PocketWikiTheme.dim)
+                }
+            }
+
+            SectionCard("MCP Evidence", subtitle: store.remoteMCPEvidence?.status ?? "nao anunciado", systemImage: "point.3.connected.trianglepath.dotted") {
+                if let evidence = store.remoteMCPEvidence {
+                    mcpEvidencePanel(evidence, allowCopy: false)
+                } else {
+                    Text("Conecte um servidor com /api/config atualizado para ver o MCP Evidence anunciado.")
+                        .font(.callout)
+                        .foregroundStyle(PocketWikiTheme.muted)
                 }
             }
         }
@@ -222,6 +232,68 @@ struct ServerView: View {
                         .textSelection(.enabled)
                 }
             }
+        }
+    }
+
+    private func mcpEvidencePanel(_ evidence: PocketWikiMCPEvidenceStatus, allowCopy: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Label(evidence.title, systemImage: evidence.available ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(evidence.status == "ready" ? PocketWikiTheme.good : PocketWikiTheme.warn)
+                Spacer(minLength: 8)
+                Text(evidence.transport)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(PocketWikiTheme.muted)
+            }
+
+            Text(evidence.note)
+                .font(.callout)
+                .foregroundStyle(PocketWikiTheme.dim)
+
+            VStack(alignment: .leading, spacing: 6) {
+                metadataRow("Tools", evidence.tools.joined(separator: ", "))
+                metadataRow("Timeout", "\(evidence.timeoutMs) ms / max \(evidence.maxResults)")
+                metadataRow("Escopo", evidence.sameHostOnly ? "mesmo host" : "remoto")
+            }
+
+            Text(evidence.commandLine)
+                .font(.caption.monospaced())
+                .foregroundStyle(PocketWikiTheme.text)
+                .textSelection(.enabled)
+                .lineLimit(3)
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .pocketWikiSurface(cornerRadius: 14)
+
+            if !evidence.argsPortable {
+                Text("PocketKernel hoje usa parsing por espaco em POCKETKERNEL_WIKI_MCP_ARGS; path com espaco precisa de wrapper sem espaco.")
+                    .font(.caption)
+                    .foregroundStyle(PocketWikiTheme.warn)
+            }
+
+            if allowCopy {
+                Button {
+                    copyToClipboard(evidence.pocketKernelEnv)
+                } label: {
+                    Label("Copiar env PocketKernel", systemImage: "doc.on.doc")
+                }
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.roundedRectangle(radius: 8))
+            }
+        }
+    }
+
+    private func metadataRow(_ title: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(PocketWikiTheme.muted)
+                .frame(width: 58, alignment: .leading)
+            Text(value)
+                .font(.caption.monospaced())
+                .foregroundStyle(PocketWikiTheme.dim)
+                .textSelection(.enabled)
         }
     }
 
@@ -312,5 +384,10 @@ struct ServerView: View {
         let route = activeRoutes?.local.first ?? activeRoutes?.mdns.first
         guard let route, let url = URL(string: route) else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    private func copyToClipboard(_ value: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(value, forType: .string)
     }
 }

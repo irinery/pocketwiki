@@ -17,12 +17,10 @@ struct SearchPaletteView: View {
                 }
                 .keyboardShortcut(.escape)
             }
-            .padding()
-            .background(PocketWikiTheme.bg)
-
-            Rectangle()
-                .fill(PocketWikiTheme.border)
-                .frame(height: 1)
+            .padding(.horizontal, 16)
+            .frame(height: 50)
+            .pocketWikiGlass(cornerRadius: 18, interactive: true)
+            .padding(12)
 
             List(store.searchResults) { result in
                 Button {
@@ -52,6 +50,6 @@ struct SearchPaletteView: View {
             }
             .scrollContentBackground(.hidden)
         }
-        .background(PocketWikiTheme.bg2)
+        .background(PocketWikiAmbientBackground())
     }
 }

@@ -183,7 +183,7 @@ private struct WikiGraphWebView: NSViewRepresentable {
     }
 
     private static var graphBundleRoot: URL? {
-        Bundle.module.resourceURL
+        PocketWikiResourceBundle.resourceURL
     }
 
     private static let diagnosticsScript = WKUserScript(

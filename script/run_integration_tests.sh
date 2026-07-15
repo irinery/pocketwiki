@@ -16,17 +16,20 @@ swiftc \
   "$ROOT_DIR"/Sources/PocketWikiMac/Support/String+PocketWiki.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Support/PocketFormatters.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Support/PocketWikiDateParser.swift \
+  "$ROOT_DIR"/Sources/PocketWikiMac/Support/PocketWikiResourceBundle.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Support/WikiMarkdownFormatter.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Support/LocalAIResponseLinkifier.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/LocalAIEndpointPolicy.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/LocalAIRuntimeConfiguration.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/LocalAIContextBuilder.swift \
-  "$ROOT_DIR"/Sources/PocketWikiMac/Services/LMStudioClient.swift \
+  "$ROOT_DIR"/Sources/PocketWikiMac/Services/MiddlewareAuthClient.swift \
+  "$ROOT_DIR"/Sources/PocketWikiMac/Services/PocketKernelClient.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/PocketWikiMDNSResponder.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/PocketWikiHTTPServer.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/PocketWikiRouteBuilder.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/PocketWikiServerConfiguration.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/PocketWikiServerPayloads.swift \
+  "$ROOT_DIR"/Sources/PocketWikiMac/Services/PocketWikiSolutionIngestion.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/ExcalidrawEditorResourceResolver.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/WikiFilePathResolver.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/RemoteWikiClient.swift \

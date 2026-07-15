@@ -19,7 +19,7 @@ enum PocketWikiHTTPServerError: Error, LocalizedError {
         case .missingWebRoot:
             "Assets web nao encontrados no bundle do app."
         case .invalidUpstream:
-            "Endpoint LM Studio invalido."
+            "Endpoint upstream invalido."
         }
     }
 }
@@ -33,6 +33,7 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
     private let log: Logger
     private let queue = DispatchQueue(label: "PocketWiki.HTTPServer")
     private let mdnsResponder: PocketWikiMDNSResponder
+    private let solutionIngestion: PocketWikiSolutionIngestion
     private var listener: NWListener?
     private var webRoot: URL?
     private var handlers: [UUID: PocketWikiHTTPConnectionHandler] = [:]
@@ -46,6 +47,7 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
         self.sourceProvider = sourceProvider
         self.log = log
         self.mdnsResponder = PocketWikiMDNSResponder(log: log)
+        self.solutionIngestion = PocketWikiSolutionIngestion(writeToken: configuration.writeToken)
     }
 
     func start() async throws -> PocketWikiRouteSnapshot {
@@ -106,7 +108,10 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
     }
 
     private func handle(_ connection: NWConnection) {
-        let handler = PocketWikiHTTPConnectionHandler(connection: connection) { [weak self] request in
+        let handler = PocketWikiHTTPConnectionHandler(
+            connection: connection,
+            maxBodyBytes: configuration.writeMaxBytes
+        ) { [weak self] request in
             guard let self else {
                 return PocketWikiHTTPResponse(status: 503, body: Data("server_unavailable".utf8), contentType: "text/plain; charset=utf-8")
             }
@@ -157,19 +162,41 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
         }
         if request.method == "GET", path == "/api/prompts/wiki-review" {
             logRequest(request)
-            if let url = Bundle.module.url(forResource: "wiki-review", withExtension: "md"),
+            if let url = PocketWikiResourceBundle.url(forResource: "wiki-review", withExtension: "md"),
                let data = try? Data(contentsOf: url) {
                 return PocketWikiHTTPResponse(status: 200, body: request.isHead ? Data() : data, contentType: "text/markdown; charset=utf-8")
             }
             return notFound()
         }
-        if request.method == "GET", path == "/api/ai/models" {
+        if request.method == "PUT", let solutionID = solutionID(from: path) {
             logRequest(request)
-            return await proxyLMStudio(endpoint: "/models", method: "GET", body: nil)
+            let source = await sourceProvider()
+            return await solutionIngestion.handle(
+                request: request,
+                solutionID: solutionID,
+                source: source,
+                configuredRoot: configuration.resolvedReferenceURL
+            )
         }
-        if request.method == "POST", path == "/api/ai/chat" {
+        if request.method == "POST", path == "/api/kernel/query" {
             logRequest(request)
-            return await proxyLMStudio(endpoint: "/chat/completions", method: "POST", body: bodyWithConfiguredModel(request.body))
+            return await proxyPocketKernel(body: request.body)
+        }
+        if request.method == "POST", path == "/api/middleware/lmstudio/api-key" {
+            logRequest(request)
+            return await proxyMiddlewareLMStudioAPIKey(body: request.body)
+        }
+        if request.method == "POST", path == "/api/middleware/lmstudio/status" {
+            logRequest(request)
+            return await proxyMiddlewareLMStudioStatus(body: request.body)
+        }
+        if request.method == "POST", path == "/api/middleware/openai/login" {
+            logRequest(request)
+            return await proxyMiddlewareOpenAILogin(body: request.body)
+        }
+        if request.method == "POST", path == "/api/middleware/openai/status" {
+            logRequest(request)
+            return await proxyMiddlewareOpenAIStatus(body: request.body)
         }
 
         return notFound(json: path.hasPrefix("/api/"))
@@ -177,6 +204,12 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
 
     private func logRequest(_ request: PocketWikiHTTPRequest) {
         log(PocketWikiServerLogEntry(level: .info, message: "\(request.method) \(request.urlPath)"))
+    }
+
+    private func solutionID(from path: String) -> String? {
+        let prefix = "/api/v1/solutions/"
+        guard path.hasPrefix(prefix) else { return nil }
+        return String(path.dropFirst(prefix.count))
     }
 
     private func configPayload() async -> [String: JSONValue] {
@@ -188,8 +221,19 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
             "referenceReadonly": .bool(source.readonly),
             "referenceAvailable": .bool(source.available),
             "referenceStatus": .string(source.status),
+            "mcpEvidence": PocketWikiMCPEvidenceStatus.make(
+                rootPath: source.rootPath ?? configuration.resolvedReferenceURL.path,
+                rootAvailable: source.available,
+                rootStatus: source.status
+            ).jsonValue,
             "lmStudioModel": .string(configuration.lmStudioModel),
-            "aiProxy": .bool(true)
+            "lmStudioBaseUrl": .string(configuration.lmStudioBaseURL),
+            "pocketKernelBaseUrl": .string(configuration.pocketKernelBaseURL),
+            "middlewareAuthBaseUrl": .string(configuration.middlewareAuthBaseURL),
+            "middlewareAuthProjectId": .string(configuration.middlewareAuthProjectID),
+            "middlewareAuthProfileId": .string(configuration.middlewareAuthProfileID),
+            "kernelProxy": .bool(true),
+            "middlewareAuthProxy": .bool(true)
         ]
     }
 
@@ -197,28 +241,18 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
         PocketWikiFilesPayload(source: source)
     }
 
-    private func bodyWithConfiguredModel(_ body: Data) -> Data {
-        guard !configuration.lmStudioModel.pocketTrimmed.isEmpty,
-              var object = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any],
-              (object["model"] as? String)?.pocketTrimmed.isEmpty != false else {
-            return body
-        }
-        object["model"] = configuration.lmStudioModel
-        return (try? JSONSerialization.data(withJSONObject: object)) ?? body
-    }
-
-    private func proxyLMStudio(endpoint: String, method: String, body: Data?) async -> PocketWikiHTTPResponse {
-        guard let url = URL(string: configuration.lmStudioBaseURL.trimmedSlash + endpoint) else {
-            return jsonError("invalid_lm_studio_endpoint", status: 502)
+    private func proxyPocketKernel(body: Data) async -> PocketWikiHTTPResponse {
+        let url: URL
+        do {
+            url = try PocketKernelEndpointPolicy.kernelURL(configuration.pocketKernelBaseURL)
+        } catch {
+            return jsonError("invalid_pocketkernel_endpoint", status: 502)
         }
 
         var request = URLRequest(url: url)
-        request.httpMethod = method
+        request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-        if !configuration.lmStudioAPIKey.pocketTrimmed.isEmpty {
-            request.setValue("Bearer \(configuration.lmStudioAPIKey)", forHTTPHeaderField: "Authorization")
-        }
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.httpBody = body
 
         do {
@@ -232,8 +266,148 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
                 contentType: contentType
             )
         } catch {
-            log(PocketWikiServerLogEntry(level: .error, message: "Proxy IA falhou: \(error.localizedDescription)"))
-            return jsonError("ai_proxy_failed", status: 502)
+            log(PocketWikiServerLogEntry(level: .error, message: "Proxy PocketKernel falhou: \(error.localizedDescription)"))
+            return jsonError("pocketkernel_proxy_failed", status: 502)
+        }
+    }
+
+    private func proxyMiddlewareLMStudioAPIKey(body: Data) async -> PocketWikiHTTPResponse {
+        let input = requestObject(body)
+        let baseURL = stringValue(input["middlewareBaseUrl"]).pocketIfEmpty(configuration.middlewareAuthBaseURL)
+        let projectID = stringValue(input["projectId"]).pocketIfEmpty(configuration.middlewareAuthProjectID).pocketIfEmpty("acme")
+        let profileID = stringValue(input["profileId"]).pocketIfEmpty(configuration.middlewareAuthProfileID).pocketIfEmpty("default")
+        let lmStudioBaseURL = stringValue(input["baseUrl"]).pocketIfEmpty(configuration.lmStudioBaseURL).pocketIfEmpty("http://127.0.0.1:1234")
+        let apiKey = stringValue(input["apiKey"])
+        guard !configuration.middlewareAuthClientToken.pocketTrimmed.isEmpty else {
+            return jsonError("middlewareauth_token_missing", status: 401)
+        }
+        guard !apiKey.pocketTrimmed.isEmpty else {
+            return jsonError("lmstudio_api_key_missing", status: 400)
+        }
+
+        do {
+            let url = try MiddlewareAuthEndpointPolicy.endpointURL(
+                baseURL: baseURL,
+                path: "/v1/projects/\(MiddlewareAuthEndpointPolicy.pathSegment(projectID, fallback: "acme"))/auth/lmstudio/api-key"
+            )
+            let upstreamBody = try JSONSerialization.data(withJSONObject: [
+                "profileId": profileID,
+                "baseUrl": lmStudioBaseURL,
+                "apiKey": apiKey
+            ])
+            return await proxyMiddlewareAuth(url: url, method: "POST", body: upstreamBody)
+        } catch {
+            return jsonError("invalid_middlewareauth_endpoint", status: 502)
+        }
+    }
+
+    private func proxyMiddlewareLMStudioStatus(body: Data) async -> PocketWikiHTTPResponse {
+        let input = requestObject(body)
+        let baseURL = stringValue(input["middlewareBaseUrl"]).pocketIfEmpty(configuration.middlewareAuthBaseURL)
+        let projectID = stringValue(input["projectId"]).pocketIfEmpty(configuration.middlewareAuthProjectID).pocketIfEmpty("acme")
+        let profileID = stringValue(input["profileId"]).pocketIfEmpty(configuration.middlewareAuthProfileID).pocketIfEmpty("default")
+        guard !configuration.middlewareAuthClientToken.pocketTrimmed.isEmpty else {
+            return jsonError("middlewareauth_token_missing", status: 401)
+        }
+
+        do {
+            let url = try MiddlewareAuthEndpointPolicy.endpointURL(
+                baseURL: baseURL,
+                path: "/v1/projects/\(MiddlewareAuthEndpointPolicy.pathSegment(projectID, fallback: "acme"))/auth/lmstudio/status",
+                queryItems: [URLQueryItem(name: "profileId", value: profileID)]
+            )
+            return await proxyMiddlewareAuth(url: url, method: "GET", body: nil)
+        } catch {
+            return jsonError("invalid_middlewareauth_endpoint", status: 502)
+        }
+    }
+
+    private func proxyMiddlewareOpenAILogin(body: Data) async -> PocketWikiHTTPResponse {
+        let input = requestObject(body)
+        let baseURL = stringValue(input["middlewareBaseUrl"]).pocketIfEmpty(configuration.middlewareAuthBaseURL)
+        let projectID = stringValue(input["projectId"]).pocketIfEmpty(configuration.middlewareAuthProjectID).pocketIfEmpty("acme")
+        let profileID = stringValue(input["profileId"]).pocketIfEmpty(configuration.middlewareAuthProfileID).pocketIfEmpty("default")
+        let mode = stringValue(input["mode"]).pocketIfEmpty("device_code")
+        guard !configuration.middlewareAuthClientToken.pocketTrimmed.isEmpty else {
+            return jsonError("middlewareauth_token_missing", status: 401)
+        }
+
+        do {
+            let url = try MiddlewareAuthEndpointPolicy.endpointURL(
+                baseURL: baseURL,
+                path: "/v1/projects/\(MiddlewareAuthEndpointPolicy.pathSegment(projectID, fallback: "acme"))/auth/openai/login"
+            )
+            let upstreamBody = try JSONSerialization.data(withJSONObject: [
+                "profileId": profileID,
+                "mode": mode
+            ])
+            return await proxyMiddlewareAuth(url: url, method: "POST", body: upstreamBody)
+        } catch {
+            return jsonError("invalid_middlewareauth_endpoint", status: 502)
+        }
+    }
+
+    private func proxyMiddlewareOpenAIStatus(body: Data) async -> PocketWikiHTTPResponse {
+        let input = requestObject(body)
+        let baseURL = stringValue(input["middlewareBaseUrl"]).pocketIfEmpty(configuration.middlewareAuthBaseURL)
+        let projectID = stringValue(input["projectId"]).pocketIfEmpty(configuration.middlewareAuthProjectID).pocketIfEmpty("acme")
+        let profileID = stringValue(input["profileId"]).pocketIfEmpty(configuration.middlewareAuthProfileID).pocketIfEmpty("default")
+        guard !configuration.middlewareAuthClientToken.pocketTrimmed.isEmpty else {
+            return jsonError("middlewareauth_token_missing", status: 401)
+        }
+
+        do {
+            let url = try MiddlewareAuthEndpointPolicy.endpointURL(
+                baseURL: baseURL,
+                path: "/v1/projects/\(MiddlewareAuthEndpointPolicy.pathSegment(projectID, fallback: "acme"))/auth/openai/status",
+                queryItems: [URLQueryItem(name: "profileId", value: profileID)]
+            )
+            return await proxyMiddlewareAuth(url: url, method: "GET", body: nil)
+        } catch {
+            return jsonError("invalid_middlewareauth_endpoint", status: 502)
+        }
+    }
+
+    private func proxyMiddlewareAuth(url: URL, method: String, body: Data?) async -> PocketWikiHTTPResponse {
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.setValue("Bearer \(configuration.middlewareAuthClientToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.httpBody = body
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 200
+            let contentType = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Type") ?? "application/json; charset=utf-8"
+            return PocketWikiHTTPResponse(
+                status: status,
+                headers: ["Cache-Control": "no-store, no-transform"],
+                body: data,
+                contentType: contentType
+            )
+        } catch {
+            log(PocketWikiServerLogEntry(level: .error, message: "Proxy MiddlewareAuth falhou: \(error.localizedDescription)"))
+            return jsonError("middlewareauth_proxy_failed", status: 502)
+        }
+    }
+
+    private func requestObject(_ body: Data) -> [String: Any] {
+        guard !body.isEmpty,
+              let object = try? JSONSerialization.jsonObject(with: body) as? [String: Any] else {
+            return [:]
+        }
+        return object
+    }
+
+    private func stringValue(_ value: Any?) -> String {
+        switch value {
+        case let text as String:
+            return text.pocketTrimmed
+        case let number as NSNumber:
+            return number.stringValue
+        default:
+            return ""
         }
     }
 
@@ -322,14 +496,17 @@ private final class PocketWikiHTTPConnectionHandler: @unchecked Sendable {
     private let connection: NWConnection
     private let route: @Sendable (PocketWikiHTTPRequest) async -> PocketWikiHTTPResponse
     private let onFinish: @Sendable (UUID) -> Void
+    private let maxBodyBytes: Int
     private var buffer = Data()
 
     init(
         connection: NWConnection,
+        maxBodyBytes: Int,
         route: @escaping @Sendable (PocketWikiHTTPRequest) async -> PocketWikiHTTPResponse,
         onFinish: @escaping @Sendable (UUID) -> Void
     ) {
         self.connection = connection
+        self.maxBodyBytes = maxBodyBytes
         self.route = route
         self.onFinish = onFinish
     }
@@ -349,16 +526,26 @@ private final class PocketWikiHTTPConnectionHandler: @unchecked Sendable {
                 self.buffer.append(data)
             }
             do {
-                if let request = try PocketWikiHTTPRequest.parse(self.buffer) {
+                if let request = try PocketWikiHTTPRequest.parse(self.buffer, maxBodyBytes: self.maxBodyBytes) {
                     Task {
                         let response = await self.route(request)
                         self.send(response)
                     }
-                } else if self.buffer.count > 2 * 1024 * 1024 {
-                    self.send(PocketWikiHTTPResponse(status: 413, body: Data("request_too_large".utf8), contentType: "text/plain; charset=utf-8"))
+                } else if self.buffer.count > self.maxBodyBytes + 64 * 1024 {
+                    self.send(PocketWikiHTTPResponse(
+                        status: 413,
+                        body: Data(#"{"error":"payload_too_large","message":"O payload excede o limite configurado."}"#.utf8),
+                        contentType: "application/json; charset=utf-8"
+                    ))
                 } else {
                     self.receive()
                 }
+            } catch PocketWikiHTTPServerError.requestTooLarge {
+                self.send(PocketWikiHTTPResponse(
+                    status: 413,
+                    body: Data(#"{"error":"payload_too_large","message":"O payload excede o limite configurado."}"#.utf8),
+                    contentType: "application/json; charset=utf-8"
+                ))
             } catch {
                 self.send(PocketWikiHTTPResponse(status: 400, body: Data("bad_request".utf8), contentType: "text/plain; charset=utf-8"))
             }
@@ -395,7 +582,7 @@ struct PocketWikiHTTPRequest: Sendable {
         return raw.removingPercentEncoding ?? raw
     }
 
-    static func parse(_ data: Data) throws -> PocketWikiHTTPRequest? {
+    static func parse(_ data: Data, maxBodyBytes: Int = PocketWikiSolutionIngestion.minimumRequestBytes) throws -> PocketWikiHTTPRequest? {
         guard let headerRange = data.range(of: Data("\r\n\r\n".utf8)) else { return nil }
         let headerData = data[..<headerRange.lowerBound]
         guard let headerText = String(data: headerData, encoding: .utf8) else {
@@ -421,6 +608,8 @@ struct PocketWikiHTTPRequest: Sendable {
 
         let bodyStart = headerRange.upperBound
         let contentLength = Int(headers["content-length"] ?? "0") ?? 0
+        guard contentLength >= 0 else { throw PocketWikiHTTPServerError.malformedRequest }
+        guard contentLength <= maxBodyBytes else { throw PocketWikiHTTPServerError.requestTooLarge }
         guard data.count >= bodyStart + contentLength else { return nil }
         let body = contentLength > 0 ? data[bodyStart..<(bodyStart + contentLength)] : Data()
         return PocketWikiHTTPRequest(method: parts[0], target: parts[1], headers: headers, body: Data(body))
@@ -462,28 +651,20 @@ struct PocketWikiHTTPResponse: Sendable {
     private static func reasonPhrase(for status: Int) -> String {
         switch status {
         case 200: "OK"
+        case 201: "Created"
         case 400: "Bad Request"
+        case 401: "Unauthorized"
+        case 403: "Forbidden"
         case 404: "Not Found"
+        case 409: "Conflict"
+        case 412: "Precondition Failed"
         case 413: "Payload Too Large"
+        case 415: "Unsupported Media Type"
+        case 422: "Unprocessable Content"
         case 500: "Internal Server Error"
         case 502: "Bad Gateway"
         case 503: "Service Unavailable"
         default: "HTTP"
-        }
-    }
-}
-
-enum JSONValue: Encodable, Sendable {
-    case string(String)
-    case bool(Bool)
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        switch self {
-        case .string(let value):
-            try container.encode(value)
-        case .bool(let value):
-            try container.encode(value)
         }
     }
 }

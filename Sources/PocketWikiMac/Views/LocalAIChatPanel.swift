@@ -139,16 +139,16 @@ struct LocalAIChatPanel: View {
             .foregroundStyle(PocketWikiTheme.muted)
         }
         .padding(16)
-        .background(PocketWikiTheme.panel.opacity(0.98))
+        .background(.thinMaterial)
     }
 
     private var promptEditor: some View {
         ZStack(alignment: .topLeading) {
             LocalAIPromptTextView(text: $chat.prompt, onSubmit: onSend)
                 .frame(minHeight: 76, maxHeight: 112)
-                .background(PocketWikiTheme.bg.opacity(0.9), in: RoundedRectangle(cornerRadius: 8))
+                .background(PocketWikiTheme.bg.opacity(0.72), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .stroke(PocketWikiTheme.border, lineWidth: 1)
                 }
 
@@ -262,7 +262,7 @@ private struct LocalAIPromptTextView: NSViewRepresentable {
 
 private struct LocalAIEmptyConversationView: View {
     var body: some View {
-        Text("Conecte o LM Studio e faca uma pergunta. O contexto sera adaptado ao tipo de pedido.")
+        Text("Faça uma pergunta. O PocketKernel consulta evidencias via MCP antes da resposta.")
             .font(.caption.monospaced())
             .foregroundStyle(PocketWikiTheme.muted)
             .lineSpacing(4)

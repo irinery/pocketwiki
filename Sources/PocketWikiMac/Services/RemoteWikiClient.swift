@@ -37,8 +37,15 @@ struct RemoteWikiConfigPayload: Decodable, Sendable {
     let referenceReadonly: Bool?
     let referenceAvailable: Bool?
     let referenceStatus: String?
+    let mcpEvidence: PocketWikiMCPEvidenceStatus?
     let lmStudioModel: String?
-    let aiProxy: Bool?
+    let lmStudioBaseUrl: String?
+    let pocketKernelBaseUrl: String?
+    let middlewareAuthBaseUrl: String?
+    let middlewareAuthProjectId: String?
+    let middlewareAuthProfileId: String?
+    let kernelProxy: Bool?
+    let middlewareAuthProxy: Bool?
 }
 
 struct RemoteWikiClient {
@@ -92,6 +99,7 @@ struct RemoteWikiClient {
         let files = decoded.files.compactMap(\.wikiFile)
         return PocketWikiServedSource(
             rootName: decoded.rootName,
+            rootPath: nil,
             source: decoded.source,
             configured: decoded.configured,
             readonly: decoded.readonly,

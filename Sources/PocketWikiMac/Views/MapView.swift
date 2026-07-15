@@ -97,15 +97,11 @@ struct MapView: View {
             PocketWikiIcon(kind: .map, size: 36)
                 .foregroundStyle(PocketWikiTheme.accent)
                 .frame(width: 52, height: 52)
-                .background(PocketWikiTheme.bg2.opacity(0.8), in: RoundedRectangle(cornerRadius: 8))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(PocketWikiTheme.border, lineWidth: 1)
-                }
+                .pocketWikiSurface(cornerRadius: 16, tint: PocketWikiTheme.accent2)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Mapa")
-                    .font(.system(size: 30, weight: .heavy, design: .serif))
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
                     .foregroundStyle(PocketWikiTheme.text)
                 Text(page.map { "Grafo de relacoes de \($0.title)" } ?? "Grafo de interconexoes entre arquivos da wiki.")
                     .foregroundStyle(PocketWikiTheme.dim)

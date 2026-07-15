@@ -6,7 +6,7 @@ Funcionalidades:
 - Exibe a base como wiki interativa com leitor, dashboard, mapa, saude, tempo e IA;
 - Usa layout responsivo para celular, tablet, notebook e telas grandes;
 - Usa icones compactos nas areas principais para reduzir ruido em telas pequenas;
-- Usa IA local via LM Studio, sempre mediada pelo proxy do servidor;
+- Usa IA via PocketKernel Harness, com provider OpenAI ou LM Studio configurado pelo MiddlewareAuth;
 - Interpreta desenhos Excalidraw como fontes visuais pesquisaveis e indexaveis.
 
 ## Base de referencia
@@ -28,6 +28,48 @@ Existem duas formas de carregar a base:
 Quando rodar pelo `server.mjs` e o path do `.env` existir, ele tem prioridade como fonte compartilhada.
 
 As APIs `/api/config` e `/api/wiki/files` releem essa configuracao durante a execucao, entao ajustes no `POCKETWIKI_REFERENCE_PATH` passam a refletir no proximo reload da pagina. O path aceita absoluto, relativo ao projeto, `~/...`, `$HOME/...`, `file://...` e espacos escapados copiados do terminal.
+
+## Ingestão de soluções do PocketTrace
+
+O endpoint `PUT /api/v1/solutions/{solution_id}` grava documentos revisados pelo PocketTrace em `solutions/{solution_id}.md`. A revisão remota é o SHA-256 dos bytes persistidos, então qualquer edição manual muda o `ETag` e força nova confirmação antes de overwrite.
+
+Habilite escrita explicitamente:
+
+```sh
+POCKETWIKI_REFERENCE_READONLY=false
+POCKETWIKI_WRITE_TOKEN="<segredo-longo-aleatorio>"
+```
+
+Sem token, a escrita falha fechada com `503`. Em modo read-only retorna `403`. O token não aparece em `/api/config`, `/api/routes`, logs ou metadados. O limite padrão é 8 MiB e pode ser aumentado com `POCKETWIKI_WRITE_MAX_BYTES`; valores menores são ignorados.
+
+Criação:
+
+```sh
+curl --fail-with-body \
+  -X PUT \
+  -H "Authorization: Bearer $POCKETWIKI_WRITE_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -H 'Idempotency-Key: solution_demo:doc_v1' \
+  --data-binary @solution.json \
+  https://pocketwiki.example/api/v1/solutions/solution_demo
+```
+
+Atualização condicional:
+
+```sh
+curl --fail-with-body \
+  -X PUT \
+  -H "Authorization: Bearer $POCKETWIKI_WRITE_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -H 'Idempotency-Key: solution_demo:doc_v2' \
+  -H 'If-Match: "sha256:REVISAO_OBSERVADA"' \
+  --data-binary @solution-v2.json \
+  https://pocketwiki.example/api/v1/solutions/solution_demo
+```
+
+Use HTTPS no cliente, normalmente com Tailscale Serve ou reverse proxy apontando para o servidor local. O contrato completo está em `docs/technical-contract/pockettrace/01_contrato_api_ingestao_solutions.md`.
 
 ## Excalidraw
 
@@ -74,9 +116,15 @@ npm install
 npm run build:excalidraw
 ```
 
-## Instalador macOS
+## Build macOS e assinatura
 
 A versao desktop macOS fica disponivel em `.dmg` nas [releases do GitHub](https://github.com/irinery/pocketwiki/releases/latest).
+
+Para gerar e abrir o app local:
+
+```sh
+./script/build_and_run.sh --verify
+```
 
 Para gerar o instalador localmente:
 
@@ -91,7 +139,49 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-Por enquanto a build e assinada ad-hoc. Se o macOS bloquear na primeira abertura, use clique direito em `PocketWiki.app` e depois `Abrir`.
+O build local usa a mesma política do PocketTrace:
+
+```sh
+cp .env.example .env.local
+```
+
+Configure apenas localmente:
+
+```sh
+POCKETWIKI_SIGN_MODE="auto"
+POCKETWIKI_SIGNING_IDENTITY=""
+POCKETWIKI_SKIP_SECRET_SCAN="0"
+```
+
+`auto` procura uma identidade `Apple Development` ou `Developer ID Application` no Keychain e assina o bundle sem imprimir nome, e-mail ou Team ID. Para fixar, use o hash do certificado em `POCKETWIKI_SIGNING_IDENTITY`, nunca a identidade completa. Para build sem conta Apple:
+
+```sh
+POCKETWIKI_SIGN_MODE=adhoc ./script/build_and_run.sh --verify
+```
+
+Antes do build, `script/scan_secrets.sh` bloqueia `.env` versionado, certificados/profiles versionados e padrões comuns de developer account no código. Não versionar `.env.local`, `.p8`, `.p12`, `.cer`, `.pem`, `.key`, `.mobileprovision`, `.provisionprofile` ou `.xcarchive`.
+
+Para permitir assinatura pela automação do GitHub, coloque o certificado apenas em `Settings > Secrets and variables > Actions`, nunca no repositório:
+
+- `APPLE_CODESIGN_CERTIFICATE_BASE64`: `.p12` exportado e codificado em base64.
+- `APPLE_CODESIGN_CERTIFICATE_PASSWORD`: senha do `.p12`.
+- `APPLE_CODESIGN_IDENTITY`: opcional, hash do certificado. Não use nome, e-mail ou Team ID.
+
+Exporte o certificado localmente e copie só o base64 para o secret:
+
+```sh
+security export \
+  -k "$HOME/Library/Keychains/login.keychain-db" \
+  -t identities \
+  -f pkcs12 \
+  -o /tmp/pocketwiki-codesign.p12
+base64 -i /tmp/pocketwiki-codesign.p12 | pbcopy
+rm -f /tmp/pocketwiki-codesign.p12
+```
+
+No workflow `.github/workflows/macos-release.yml`, se `APPLE_CODESIGN_CERTIFICATE_BASE64` existir, a automação cria um keychain temporário no runner, importa o `.p12`, define `POCKETWIKI_SIGN_MODE=auto` e roda `./script/build_macos_dmg.sh`. Se o certificado não estiver configurado, o workflow cai para `POCKETWIKI_SIGN_MODE=adhoc`.
+
+Para reduzir o raio de impacto, use environment protection no GitHub: crie um environment `release`, restrinja quem pode aprovar execução manual/tag, mova esses secrets para o environment e adicione `environment: release` no job `dmg` do workflow.
 
 ## Rodar no PC
 
@@ -240,25 +330,102 @@ Se for no celular, o mais simples costuma ser usar o nome MagicDNS `.ts.net` ou 
 
 ## Local AI
 
-Config do LM Studio:
+Fluxo governado recomendado:
 
-```sh
-LM_STUDIO_BASE_URL="http://localhost:1234/v1"
-LM_STUDIO_MODEL=""
-LM_STUDIO_API_KEY=""
+```text
+PocketWiki UI/app ou curl
+  -> PocketKernel /v1/kernel
+  -> PocketKernel inicia PocketWiki MCP via stdio
+  -> PocketWiki MCP devolve evidencia
+  -> PocketKernel chama LLM
+  -> PocketKernel monta resposta governada
 ```
 
-Se o LM Studio exigir auth, coloque o token em `LM_STUDIO_API_KEY`. Se `LM_STUDIO_MODEL` estiver vazio, o app tenta `/v1/models` e usa o primeiro modelo carregado.
+O PocketWiki MCP nao envia mensagens para o PocketKernel. Ele e um servidor stdio que o PocketKernel sobe sob demanda. A UI do PocketWiki so participa desse fluxo quando chama o endpoint HTTP do Kernel.
 
-O token fica só no `.env`, que deve permanecer fora do git. O app fala com LM Studio via proxy local (`/api/ai/*`), então o token não vai para o browser.
+Config do PocketKernel:
 
-A tela de IA consulta `/api/ai/models` e mostra os modelos carregados no LM Studio em dropdown. No chat, `Enter` envia a mensagem e `Shift+Enter` quebra linha.
+```sh
+POCKETKERNEL_BASE_URL="http://127.0.0.1:8080"
+```
+
+Para subir o PocketKernel consumindo este MCP:
+
+```sh
+POCKETKERNEL_WIKI_MCP_COMMAND=node \
+POCKETKERNEL_WIKI_MCP_ARGS="/Users/irinery/Documents/pocketwiki/src/mcp/pocketwiki-mcp-server.mjs --root /absolute/path/to/reference/wiki" \
+go run ./cmd/pocketkernel -mode serve -addr 127.0.0.1:8080
+```
+
+Smoke direto no Kernel:
+
+```sh
+curl -sS http://127.0.0.1:8080/v1/kernel \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"Qual é o status do deploy?","channel":"api","app_id":"pocketwiki","user_id":"u1"}'
+```
+
+Sinais esperados no JSON:
+
+- `"profile_used": "wiki"`
+- `"missing_evidence": []` quando houver documento confiavel suficiente
+
+Se o MCP nao trouxer evidencia confiavel, o Kernel deve explicitar `missing_evidence`, por exemplo `contexto_requerido_indisponivel` ou `fonte_confiavel_de_status_operacional`.
+
+Provider via MiddlewareAuth:
+
+```sh
+MIDDLEWARE_BASE_URL="http://127.0.0.1:18787"
+MIDDLEWARE_CLIENT_TOKEN="<token do middlewareAuth>"
+MIDDLEWARE_PROJECT_ID="acme"
+MIDDLEWARE_LLM_PROFILE_ID="default"
+LM_STUDIO_BASE_URL="http://127.0.0.1:1234"
+LM_STUDIO_MODEL=""
+```
+
+O PocketWiki nao chama LM Studio/OpenAI direto para responder. A tela de IA fica compacta: escolhe `OpenAI` ou `LM Studio`, modelo e raciocinio; URLs, tokens e API key ficam em configuracoes avancadas. OpenAI usa login/status via MiddlewareAuth; LM Studio registra `baseUrl` e `apiKey` no MiddlewareAuth. A pergunta sempre vai para o PocketKernel:
+
+```text
+PocketWiki UI
+  -> MiddlewareAuth /v1/projects/{projectId}/auth/{openai|lmstudio}/...
+  -> PocketKernel /v1/kernel
+  -> PocketKernel Harness
+  -> LLM/provider configurado
+  -> resposta governada
+```
+
+Endpoints locais do PocketWiki:
+
+- `POST /api/kernel/query`: proxy para o PocketKernel.
+- `POST /api/middleware/lmstudio/api-key`: registra `baseUrl` e `apiKey` no MiddlewareAuth.
+- `POST /api/middleware/lmstudio/status`: consulta status do provider LM Studio no MiddlewareAuth.
+- `POST /api/middleware/openai/login`: inicia login OpenAI via MiddlewareAuth.
+- `POST /api/middleware/openai/status`: consulta status OpenAI via MiddlewareAuth.
+
+Nao existem mais `/api/ai/chat` nem `/api/ai/models` no PocketWiki. A API key do LM Studio fica em memoria na UI e e enviada ao MiddlewareAuth; o bearer `MIDDLEWARE_CLIENT_TOKEN` fica no processo do app/servidor e nao e exposto em `/api/config`.
 
 ## Revisao da wiki
 
 A aba Saude tem uma area Revisao com melhorias acionaveis e um prompt dedicado em `prompts/wiki-review.md`. O botao `Copiar prompt` copia o prompt completo para usar em qualquer LLM; o botao `Revisar na IA local` manda o mesmo contexto para o modelo local configurado.
 
-MCP note: `mcp.json` is for LM Studio/Codex tools, not for the browser app directly. The filesystem MCP path for this repo should point to:
+## MCP Evidence Server
+
+A RFC03 esta implementada como servidor MCP local via stdio:
+
+```sh
+npm run mcp:evidence -- --root "/absolute/path/to/reference/wiki"
+```
+
+Ele nao abre HTTP, nao chama LLM e expoe apenas leitura segura:
+
+- `wiki.search`
+- `wiki.get_document`
+
+Sem `--root`, o servidor usa `POCKETWIKI_REFERENCE_PATH` do `.env` ou cai no default `SKILL/wiki-reference`. A resposta de `wiki.get_document` sempre vem com `evidence_only=true` e `redaction_mode=basic`.
+
+Direcao correta: PocketKernel chama este MCP via stdio. PocketWiki UI/app nao chama MCP diretamente e tambem nao "liga" o MCP; quando a UI precisa de resposta governada, ela chama `POST /v1/kernel` no PocketKernel ou o proxy `/api/kernel/query` do servidor PocketWiki.
+
+MCP note: `mcp.json` is for LM Studio/Codex/PocketKernel tools, not for the browser app directly. The filesystem MCP path for this repo should point to:
 
 Use o path absoluto local da sua máquina apontando para `SKILL/`.
 

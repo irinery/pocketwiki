@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 struct WikiFolderLoader {
@@ -14,8 +15,16 @@ struct WikiFolderLoader {
     func loadFiles(from root: URL) throws -> (files: [WikiFile], issues: [String]) {
         var files: [WikiFile] = []
         var issues: [String] = []
-        try walk(root: root, current: root, files: &files, issues: &issues)
+        let canonicalRoot = canonicalURL(root)
+        try walk(root: canonicalRoot, current: canonicalRoot, files: &files, issues: &issues)
         return (files.sorted { $0.relativePath < $1.relativePath }, issues)
+    }
+
+    private func canonicalURL(_ url: URL) -> URL {
+        let resolved = url.path.withCString { realpath($0, nil) }
+        guard let resolved else { return url.standardizedFileURL }
+        defer { free(resolved) }
+        return URL(fileURLWithPath: String(cString: resolved), isDirectory: true).standardizedFileURL
     }
 
     func isEligible(relativePath: String, isDirectory: Bool, sizeBytes: Int? = nil) -> Bool {
@@ -46,7 +55,14 @@ struct WikiFolderLoader {
 
         for url in urls {
             let values = try url.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey])
-            let relativePath = url.path.replacingOccurrences(of: root.path + "/", with: "")
+            let rootPath = comparableFileSystemPath(root.path).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            let childPath = comparableFileSystemPath(url.path)
+            let rootPrefix = "/\(rootPath)/"
+            guard childPath.hasPrefix(rootPrefix) else {
+                issues.append("path fora da raiz ignorado: \(url.lastPathComponent)")
+                continue
+            }
+            let relativePath = String(childPath.dropFirst(rootPrefix.count))
             let isDirectory = values.isDirectory == true
 
             guard isEligible(relativePath: relativePath, isDirectory: isDirectory, sizeBytes: values.fileSize) else {
@@ -75,6 +91,16 @@ struct WikiFolderLoader {
                 issues.append("nao foi possivel ler \(relativePath)")
             }
         }
+    }
+
+    private func comparableFileSystemPath(_ path: String) -> String {
+        for (canonical, alias) in [("/private/var", "/var"), ("/private/tmp", "/tmp"), ("/private/etc", "/etc")] {
+            if path == canonical { return alias }
+            if path.hasPrefix("\(canonical)/") {
+                return alias + path.dropFirst(canonical.count)
+            }
+        }
+        return path
     }
 
     private func appendIgnoredFileIssueIfNeeded(relativePath: String, isDirectory: Bool, sizeBytes: Int?, issues: inout [String]) {

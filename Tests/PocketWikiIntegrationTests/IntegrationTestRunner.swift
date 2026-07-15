@@ -1,4 +1,5 @@
 import Darwin
+import CryptoKit
 import Foundation
 
 enum IntegrationTestFailure: Error, CustomStringConvertible {
@@ -29,6 +30,7 @@ struct IntegrationTestRunner {
     static func main() async throws {
         let tests: [(String, () async throws -> Void)] = [
             ("native server http contract", testNativeServerHTTPContract),
+            ("native solutions ingestion contract", testNativeSolutionsIngestionContract),
             ("remote client against native server", testRemoteClientAgainstNativeServer),
             ("web runtime assets", testWebRuntimeAssets),
             ("excalidraw editor bundle resolver", testExcalidrawEditorBundleResolver)
@@ -58,7 +60,7 @@ struct IntegrationTestRunner {
             try expect(configResponse.status == 200, "config status failed")
             try expect(config["referenceName"] as? String == "IntegrationWiki", "config referenceName failed")
             try expect(config["referenceAvailable"] as? Bool == true, "config availability failed")
-            try expect(config["aiProxy"] as? Bool == true, "config aiProxy failed")
+            try expect(config["kernelProxy"] as? Bool == true, "config kernelProxy failed")
 
             let routesResponse = try await request(baseURL.appendingPathComponent("/api/routes"))
             let routes = try JSONDecoder().decode(PocketWikiRouteSnapshot.self, from: routesResponse.body)
@@ -86,6 +88,79 @@ struct IntegrationTestRunner {
             try expect(messages.contains("GET /api/config"), "server did not log config request")
             try expect(messages.contains("GET /api/wiki/files"), "server did not log files request")
         }
+    }
+
+    static func testNativeSolutionsIngestionContract() async throws {
+        let requestedRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PocketWikiSolutions-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: requestedRoot, withIntermediateDirectories: true)
+        let root = requestedRoot.resolvingSymlinksInPath()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let port = try availablePort()
+        let config = serverConfiguration(
+            port: port,
+            referencePath: root.path,
+            referenceReadonly: false,
+            writeToken: "integration-write-token"
+        )
+        let server = PocketWikiHTTPServer(
+            configuration: config,
+            sourceProvider: {
+                let files = (try? WikiFolderLoader().loadFiles(from: root).files) ?? []
+                return PocketWikiServedSource(
+                    rootName: root.lastPathComponent,
+                    rootPath: root.path,
+                    source: "integration",
+                    configured: true,
+                    readonly: false,
+                    available: true,
+                    status: "ready",
+                    files: files
+                )
+            },
+            log: { _ in }
+        )
+        _ = try await server.start()
+        defer { server.stop() }
+        let baseURL = URL(string: "http://127.0.0.1:\(port)")!
+        try await waitUntilReady(baseURL: baseURL)
+
+        let payload = try solutionPayload()
+        let endpoint = baseURL.appendingPathComponent("api/v1/solutions/solution_native")
+        let headers = [
+            "Authorization": "Bearer integration-write-token",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Idempotency-Key": "solution_native:doc_v1"
+        ]
+        let created = try await request(endpoint, method: "PUT", headers: headers, body: payload)
+        try expect(created.status == 201, "native solution create status failed: \(created.text)")
+        let createdJSON = try jsonObject(created.body)
+        let revision = try require(createdJSON["remote_revision"] as? String, "native solution revision missing")
+        try expect(revision.range(of: #"^"sha256:[a-f0-9]{64}"$"#, options: .regularExpression) != nil, "native revision format failed")
+        try expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("solutions/solution_native.md").path), "native solution file missing")
+
+        let replay = try await request(endpoint, method: "PUT", headers: headers, body: payload)
+        try expect(replay.status == 201, "native idempotency replay failed")
+        try expect(replay.body == created.body, "native idempotency response changed")
+
+        let filesResponse = try await request(baseURL.appendingPathComponent("api/wiki/files"))
+        let filesJSON = try jsonObject(filesResponse.body)
+        let files = try require(filesJSON["files"] as? [[String: Any]], "native solution files missing")
+        try expect(
+            files.contains { $0["path"] as? String == "solutions/solution_native.md" },
+            "native solution not indexed: \(filesResponse.text)"
+        )
+
+        let unauthorized = try await request(
+            endpoint,
+            method: "PUT",
+            headers: headers.merging(["Authorization": "Bearer invalid-token"]) { _, new in new },
+            body: payload
+        )
+        try expect(unauthorized.status == 401, "native unauthorized status failed")
+        try expect(!unauthorized.text.contains("integration-write-token"), "native response leaked token")
     }
 
     static func testRemoteClientAgainstNativeServer() async throws {
@@ -138,18 +213,7 @@ struct IntegrationTestRunner {
 
     private static func withRunningServer(_ body: (URL, PocketWikiHTTPServer, IntegrationLogSink) async throws -> Void) async throws {
         let port = try availablePort()
-        let config = PocketWikiServerConfiguration(
-            port: port,
-            bindHost: "127.0.0.1",
-            publicHosts: [],
-            mdnsEnabled: false,
-            referencePath: "",
-            referenceReadonly: true,
-            lmStudioBaseURL: "http://127.0.0.1:9/v1",
-            lmStudioAPIKey: "",
-            lmStudioModel: "",
-            envPath: nil
-        )
+        let config = serverConfiguration(port: port)
         let logs = IntegrationLogSink()
         let server = PocketWikiHTTPServer(
             configuration: config,
@@ -191,10 +255,19 @@ struct IntegrationTestRunner {
         throw IntegrationTestFailure.failed("server did not become ready: \(lastError?.localizedDescription ?? "unknown")")
     }
 
-    private static func request(_ url: URL, method: String = "GET") async throws -> HTTPResult {
+    private static func request(
+        _ url: URL,
+        method: String = "GET",
+        headers: [String: String] = [:],
+        body: Data? = nil
+    ) async throws -> HTTPResult {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        request.httpBody = body
+        for (name, value) in headers {
+            request.setValue(value, forHTTPHeaderField: name)
+        }
         let (data, response) = try await URLSession.shared.data(for: request)
         let http = try require(response as? HTTPURLResponse, "non-http response")
         return HTTPResult(
@@ -240,6 +313,62 @@ struct IntegrationTestRunner {
         }
         guard nameResult == 0 else { throw IntegrationTestFailure.failed("getsockname failed") }
         return Int(UInt16(bigEndian: address.sin_port))
+    }
+
+    private static func serverConfiguration(
+        port: Int,
+        referencePath: String = "",
+        referenceReadonly: Bool = true,
+        writeToken: String = ""
+    ) -> PocketWikiServerConfiguration {
+        PocketWikiServerConfiguration(
+            port: port,
+            bindHost: "127.0.0.1",
+            publicHosts: [],
+            mdnsEnabled: false,
+            referencePath: referencePath,
+            referenceReadonly: referenceReadonly,
+            writeToken: writeToken,
+            writeMaxBytes: PocketWikiSolutionIngestion.minimumRequestBytes,
+            lmStudioBaseURL: "http://127.0.0.1:9/v1",
+            lmStudioAPIKey: "",
+            lmStudioModel: "",
+            pocketKernelBaseURL: "http://127.0.0.1:9",
+            middlewareAuthBaseURL: "http://127.0.0.1:9",
+            middlewareAuthClientToken: "",
+            middlewareAuthProjectID: "acme",
+            middlewareAuthProfileID: "default",
+            envPath: nil
+        )
+    }
+
+    private static func solutionPayload() throws -> Data {
+        var payload: [String: Any] = [
+            "schema_version": "pockettrace.pocketwiki_solution.v1",
+            "generator_version": "pockettrace.processor.v1",
+            "input_hash": String(repeating: "a", count: 64),
+            "output_hash": "",
+            "solution_id": "solution_native",
+            "document_version": "doc_v1",
+            "trace_or_context_id": "pt_native",
+            "title": "Solução nativa",
+            "summary": "Validação do servidor Swift.",
+            "body_markdown": "# Solução nativa\n\nDocumento persistido.",
+            "category": "infraestrutura",
+            "tags": ["swift", "smoke"],
+            "replicability_level": "R1",
+            "mvp5_candidate": false,
+            "source_hashes": [[
+                "path": "ai/runs/native/validated_output.json",
+                "artifact_type": "ai_validated_output_json",
+                "schema_version": "pockettrace.ai_validated_enrichment.v1",
+                "sha256": String(repeating: "c", count: 64)
+            ]],
+            "publish_mode": "ai_enriched"
+        ]
+        let canonical = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys, .withoutEscapingSlashes])
+        payload["output_hash"] = SHA256.hash(data: canonical).map { String(format: "%02x", $0) }.joined()
+        return try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys, .withoutEscapingSlashes])
     }
 
     private static var sampleFiles: [WikiFile] {

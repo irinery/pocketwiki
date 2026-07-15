@@ -7,12 +7,22 @@ struct PocketWikiServerConfiguration: Equatable, Sendable {
     var mdnsEnabled: Bool
     var referencePath: String
     var referenceReadonly: Bool
+    var writeToken: String
+    var writeMaxBytes: Int
     var lmStudioBaseURL: String
     var lmStudioAPIKey: String
     var lmStudioModel: String
+    var pocketKernelBaseURL: String
+    var middlewareAuthBaseURL: String
+    var middlewareAuthClientToken: String
+    var middlewareAuthProjectID: String
+    var middlewareAuthProfileID: String
     var envPath: String?
 
     static let defaultReferencePath = "SKILL/wiki-reference"
+    static let minimumWriteRequestBytes = 8 * 1024 * 1024
+    static let defaultPocketKernelBaseURL = "http://127.0.0.1:8080"
+    static let defaultMiddlewareAuthBaseURL = "http://127.0.0.1:18787"
 
     static var defaults: PocketWikiServerConfiguration {
         PocketWikiServerConfiguration(
@@ -22,9 +32,16 @@ struct PocketWikiServerConfiguration: Equatable, Sendable {
             mdnsEnabled: true,
             referencePath: defaultReferencePath,
             referenceReadonly: true,
+            writeToken: "",
+            writeMaxBytes: minimumWriteRequestBytes,
             lmStudioBaseURL: LocalAIEndpointPolicy.defaultBaseURL,
             lmStudioAPIKey: "",
             lmStudioModel: "",
+            pocketKernelBaseURL: defaultPocketKernelBaseURL,
+            middlewareAuthBaseURL: defaultMiddlewareAuthBaseURL,
+            middlewareAuthClientToken: "",
+            middlewareAuthProjectID: "acme",
+            middlewareAuthProfileID: "default",
             envPath: nil
         )
     }
@@ -58,10 +75,22 @@ struct PocketWikiServerConfiguration: Equatable, Sendable {
             mdnsEnabled: boolValue("POCKETWIKI_MDNS", environment: environment, fileValues: fileValues, fallback: true),
             referencePath: Self.resolvePath(value("POCKETWIKI_REFERENCE_PATH", environment: environment, fileValues: fileValues, fallback: defaultReferencePath)),
             referenceReadonly: boolValue("POCKETWIKI_REFERENCE_READONLY", environment: environment, fileValues: fileValues, fallback: true),
+            writeToken: value("POCKETWIKI_WRITE_TOKEN", environment: environment, fileValues: fileValues),
+            writeMaxBytes: max(
+                Int(value("POCKETWIKI_WRITE_MAX_BYTES", environment: environment, fileValues: fileValues)) ?? minimumWriteRequestBytes,
+                minimumWriteRequestBytes
+            ),
             lmStudioBaseURL: value("LM_STUDIO_BASE_URL", environment: environment, fileValues: fileValues, fallback: LocalAIEndpointPolicy.defaultBaseURL).trimmedSlash,
             lmStudioAPIKey: value("LM_STUDIO_API_KEY", environment: environment, fileValues: fileValues)
                 .ifEmpty(value("LM_API_TOKEN", environment: environment, fileValues: fileValues)),
             lmStudioModel: value("LM_STUDIO_MODEL", environment: environment, fileValues: fileValues),
+            pocketKernelBaseURL: value("POCKETKERNEL_BASE_URL", environment: environment, fileValues: fileValues, fallback: defaultPocketKernelBaseURL).trimmedSlash,
+            middlewareAuthBaseURL: value("MIDDLEWARE_BASE_URL", environment: environment, fileValues: fileValues, fallback: defaultMiddlewareAuthBaseURL).trimmedSlash,
+            middlewareAuthClientToken: value("MIDDLEWARE_CLIENT_TOKEN", environment: environment, fileValues: fileValues),
+            middlewareAuthProjectID: value("MIDDLEWARE_PROJECT_ID", environment: environment, fileValues: fileValues)
+                .ifEmpty(value("MCP_DEFAULT_PROJECT_ID", environment: environment, fileValues: fileValues, fallback: "acme")),
+            middlewareAuthProfileID: value("MIDDLEWARE_LLM_PROFILE_ID", environment: environment, fileValues: fileValues)
+                .ifEmpty(value("MCP_LMSTUDIO_PROFILE_ID", environment: environment, fileValues: fileValues, fallback: "default")),
             envPath: envPath?.path
         )
     }

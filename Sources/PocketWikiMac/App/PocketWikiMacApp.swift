@@ -14,6 +14,9 @@ struct PocketWikiMacApp: App {
                     await store.restoreLastSource()
                 }
         }
+        .windowStyle(.hiddenTitleBar)
+        .windowToolbarStyle(.unifiedCompact(showsTitle: false))
+        .defaultSize(width: 1440, height: 900)
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("Abrir Pasta...") {

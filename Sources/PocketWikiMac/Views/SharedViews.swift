@@ -24,7 +24,7 @@ struct BrandLogoView: View {
     }
 
     private static var logoImage: NSImage? {
-        guard let url = Bundle.module.url(forResource: "pocketwiki-logo", withExtension: "png") else {
+        guard let url = PocketWikiResourceBundle.url(forResource: "pocketwiki-logo", withExtension: "png") else {
             return nil
         }
         return NSImage(contentsOf: url)
@@ -64,7 +64,7 @@ struct SectionCard<Content: View>: View {
 
             content
         }
-        .padding(14)
+        .padding(16)
         .pocketWikiCard()
     }
 }
@@ -77,9 +77,10 @@ struct MetricTile: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: systemImage)
-                .font(.title3)
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(PocketWikiTheme.accent)
-                .frame(width: 30, height: 30)
+                .frame(width: 32, height: 32)
+                .background(PocketWikiTheme.accent.opacity(0.11), in: Circle())
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(value)
@@ -95,11 +96,7 @@ struct MetricTile: View {
             Spacer(minLength: 0)
         }
         .padding(12)
-        .background(PocketWikiTheme.bg2.opacity(0.78), in: RoundedRectangle(cornerRadius: 8))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(PocketWikiTheme.border, lineWidth: 1)
-        }
+        .pocketWikiSurface(cornerRadius: 16)
     }
 }
 

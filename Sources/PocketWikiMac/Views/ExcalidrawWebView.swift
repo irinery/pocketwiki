@@ -69,7 +69,7 @@ struct ExcalidrawWebView: NSViewRepresentable {
     }
 
     private static var editorBundleRoot: URL? {
-        Bundle.module.resourceURL?.appendingPathComponent("ExcalidrawEditor", isDirectory: true)
+        PocketWikiResourceBundle.resourceURL?.appendingPathComponent("ExcalidrawEditor", isDirectory: true)
     }
 
     private static let diagnosticsScript = WKUserScript(

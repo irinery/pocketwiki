@@ -15,7 +15,7 @@ enum LocalAIEndpointPolicyError: Error, LocalizedError, Equatable {
 }
 
 enum LocalAIEndpointPolicy {
-    static let defaultBaseURL = "http://127.0.0.1:1234/v1"
+    static let defaultBaseURL = "http://127.0.0.1:1234"
 
     static func normalizedBaseURL(_ rawValue: String) throws -> URL {
         let value = rawValue.pocketTrimmed
