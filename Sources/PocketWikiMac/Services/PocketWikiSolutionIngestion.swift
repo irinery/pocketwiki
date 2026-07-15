@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 
 actor PocketWikiSolutionIngestion {
-    static let minimumRequestBytes = 8 * 1024 * 1024
+    static let minimumRequestBytes = PocketWikiServerConfiguration.minimumWriteRequestBytes
     static let maximumMarkdownBytes = 5 * 1024 * 1024
 
     private let writeToken: String

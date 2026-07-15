@@ -53,16 +53,16 @@ signing_label() {
 }
 
 clean_bundle_metadata() {
-  bundle="$1"
+  metadata_bundle="$1"
 
-  find "$bundle" \( -name '.DS_Store' -o -name '._*' \) -delete
+  find "$metadata_bundle" \( -name '.DS_Store' -o -name '._*' \) -delete
   if command -v xattr >/dev/null 2>&1; then
-    xattr -cr "$bundle" 2>/dev/null || true
-    find "$bundle" -exec xattr -c {} + 2>/dev/null || true
-    xattr -d com.apple.FinderInfo "$bundle" 2>/dev/null || true
-    xattr -d com.apple.ResourceFork "$bundle" 2>/dev/null || true
-    find "$bundle" -exec xattr -d com.apple.FinderInfo {} + 2>/dev/null || true
-    find "$bundle" -exec xattr -d com.apple.ResourceFork {} + 2>/dev/null || true
+    xattr -cr "$metadata_bundle" 2>/dev/null || true
+    find "$metadata_bundle" -exec xattr -c {} + 2>/dev/null || true
+    find "$metadata_bundle" -exec xattr -d com.apple.FinderInfo {} + 2>/dev/null || true
+    find "$metadata_bundle" -exec xattr -d com.apple.ResourceFork {} + 2>/dev/null || true
+    xattr -d com.apple.FinderInfo "$metadata_bundle" 2>/dev/null || true
+    xattr -d com.apple.ResourceFork "$metadata_bundle" 2>/dev/null || true
   fi
 }
 
@@ -81,20 +81,39 @@ ERROR
   printf '%s' "$identity"
 }
 
-codesign_app_bundle() {
+codesign_app_bundle() (
   bundle="$1"
   bundle_id="$2"
   identity="$3"
+  staging_dir="$(mktemp -d "${TMPDIR:-/tmp}/pocketwiki-sign.XXXXXX")"
+  staged_bundle="$staging_dir/$(basename "$bundle")"
+
+  trap 'rm -rf "$staging_dir"' 0 1 2 15
 
   printf '%s\n' "Assinando bundle: $(signing_label "$identity")"
-  clean_bundle_metadata "$bundle"
+  ditto --noextattr --norsrc "$bundle" "$staged_bundle"
+  clean_bundle_metadata "$staged_bundle"
   codesign \
     --force \
     --deep \
     --sign "$identity" \
     --timestamp=none \
     --identifier "$bundle_id" \
-    "$bundle" >/dev/null
-  clean_bundle_metadata "$bundle"
+    "$staged_bundle" >/dev/null
+  codesign --verify --deep --strict "$staged_bundle"
+
+  rm -rf "$bundle"
+  ditto --noextattr --norsrc "$staged_bundle" "$bundle"
+
+  attempt=1
+  while [ "$attempt" -le 3 ]; do
+    clean_bundle_metadata "$bundle"
+    if codesign --verify --deep --strict "$bundle" 2>/dev/null; then
+      return 0
+    fi
+    attempt=$((attempt + 1))
+    sleep 0.1
+  done
+
   codesign --verify --deep --strict "$bundle"
-}
+)

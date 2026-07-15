@@ -24,7 +24,11 @@ load_env_file "$ROOT_DIR/.env.local"
 BUNDLE_ID="${POCKETWIKI_BUNDLE_ID:-$BUNDLE_ID}"
 
 MODE="run"
-SIGN_MODE="${POCKETWIKI_SIGN_MODE:-auto}"
+DEFAULT_SIGN_MODE="auto"
+if [ "${CI:-}" = "true" ]; then
+  DEFAULT_SIGN_MODE="adhoc"
+fi
+SIGN_MODE="${POCKETWIKI_SIGN_MODE:-$DEFAULT_SIGN_MODE}"
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --sign)
@@ -65,7 +69,14 @@ chmod +x "$APP_BINARY"
 BUILD_DIR="$(swift build --package-path "$ROOT_DIR" --show-bin-path)"
 RESOURCE_BUNDLE="$BUILD_DIR/PocketWikiMac_PocketWikiMac.bundle"
 if [ -d "$RESOURCE_BUNDLE" ]; then
-  ditto --noextattr --norsrc "$RESOURCE_BUNDLE" "$APP_RESOURCES/$(basename "$RESOURCE_BUNDLE")"
+  case "$MODE" in
+    --bundle|bundle)
+      ditto --noextattr --norsrc "$RESOURCE_BUNDLE" "$APP_BUNDLE/$(basename "$RESOURCE_BUNDLE")"
+      ;;
+    *)
+      ditto --noextattr --norsrc "$RESOURCE_BUNDLE" "$APP_RESOURCES/$(basename "$RESOURCE_BUNDLE")"
+      ;;
+  esac
 fi
 if [ -f "$ROOT_DIR/Sources/PocketWikiMac/Resources/PocketWikiMac.icns" ]; then
   cp "$ROOT_DIR/Sources/PocketWikiMac/Resources/PocketWikiMac.icns" "$APP_RESOURCES/PocketWikiMac.icns"
@@ -121,7 +132,13 @@ cat >"$INFO_PLIST" <<PLIST
 </plist>
 PLIST
 
-codesign_app_bundle "$APP_BUNDLE" "$BUNDLE_ID" "$SIGNING_IDENTITY"
+case "$MODE" in
+  --bundle|bundle)
+    ;;
+  *)
+    codesign_app_bundle "$APP_BUNDLE" "$BUNDLE_ID" "$SIGNING_IDENTITY"
+    ;;
+esac
 
 open_app() {
   /usr/bin/open -n "$APP_BUNDLE"

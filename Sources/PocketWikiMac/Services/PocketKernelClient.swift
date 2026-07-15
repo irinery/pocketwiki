@@ -21,7 +21,7 @@ enum PocketKernelClientError: Error, LocalizedError {
 }
 
 enum PocketKernelEndpointPolicy {
-    static let defaultBaseURL = "http://127.0.0.1:8080"
+    static let defaultBaseURL = PocketWikiServerConfiguration.defaultPocketKernelBaseURL
 
     static func kernelURL(_ rawValue: String) throws -> URL {
         let value = rawValue.pocketTrimmed.isEmpty ? defaultBaseURL : rawValue.pocketTrimmed

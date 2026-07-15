@@ -126,24 +126,32 @@ struct PocketWikiGlassModifier: ViewModifier {
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
 
+        #if compiler(>=6.2)
         if #available(macOS 26.0, *) {
             content
                 .glassEffect(.regular.tint(tint).interactive(interactive), in: shape)
         } else {
-            content
-                .background(.ultraThinMaterial, in: shape)
-                .background(tint?.opacity(0.10) ?? .clear, in: shape)
-                .overlay {
-                    shape.stroke(
-                        LinearGradient(
-                            colors: [Color.white.opacity(0.22), Color.white.opacity(0.06)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
-                }
+            fallbackGlass(content: content, shape: shape)
         }
+        #else
+        fallbackGlass(content: content, shape: shape)
+        #endif
+    }
+
+    private func fallbackGlass(content: Content, shape: RoundedRectangle) -> some View {
+        content
+            .background(.ultraThinMaterial, in: shape)
+            .background(tint?.opacity(0.10) ?? .clear, in: shape)
+            .overlay {
+                shape.stroke(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.22), Color.white.opacity(0.06)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+            }
     }
 }
 

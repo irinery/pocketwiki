@@ -28,7 +28,7 @@ enum MiddlewareAuthClientError: Error, LocalizedError {
 }
 
 enum MiddlewareAuthEndpointPolicy {
-    static let defaultBaseURL = "http://127.0.0.1:18787"
+    static let defaultBaseURL = PocketWikiServerConfiguration.defaultMiddlewareAuthBaseURL
 
     static func normalizedBaseURL(_ rawValue: String) throws -> URL {
         let value = rawValue.pocketTrimmed.isEmpty ? defaultBaseURL : rawValue.pocketTrimmed

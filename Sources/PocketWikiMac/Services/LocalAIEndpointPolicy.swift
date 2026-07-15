@@ -26,7 +26,13 @@ enum LocalAIEndpointPolicy {
             throw LocalAIEndpointPolicyError.invalidURL
         }
         let cleanPath = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        components.path = cleanPath.isEmpty || cleanPath == "v1" ? "" : "/" + cleanPath
+        if cleanPath.isEmpty {
+            components.path = "/v1"
+        } else if cleanPath == "api/ai" {
+            components.path = "/api/ai"
+        } else {
+            components.path = "/" + cleanPath
+        }
         guard let normalized = components.url else {
             throw LocalAIEndpointPolicyError.invalidURL
         }
@@ -40,7 +46,10 @@ enum LocalAIEndpointPolicy {
         }
 
         let basePath = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let suffix = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        var suffix = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        if basePath == "api/ai", suffix == "chat/completions" {
+            suffix = "chat"
+        }
         components.path = "/" + [basePath, suffix].filter { !$0.isEmpty }.joined(separator: "/")
 
         guard let url = components.url else {
