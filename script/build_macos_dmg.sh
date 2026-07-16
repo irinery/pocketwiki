@@ -16,8 +16,24 @@ BUNDLE_ID="${POCKETWIKI_BUNDLE_ID:-$BUNDLE_ID}"
 
 APP_VERSION="${APP_VERSION:-}"
 if [ -z "$APP_VERSION" ]; then
-  APP_VERSION="$(node -e "process.stdout.write(require('./package.json').version)" 2>/dev/null || printf "0.0.0")"
+  APP_VERSION="$(node -e 'process.stdout.write(require(process.argv[1]).version)' "$ROOT_DIR/package.json" 2>/dev/null || printf "0.0.0")"
 fi
+if [ -z "${RELEASE_TAG:-}" ]; then
+  case "${POCKETWIKI_RELEASE_CHANNEL:-alpha}" in
+    stable) RELEASE_TAG="$APP_VERSION" ;;
+    alpha) RELEASE_TAG="alpha-$APP_VERSION" ;;
+    *) printf 'invalid release channel: %s\n' "$POCKETWIKI_RELEASE_CHANNEL" >&2; exit 2 ;;
+  esac
+fi
+COMMIT_SHA="${GITHUB_SHA:-$(git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null || printf "unknown")}"
+
+printf '%s\n' "$APP_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || {
+  printf 'invalid app version: %s\n' "$APP_VERSION" >&2
+  exit 2
+}
+case "$RELEASE_TAG" in
+  *[!A-Za-z0-9._-]*) printf 'invalid release tag: %s\n' "$RELEASE_TAG" >&2; exit 2 ;;
+esac
 
 MACOS_ARCHS="${MACOS_ARCHS:-arm64 x86_64}"
 if [ -n "${SIGN_IDENTITY:-}" ] && [ -z "${POCKETWIKI_SIGNING_IDENTITY:-}" ]; then
@@ -60,8 +76,13 @@ else
   ARCH_LABEL="custom"
 fi
 
-DMG_NAME="$APP_NAME-$APP_VERSION-macOS-$ARCH_LABEL.dmg"
+ASSET_BASENAME="$APP_NAME-$RELEASE_TAG-macOS-$ARCH_LABEL"
+DMG_NAME="$ASSET_BASENAME.dmg"
 DMG_PATH="$DIST_DIR/$DMG_NAME"
+ZIP_NAME="$ASSET_BASENAME.zip"
+ZIP_PATH="$DIST_DIR/$ZIP_NAME"
+MANIFEST_NAME="$ASSET_BASENAME.build.json"
+MANIFEST_PATH="$DIST_DIR/$MANIFEST_NAME"
 
 if [ -z "${DEVELOPER_DIR:-}" ] && [ -d "/Applications/Xcode.app/Contents/Developer" ]; then
   export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
@@ -152,6 +173,10 @@ cat >"$INFO_PLIST" <<PLIST
   <string>$APP_VERSION</string>
   <key>CFBundleVersion</key>
   <string>$BUILD_NUMBER</string>
+  <key>PocketWikiReleaseTag</key>
+  <string>$RELEASE_TAG</string>
+  <key>PocketWikiCommitSHA</key>
+  <string>$COMMIT_SHA</string>
   <key>CFBundleIconFile</key>
   <string>PocketWikiMac</string>
   <key>CFBundlePackageType</key>
@@ -183,6 +208,13 @@ done
 
 echo "==> Signing app bundle"
 codesign_app_bundle "$APP_BUNDLE" "$BUNDLE_ID" "$SIGNING_IDENTITY"
+
+echo "==> Creating update archive"
+ditto -c -k --sequesterRsrc --keepParent "$APP_BUNDLE" "$ZIP_PATH"
+(
+  cd "$DIST_DIR"
+  shasum -a 256 "$ZIP_NAME" >"$ZIP_NAME.sha256"
+)
 
 echo "==> Creating DMG"
 RW_DMG="$WORK_DIR/$APP_NAME-rw.dmg"
@@ -216,5 +248,22 @@ trap - EXIT HUP INT TERM
   shasum -a 256 "$DMG_NAME" >"$DMG_NAME.sha256"
 )
 
+node - "$MANIFEST_PATH" "$RELEASE_TAG" "$APP_VERSION" "$BUILD_NUMBER" "$COMMIT_SHA" "$BUNDLE_ID" "$ZIP_NAME" "$DMG_NAME" <<'NODE'
+const fs = require("node:fs");
+const [path, releaseTag, appVersion, buildNumber, commit, bundleID, zip, dmg] = process.argv.slice(2);
+const manifest = {
+  schema_version: "pocketwiki.build.v1",
+  release_tag: releaseTag,
+  app_version: appVersion,
+  build_number: buildNumber,
+  commit,
+  bundle_id: bundleID,
+  assets: { zip, dmg },
+};
+fs.writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`);
+NODE
+
 echo "==> Created $DMG_PATH"
+echo "==> Created $ZIP_PATH"
+echo "==> Created $MANIFEST_PATH"
 echo "==> SHA256 $(cat "$DMG_PATH.sha256")"

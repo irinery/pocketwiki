@@ -70,6 +70,7 @@ struct CoreTestRunner {
             ("graph deduplicates edges", testGraphDeduplicatesEdges),
             ("graph truncates high fanout", testGraphTruncatesHighFanout),
             ("graph oversized node", testGraphOversizedNode),
+            ("canonical release versions", testCanonicalReleaseVersions),
             ("desktop tabs include map and server", testDesktopTabs)
         ]
 
@@ -83,6 +84,28 @@ struct CoreTestRunner {
 
     static func testPathToSlug() throws {
         try expect(WikiTextParser.pathToSlug("Wiki/Minha Página.md") == "minha-pagina", "slug mismatch")
+    }
+
+    static func testCanonicalReleaseVersions() throws {
+        let alpha = try require(
+            PocketWikiReleaseVersion.parse(tag: "alpha-1.2.3"),
+            "alpha version should parse"
+        )
+        let stable = try require(
+            PocketWikiReleaseVersion.parse(tag: "1.2.3"),
+            "stable version should parse"
+        )
+        let newerAlpha = try require(
+            PocketWikiReleaseVersion.parse(tag: "alpha-1.2.4"),
+            "newer alpha should parse"
+        )
+
+        try expect(alpha.channel == .alpha, "alpha channel mismatch")
+        try expect(stable.channel == .stable, "stable channel mismatch")
+        try expect(stable > alpha, "stable should supersede alpha at the same version")
+        try expect(newerAlpha > stable, "numeric version should precede channel preference")
+        try expect(PocketWikiReleaseVersion.parse(tag: "v1.2.3") == nil, "legacy v tag should be ignored")
+        try expect(PocketWikiReleaseVersion.parse(tag: "alpha-1.2") == nil, "invalid alpha should be ignored")
     }
 
     static func testFrontmatter() throws {

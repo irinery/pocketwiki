@@ -8,6 +8,10 @@ MIN_SYSTEM_VERSION="14.0"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPT_DIR="$ROOT_DIR/script"
+APP_VERSION="${APP_VERSION:-$(node -e 'process.stdout.write(require(process.argv[1]).version)' "$ROOT_DIR/package.json" 2>/dev/null || printf "0.0.0")}"
+RELEASE_TAG="${RELEASE_TAG:-dev-$APP_VERSION}"
+BUILD_NUMBER="${BUILD_NUMBER:-$(git -C "$ROOT_DIR" rev-list --count HEAD 2>/dev/null || printf "1")}"
+COMMIT_SHA="${GITHUB_SHA:-$(git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null || printf "unknown")}"
 DIST_DIR="$ROOT_DIR/dist"
 APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
 APP_CONTENTS="$APP_BUNDLE/Contents"
@@ -103,6 +107,14 @@ cat >"$INFO_PLIST" <<PLIST
   <string>$APP_NAME</string>
   <key>CFBundleDisplayName</key>
   <string>$APP_NAME</string>
+  <key>CFBundleShortVersionString</key>
+  <string>$APP_VERSION</string>
+  <key>CFBundleVersion</key>
+  <string>$BUILD_NUMBER</string>
+  <key>PocketWikiReleaseTag</key>
+  <string>$RELEASE_TAG</string>
+  <key>PocketWikiCommitSHA</key>
+  <string>$COMMIT_SHA</string>
   <key>CFBundleIconFile</key>
   <string>PocketWikiMac</string>
   <key>CFBundlePackageType</key>

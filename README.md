@@ -118,7 +118,7 @@ npm run build:excalidraw
 
 ## Build macOS e assinatura
 
-A versao desktop macOS fica disponivel em `.dmg` nas [releases do GitHub](https://github.com/irinery/pocketwiki/releases/latest).
+A versao desktop macOS fica disponivel em `.dmg` nas [releases do GitHub](https://github.com/irinery/pocketwiki/releases).
 
 Para gerar e abrir o app local:
 
@@ -132,12 +132,51 @@ Para gerar o instalador localmente:
 ./script/build_macos_dmg.sh
 ```
 
-O arquivo sai em `dist/release/PocketWiki-<versao>-macOS-universal.dmg`, junto com o `.sha256`. Para publicar uma release baixavel no GitHub, crie e envie uma tag:
+O builder gera os arquivos abaixo em `dist/release/`:
+
+```text
+PocketWiki-alpha-<x.y.z>-macOS-universal.dmg
+PocketWiki-alpha-<x.y.z>-macOS-universal.zip
+PocketWiki-alpha-<x.y.z>-macOS-universal.build.json
+*.sha256
+```
+
+O workflow `.github/workflows/macos-release.yml` roda em todo push na `main`,
+inclusive após merge de qualquer branch. Ele resolve a próxima versão, gera os
+arquivos e publica uma GitHub Release canônica. Hoje o canal padrão é `alpha`,
+com tags `alpha-x.y.z`. Para migrar ao formato tradicional `x.y.z`, configure a
+variável Actions `POCKETWIKI_RELEASE_CHANNEL=stable`; o mesmo builder e o mesmo
+updater passam a usar releases estáveis sem mudança de código.
+
+O versionamento é SemVer e sempre tem os três componentes `MAJOR.MINOR.PATCH`.
+O resolvedor lê as tags alcançáveis pelo `HEAD` e usa como base a maior versão
+numérica encontrada nos formatos `alpha-X.Y.Z`, `X.Y.Z` ou no legado `vX.Y.Z`.
+Em empate, a ordem é estável, alpha e legado. O `package.json` só é usado para
+bootstrap quando o histórico não contém nenhuma tag SemVer reconhecida.
+
+| Incremento | Sinal encontrado nos commits desde a tag base | Resultado a partir de `1.2.3` |
+| --- | --- | --- |
+| Major | `tipo!:`, `BREAKING CHANGE` ou `[major]` | `2.0.0` |
+| Minor | `feat:`, `feature:` ou `[minor]` | `1.3.0` |
+| Patch | correção, manutenção, documentação ou qualquer fallback | `1.2.4` |
+
+O maior incremento encontrado vence. Se não houver commits após a tag base, a
+versão é reutilizada — isso permite promover `alpha-1.2.3` diretamente para
+`1.2.3`. Para inspecionar exatamente o que será publicado:
 
 ```sh
-git tag v0.1.0
-git push origin v0.1.0
+./script/resolve_release_version.sh
+POCKETWIKI_RELEASE_CHANNEL=stable ./script/resolve_release_version.sh
 ```
+
+Para um bootstrap controlado sem tags, use
+`POCKETWIKI_RELEASE_BASE_VERSION=X.Y.Z`.
+
+O app consulta as releases no launch e ao voltar ao foco. Quando existe uma
+versão canônica mais nova, exibe `Atualizar para <tag>` no canto superior direito,
+baixa o ZIP, valida bundle id, tag interna e assinatura, substitui o app atual e
+reabre a nova versão. Também é possível forçar a consulta pelo menu
+`PocketWiki > Verificar Atualizações...`.
 
 O build local usa a mesma política do PocketTrace:
 
@@ -179,9 +218,9 @@ base64 -i /tmp/pocketwiki-codesign.p12 | pbcopy
 rm -f /tmp/pocketwiki-codesign.p12
 ```
 
-No workflow `.github/workflows/macos-release.yml`, se `APPLE_CODESIGN_CERTIFICATE_BASE64` existir, a automação cria um keychain temporário no runner, importa o `.p12`, define `POCKETWIKI_SIGN_MODE=auto` e roda `./script/build_macos_dmg.sh`. Se o certificado não estiver configurado, o workflow cai para `POCKETWIKI_SIGN_MODE=adhoc`.
+No workflow `.github/workflows/macos-release.yml`, se `APPLE_CODESIGN_CERTIFICATE_BASE64` existir, a automação cria um keychain temporário no runner, importa o `.p12`, define `POCKETWIKI_SIGN_MODE=auto` e roda `./script/build_macos_dmg.sh`. Se o certificado não estiver configurado, o workflow cai para `POCKETWIKI_SIGN_MODE=adhoc`. O ZIP usado pelo updater recebe exatamente a mesma assinatura do app contido no DMG.
 
-Para reduzir o raio de impacto, use environment protection no GitHub: crie um environment `release`, restrinja quem pode aprovar execução manual/tag, mova esses secrets para o environment e adicione `environment: release` no job `dmg` do workflow.
+Para reduzir o raio de impacto, use environment protection no GitHub: crie um environment `release`, restrinja quem pode aprovar execuções manuais, mova esses secrets para o environment e adicione `environment: release` no job `release` do workflow.
 
 ## Rodar no PC
 
