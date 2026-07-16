@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Bindable var store: WikiAppStore
+    @Bindable var updater: CanonicalUpdater
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
@@ -27,6 +28,17 @@ struct ContentView: View {
             SearchPaletteView(store: store)
                 .frame(minWidth: 620, minHeight: 520)
                 .presentationBackground(.ultraThinMaterial)
+        }
+        .overlay(alignment: .topTrailing) {
+            CanonicalUpdateButton(updater: updater)
+                .padding(.top, 9)
+                .padding(.trailing, 14)
+        }
+        .task {
+            await updater.checkForUpdates()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await updater.checkForUpdates() }
         }
     }
 }

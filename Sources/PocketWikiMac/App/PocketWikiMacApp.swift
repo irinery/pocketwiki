@@ -5,10 +5,11 @@ import SwiftUI
 struct PocketWikiMacApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var store = WikiAppStore()
+    @State private var updater = CanonicalUpdater()
 
     var body: some Scene {
         WindowGroup("PocketWiki", id: "main") {
-            ContentView(store: store)
+            ContentView(store: store, updater: updater)
                 .frame(minWidth: 980, minHeight: 680)
                 .task {
                     await store.restoreLastSource()
@@ -35,6 +36,13 @@ struct PocketWikiMacApp: App {
                     store.showSearchPalette = true
                 }
                 .keyboardShortcut("k", modifiers: [.command])
+
+                Divider()
+
+                Button("Verificar Atualizações...") {
+                    Task { await updater.checkForUpdates(force: true) }
+                }
+                .disabled(updater.state.isBusy)
             }
         }
     }
