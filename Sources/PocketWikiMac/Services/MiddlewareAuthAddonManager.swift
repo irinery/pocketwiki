@@ -180,7 +180,8 @@ final class MiddlewareAuthAddonManager {
             clientToken = credentials.clientToken
             status = .starting
 
-            for _ in 0..<50 {
+            let readinessDeadline = Date().addingTimeInterval(5)
+            repeat {
                 if await isHealthy(baseURL) {
                     healthAvailable = true
                     activeEndpoint = baseURL
@@ -201,7 +202,7 @@ final class MiddlewareAuthAddonManager {
                 }
                 if !child.isRunning { break }
                 try await Task.sleep(for: .milliseconds(100))
-            }
+            } while Date() < readinessDeadline
 
             let reason = child.isRunning
                 ? "health check não ficou pronto em 5 segundos"
@@ -450,8 +451,9 @@ final class MiddlewareAuthAddonManager {
         var request = URLRequest(url: baseURL.appendingPathComponent("healthz"))
         request.timeoutInterval = 0.6
         request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("close", forHTTPHeaderField: "Connection")
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await lifecycleData(for: request, timeout: 0.6)
             guard (response as? HTTPURLResponse)?.statusCode == 200,
                   let payload = try? JSONDecoder().decode(HealthPayload.self, from: data) else {
                 return false
@@ -485,14 +487,28 @@ final class MiddlewareAuthAddonManager {
         var request = URLRequest(url: url)
         request.timeoutInterval = 1.5
         request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("close", forHTTPHeaderField: "Connection")
         request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await lifecycleData(for: request, timeout: 1.5)
             return (response as? HTTPURLResponse)?.statusCode == 200
         } catch {
             return false
         }
+    }
+
+    private func lifecycleData(
+        for request: URLRequest,
+        timeout: TimeInterval
+    ) async throws -> (Data, URLResponse) {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = timeout
+        configuration.timeoutIntervalForResource = timeout
+        configuration.waitsForConnectivity = false
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        return try await session.data(for: request)
     }
 
     private func managedEnvironment(

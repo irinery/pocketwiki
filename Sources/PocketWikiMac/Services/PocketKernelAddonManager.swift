@@ -198,7 +198,8 @@ final class PocketKernelAddonManager {
                 : "Kernel iniciado sem MCP funcional: \(mcp.evidence.status)."
             status = .starting
 
-            for _ in 0..<50 {
+            let readinessDeadline = Date().addingTimeInterval(5)
+            repeat {
                 if await isHealthy(kernelURL) {
                     healthAvailable = true
                     activeEndpoint = kernelURL
@@ -213,7 +214,7 @@ final class PocketKernelAddonManager {
                 }
                 if !child.isRunning { break }
                 try await Task.sleep(for: .milliseconds(100))
-            }
+            } while Date() < readinessDeadline
 
             let reason = child.isRunning
                 ? "sonda HTTP não ficou pronta em 5 segundos"
@@ -536,8 +537,15 @@ final class PocketKernelAddonManager {
         request.httpMethod = "GET"
         request.timeoutInterval = 0.7
         request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("close", forHTTPHeaderField: "Connection")
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.timeoutIntervalForRequest = 0.7
+            configuration.timeoutIntervalForResource = 0.7
+            configuration.waitsForConnectivity = false
+            let session = URLSession(configuration: configuration)
+            defer { session.invalidateAndCancel() }
+            let (_, response) = try await session.data(for: request)
             return (response as? HTTPURLResponse)?.statusCode == 405
         } catch {
             return false

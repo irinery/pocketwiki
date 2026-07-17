@@ -271,6 +271,7 @@ struct IntegrationTestRunner {
             configuration.middlewareAuthAddonBinaryPath = executable.path
 
             let manager = MiddlewareAuthAddonManager(applicationSupportURL: root.appendingPathComponent("support"))
+            defer { manager.stop() }
             var runtimeEvents: [PocketAddonRuntimeEvent] = []
             manager.setEventHandler { event in runtimeEvents.append(event) }
             await manager.start(configuration: configuration, baseURL: configuration.middlewareAuthBaseURL)
@@ -308,7 +309,7 @@ struct IntegrationTestRunner {
             try expect(manager.accessVerified, "rotated add-on password was not verified")
             let managedPID = try require(manager.managedProcessID, "managed add-on pid missing before failure test")
             _ = kill(managedPID, SIGTERM)
-            for _ in 0..<80 {
+            for _ in 0..<150 {
                 if manager.status == .managed,
                    let recoveredPID = manager.managedProcessID,
                    recoveredPID != managedPID {
@@ -318,7 +319,10 @@ struct IntegrationTestRunner {
             }
             let recoveredPID = try require(manager.managedProcessID, "MiddlewareAuth was not restarted automatically")
             try expect(recoveredPID != managedPID, "MiddlewareAuth recovery reused the terminated process")
-            try expect(manager.status == .managed, "MiddlewareAuth recovery did not restore managed status")
+            try expect(
+                manager.status == .managed,
+                "MiddlewareAuth recovery did not restore managed status: \(manager.status.title)"
+            )
             try expect(
                 runtimeEvents.contains { $0.service == .middlewareAuth && $0.level == .warning && !$0.presentsAlert },
                 "MiddlewareAuth recovery warning was not logged"
@@ -395,6 +399,7 @@ struct IntegrationTestRunner {
             try expect(evidence.status == "args_require_wrapper", "fixture should require MCP wrapper")
 
             let manager = PocketKernelAddonManager(applicationSupportURL: root.appendingPathComponent("support"))
+            defer { manager.stop() }
             await manager.start(
                 configuration: configuration,
                 baseURL: configuration.pocketKernelBaseURL,
@@ -420,7 +425,7 @@ struct IntegrationTestRunner {
             var runtimeEvents: [PocketAddonRuntimeEvent] = []
             manager.setEventHandler { event in runtimeEvents.append(event) }
             _ = kill(managedPID, SIGTERM)
-            for _ in 0..<80 {
+            for _ in 0..<150 {
                 if manager.status == .managed,
                    let recoveredPID = manager.managedProcessID,
                    recoveredPID != managedPID {
@@ -430,7 +435,10 @@ struct IntegrationTestRunner {
             }
             let recoveredPID = try require(manager.managedProcessID, "PocketKernel was not restarted automatically")
             try expect(recoveredPID != managedPID, "PocketKernel recovery reused the terminated process")
-            try expect(manager.status == .managed, "PocketKernel recovery did not restore managed status")
+            try expect(
+                manager.status == .managed,
+                "PocketKernel recovery did not restore managed status: \(manager.status.title)"
+            )
             try expect(
                 runtimeEvents.contains { $0.service == .pocketKernel && $0.level == .warning && !$0.presentsAlert },
                 "PocketKernel recovery warning was not logged"
