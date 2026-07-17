@@ -309,7 +309,7 @@ struct IntegrationTestRunner {
             try expect(manager.accessVerified, "rotated add-on password was not verified")
             let managedPID = try require(manager.managedProcessID, "managed add-on pid missing before failure test")
             _ = kill(managedPID, SIGTERM)
-            for _ in 0..<150 {
+            for _ in 0..<600 {
                 if manager.status == .managed,
                    let recoveredPID = manager.managedProcessID,
                    recoveredPID != managedPID {
@@ -425,7 +425,7 @@ struct IntegrationTestRunner {
             var runtimeEvents: [PocketAddonRuntimeEvent] = []
             manager.setEventHandler { event in runtimeEvents.append(event) }
             _ = kill(managedPID, SIGTERM)
-            for _ in 0..<150 {
+            for _ in 0..<600 {
                 if manager.status == .managed,
                    let recoveredPID = manager.managedProcessID,
                    recoveredPID != managedPID {

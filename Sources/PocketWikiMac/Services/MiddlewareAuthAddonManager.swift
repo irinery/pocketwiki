@@ -46,6 +46,7 @@ final class MiddlewareAuthAddonManager {
 
     private static let restartLimit = 3
     private static let restartWindow: TimeInterval = 60
+    private static let startupTimeout: TimeInterval = 45
 
     private(set) var status: MiddlewareAuthAddonStatus = .idle
     private(set) var clientToken = ""
@@ -180,7 +181,7 @@ final class MiddlewareAuthAddonManager {
             clientToken = credentials.clientToken
             status = .starting
 
-            let readinessDeadline = Date().addingTimeInterval(5)
+            let readinessDeadline = Date().addingTimeInterval(Self.startupTimeout)
             repeat {
                 if await isHealthy(baseURL) {
                     healthAvailable = true
@@ -205,7 +206,7 @@ final class MiddlewareAuthAddonManager {
             } while Date() < readinessDeadline
 
             let reason = child.isRunning
-                ? "health check não ficou pronto em 5 segundos"
+                ? "health check não ficou pronto em (Int(Self.startupTimeout)) segundos"
                 : "processo encerrou durante a inicialização"
             stop()
             status = .failed(reason)

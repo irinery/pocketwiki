@@ -48,6 +48,7 @@ final class PocketKernelAddonManager {
 
     private static let restartLimit = 3
     private static let restartWindow: TimeInterval = 60
+    private static let startupTimeout: TimeInterval = 45
 
     private(set) var status: PocketKernelAddonStatus = .idle
     private(set) var healthAvailable = false
@@ -198,7 +199,7 @@ final class PocketKernelAddonManager {
                 : "Kernel iniciado sem MCP funcional: \(mcp.evidence.status)."
             status = .starting
 
-            let readinessDeadline = Date().addingTimeInterval(5)
+            let readinessDeadline = Date().addingTimeInterval(Self.startupTimeout)
             repeat {
                 if await isHealthy(kernelURL) {
                     healthAvailable = true
@@ -217,7 +218,7 @@ final class PocketKernelAddonManager {
             } while Date() < readinessDeadline
 
             let reason = child.isRunning
-                ? "sonda HTTP não ficou pronta em 5 segundos"
+                ? "sonda HTTP não ficou pronta em (Int(Self.startupTimeout)) segundos"
                 : "processo encerrou durante a inicialização"
             stop()
             status = .failed(reason)
