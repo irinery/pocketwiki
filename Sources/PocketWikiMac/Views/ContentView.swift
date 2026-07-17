@@ -11,10 +11,10 @@ struct ContentView: View {
             PocketWikiAmbientBackground()
 
             NavigationSplitView(columnVisibility: $columnVisibility) {
-                SidebarView(store: store)
+                SidebarView(store: store, updater: updater)
                     .navigationSplitViewColumnWidth(min: 248, ideal: 292, max: 360)
             } detail: {
-                DetailContainerView(store: store, columnVisibility: $columnVisibility)
+                DetailContainerView(store: store, updater: updater, columnVisibility: $columnVisibility)
             }
             .background(Color.clear)
         }
@@ -29,16 +29,27 @@ struct ContentView: View {
                 .frame(minWidth: 620, minHeight: 520)
                 .presentationBackground(.ultraThinMaterial)
         }
-        .overlay(alignment: .topTrailing) {
-            CanonicalUpdateButton(updater: updater)
-                .padding(.top, 9)
-                .padding(.trailing, 14)
+        .alert(item: $store.addonAlert) { alert in
+            Alert(
+                title: Text(alert.title),
+                message: Text(alert.message),
+                primaryButton: .default(Text("Abrir logs")) {
+                    store.dismissAddonAlert(openLogs: true)
+                },
+                secondaryButton: .cancel(Text("Fechar")) {
+                    store.dismissAddonAlert()
+                }
+            )
         }
         .task {
             await updater.checkForUpdates()
+            store.registerAvailableAddonUpdate(updater.availableRelease)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            Task { await updater.checkForUpdates() }
+            Task {
+                await updater.checkForUpdates()
+                store.registerAvailableAddonUpdate(updater.availableRelease)
+            }
         }
     }
 }

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DetailContainerView: View {
     @Bindable var store: WikiAppStore
+    @Bindable var updater: CanonicalUpdater
     @Binding var columnVisibility: NavigationSplitViewVisibility
     @SceneStorage("PocketWikiMac.inspectorDrawerPresented") private var inspectorDrawerPresented = false
 
@@ -197,7 +198,7 @@ struct DetailContainerView: View {
         case .localAI:
             LocalAIView(store: store)
         case .server:
-            ServerView(store: store)
+            ServerView(store: store, updater: updater)
         }
     }
 

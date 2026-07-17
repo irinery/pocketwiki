@@ -24,17 +24,18 @@ enum LocalAIRuntimeConfigurationLoader {
         bundle: Bundle = .main,
         fileManager: FileManager = .default
     ) -> LocalAIRuntimeConfiguration {
-        let envPath = candidateEnvPaths(environment: environment, bundle: bundle, fileManager: fileManager)
-            .first { fileManager.fileExists(atPath: $0.path) }
-        let fileValues = envPath.flatMap { try? String(contentsOf: $0, encoding: .utf8) }
-            .map(parseEnv) ?? [:]
+        let envFile = EnvironmentFileReader.firstReadable(
+            in: candidateEnvPaths(environment: environment, bundle: bundle, fileManager: fileManager),
+            fileManager: fileManager
+        )
+        let fileValues = envFile.map { parseEnv($0.contents) } ?? [:]
 
         return LocalAIRuntimeConfiguration(
             baseURL: value("LM_STUDIO_BASE_URL", environment: environment, fileValues: fileValues, fallback: LocalAIEndpointPolicy.defaultBaseURL),
             apiKey: value("LM_STUDIO_API_KEY", environment: environment, fileValues: fileValues)
                 .ifEmpty(value("LM_API_TOKEN", environment: environment, fileValues: fileValues)),
             modelID: value("LM_STUDIO_MODEL", environment: environment, fileValues: fileValues),
-            sourcePath: envPath?.path
+            sourcePath: envFile?.url.path
         )
     }
 
@@ -69,15 +70,10 @@ enum LocalAIRuntimeConfigurationLoader {
         appendPath(environment["POCKETWIKI_ENV_PATH"], to: &paths)
         appendPath(bundle.object(forInfoDictionaryKey: "PocketWikiEnvPath") as? String, to: &paths)
 
-        if let rootPath = bundle.object(forInfoDictionaryKey: "PocketWikiRootPath") as? String, !rootPath.pocketTrimmed.isEmpty {
-            paths.append(URL(fileURLWithPath: rootPath).appendingPathComponent(".env"))
-        }
-
         paths.append(URL(fileURLWithPath: fileManager.currentDirectoryPath).appendingPathComponent(".env"))
 
         let bundleURL = bundle.bundleURL
         paths.append(bundleURL.deletingLastPathComponent().appendingPathComponent(".env"))
-        paths.append(bundleURL.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(".env"))
 
         var seen = Set<String>()
         return paths.filter { url in

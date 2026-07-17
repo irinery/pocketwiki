@@ -40,6 +40,7 @@ final class WikiAppStore {
     var serverStatus: PocketWikiServerStatus = .stopped
     var serverConfiguration = PocketWikiServerConfiguration.load()
     var serverLogs: [PocketWikiServerLogEntry] = []
+    var addonAlert: PocketAddonAlert?
     var remoteServerURLText = UserDefaults.standard.string(forKey: "PocketWikiMac.remoteServerURL") ?? "http://pocketwiki.local"
     var remoteConnectionMessage = "Nenhum servidor remoto conectado."
     var remoteMCPEvidence: PocketWikiMCPEvidenceStatus?
@@ -49,6 +50,24 @@ final class WikiAppStore {
     var localAIRuntimeTokenLoaded = false
     var middlewareAuthClientToken = ""
     var middlewareAuthRuntimeTokenLoaded = false
+    var middlewareAuthRuntimeMode: MiddlewareAuthAddonMode = .automatic {
+        didSet {
+            UserDefaults.standard.set(
+                middlewareAuthRuntimeMode.rawValue,
+                forKey: "PocketWikiMac.middlewareAuth.addonMode"
+            )
+        }
+    }
+    var pocketKernelRuntimeMode: PocketKernelAddonMode = .automatic {
+        didSet {
+            UserDefaults.standard.set(
+                pocketKernelRuntimeMode.rawValue,
+                forKey: "PocketWikiMac.pocketKernel.addonMode"
+            )
+        }
+    }
+    var middlewareAuthAddon = MiddlewareAuthAddonManager()
+    var pocketKernelAddon = PocketKernelAddonManager()
     var localAIChatSession = LocalAIChatSession()
 
     private let folderPicker: WikiFolderPicker
@@ -59,6 +78,10 @@ final class WikiAppStore {
     private var currentSourceURL: URL?
     private var currentFiles: [WikiFile] = []
     private var localServer: PocketWikiHTTPServer?
+    private var pendingAddonAlerts: [PocketAddonAlert] = []
+    private var lastAddonStatusSignature: [PocketAddonService: String] = [:]
+    private var lastAddonUpdateSignature: [PocketAddonService: String] = [:]
+    private var availableAddonRelease: CanonicalRelease?
 
     init(
         folderPicker: WikiFolderPicker = WikiFolderPicker(),
@@ -72,6 +95,166 @@ final class WikiAppStore {
         self.folderLoader = folderLoader
         self.indexer = indexer
         self.remoteClient = remoteClient
+        let configuredMode = serverConfiguration.middlewareAuthAddonMode
+        let persistedMode = UserDefaults.standard.string(forKey: "PocketWikiMac.middlewareAuth.addonMode")
+        middlewareAuthRuntimeMode = persistedMode.map(MiddlewareAuthAddonMode.parse) ?? configuredMode
+        let configuredKernelMode = serverConfiguration.pocketKernelAddonMode
+        let persistedKernelMode = UserDefaults.standard.string(forKey: "PocketWikiMac.pocketKernel.addonMode")
+        pocketKernelRuntimeMode = persistedKernelMode.map(PocketKernelAddonMode.parse) ?? configuredKernelMode
+        middlewareAuthAddon.setEventHandler { [weak self] event in
+            self?.handleAddonEvent(event)
+        }
+        pocketKernelAddon.setEventHandler { [weak self] event in
+            self?.handleAddonEvent(event)
+        }
+    }
+
+    func ensureMiddlewareAuthAddon(baseURL: String) async {
+        var configuration = serverConfiguration
+        configuration.middlewareAuthAddonMode = middlewareAuthRuntimeMode
+        if configuration.middlewareAuthClientToken.isEmpty {
+            configuration.middlewareAuthClientToken = middlewareAuthClientToken
+        }
+        await middlewareAuthAddon.start(configuration: configuration, baseURL: baseURL)
+        reportAddonStatus(
+            service: .middlewareAuth,
+            title: middlewareAuthAddon.status.title,
+            failureReason: middlewareAuthAddon.status.failureReason
+                ?? (middlewareAuthAddon.healthAvailable && !middlewareAuthAddon.accessVerified
+                    ? "serviço online, mas a senha não foi aceita ou não foi informada"
+                    : nil),
+            integrity: middlewareAuthAddon.integrityStatus
+        )
+        if middlewareAuthAddon.status.isReady {
+            middlewareAuthClientToken = middlewareAuthAddon.clientToken
+            middlewareAuthRuntimeTokenLoaded = !middlewareAuthAddon.clientToken.isEmpty
+        }
+    }
+
+    func rotateMiddlewareAuthPassword(baseURL: String) async throws -> String {
+        var configuration = serverConfiguration
+        configuration.middlewareAuthAddonMode = middlewareAuthRuntimeMode
+        let token = try await middlewareAuthAddon.rotateManagedClientToken(
+            configuration: configuration,
+            baseURL: baseURL
+        )
+        middlewareAuthClientToken = token
+        middlewareAuthRuntimeTokenLoaded = true
+        return token
+    }
+
+    func ensurePocketKernelAddon(
+        baseURL: String,
+        providerRoute: PocketKernelProviderRoute? = nil
+    ) async {
+        var configuration = serverConfiguration
+        configuration.pocketKernelAddonMode = pocketKernelRuntimeMode
+        configuration.pocketKernelBaseURL = baseURL
+        if !middlewareAuthClientToken.isEmpty {
+            configuration.middlewareAuthClientToken = middlewareAuthClientToken
+        }
+        let evidence = PocketWikiMCPEvidenceStatus.make(
+            rootPath: currentSourceURL?.path ?? serverConfiguration.resolvedReferenceURL.path
+        )
+        await pocketKernelAddon.start(
+            configuration: configuration,
+            baseURL: baseURL,
+            evidence: evidence,
+            providerRoute: providerRoute ?? currentPocketKernelProviderRoute()
+        )
+        reportAddonStatus(
+            service: .pocketKernel,
+            title: pocketKernelAddon.status.title,
+            failureReason: pocketKernelAddon.status.failureReason,
+            integrity: pocketKernelAddon.integrityStatus
+        )
+    }
+
+    func dismissAddonAlert(openLogs: Bool = false) {
+        if openLogs {
+            selectedTab = .server
+        }
+        addonAlert = pendingAddonAlerts.isEmpty ? nil : pendingAddonAlerts.removeFirst()
+    }
+
+    func registerAvailableAddonUpdate(_ release: CanonicalRelease?) {
+        availableAddonRelease = release
+        guard let release else { return }
+        reportAddonUpdate(
+            service: .middlewareAuth,
+            integrity: middlewareAuthAddon.integrityStatus,
+            release: release
+        )
+        reportAddonUpdate(
+            service: .pocketKernel,
+            integrity: pocketKernelAddon.integrityStatus,
+            release: release
+        )
+    }
+
+    func configurePocketKernelProvider(
+        baseURL: String,
+        providerID: String,
+        modelID: String,
+        reasoningEffort: String,
+        middlewareBaseURL: String,
+        projectID: String,
+        profileID: String
+    ) async {
+        let route = PocketKernelProviderRoute(
+            providerID: providerID,
+            middlewareBaseURL: middlewareBaseURL,
+            middlewareClientToken: middlewareAuthClientToken,
+            projectID: projectID,
+            profileID: profileID,
+            modelID: modelID,
+            reasoningEffort: reasoningEffort
+        )
+        await ensurePocketKernelAddon(baseURL: baseURL, providerRoute: route)
+    }
+
+    func bootstrapManagedServices() async {
+        let defaults = UserDefaults.standard
+        let middlewareBaseURL = defaults.string(forKey: "PocketWikiMac.localAI.middlewareBaseURL")
+            .map { $0.pocketTrimmed.pocketIfEmpty(serverConfiguration.middlewareAuthBaseURL) }
+            ?? serverConfiguration.middlewareAuthBaseURL
+        await ensureMiddlewareAuthAddon(baseURL: middlewareBaseURL)
+
+        let kernelBaseURL = defaults.string(forKey: "PocketWikiMac.localAI.kernelBaseURL")
+            .map { $0.pocketTrimmed.pocketIfEmpty(serverConfiguration.pocketKernelBaseURL) }
+            ?? serverConfiguration.pocketKernelBaseURL
+        await ensurePocketKernelAddon(baseURL: kernelBaseURL)
+    }
+
+    private func currentPocketKernelProviderRoute() -> PocketKernelProviderRoute {
+        let defaults = UserDefaults.standard
+        let providerID = defaults.string(forKey: "PocketWikiMac.localAI.providerMethod")
+            .map { $0.pocketTrimmed.pocketIfEmpty("openai") } ?? "openai"
+        let modelKey = providerID.lowercased() == "lmstudio"
+            ? "PocketWikiMac.localAI.lmStudioModelID"
+            : "PocketWikiMac.localAI.openAIModelID"
+        let modelFallback = providerID.lowercased() == "lmstudio" ? "local-model" : "gpt-5.5"
+        return PocketKernelProviderRoute(
+            providerID: providerID,
+            middlewareBaseURL: defaults.string(forKey: "PocketWikiMac.localAI.middlewareBaseURL")
+                .map { $0.pocketTrimmed.pocketIfEmpty(serverConfiguration.middlewareAuthBaseURL) }
+                ?? serverConfiguration.middlewareAuthBaseURL,
+            middlewareClientToken: middlewareAuthClientToken,
+            projectID: defaults.string(forKey: "PocketWikiMac.localAI.middlewareProjectID")
+                .map { $0.pocketTrimmed.pocketIfEmpty(serverConfiguration.middlewareAuthProjectID) }
+                ?? serverConfiguration.middlewareAuthProjectID,
+            profileID: defaults.string(forKey: "PocketWikiMac.localAI.middlewareProfileID")
+                .map { $0.pocketTrimmed.pocketIfEmpty(serverConfiguration.middlewareAuthProfileID) }
+                ?? serverConfiguration.middlewareAuthProfileID,
+            modelID: defaults.string(forKey: modelKey)?.pocketTrimmed.pocketIfEmpty(modelFallback) ?? modelFallback,
+            reasoningEffort: defaults.string(forKey: "PocketWikiMac.localAI.reasoningEffort")
+                .map { $0.pocketTrimmed.pocketIfEmpty("medium") } ?? "medium"
+        )
+    }
+
+    func shutdownManagedServices() {
+        pocketKernelAddon.stop()
+        middlewareAuthAddon.stop()
     }
 
     var selectedPage: WikiPage? {
@@ -96,6 +279,9 @@ final class WikiAppStore {
     }
 
     var localMCPEvidence: PocketWikiMCPEvidenceStatus {
+        if let configured = pocketKernelAddon.configuredEvidence {
+            return configured
+        }
         let rootPath = currentSourceURL?.path ?? serverConfiguration.resolvedReferenceURL.path
         return PocketWikiMCPEvidenceStatus.make(rootPath: rootPath)
     }
@@ -373,6 +559,13 @@ final class WikiAppStore {
                 status: "\(loaded.files.count) paginas carregadas"
             )
             currentSourceURL = url
+            if pocketKernelAddon.managedProcessID != nil {
+                pocketKernelAddon.stop()
+                let kernelBaseURL = UserDefaults.standard.string(forKey: "PocketWikiMac.localAI.kernelBaseURL")
+                    .map { $0.pocketTrimmed.pocketIfEmpty(serverConfiguration.pocketKernelBaseURL) }
+                    ?? serverConfiguration.pocketKernelBaseURL
+                await ensurePocketKernelAddon(baseURL: kernelBaseURL)
+            }
         } catch {
             errorMessage = "Falha ao carregar \(url.lastPathComponent): \(error.localizedDescription)"
         }
@@ -481,6 +674,73 @@ final class WikiAppStore {
         serverLogs.append(entry)
         if serverLogs.count > 240 {
             serverLogs.removeFirst(serverLogs.count - 240)
+        }
+    }
+
+    private func reportAddonStatus(
+        service: PocketAddonService,
+        title: String,
+        failureReason: String?,
+        integrity: PocketAddonIntegrityStatus
+    ) {
+        let message = failureReason.map { "\(service.title): \($0)" }
+            ?? "\(service.title): \(title). \(integrity.title)."
+        guard lastAddonStatusSignature[service] != message else { return }
+        lastAddonStatusSignature[service] = message
+        if failureReason != nil {
+            handleAddonEvent(
+                PocketAddonRuntimeEvent(
+                    service: service,
+                    level: .error,
+                    message: message,
+                    presentsAlert: true
+                )
+            )
+        } else {
+            appendServerLog(PocketWikiServerLogEntry(level: .info, message: message))
+        }
+        if let availableAddonRelease {
+            reportAddonUpdate(service: service, integrity: integrity, release: availableAddonRelease)
+        }
+    }
+
+    private func reportAddonUpdate(
+        service: PocketAddonService,
+        integrity: PocketAddonIntegrityStatus,
+        release: CanonicalRelease
+    ) {
+        let message: String
+        let level: PocketWikiServerLogEntry.Level
+        if let remote = release.addonBuilds?.build(for: service) {
+            if case .verified(let local) = integrity {
+                message = local.ref == remote.ref
+                    ? "Release \(release.tag): \(service.title) permanece em \(remote.shortRef)."
+                    : "Release \(release.tag): \(service.title) será atualizado de \(local.shortRef) para \(remote.shortRef)."
+            } else {
+                message = "Release \(release.tag): \(service.title) empacotado em \(remote.shortRef); a instalação validará o SHA-256."
+            }
+            level = .info
+        } else {
+            message = "Release \(release.tag): manifesto remoto do \(service.title) ausente; o ZIP será validado internamente antes da instalação."
+            level = .warning
+        }
+        guard lastAddonUpdateSignature[service] != message else { return }
+        lastAddonUpdateSignature[service] = message
+        appendServerLog(PocketWikiServerLogEntry(level: level, message: message))
+    }
+
+    private func handleAddonEvent(_ event: PocketAddonRuntimeEvent) {
+        let message = event.message.hasPrefix(event.service.title)
+            ? event.message
+            : "\(event.service.title): \(event.message)"
+        appendServerLog(PocketWikiServerLogEntry(level: event.level, message: message))
+        guard event.presentsAlert else { return }
+        let alert = PocketAddonAlert(service: event.service, message: message)
+        if addonAlert == nil {
+            addonAlert = alert
+        } else if addonAlert?.message != alert.message,
+                  !pendingAddonAlerts.contains(where: { $0.message == alert.message }) {
+            pendingAddonAlerts.append(alert)
         }
     }
 

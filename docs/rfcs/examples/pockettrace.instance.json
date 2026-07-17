@@ -1,0 +1,15 @@
+{
+  "schema_version": "pocket.app.instance/v1",
+  "app_id": "dev.pocket.pockettrace",
+  "manifest": "http://127.0.0.1:21981/pocket-app.json",
+  "instance_id": "local-pockettrace",
+  "started_at": "2026-07-17T12:00:00Z",
+  "endpoints": [
+    {
+      "interface_id": "trace-mcp",
+      "url": "http://127.0.0.1:21981/mcp"
+    }
+  ],
+  "capabilities": ["trace.session.search", "trace.solution.publish"],
+  "status": "ready"
+}

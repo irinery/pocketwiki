@@ -490,7 +490,7 @@ private final class ListenerStartBox: @unchecked Sendable {
     }
 }
 
-private final class PocketWikiHTTPConnectionHandler: @unchecked Sendable {
+final class PocketWikiHTTPConnectionHandler: @unchecked Sendable {
     let id = UUID()
 
     private let connection: NWConnection

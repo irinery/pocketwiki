@@ -1,0 +1,88 @@
+{
+  "schema_version": "pocket.app.manifest/v1",
+  "id": "dev.pocket.pocketkernel",
+  "name": "PocketKernel",
+  "description": "Harness e orquestrador governado da Pocket Stack.",
+  "version": "0.1.0",
+  "release_channel": "alpha",
+  "release_tag": "alpha-0.1.0",
+  "distribution": {
+    "class": "managed-addon",
+    "update_strategy": "atomic-with-host"
+  },
+  "build": {
+    "ref": "b0453b87ba06575bb5a8187b71e5baa07a843c36",
+    "sha256": "8f5ee79cd8e38e39f24a66de923d2154170052069b2f66eddccb4e4018562591",
+    "architectures": ["arm64", "x86_64"]
+  },
+  "runtime": {
+    "executable": "pocketkernel",
+    "arguments": ["-mode", "serve", "-addr", "127.0.0.1:${POCKET_PORT}"],
+    "environment": [
+      "POCKETKERNEL_LLM_BASE_URL",
+      "POCKETKERNEL_LLM_API_KEY",
+      "POCKETKERNEL_WIKI_MCP_COMMAND",
+      "POCKETKERNEL_WIKI_MCP_ARGS"
+    ],
+    "bind_policy": "loopback-only",
+    "ready_timeout_ms": 10000,
+    "shutdown_timeout_ms": 5000,
+    "restart": {
+      "policy": "on-failure",
+      "max_attempts": 3,
+      "window_seconds": 60,
+      "backoff_seconds": [1, 5, 15]
+    }
+  },
+  "interfaces": [
+    {
+      "id": "kernel-api",
+      "protocol": "pocket-http",
+      "role": "server",
+      "version": "1.0",
+      "transport": "http",
+      "endpoint": "http://127.0.0.1:${POCKET_PORT}/v1/kernel",
+      "auth": "host-ephemeral-bearer",
+      "required": true,
+      "health": {
+        "method": "GET",
+        "path": "/v1/kernel",
+        "expected_status": 405
+      },
+      "readiness": {
+        "method": "GET",
+        "path": "/v1/kernel",
+        "expected_status": 405
+      }
+    },
+    {
+      "id": "wiki-evidence-client",
+      "protocol": "mcp",
+      "role": "client",
+      "version": "2025-11-25",
+      "transport": "stdio",
+      "auth": "none",
+      "required": true
+    }
+  ],
+  "provides": ["kernel.query", "kernel.tools.route"],
+  "consumes": ["auth.provider.responses", "wiki.evidence.read"],
+  "compatibility": {
+    "host": ">=0.2.0 <1.0.0",
+    "pocket_contract": "1.x",
+    "mcp_protocols": ["2025-11-25"]
+  },
+  "permissions": [
+    {
+      "id": "wiki.evidence.read",
+      "required": true,
+      "approval": "session",
+      "reason": "Consultar evidências dentro do root da wiki autorizado para a sessão."
+    }
+  ],
+  "observability": {
+    "event_schema": "pocket.event/v1",
+    "log_stream": "stderr",
+    "redaction_required": true
+  }
+}

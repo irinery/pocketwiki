@@ -42,7 +42,7 @@ actor CanonicalUpdateService {
         let parsedCurrentTag = currentTag.flatMap(PocketWikiReleaseVersion.parse(tag:))
         let stableOnly = parsedCurrentTag?.channel == .stable
 
-        let releases = githubReleases.compactMap { release -> CanonicalRelease? in
+        let releases = githubReleases.compactMap { release -> (GitHubRelease, PocketWikiReleaseVersion, GitHubAsset)? in
             guard !release.draft,
                   let version = PocketWikiReleaseVersion.parse(tag: release.tagName),
                   !stableOnly || version.channel == .stable else {
@@ -51,30 +51,38 @@ actor CanonicalUpdateService {
             guard let asset = release.assets.first(where: Self.isUpdateArchive) else {
                 return nil
             }
-            return CanonicalRelease(
-                tag: release.tagName,
-                version: version,
-                assetName: asset.name,
-                assetURL: asset.browserDownloadURL,
-                pageURL: release.htmlURL
-            )
+            return (release, version, asset)
         }
 
-        guard let latest = releases.max(by: { $0.version < $1.version }) else { return nil }
-        if latest.tag == currentTag { return nil }
+        guard let selected = releases.max(by: { $0.1 < $1.1 }) else { return nil }
+        if selected.0.tagName == currentTag { return nil }
 
         if let parsedCurrentTag {
-            return latest.version > parsedCurrentTag ? latest : nil
+            guard selected.1 > parsedCurrentTag else { return nil }
+        }
+        if parsedCurrentTag == nil,
+           let currentVersion,
+           let parsedCurrentVersion = PocketWikiReleaseVersion.parse(version: currentVersion, channel: .alpha),
+           selected.1 < parsedCurrentVersion {
+            return nil
         }
 
-        if let currentVersion,
-           let parsedCurrentVersion = PocketWikiReleaseVersion.parse(
-               version: currentVersion,
-               channel: .alpha
-           ) {
-            return latest.version >= parsedCurrentVersion ? latest : nil
+        let manifestName = String(selected.2.name.dropLast(".zip".count)) + ".build.json"
+        let manifestAsset = selected.0.assets.first { $0.name == manifestName }
+        let addonBuilds: PocketAddonReleaseBuilds?
+        if let manifestAsset {
+            addonBuilds = try await fetchBuildManifest(manifestAsset.browserDownloadURL).addons
+        } else {
+            addonBuilds = nil
         }
-        return latest
+        return CanonicalRelease(
+            tag: selected.0.tagName,
+            version: selected.1,
+            assetName: selected.2.name,
+            assetURL: selected.2.browserDownloadURL,
+            pageURL: selected.0.htmlURL,
+            addonBuilds: addonBuilds
+        )
     }
 
     func install(_ release: CanonicalRelease, replacing currentAppURL: URL) async throws {
@@ -101,6 +109,10 @@ actor CanonicalUpdateService {
                 expectedTag: release.tag,
                 expectedVersion: release.version.numericString
             )
+            _ = try PocketAddonBuildInspector.validateUpdatedApp(
+                updatedAppURL,
+                expected: release.addonBuilds
+            )
             try runTool("/usr/bin/codesign", ["--verify", "--deep", "--strict", updatedAppURL.path])
             try launchInstaller(
                 updatedAppURL: updatedAppURL,
@@ -117,6 +129,16 @@ actor CanonicalUpdateService {
         asset.name.hasPrefix("PocketWiki-")
             && asset.name.contains("-macOS-")
             && asset.name.hasSuffix(".zip")
+    }
+
+    private func fetchBuildManifest(_ url: URL) async throws -> PocketWikiBuildManifest {
+        var request = URLRequest(url: url)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("application/octet-stream", forHTTPHeaderField: "Accept")
+        request.setValue("PocketWiki", forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validate(response)
+        return try JSONDecoder().decode(PocketWikiBuildManifest.self, from: data)
     }
 
     private func validate(_ response: URLResponse) throws {

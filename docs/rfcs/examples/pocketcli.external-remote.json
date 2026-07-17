@@ -1,0 +1,86 @@
+{
+  "schema_version": "pocket.app.manifest/v1",
+  "id": "dev.pocket.pocketcli",
+  "name": "PocketCli",
+  "description": "Runtime portátil para inventário, planejamento e execução operacional segura.",
+  "version": "0.1.0",
+  "release_channel": "alpha",
+  "release_tag": "alpha-0.1.0",
+  "distribution": {
+    "class": "external-remote",
+    "update_strategy": "self-managed"
+  },
+  "interfaces": [
+    {
+      "id": "operations-mcp",
+      "protocol": "mcp",
+      "role": "server",
+      "version": "2025-11-25",
+      "transport": "streamable-http",
+      "endpoint": "https://pocketcli.example/mcp",
+      "auth": "oauth2.1",
+      "required": false,
+      "health": {
+        "method": "GET",
+        "path": "/healthz",
+        "expected_status": 200
+      },
+      "readiness": {
+        "method": "GET",
+        "path": "/readyz",
+        "expected_status": 200
+      }
+    },
+    {
+      "id": "operations-cli",
+      "protocol": "cli-json",
+      "role": "server",
+      "version": "1.0",
+      "transport": "subprocess",
+      "auth": "none",
+      "required": false
+    }
+  ],
+  "provides": [
+    "ops.capabilities.read",
+    "ops.execution.plan",
+    "ops.execution.run",
+    "ops.ledger.read"
+  ],
+  "consumes": [],
+  "compatibility": {
+    "host": ">=0.2.0 <1.0.0",
+    "pocket_contract": "1.x",
+    "mcp_protocols": ["2025-11-25"]
+  },
+  "permissions": [
+    {
+      "id": "ops.inventory.read",
+      "required": false,
+      "approval": "pairing",
+      "reason": "Ler inventário e capacidades publicadas pelo PocketCli Agent."
+    },
+    {
+      "id": "ops.execution.plan",
+      "required": false,
+      "approval": "per-operation",
+      "reason": "Criar um plano ou envelope sem executá-lo."
+    },
+    {
+      "id": "ops.execution.run",
+      "required": false,
+      "approval": "per-operation",
+      "reason": "Executar somente um envelope aprovado pelo contrato do PocketCli."
+    }
+  ],
+  "discovery": {
+    "well_known_path": "/.well-known/pocket-app",
+    "mdns_service": "_pocket-app._tcp",
+    "requires_pairing": true
+  },
+  "observability": {
+    "event_schema": "pocket.event/v1",
+    "log_stream": "http",
+    "redaction_required": true
+  }
+}

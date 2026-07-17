@@ -104,7 +104,13 @@ struct PocketWikiMCPEvidenceStatus: Codable, Equatable, Sendable {
     }
 
     private static func mcpServerScriptPath(bundle: Bundle, fileManager: FileManager) -> String {
-        URL(fileURLWithPath: repositoryRootPath(bundle: bundle, fileManager: fileManager))
+        let bundled = bundle.resourceURL?
+            .appendingPathComponent("PocketWikiMCP", isDirectory: true)
+            .appendingPathComponent("pocketwiki-mcp-server.mjs")
+        if let bundled, fileManager.fileExists(atPath: bundled.path) {
+            return bundled.standardizedFileURL.path
+        }
+        return URL(fileURLWithPath: repositoryRootPath(bundle: bundle, fileManager: fileManager))
             .appendingPathComponent("src/mcp/pocketwiki-mcp-server.mjs")
             .standardizedFileURL
             .path

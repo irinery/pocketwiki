@@ -10,6 +10,7 @@ mkdir -p "$OUT_DIR"
 swiftc \
   "$ROOT_DIR"/Sources/PocketWikiMac/Models/*.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Support/String+PocketWiki.swift \
+  "$ROOT_DIR"/Sources/PocketWikiMac/Support/EnvironmentFileReader.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Support/PocketFormatters.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Support/PocketWikiDateParser.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Support/WikiMarkdownFormatter.swift \

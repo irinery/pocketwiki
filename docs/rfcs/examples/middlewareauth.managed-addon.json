@@ -1,0 +1,84 @@
+{
+  "schema_version": "pocket.app.manifest/v1",
+  "id": "dev.pocket.middlewareauth",
+  "name": "MiddlewareAuth",
+  "description": "Autoridade de autenticação e providers da Pocket Stack.",
+  "version": "0.1.0",
+  "release_channel": "alpha",
+  "release_tag": "alpha-0.1.0",
+  "distribution": {
+    "class": "managed-addon",
+    "update_strategy": "atomic-with-host"
+  },
+  "build": {
+    "ref": "196ba5f40ec69c2be2d283b503c1dd6fa5c40b4f",
+    "sha256": "f4f1e044de2abad93d5d2ea3b8efe4e46cd81d4d2f837570441b94f0ca4da762",
+    "architectures": ["arm64", "x86_64"]
+  },
+  "runtime": {
+    "executable": "middleware-codex-oauth",
+    "arguments": [],
+    "environment": [
+      "MIDDLEWARE_SECRET_KEY",
+      "MIDDLEWARE_CLIENT_TOKEN",
+      "MIDDLEWARE_STATE_DIR",
+      "HTTP_BIND_ADDR",
+      "HTTP_PORT"
+    ],
+    "bind_policy": "loopback-only",
+    "ready_timeout_ms": 10000,
+    "shutdown_timeout_ms": 5000,
+    "restart": {
+      "policy": "on-failure",
+      "max_attempts": 3,
+      "window_seconds": 60,
+      "backoff_seconds": [1, 5, 15]
+    }
+  },
+  "interfaces": [
+    {
+      "id": "provider-api",
+      "protocol": "pocket-http",
+      "role": "server",
+      "version": "1.0",
+      "transport": "http",
+      "endpoint": "http://127.0.0.1:${POCKET_PORT}",
+      "auth": "host-ephemeral-bearer",
+      "required": true,
+      "health": {
+        "method": "GET",
+        "path": "/healthz",
+        "expected_status": 200
+      },
+      "readiness": {
+        "method": "GET",
+        "path": "/v1/projects/default/llm/providers",
+        "expected_status": 200
+      }
+    }
+  ],
+  "provides": [
+    "auth.provider.login",
+    "auth.provider.status",
+    "auth.provider.responses"
+  ],
+  "consumes": [],
+  "compatibility": {
+    "host": ">=0.2.0 <1.0.0",
+    "pocket_contract": "1.x",
+    "mcp_protocols": ["2025-11-25"]
+  },
+  "permissions": [
+    {
+      "id": "auth.store.write",
+      "required": true,
+      "approval": "pairing",
+      "reason": "Persistir credenciais de providers no store criptografado do MiddlewareAuth."
+    }
+  ],
+  "observability": {
+    "event_schema": "pocket.event/v1",
+    "log_stream": "stderr",
+    "redaction_required": true
+  }
+}

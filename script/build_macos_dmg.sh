@@ -14,17 +14,8 @@ load_env_file "$ROOT_DIR/.env"
 load_env_file "$ROOT_DIR/.env.local"
 BUNDLE_ID="${POCKETWIKI_BUNDLE_ID:-$BUNDLE_ID}"
 
-APP_VERSION="${APP_VERSION:-}"
-if [ -z "$APP_VERSION" ]; then
-  APP_VERSION="$(node -e 'process.stdout.write(require(process.argv[1]).version)' "$ROOT_DIR/package.json" 2>/dev/null || printf "0.0.0")"
-fi
-if [ -z "${RELEASE_TAG:-}" ]; then
-  case "${POCKETWIKI_RELEASE_CHANNEL:-alpha}" in
-    stable) RELEASE_TAG="$APP_VERSION" ;;
-    alpha) RELEASE_TAG="alpha-$APP_VERSION" ;;
-    *) printf 'invalid release channel: %s\n' "$POCKETWIKI_RELEASE_CHANNEL" >&2; exit 2 ;;
-  esac
-fi
+APP_VERSION="${APP_VERSION:-$("$SCRIPT_DIR/resolve_release_version.sh" --print app_version)}"
+RELEASE_TAG="${RELEASE_TAG:-$("$SCRIPT_DIR/resolve_release_version.sh" --print release_tag)}"
 COMMIT_SHA="${GITHUB_SHA:-$(git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null || printf "unknown")}"
 
 printf '%s\n' "$APP_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || {
@@ -50,6 +41,10 @@ APP_CONTENTS="$APP_BUNDLE/Contents"
 APP_MACOS="$APP_CONTENTS/MacOS"
 APP_RESOURCES="$APP_CONTENTS/Resources"
 APP_WEB="$APP_RESOURCES/Web"
+APP_HELPERS="$APP_CONTENTS/Helpers"
+APP_MIDDLEWARE_METADATA="$APP_RESOURCES/Addons/MiddlewareAuth"
+APP_POCKETKERNEL_METADATA="$APP_RESOURCES/Addons/PocketKernel"
+APP_MCP="$APP_RESOURCES/PocketWikiMCP"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 
@@ -90,6 +85,15 @@ fi
 
 [ "${POCKETWIKI_SKIP_SECRET_SCAN:-0}" = "1" ] || "$SCRIPT_DIR/scan_secrets.sh" >/dev/null
 SIGNING_IDENTITY="$(require_signing_identity "$SIGN_MODE")"
+
+MIDDLEWARE_AUTH_ADDON_BINARY="$ROOT_DIR/.build/middleware-auth-addon/middleware-codex-oauth"
+if [ "${POCKETWIKI_INCLUDE_MIDDLEWARE_AUTH_ADDON:-1}" = "1" ]; then
+  "$SCRIPT_DIR/build_middleware_auth_addon.sh" "$MIDDLEWARE_AUTH_ADDON_BINARY"
+fi
+POCKETKERNEL_ADDON_BINARY="$ROOT_DIR/.build/pocketkernel-addon/pocketkernel"
+if [ "${POCKETWIKI_INCLUDE_POCKETKERNEL_ADDON:-1}" = "1" ]; then
+  "$SCRIPT_DIR/build_pocketkernel_addon.sh" "$POCKETKERNEL_ADDON_BINARY"
+fi
 
 need_node_deps() {
   [ ! -x "$ROOT_DIR/node_modules/.bin/vite" ] || [ ! -f "$ROOT_DIR/node_modules/lz-string/libs/lz-string.min.js" ]
@@ -137,10 +141,23 @@ test -d "$RESOURCE_BUNDLE"
 
 echo "==> Staging app bundle"
 rm -rf "$WORK_DIR" "$DIST_DIR"
-mkdir -p "$APP_MACOS" "$APP_RESOURCES" "$APP_WEB" "$DIST_DIR"
+mkdir -p "$APP_MACOS" "$APP_RESOURCES" "$APP_WEB" "$APP_HELPERS" "$APP_MIDDLEWARE_METADATA" "$APP_POCKETKERNEL_METADATA" "$APP_MCP" "$DIST_DIR"
 cp "$BUILD_BINARY" "$APP_BINARY"
 chmod +x "$APP_BINARY"
 ditto --noextattr --norsrc "$RESOURCE_BUNDLE" "$APP_RESOURCES/$(basename "$RESOURCE_BUNDLE")"
+
+if [ -x "$MIDDLEWARE_AUTH_ADDON_BINARY" ]; then
+  cp "$MIDDLEWARE_AUTH_ADDON_BINARY" "$APP_HELPERS/middleware-codex-oauth"
+  chmod 755 "$APP_HELPERS/middleware-codex-oauth"
+  cp "$MIDDLEWARE_AUTH_ADDON_BINARY.build.json" "$APP_MIDDLEWARE_METADATA/middleware-codex-oauth.build.json"
+fi
+if [ -x "$POCKETKERNEL_ADDON_BINARY" ]; then
+  cp "$POCKETKERNEL_ADDON_BINARY" "$APP_HELPERS/pocketkernel"
+  chmod 755 "$APP_HELPERS/pocketkernel"
+  cp "$POCKETKERNEL_ADDON_BINARY.build.json" "$APP_POCKETKERNEL_METADATA/pocketkernel.build.json"
+fi
+cp "$ROOT_DIR/src/mcp/pocketwiki-mcp-server.mjs" "$APP_MCP/pocketwiki-mcp-server.mjs"
+cp "$ROOT_DIR/src/mcp/pocketwiki-evidence-core.mjs" "$APP_MCP/pocketwiki-evidence-core.mjs"
 
 if [ -f "$ROOT_DIR/Sources/PocketWikiMac/Resources/PocketWikiMac.icns" ]; then
   cp "$ROOT_DIR/Sources/PocketWikiMac/Resources/PocketWikiMac.icns" "$APP_RESOURCES/PocketWikiMac.icns"
@@ -248,9 +265,9 @@ trap - EXIT HUP INT TERM
   shasum -a 256 "$DMG_NAME" >"$DMG_NAME.sha256"
 )
 
-node - "$MANIFEST_PATH" "$RELEASE_TAG" "$APP_VERSION" "$BUILD_NUMBER" "$COMMIT_SHA" "$BUNDLE_ID" "$ZIP_NAME" "$DMG_NAME" <<'NODE'
+node - "$MANIFEST_PATH" "$RELEASE_TAG" "$APP_VERSION" "$BUILD_NUMBER" "$COMMIT_SHA" "$BUNDLE_ID" "$ZIP_NAME" "$DMG_NAME" "$APP_BUNDLE/Contents/Resources/Addons/MiddlewareAuth/middleware-codex-oauth.build.json" "$APP_BUNDLE/Contents/Resources/Addons/PocketKernel/pocketkernel.build.json" <<'NODE'
 const fs = require("node:fs");
-const [path, releaseTag, appVersion, buildNumber, commit, bundleID, zip, dmg] = process.argv.slice(2);
+const [path, releaseTag, appVersion, buildNumber, commit, bundleID, zip, dmg, middlewareManifestPath, kernelManifestPath] = process.argv.slice(2);
 const manifest = {
   schema_version: "pocketwiki.build.v1",
   release_tag: releaseTag,
@@ -260,6 +277,16 @@ const manifest = {
   bundle_id: bundleID,
   assets: { zip, dmg },
 };
+manifest.addons = {};
+if (fs.existsSync(middlewareManifestPath)) {
+  manifest.addons.middleware_auth = JSON.parse(fs.readFileSync(middlewareManifestPath, "utf8"));
+}
+if (fs.existsSync(kernelManifestPath)) {
+  manifest.addons.pocket_kernel = JSON.parse(fs.readFileSync(kernelManifestPath, "utf8"));
+}
+if (Object.keys(manifest.addons).length === 0) {
+  delete manifest.addons;
+}
 fs.writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`);
 NODE
 

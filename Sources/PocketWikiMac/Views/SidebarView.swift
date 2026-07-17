@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SidebarView: View {
     @Bindable var store: WikiAppStore
+    @Bindable var updater: CanonicalUpdater
 
     var body: some View {
         let sections = WikiSidebarExplorer.sections(index: store.index, selectedPageID: store.selectedPageID, query: store.searchText)
@@ -22,8 +23,23 @@ struct SidebarView: View {
             }
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
+
+            if updater.availableRelease != nil {
+                updateFooter
+            }
         }
         .background(.ultraThinMaterial)
+    }
+
+    private var updateFooter: some View {
+        CanonicalUpdateButton(updater: updater)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(PocketWikiTheme.border)
+                    .frame(height: 1)
+            }
     }
 
     private var header: some View {

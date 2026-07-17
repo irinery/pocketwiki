@@ -1,5 +1,77 @@
 import Foundation
 
+enum MiddlewareAuthAddonMode: String, CaseIterable, Identifiable, Sendable {
+    case automatic
+    case managed
+    case external
+    case disabled
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .automatic: "Automático"
+        case .managed: "Neste Mac"
+        case .external: "Remoto"
+        case .disabled: "Desligado"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .automatic: "Usa um endpoint saudável ou inicia o helper local."
+        case .managed: "PocketWiki inicia e encerra o helper em loopback."
+        case .external: "Conecta em um MiddlewareAuth iniciado fora deste app."
+        case .disabled: "Não consulta nem inicia o MiddlewareAuth."
+        }
+    }
+
+    static func parse(_ value: String) -> MiddlewareAuthAddonMode {
+        switch value.pocketTrimmed.lowercased() {
+        case "managed", "gerenciado": .managed
+        case "external", "externo": .external
+        case "disabled", "off", "desabilitado": .disabled
+        default: .automatic
+        }
+    }
+}
+
+enum PocketKernelAddonMode: String, CaseIterable, Identifiable, Sendable {
+    case automatic
+    case managed
+    case external
+    case disabled
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .automatic: "Automático"
+        case .managed: "Neste Mac"
+        case .external: "Remoto"
+        case .disabled: "Desligado"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .automatic: "Usa um PocketKernel saudável ou inicia a base local empacotada."
+        case .managed: "PocketWiki inicia o Kernel local e conecta o MCP Evidence."
+        case .external: "Conecta em um PocketKernel iniciado e administrado separadamente."
+        case .disabled: "Não consulta nem inicia o PocketKernel."
+        }
+    }
+
+    static func parse(_ value: String) -> PocketKernelAddonMode {
+        switch value.pocketTrimmed.lowercased() {
+        case "managed", "gerenciado": .managed
+        case "external", "externo": .external
+        case "disabled", "off", "desabilitado": .disabled
+        default: .automatic
+        }
+    }
+}
+
 struct PocketWikiServerConfiguration: Equatable, Sendable {
     var port: Int
     var bindHost: String
@@ -13,10 +85,15 @@ struct PocketWikiServerConfiguration: Equatable, Sendable {
     var lmStudioAPIKey: String
     var lmStudioModel: String
     var pocketKernelBaseURL: String
+    var pocketKernelAddonMode: PocketKernelAddonMode
+    var pocketKernelAddonBinaryPath: String
+    var pocketKernelNodeBinaryPath: String
     var middlewareAuthBaseURL: String
     var middlewareAuthClientToken: String
     var middlewareAuthProjectID: String
     var middlewareAuthProfileID: String
+    var middlewareAuthAddonMode: MiddlewareAuthAddonMode
+    var middlewareAuthAddonBinaryPath: String
     var envPath: String?
 
     static let defaultReferencePath = "SKILL/wiki-reference"
@@ -38,10 +115,15 @@ struct PocketWikiServerConfiguration: Equatable, Sendable {
             lmStudioAPIKey: "",
             lmStudioModel: "",
             pocketKernelBaseURL: defaultPocketKernelBaseURL,
+            pocketKernelAddonMode: .automatic,
+            pocketKernelAddonBinaryPath: "",
+            pocketKernelNodeBinaryPath: "",
             middlewareAuthBaseURL: defaultMiddlewareAuthBaseURL,
             middlewareAuthClientToken: "",
             middlewareAuthProjectID: "acme",
             middlewareAuthProfileID: "default",
+            middlewareAuthAddonMode: .automatic,
+            middlewareAuthAddonBinaryPath: "",
             envPath: nil
         )
     }
@@ -59,10 +141,11 @@ struct PocketWikiServerConfiguration: Equatable, Sendable {
         bundle: Bundle = .main,
         fileManager: FileManager = .default
     ) -> PocketWikiServerConfiguration {
-        let envPath = candidateEnvPaths(environment: environment, bundle: bundle, fileManager: fileManager)
-            .first { fileManager.fileExists(atPath: $0.path) }
-        let fileValues = envPath.flatMap { try? String(contentsOf: $0, encoding: .utf8) }
-            .map(parseEnv) ?? [:]
+        let envFile = EnvironmentFileReader.firstReadable(
+            in: candidateEnvPaths(environment: environment, bundle: bundle, fileManager: fileManager),
+            fileManager: fileManager
+        )
+        let fileValues = envFile.map { parseEnv($0.contents) } ?? [:]
 
         return PocketWikiServerConfiguration(
             port: Int(value("POCKETWIKI_PORT", environment: environment, fileValues: fileValues, fallback: "8787")) ?? 8787,
@@ -85,13 +168,28 @@ struct PocketWikiServerConfiguration: Equatable, Sendable {
                 .ifEmpty(value("LM_API_TOKEN", environment: environment, fileValues: fileValues)),
             lmStudioModel: value("LM_STUDIO_MODEL", environment: environment, fileValues: fileValues),
             pocketKernelBaseURL: value("POCKETKERNEL_BASE_URL", environment: environment, fileValues: fileValues, fallback: defaultPocketKernelBaseURL).trimmedSlash,
+            pocketKernelAddonMode: PocketKernelAddonMode.parse(
+                value("POCKETWIKI_POCKETKERNEL_MODE", environment: environment, fileValues: fileValues, fallback: "automatic")
+            ),
+            pocketKernelAddonBinaryPath: Self.resolveOptionalPath(
+                value("POCKETWIKI_POCKETKERNEL_BINARY", environment: environment, fileValues: fileValues)
+            ),
+            pocketKernelNodeBinaryPath: Self.resolveOptionalPath(
+                value("POCKETWIKI_NODE_BINARY", environment: environment, fileValues: fileValues)
+            ),
             middlewareAuthBaseURL: value("MIDDLEWARE_BASE_URL", environment: environment, fileValues: fileValues, fallback: defaultMiddlewareAuthBaseURL).trimmedSlash,
             middlewareAuthClientToken: value("MIDDLEWARE_CLIENT_TOKEN", environment: environment, fileValues: fileValues),
             middlewareAuthProjectID: value("MIDDLEWARE_PROJECT_ID", environment: environment, fileValues: fileValues)
                 .ifEmpty(value("MCP_DEFAULT_PROJECT_ID", environment: environment, fileValues: fileValues, fallback: "acme")),
             middlewareAuthProfileID: value("MIDDLEWARE_LLM_PROFILE_ID", environment: environment, fileValues: fileValues)
                 .ifEmpty(value("MCP_LMSTUDIO_PROFILE_ID", environment: environment, fileValues: fileValues, fallback: "default")),
-            envPath: envPath?.path
+            middlewareAuthAddonMode: MiddlewareAuthAddonMode.parse(
+                value("POCKETWIKI_MIDDLEWARE_AUTH_MODE", environment: environment, fileValues: fileValues, fallback: "automatic")
+            ),
+            middlewareAuthAddonBinaryPath: Self.resolveOptionalPath(
+                value("POCKETWIKI_MIDDLEWARE_AUTH_BINARY", environment: environment, fileValues: fileValues)
+            ),
+            envPath: envFile?.url.path
         )
     }
 
@@ -123,6 +221,10 @@ struct PocketWikiServerConfiguration: Equatable, Sendable {
         return URL(fileURLWithPath: base).appendingPathComponent(clean).standardizedFileURL.path
     }
 
+    private static func resolveOptionalPath(_ rawValue: String) -> String {
+        rawValue.pocketTrimmed.isEmpty ? "" : resolvePath(rawValue)
+    }
+
     private static func candidateEnvPaths(
         environment: [String: String],
         bundle: Bundle,
@@ -132,13 +234,8 @@ struct PocketWikiServerConfiguration: Equatable, Sendable {
         appendPath(environment["POCKETWIKI_ENV_PATH"], to: &paths)
         appendPath(bundle.object(forInfoDictionaryKey: "PocketWikiEnvPath") as? String, to: &paths)
 
-        if let rootPath = bundle.object(forInfoDictionaryKey: "PocketWikiRootPath") as? String, !rootPath.pocketTrimmed.isEmpty {
-            paths.append(URL(fileURLWithPath: rootPath).appendingPathComponent(".env"))
-        }
-
         paths.append(URL(fileURLWithPath: fileManager.currentDirectoryPath).appendingPathComponent(".env"))
         paths.append(bundle.bundleURL.deletingLastPathComponent().appendingPathComponent(".env"))
-        paths.append(bundle.bundleURL.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(".env"))
 
         var seen = Set<String>()
         return paths.filter { url in
