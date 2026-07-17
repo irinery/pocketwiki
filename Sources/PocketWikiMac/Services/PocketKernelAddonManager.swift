@@ -539,13 +539,7 @@ final class PocketKernelAddonManager {
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("close", forHTTPHeaderField: "Connection")
         do {
-            let configuration = URLSessionConfiguration.ephemeral
-            configuration.timeoutIntervalForRequest = 0.7
-            configuration.timeoutIntervalForResource = 0.7
-            configuration.waitsForConnectivity = false
-            let session = URLSession(configuration: configuration)
-            defer { session.invalidateAndCancel() }
-            let (_, response) = try await session.data(for: request)
+            let (_, response) = try await URLSession.shared.data(for: request)
             return (response as? HTTPURLResponse)?.statusCode == 405
         } catch {
             return false

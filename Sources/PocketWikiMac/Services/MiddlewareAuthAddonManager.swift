@@ -453,7 +453,7 @@ final class MiddlewareAuthAddonManager {
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("close", forHTTPHeaderField: "Connection")
         do {
-            let (data, response) = try await lifecycleData(for: request, timeout: 0.6)
+            let (data, response) = try await URLSession.shared.data(for: request)
             guard (response as? HTTPURLResponse)?.statusCode == 200,
                   let payload = try? JSONDecoder().decode(HealthPayload.self, from: data) else {
                 return false
@@ -491,24 +491,11 @@ final class MiddlewareAuthAddonManager {
         request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         do {
-            let (_, response) = try await lifecycleData(for: request, timeout: 1.5)
+            let (_, response) = try await URLSession.shared.data(for: request)
             return (response as? HTTPURLResponse)?.statusCode == 200
         } catch {
             return false
         }
-    }
-
-    private func lifecycleData(
-        for request: URLRequest,
-        timeout: TimeInterval
-    ) async throws -> (Data, URLResponse) {
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = timeout
-        configuration.timeoutIntervalForResource = timeout
-        configuration.waitsForConnectivity = false
-        let session = URLSession(configuration: configuration)
-        defer { session.invalidateAndCancel() }
-        return try await session.data(for: request)
     }
 
     private func managedEnvironment(
