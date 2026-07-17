@@ -4,10 +4,12 @@ set -eu
 ROOT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
 OUT_DIR="$ROOT_DIR/.build/integration-tests"
 BIN="$OUT_DIR/PocketWikiIntegrationTests"
-APP_BUNDLE="$ROOT_DIR/dist/PocketWiki.app"
+TEST_DIST_DIR="$OUT_DIR/dist"
+APP_BUNDLE="$TEST_DIST_DIR/PocketWiki.app"
 INFO_PLIST="$APP_BUNDLE/Contents/Info.plist"
 
 mkdir -p "$OUT_DIR"
+rm -rf "$TEST_DIST_DIR"
 
 swift build --package-path "$ROOT_DIR"
 
@@ -54,6 +56,7 @@ swiftc \
 
 POCKETWIKI_MIDDLEWARE_AUTH_BINARY=/usr/bin/true \
   POCKETWIKI_POCKETKERNEL_BINARY=/usr/bin/true \
+  POCKETWIKI_DIST_DIR="$TEST_DIST_DIR" \
   "$ROOT_DIR"/script/build_and_run.sh --bundle >/dev/null
 
 test -x "$APP_BUNDLE/Contents/MacOS/PocketWiki"

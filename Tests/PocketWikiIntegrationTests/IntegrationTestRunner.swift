@@ -371,9 +371,11 @@ struct IntegrationTestRunner {
         export MOCK_KERNEL_ADDR="$addr"
         exec python3 -c '
         import os
+        import time
         from http.server import BaseHTTPRequestHandler, HTTPServer
 
         host, port = os.environ["MOCK_KERNEL_ADDR"].rsplit(":", 1)
+        time.sleep(0.5)
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self):
                 self.send_response(405)
@@ -397,22 +399,62 @@ struct IntegrationTestRunner {
             configuration.pocketKernelAddonBinaryPath = executable.path
             let evidence = PocketWikiMCPEvidenceStatus.make(rootPath: wikiRoot.path)
             try expect(evidence.status == "args_require_wrapper", "fixture should require MCP wrapper")
+            let providerRoute = PocketKernelProviderRoute(
+                providerID: "lmstudio",
+                middlewareBaseURL: "http://127.0.0.1:9",
+                middlewareClientToken: "integration-middleware-token",
+                projectID: "acme",
+                profileID: "default",
+                modelID: "model-a",
+                reasoningEffort: "medium"
+            )
+
+            var invalidHelperConfiguration = configuration
+            invalidHelperConfiguration.pocketKernelBaseURL = "http://127.0.0.1:\(try availablePort())"
+            invalidHelperConfiguration.pocketKernelAddonBinaryPath = "/usr/bin/true"
+            let invalidHelperManager = PocketKernelAddonManager(
+                applicationSupportURL: root.appendingPathComponent("invalid-helper-support")
+            )
+            await invalidHelperManager.start(
+                configuration: invalidHelperConfiguration,
+                baseURL: invalidHelperConfiguration.pocketKernelBaseURL,
+                evidence: evidence,
+                providerRoute: providerRoute
+            )
+            try expect(
+                invalidHelperManager.status.failureReason?.contains("exit 0") == true,
+                "PocketKernel startup failure did not expose the child exit code"
+            )
+            invalidHelperManager.stop()
 
             let manager = PocketKernelAddonManager(applicationSupportURL: root.appendingPathComponent("support"))
             defer { manager.stop() }
+            let staleStart = Task { @MainActor in
+                await manager.start(
+                    configuration: configuration,
+                    baseURL: configuration.pocketKernelBaseURL,
+                    evidence: evidence,
+                    providerRoute: providerRoute
+                )
+            }
+            try await Task.sleep(for: .milliseconds(100))
+            var disabledConfiguration = configuration
+            disabledConfiguration.pocketKernelAddonMode = .disabled
+            await manager.start(
+                configuration: disabledConfiguration,
+                baseURL: disabledConfiguration.pocketKernelBaseURL,
+                evidence: evidence,
+                providerRoute: providerRoute
+            )
+            await staleStart.value
+            try expect(manager.status == .disabled, "stale PocketKernel start overwrote disabled mode")
+            try expect(manager.managedProcessID == nil, "PocketKernel process survived disabled mode")
+
             await manager.start(
                 configuration: configuration,
                 baseURL: configuration.pocketKernelBaseURL,
                 evidence: evidence,
-                providerRoute: PocketKernelProviderRoute(
-                    providerID: "lmstudio",
-                    middlewareBaseURL: "http://127.0.0.1:9",
-                    middlewareClientToken: "integration-middleware-token",
-                    projectID: "acme",
-                    profileID: "default",
-                    modelID: "model-a",
-                    reasoningEffort: "medium"
-                )
+                providerRoute: providerRoute
             )
             try expect(manager.status == .managed, "PocketKernel add-on did not start: \(manager.status.title)")
             try expect(manager.healthAvailable, "PocketKernel HTTP probe failed")

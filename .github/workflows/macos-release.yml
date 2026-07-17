@@ -2,30 +2,57 @@ name: PocketWiki macOS Release
 
 on:
   workflow_dispatch:
+  pull_request:
   push:
     branches:
       - main
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: pocketwiki-macos-release
-  cancel-in-progress: false
+  group: pocketwiki-macos-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'release' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   release:
-    name: Build and publish macOS release
+    name: macOS release candidate
     runs-on: macos-15
     timeout-minutes: 45
+    outputs:
+      release_tag: ${{ steps.version.outputs.RELEASE_TAG }}
+      previous_release_tag: ${{ steps.version.outputs.PREVIOUS_RELEASE_TAG }}
+      release_channel: ${{ steps.version.outputs.RELEASE_CHANNEL }}
+      release_bump: ${{ steps.version.outputs.RELEASE_BUMP }}
+      release_bump_reason: ${{ steps.version.outputs.RELEASE_BUMP_REASON }}
+      is_prerelease: ${{ steps.version.outputs.IS_PRERELEASE }}
     env:
       POCKETWIKI_RELEASE_CHANNEL: ${{ vars.POCKETWIKI_RELEASE_CHANNEL || 'alpha' }}
+      POCKETKERNEL_REF: b0453b87ba06575bb5a8187b71e5baa07a843c36
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Validate PocketKernel deploy key
+        env:
+          POCKETKERNEL_DEPLOY_KEY: ${{ secrets.POCKETKERNEL_DEPLOY_KEY }}
+        run: |
+          if [ -z "$POCKETKERNEL_DEPLOY_KEY" ]; then
+            echo "::error::POCKETKERNEL_DEPLOY_KEY não configurada no PocketWiki."
+            exit 1
+          fi
+
+      - name: Checkout PocketKernel privado
+        uses: actions/checkout@v4
+        with:
+          repository: irinery/pocketkernel
+          ref: ${{ env.POCKETKERNEL_REF }}
+          path: .build/dependencies/pocketkernel
+          ssh-key: ${{ secrets.POCKETKERNEL_DEPLOY_KEY }}
+          persist-credentials: false
 
       - name: Node
         uses: actions/setup-node@v4
@@ -106,6 +133,7 @@ jobs:
         env:
           APP_VERSION: ${{ steps.version.outputs.APP_VERSION }}
           RELEASE_TAG: ${{ steps.version.outputs.RELEASE_TAG }}
+          POCKETKERNEL_SOURCE_DIR: ${{ github.workspace }}/.build/dependencies/pocketkernel
         run: ./script/build_macos_dmg.sh
 
       - name: Upload workflow artifact
@@ -116,16 +144,32 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  publish:
+    name: Publish canonical macOS release
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@v4
+
+      - name: Download validated release files
+        uses: actions/download-artifact@v4
+        with:
+          name: PocketWiki-${{ needs.release.outputs.release_tag }}-macOS
+          path: dist/release
+
       - name: Publish canonical GitHub release
-        if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ steps.version.outputs.RELEASE_TAG }}
-          PREVIOUS_RELEASE_TAG: ${{ steps.version.outputs.PREVIOUS_RELEASE_TAG }}
-          RELEASE_CHANNEL: ${{ steps.version.outputs.RELEASE_CHANNEL }}
-          RELEASE_BUMP: ${{ steps.version.outputs.RELEASE_BUMP }}
-          RELEASE_BUMP_REASON: ${{ steps.version.outputs.RELEASE_BUMP_REASON }}
-          IS_PRERELEASE: ${{ steps.version.outputs.IS_PRERELEASE }}
+          RELEASE_TAG: ${{ needs.release.outputs.release_tag }}
+          PREVIOUS_RELEASE_TAG: ${{ needs.release.outputs.previous_release_tag }}
+          RELEASE_CHANNEL: ${{ needs.release.outputs.release_channel }}
+          RELEASE_BUMP: ${{ needs.release.outputs.release_bump }}
+          RELEASE_BUMP_REASON: ${{ needs.release.outputs.release_bump_reason }}
+          IS_PRERELEASE: ${{ needs.release.outputs.is_prerelease }}
         run: |
           set -euo pipefail
 

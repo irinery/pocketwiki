@@ -62,11 +62,12 @@ final class PocketKernelAddonManager {
     private var process: Process?
     private var processLogHandle: FileHandle?
     private var activeBaseURL: URL?
-    private let providerBridge = PocketKernelProviderBridge()
+    private var providerBridge = PocketKernelProviderBridge()
     private let applicationSupportOverride: URL?
     private var eventHandler: (@MainActor (PocketAddonRuntimeEvent) -> Void)?
     private var restartContext: RestartContext?
     private var unexpectedTerminationDates: [Date] = []
+    private var operationGeneration: UInt64 = 0
 
     init(applicationSupportURL: URL? = nil) {
         applicationSupportOverride = applicationSupportURL
@@ -82,8 +83,11 @@ final class PocketKernelAddonManager {
         evidence: PocketWikiMCPEvidenceStatus,
         providerRoute: PocketKernelProviderRoute
     ) async {
+        operationGeneration &+= 1
+        let operation = operationGeneration
+
         guard configuration.pocketKernelAddonMode != .disabled else {
-            stop()
+            stopCurrentProcess()
             status = .disabled
             integrityStatus = .notChecked
             detail = "PocketWiki e os demais projetos Pocket continuam funcionando de forma independente."
@@ -97,27 +101,33 @@ final class PocketKernelAddonManager {
         }
 
         if configuration.pocketKernelAddonMode == .external || activeBaseURL != baseURL {
-            stop()
+            stopCurrentProcess()
         }
 
-        if activeBaseURL == baseURL, process?.isRunning == true, await isHealthy(kernelURL) {
-            providerBridge.update(configuration: providerRoute)
-            healthAvailable = true
-            providerAvailable = providerBridge.isReady
-            activeEndpoint = kernelURL
-            status = .managed
-            restartContext = RestartContext(
-                configuration: configuration,
-                baseURL: rawBaseURL,
-                evidence: evidence,
-                providerRoute: providerRoute
-            )
-            return
+        if activeBaseURL == baseURL, process?.isRunning == true {
+            let managedHealthy = await isHealthy(kernelURL)
+            guard operation == operationGeneration else { return }
+            if managedHealthy {
+                providerBridge.update(configuration: providerRoute)
+                healthAvailable = true
+                providerAvailable = providerBridge.isReady
+                activeEndpoint = kernelURL
+                status = .managed
+                restartContext = RestartContext(
+                    configuration: configuration,
+                    baseURL: rawBaseURL,
+                    evidence: evidence,
+                    providerRoute: providerRoute
+                )
+                return
+            }
         }
 
         status = .checking
-        if await isHealthy(kernelURL) {
-            stop()
+        let externalHealthy = await isHealthy(kernelURL)
+        guard operation == operationGeneration else { return }
+        if externalHealthy {
+            stopCurrentProcess()
             activeBaseURL = baseURL
             activeEndpoint = kernelURL
             healthAvailable = true
@@ -142,7 +152,7 @@ final class PocketKernelAddonManager {
         }
 
         do {
-            stop()
+            stopCurrentProcess()
             let locations = try managedLocations()
             integrityStatus = try PocketAddonBuildInspector.inspect(
                 executableURL: executableURL,
@@ -161,7 +171,13 @@ final class PocketKernelAddonManager {
                     evidence: unavailableEvidence(from: evidence, reason: error.localizedDescription)
                 )
             }
-            let providerRuntime = try await providerBridge.start(configuration: providerRoute)
+            let candidateBridge = PocketKernelProviderBridge()
+            let providerRuntime = try await candidateBridge.start(configuration: providerRoute)
+            guard operation == operationGeneration else {
+                candidateBridge.stop()
+                return
+            }
+            providerBridge = candidateBridge
             let logURL = locations.addonDirectory.appendingPathComponent("pocketkernel.log")
             let logHandle = try Self.makeProcessLog(at: logURL)
             let child = Process()
@@ -201,7 +217,9 @@ final class PocketKernelAddonManager {
 
             let readinessDeadline = Date().addingTimeInterval(Self.startupTimeout)
             repeat {
-                if await isHealthy(kernelURL) {
+                let healthy = await isHealthy(kernelURL)
+                guard operation == operationGeneration else { return }
+                if healthy {
                     healthAvailable = true
                     activeEndpoint = kernelURL
                     status = .managed
@@ -217,19 +235,34 @@ final class PocketKernelAddonManager {
                 try await Task.sleep(for: .milliseconds(100))
             } while Date() < readinessDeadline
 
-            let reason = child.isRunning
-                ? "sonda HTTP não ficou pronta em (Int(Self.startupTimeout)) segundos"
-                : "processo encerrou durante a inicialização"
-            stop()
-            status = .failed(reason)
+            guard operation == operationGeneration else { return }
+            try? logHandle.synchronize()
+            let diagnosis = Self.processLogTail(from: logURL)
+            let reason: String
+            if child.isRunning {
+                reason = "sonda HTTP não ficou pronta em \(Int(Self.startupTimeout)) segundos"
+            } else {
+                reason = "processo encerrou durante a inicialização (exit \(child.terminationStatus))"
+            }
+            let fullReason = diagnosis.isEmpty ? reason : "\(reason). Diagnóstico: \(diagnosis)"
+            stopCurrentProcess()
+            status = .failed(fullReason)
+            detail = fullReason
         } catch {
-            stop()
+            guard operation == operationGeneration else { return }
+            stopCurrentProcess()
             integrityStatus = .failed(error.localizedDescription)
             status = .failed(error.localizedDescription)
+            detail = error.localizedDescription
         }
     }
 
     func stop() {
+        operationGeneration &+= 1
+        stopCurrentProcess()
+    }
+
+    private func stopCurrentProcess() {
         let child = process
         process = nil
         if let child, child.isRunning {
@@ -370,7 +403,9 @@ final class PocketKernelAddonManager {
             contents: Data(),
             attributes: [.posixPermissions: 0o600]
         )
-        return try FileHandle(forWritingTo: url)
+        let handle = try FileHandle(forWritingTo: url)
+        try handle.truncate(atOffset: 0)
+        return handle
     }
 
     private static func processLogTail(from url: URL) -> String {

@@ -5,12 +5,13 @@ on:
   push:
     branches:
       - main
-      - master
-      - "codex/**"
+
+permissions:
+  contents: read
 
 jobs:
   macos:
-    name: Build and test macOS app
+    name: Core and integration tests
     runs-on: macos-15
     timeout-minutes: 25
 
