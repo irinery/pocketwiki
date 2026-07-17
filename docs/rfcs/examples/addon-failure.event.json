@@ -1,0 +1,17 @@
+{
+  "schema_version": "pocket.event/v1",
+  "event_id": "01JZEXAMPLEEVENT",
+  "timestamp": "2026-07-17T12:00:00Z",
+  "source": {
+    "app_id": "dev.pocket.pocketkernel",
+    "instance_id": "managed-1234"
+  },
+  "severity": "error",
+  "code": "addon.process.exited",
+  "message": "PocketKernel encerrou inesperadamente.",
+  "correlation_id": "req-123",
+  "user_action": "Reiniciar o add-on e abrir os logs.",
+  "details": {
+    "exit_code": 15
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pocket.dev/schemas/pocket-event.v1.schema.json",
+  "title": "Pocket Event v1",
+  "description": "Evento operacional estruturado e redigido da Pocket Stack.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "timestamp",
+    "source",
+    "severity",
+    "code",
+    "message"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "pocket.event/v1"
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?Z$"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["app_id", "instance_id"],
+      "properties": {
+        "app_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)+$"
+        },
+        "instance_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+        }
+      }
+    },
+    "severity": {
+      "enum": ["debug", "info", "warning", "error", "critical"]
+    },
+    "code": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z][a-z0-9]*)+$"
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000
+    },
+    "correlation_id": {
+      "type": "string",
+      "maxLength": 128
+    },
+    "user_action": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "details": {
+      "type": "object",
+      "description": "Detalhes já redigidos; nunca deve conter secrets.",
+      "additionalProperties": true
+    }
+  }
+}

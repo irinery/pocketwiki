@@ -304,6 +304,12 @@ struct LocalAIAdvancedSettingsSheet: View {
     @Binding var apiKey: String
     let middlewareRuntimeTokenLoaded: Bool
     let runtimeTokenLoaded: Bool
+    let middlewareAddonStatus: MiddlewareAuthAddonStatus
+    let middlewareAddonAccessVerified: Bool
+    let pocketKernelAddonStatus: PocketKernelAddonStatus
+    let pocketKernelAddonReady: Bool
+    let onRestartMiddlewareAddon: () async -> Void
+    let onRestartPocketKernelAddon: () async -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -377,12 +383,12 @@ struct LocalAIAdvancedSettingsSheet: View {
                 .localAIInputChrome()
 
             LocalAIFieldLabel("LM Studio API key")
-            SecureField("", text: $apiKey, prompt: Text(runtimeTokenLoaded ? "override opcional da sessão" : "API key da sessão"))
+            SecureField("", text: $apiKey, prompt: Text("nova chave, somente para configurar"))
                 .textFieldStyle(.plain)
                 .font(.caption.monospaced())
                 .localAIInputChrome()
 
-            Text("OpenAI usa login/status pelo MiddlewareAuth. LM Studio registra base URL e API key no MiddlewareAuth.")
+            Text("OpenAI usa login/status pelo MiddlewareAuth. LM Studio só substitui a credencial quando uma nova chave é informada; em branco, mantém a já armazenada.")
                 .font(.caption.monospaced())
                 .foregroundStyle(PocketWikiTheme.muted)
         }
@@ -441,9 +447,43 @@ struct LocalAIAdvancedSettingsSheet: View {
             Text("Perguntas continuam saindo pelo PocketKernel Harness; estes campos só configuram auth/provider.")
                 .font(.caption.monospaced())
                 .foregroundStyle(PocketWikiTheme.muted)
+
+            addonStatusRow(
+                ready: pocketKernelAddonReady,
+                title: pocketKernelAddonStatus.title,
+                action: onRestartPocketKernelAddon
+            )
+
+            addonStatusRow(
+                ready: middlewareAddonAccessVerified,
+                title: middlewareAddonStatus.title,
+                action: onRestartMiddlewareAddon
+            )
         }
         .padding(14)
         .pocketWikiCard()
+    }
+
+    private func addonStatusRow(
+        ready: Bool,
+        title: String,
+        action: @escaping () async -> Void
+    ) -> some View {
+        HStack(spacing: 8) {
+                Circle()
+                    .fill(ready ? PocketWikiTheme.good : PocketWikiTheme.warn)
+                    .frame(width: 7, height: 7)
+                Text(title)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(PocketWikiTheme.muted)
+                    .lineLimit(2)
+                Spacer()
+                Button("Reiniciar") {
+                    Task { await action() }
+                }
+                .buttonStyle(.borderless)
+                .font(.caption)
+            }
     }
 }
 

@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+ROOT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
 OUT_DIR="$ROOT_DIR/.build/integration-tests"
 BIN="$OUT_DIR/PocketWikiIntegrationTests"
 APP_BUNDLE="$ROOT_DIR/dist/PocketWiki.app"
@@ -14,6 +14,7 @@ swift build --package-path "$ROOT_DIR"
 swiftc \
   "$ROOT_DIR"/Sources/PocketWikiMac/Models/*.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Support/String+PocketWiki.swift \
+  "$ROOT_DIR"/Sources/PocketWikiMac/Support/EnvironmentFileReader.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Support/PocketFormatters.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Support/PocketWikiDateParser.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Support/PocketWikiResourceBundle.swift \
@@ -22,6 +23,9 @@ swiftc \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/LocalAIEndpointPolicy.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/LocalAIRuntimeConfiguration.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/LocalAIContextBuilder.swift \
+  "$ROOT_DIR"/Sources/PocketWikiMac/Services/MiddlewareAuthAddonManager.swift \
+  "$ROOT_DIR"/Sources/PocketWikiMac/Services/PocketKernelAddonManager.swift \
+  "$ROOT_DIR"/Sources/PocketWikiMac/Services/PocketKernelProviderBridge.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/MiddlewareAuthClient.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/PocketKernelClient.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/PocketWikiMDNSResponder.swift \
@@ -48,7 +52,9 @@ swiftc \
   "$BIN"
 )
 
-"$ROOT_DIR"/script/build_and_run.sh --bundle >/dev/null
+POCKETWIKI_MIDDLEWARE_AUTH_BINARY=/usr/bin/true \
+  POCKETWIKI_POCKETKERNEL_BINARY=/usr/bin/true \
+  "$ROOT_DIR"/script/build_and_run.sh --bundle >/dev/null
 
 test -x "$APP_BUNDLE/Contents/MacOS/PocketWiki"
 test -f "$INFO_PLIST"
@@ -57,10 +63,24 @@ test -f "$APP_BUNDLE/Contents/Resources/Web/assets/favicon.png"
 test -f "$APP_BUNDLE/PocketWikiMac_PocketWikiMac.bundle/wiki-review.md"
 test -f "$APP_BUNDLE/PocketWikiMac_PocketWikiMac.bundle/ExcalidrawEditor/index.html"
 test -f "$APP_BUNDLE/PocketWikiMac_PocketWikiMac.bundle/ExcalidrawEditor/THIRD_PARTY_NOTICES.md"
+test -x "$APP_BUNDLE/Contents/Helpers/middleware-codex-oauth"
+test -f "$APP_BUNDLE/Contents/Resources/Addons/MiddlewareAuth/middleware-codex-oauth.build.json"
+test -x "$APP_BUNDLE/Contents/Helpers/pocketkernel"
+test -f "$APP_BUNDLE/Contents/Resources/Addons/PocketKernel/pocketkernel.build.json"
+test -f "$APP_BUNDLE/Contents/Resources/PocketWikiMCP/pocketwiki-mcp-server.mjs"
+test -f "$APP_BUNDLE/Contents/Resources/PocketWikiMCP/pocketwiki-evidence-core.mjs"
+
+middleware_actual_sha="$(shasum -a 256 "$APP_BUNDLE/Contents/Helpers/middleware-codex-oauth" | awk '{ print $1 }')"
+middleware_manifest_sha="$(sed -nE 's/.*\"sha256\"[[:space:]]*:[[:space:]]*\"([0-9a-fA-F]+)\".*/\1/p' "$APP_BUNDLE/Contents/Resources/Addons/MiddlewareAuth/middleware-codex-oauth.build.json")"
+test "$middleware_actual_sha" = "$middleware_manifest_sha"
+
+kernel_actual_sha="$(shasum -a 256 "$APP_BUNDLE/Contents/Helpers/pocketkernel" | awk '{ print $1 }')"
+kernel_manifest_sha="$(sed -nE 's/.*\"sha256\"[[:space:]]*:[[:space:]]*\"([0-9a-fA-F]+)\".*/\1/p' "$APP_BUNDLE/Contents/Resources/Addons/PocketKernel/pocketkernel.build.json")"
+test "$kernel_actual_sha" = "$kernel_manifest_sha"
 
 plutil -extract NSLocalNetworkUsageDescription raw -o - "$INFO_PLIST" >/dev/null
 plutil -extract NSBonjourServices xml1 -o - "$INFO_PLIST" | grep -q "_http._tcp"
 plutil -extract NSAppTransportSecurity.NSAllowsLocalNetworking raw -o - "$INFO_PLIST" | grep -q "true"
 
 echo "ok - app bundle contract"
-echo "4 integration checks passing"
+echo "11 integration checks passing"

@@ -19,6 +19,7 @@ final class LocalAIChatSession {
     private let kernelClient: PocketKernelClient
     private let middlewareAuthClient: MiddlewareAuthClient
     private var streamTask: Task<Void, Never>?
+    private var loginPollTask: Task<Void, Never>?
 
     init(
         kernelClient: PocketKernelClient = PocketKernelClient(),
@@ -78,11 +79,74 @@ final class LocalAIChatSession {
                 profileID: profileID
             )
             statusMessage = login.summary
+            loginPollTask?.cancel()
+            loginPollTask = Task { [weak self] in
+                await self?.pollOpenAILogin(
+                    login,
+                    middlewareBaseURL: middlewareBaseURL,
+                    clientToken: clientToken,
+                    projectID: projectID,
+                    profileID: profileID
+                )
+            }
             return login
         } catch {
             errorMessage = error.localizedDescription
             statusMessage = "Nao foi possivel iniciar login OpenAI."
             return nil
+        }
+    }
+
+    private func pollOpenAILogin(
+        _ login: MiddlewareAuthOpenAILoginStart,
+        middlewareBaseURL: String,
+        clientToken: String,
+        projectID: String,
+        profileID: String
+    ) async {
+        let fallbackDeadline = Date().addingTimeInterval(15 * 60).timeIntervalSince1970 * 1_000
+        let deadline = Double(login.expiresAt ?? Int64(fallbackDeadline))
+
+        while !Task.isCancelled, Date().timeIntervalSince1970 * 1_000 < deadline {
+            do {
+                try await Task.sleep(for: .seconds(1))
+                let loginStatus = try await middlewareAuthClient.openAILoginStatus(
+                    middlewareBaseURL: middlewareBaseURL,
+                    clientToken: clientToken,
+                    projectID: projectID,
+                    profileID: profileID,
+                    loginSessionID: login.loginSessionId
+                )
+                switch loginStatus.status?.pocketTrimmed.lowercased() {
+                case "authenticated", "completed":
+                    let providerStatus = try await middlewareAuthClient.openAIStatus(
+                        middlewareBaseURL: middlewareBaseURL,
+                        clientToken: clientToken,
+                        projectID: projectID,
+                        profileID: profileID
+                    )
+                    errorMessage = nil
+                    statusMessage = providerStatus.authenticated ? providerStatus.summary : "Login terminou, mas o perfil OpenAI não foi persistido."
+                    return
+                case "failed", "expired":
+                    errorMessage = loginStatus.summary
+                    statusMessage = loginStatus.summary
+                    return
+                default:
+                    statusMessage = loginStatus.summary
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                errorMessage = error.localizedDescription
+                statusMessage = "Falha ao acompanhar o login OpenAI."
+                return
+            }
+        }
+
+        if !Task.isCancelled {
+            errorMessage = "Sessão de login OpenAI expirada."
+            statusMessage = "Sessão de login OpenAI expirada."
         }
     }
 

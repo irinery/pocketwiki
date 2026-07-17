@@ -50,6 +50,7 @@ struct CanonicalRelease: Equatable, Sendable {
     let assetName: String
     let assetURL: URL
     let pageURL: URL
+    let addonBuilds: PocketAddonReleaseBuilds?
 }
 
 enum CanonicalUpdateState: Equatable {

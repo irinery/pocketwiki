@@ -59,8 +59,10 @@ clean_bundle_metadata() {
   if command -v xattr >/dev/null 2>&1; then
     xattr -cr "$metadata_bundle" 2>/dev/null || true
     find "$metadata_bundle" -exec xattr -c {} + 2>/dev/null || true
+    find "$metadata_bundle" -exec xattr -d 'com.apple.fileprovider.fpfs#P' {} + 2>/dev/null || true
     find "$metadata_bundle" -exec xattr -d com.apple.FinderInfo {} + 2>/dev/null || true
     find "$metadata_bundle" -exec xattr -d com.apple.ResourceFork {} + 2>/dev/null || true
+    xattr -d 'com.apple.fileprovider.fpfs#P' "$metadata_bundle" 2>/dev/null || true
     xattr -d com.apple.FinderInfo "$metadata_bundle" 2>/dev/null || true
     xattr -d com.apple.ResourceFork "$metadata_bundle" 2>/dev/null || true
   fi
@@ -93,9 +95,33 @@ codesign_app_bundle() (
   printf '%s\n' "Assinando bundle: $(signing_label "$identity")"
   ditto --noextattr --norsrc "$bundle" "$staged_bundle"
   clean_bundle_metadata "$staged_bundle"
+
+  sign_addon_helper() {
+    helper="$1"
+    manifest="$2"
+    [ -x "$helper" ] || return 0
+    codesign \
+      --force \
+      --sign "$identity" \
+      --timestamp=none \
+      "$helper" >/dev/null
+    [ -f "$manifest" ] || return 0
+    digest="$(shasum -a 256 "$helper" | awk '{ print $1 }')"
+    manifest_tmp="$manifest.tmp"
+    sed -E "s/(\"sha256\"[[:space:]]*:[[:space:]]*\")[0-9a-fA-F]+(\")/\\1${digest}\\2/" \
+      "$manifest" >"$manifest_tmp"
+    mv "$manifest_tmp" "$manifest"
+  }
+
+  sign_addon_helper \
+    "$staged_bundle/Contents/Helpers/middleware-codex-oauth" \
+    "$staged_bundle/Contents/Resources/Addons/MiddlewareAuth/middleware-codex-oauth.build.json"
+  sign_addon_helper \
+    "$staged_bundle/Contents/Helpers/pocketkernel" \
+    "$staged_bundle/Contents/Resources/Addons/PocketKernel/pocketkernel.build.json"
+
   codesign \
     --force \
-    --deep \
     --sign "$identity" \
     --timestamp=none \
     --identifier "$bundle_id" \

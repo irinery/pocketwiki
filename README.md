@@ -7,6 +7,8 @@ Funcionalidades:
 - Usa layout responsivo para celular, tablet, notebook e telas grandes;
 - Usa icones compactos nas areas principais para reduzir ruido em telas pequenas;
 - Usa IA via PocketKernel Harness, com provider OpenAI ou LM Studio configurado pelo MiddlewareAuth;
+- Pode iniciar o MiddlewareAuth como add-on macOS, sem exigir um segundo processo manual;
+- Pode iniciar o PocketKernel como add-on macOS e conectar o MCP Evidence sem start manual;
 - Interpreta desenhos Excalidraw como fontes visuais pesquisaveis e indexaveis.
 
 ## Base de referencia
@@ -120,6 +122,16 @@ npm run build:excalidraw
 
 A versao desktop macOS fica disponivel em `.dmg` nas [releases do GitHub](https://github.com/irinery/pocketwiki/releases).
 
+Os bundles macOS incluem o MiddlewareAuth como helper independente. O PocketWiki usa uma instância externa se ela já estiver saudável e só gerencia o processo empacotado que ele próprio iniciou. O limite completo, modos de execução e overrides estão em [`docs/technical-contract/macos-app/09_middleware_auth_addon.md`](docs/technical-contract/macos-app/09_middleware_auth_addon.md).
+
+Na aba **Servidor**, o card MiddlewareAuth mostra health e autenticação como checks separados, permite alternar entre helper local e endpoint remoto e rotaciona a senha do helper local sem trocar a chave que protege os tokens OAuth.
+
+O PocketKernel também possui um card operacional com os modos `automatic`, `managed`, `external` e `disabled`. No modo local, o PocketWiki inicia o binário empacotado em loopback e gera um wrapper stdio que preserva paths com espaço. Os limites entre os projetos e o contrato de distribuição estão em [`docs/technical-contract/macos-app/10_pocketkernel_addon.md`](docs/technical-contract/macos-app/10_pocketkernel_addon.md).
+
+Falhas de inicialização aparecem como alerta global e como `ERROR` no log da aba **Servidor**. Se um helper já validado cair, o PocketWiki registra `WARNING` e tenta recuperá-lo até três vezes em 60 segundos, com backoff de 1, 5 e 15 segundos; uma recuperação bem-sucedida não interrompe o usuário com modal. O alerta global só aparece quando a recuperação falha ou entra em crash loop, e a saída completa fica em `~/Library/Application Support/PocketWiki/{MiddlewareAuth,PocketKernel}/`. Os add-ons não fazem auto-update isolado: cada release do PocketWiki publica e valida os refs e SHA-256 dos dois helpers, mostra a diferença da próxima versão na aba **Servidor** e recusa instalar um pacote inconsistente.
+
+O contrato proposto para integrar toda a família — add-ons internos, aplicações locais independentes e serviços remotos — está na [`RFC-0001 — Pocket Interop Contract`](docs/rfcs/0001-pocket-interop-contract.md). A RFC inclui schema validável e exemplos para PocketKernel, MiddlewareAuth, PocketTrace e PocketCli.
+
 Para gerar e abrir o app local:
 
 ```sh
@@ -197,6 +209,8 @@ POCKETWIKI_SKIP_SECRET_SCAN="0"
 ```sh
 POCKETWIKI_SIGN_MODE=adhoc ./script/build_and_run.sh --verify
 ```
+
+O bundle local resolve versão e tag pelo mesmo histórico Git usado pela release, não pelo valor estático do `package.json`. Ele também não incorpora o caminho do `.env`: o launcher repassa as variáveis já carregadas ao processo e remove `POCKETWIKI_ENV_PATH` antes de abrir o app, evitando bloquear a primeira janela no controle de privacidade do macOS. Quando um caminho de configuração é fornecido explicitamente em outro fluxo, apenas arquivo regular UTF-8 de até 1 MiB é aceito.
 
 Antes do build, `script/scan_secrets.sh` bloqueia `.env` versionado, certificados/profiles versionados e padrões comuns de developer account no código. Não versionar `.env.local`, `.p8`, `.p12`, `.cer`, `.pem`, `.key`, `.mobileprovision`, `.provisionprofile` ou `.xcarchive`.
 
@@ -376,7 +390,8 @@ PocketWiki UI/app ou curl
   -> PocketKernel /v1/kernel
   -> PocketKernel inicia PocketWiki MCP via stdio
   -> PocketWiki MCP devolve evidencia
-  -> PocketKernel chama LLM
+  -> ponte loopback do PocketWiki
+  -> MiddlewareAuth chama LM Studio/OpenAI
   -> PocketKernel monta resposta governada
 ```
 
@@ -422,16 +437,20 @@ LM_STUDIO_BASE_URL="http://127.0.0.1:1234"
 LM_STUDIO_MODEL=""
 ```
 
-O PocketWiki nao chama LM Studio/OpenAI direto para responder. A tela de IA fica compacta: escolhe `OpenAI` ou `LM Studio`, modelo e raciocinio; URLs, tokens e API key ficam em configuracoes avancadas. OpenAI usa login/status via MiddlewareAuth; LM Studio registra `baseUrl` e `apiKey` no MiddlewareAuth. A pergunta sempre vai para o PocketKernel:
+O PocketWiki nao chama LM Studio/OpenAI direto para responder. A tela de IA fica compacta: escolhe `OpenAI` ou `LM Studio`, modelo e raciocinio; URLs, tokens e API key ficam em configuracoes avancadas. OpenAI usa device code pelo contrato canonico do MiddlewareAuth e acompanha a sessao ate confirmar que o perfil foi persistido; LM Studio registra `baseUrl` e `apiKey` no MiddlewareAuth. A pergunta sempre vai para o PocketKernel:
 
 ```text
 PocketWiki UI
   -> MiddlewareAuth /v1/projects/{projectId}/auth/{openai|lmstudio}/...
   -> PocketKernel /v1/kernel
   -> PocketKernel Harness
+  -> ponte loopback efemera do PocketWiki
+  -> MiddlewareAuth /v1/projects/{projectId}/llm/responses
   -> LLM/provider configurado
   -> resposta governada
 ```
+
+No add-on gerenciado, o PocketKernel recebe somente o endereço da ponte e um bearer aleatório válido durante o processo. API key do LM Studio e tokens OpenAI continuam exclusivamente no MiddlewareAuth. A troca de provider/modelo atualiza essa rota em runtime.
 
 Endpoints locais do PocketWiki:
 

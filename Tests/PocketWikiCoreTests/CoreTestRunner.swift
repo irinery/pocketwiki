@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 enum TestFailure: Error, CustomStringConvertible {
@@ -52,6 +53,7 @@ struct CoreTestRunner {
             ("markdown display links", testMarkdownDisplayLinks),
             ("local ai endpoint policy", testLocalAIEndpointPolicy),
             ("local ai runtime configuration", testLocalAIRuntimeConfiguration),
+            ("environment file safety", testEnvironmentFileSafety),
             ("local ai model parsing", testLocalAIModelParsing),
             ("local ai chat parsing", testLocalAIChatParsing),
             ("local ai remote proxy endpoint", testLocalAIRemoteProxyEndpoint),
@@ -71,6 +73,7 @@ struct CoreTestRunner {
             ("graph truncates high fanout", testGraphTruncatesHighFanout),
             ("graph oversized node", testGraphOversizedNode),
             ("canonical release versions", testCanonicalReleaseVersions),
+            ("add-on build integrity", testAddonBuildIntegrity),
             ("desktop tabs include map and server", testDesktopTabs)
         ]
 
@@ -106,6 +109,76 @@ struct CoreTestRunner {
         try expect(newerAlpha > stable, "numeric version should precede channel preference")
         try expect(PocketWikiReleaseVersion.parse(tag: "v1.2.3") == nil, "legacy v tag should be ignored")
         try expect(PocketWikiReleaseVersion.parse(tag: "alpha-1.2") == nil, "invalid alpha should be ignored")
+    }
+
+    static func testAddonBuildIntegrity() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PocketWikiAddonIntegrity-\(UUID().uuidString)", isDirectory: true)
+        let app = root.appendingPathComponent("PocketWiki.app", isDirectory: true)
+        let helpers = app.appendingPathComponent("Contents/Helpers", isDirectory: true)
+        let resources = app.appendingPathComponent("Contents/Resources/Addons", isDirectory: true)
+        try FileManager.default.createDirectory(at: helpers, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        var expected: [PocketAddonService: PocketAddonBuildInfo] = [:]
+        for service in PocketAddonService.allCases {
+            let executable = helpers.appendingPathComponent(service.executableName)
+            let data = Data("binary-\(service.rawValue)".utf8)
+            try data.write(to: executable)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+            let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+            let build = PocketAddonBuildInfo(
+                schemaVersion: "pocketwiki.addon.v1",
+                module: service.rawValue,
+                ref: service == .middlewareAuth ? "middleware-ref" : "kernel-ref",
+                architectures: "arm64 x86_64",
+                sha256: digest
+            )
+            expected[service] = build
+            let metadata = resources.appendingPathComponent(service.metadataDirectoryName, isDirectory: true)
+            try FileManager.default.createDirectory(at: metadata, withIntermediateDirectories: true)
+            try JSONEncoder().encode(build).write(
+                to: metadata.appendingPathComponent("\(service.executableName).build.json")
+            )
+        }
+
+        let releaseBuilds = PocketAddonReleaseBuilds(
+            middlewareAuth: expected[.middlewareAuth],
+            pocketKernel: expected[.pocketKernel]
+        )
+        let releaseManifestData = try JSONEncoder().encode(PocketWikiBuildManifest(
+            schemaVersion: "pocketwiki.build.v1",
+            releaseTag: "alpha-1.2.3",
+            appVersion: "1.2.3",
+            addons: releaseBuilds
+        ))
+        let releaseManifestJSON = try require(
+            String(data: releaseManifestData, encoding: .utf8),
+            "release manifest JSON missing"
+        )
+        try expect(releaseManifestJSON.contains("\"middleware_auth\""), "MiddlewareAuth release key missing")
+        try expect(releaseManifestJSON.contains("\"pocket_kernel\""), "PocketKernel release key missing")
+        let decodedReleaseManifest = try JSONDecoder().decode(
+            PocketWikiBuildManifest.self,
+            from: releaseManifestData
+        )
+        try expect(decodedReleaseManifest.addons == releaseBuilds, "release add-on manifest decode mismatch")
+
+        let validated = try PocketAddonBuildInspector.validateUpdatedApp(app, expected: releaseBuilds)
+        try expect(validated == releaseBuilds, "validated add-on refs mismatch")
+
+        try Data("tampered".utf8).write(to: helpers.appendingPathComponent("pocketkernel"))
+        do {
+            _ = try PocketAddonBuildInspector.validateUpdatedApp(app, expected: releaseBuilds)
+            throw TestFailure.failed("tampered add-on should fail validation")
+        } catch let error as TestFailure {
+            throw error
+        } catch {
+            try expect(
+                error.localizedDescription.contains("SHA-256"),
+                "tampered add-on returned unclear error: \(error.localizedDescription)"
+            )
+        }
     }
 
     static func testFrontmatter() throws {
@@ -450,6 +523,28 @@ struct CoreTestRunner {
         try expect(config.hasToken, "runtime token flag failed")
     }
 
+    static func testEnvironmentFileSafety() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let directoryCandidate = tempDir.appendingPathComponent("directory.env", isDirectory: true)
+        try FileManager.default.createDirectory(at: directoryCandidate, withIntermediateDirectories: true)
+
+        let oversizedCandidate = tempDir.appendingPathComponent("oversized.env")
+        try Data(repeating: 0x41, count: EnvironmentFileReader.maximumSize + 1).write(to: oversizedCandidate)
+
+        let validCandidate = tempDir.appendingPathComponent("valid.env")
+        try "LM_STUDIO_MODEL=safe-model\n".write(to: validCandidate, atomically: true, encoding: .utf8)
+
+        let result = EnvironmentFileReader.firstReadable(
+            in: [directoryCandidate, oversizedCandidate, validCandidate]
+        )
+
+        try expect(result?.url == validCandidate, "unsafe env candidate was accepted")
+        try expect(result?.contents.contains("safe-model") == true, "valid env candidate was not read")
+    }
+
     static func testLocalAIModelParsing() throws {
         let models = try LMStudioClient.parseModelsResponse(Data("""
         {
@@ -612,6 +707,11 @@ struct CoreTestRunner {
             "POCKETWIKI_PUBLIC_HOSTS": "pocketwiki.local,desk",
             "POCKETWIKI_MDNS": "false",
             "POCKETWIKI_REFERENCE_READONLY": "false",
+            "POCKETWIKI_MIDDLEWARE_AUTH_MODE": "managed",
+            "POCKETWIKI_MIDDLEWARE_AUTH_BINARY": "/tmp/middleware-codex-oauth",
+            "POCKETWIKI_POCKETKERNEL_MODE": "external",
+            "POCKETWIKI_POCKETKERNEL_BINARY": "/tmp/pocketkernel",
+            "POCKETWIKI_NODE_BINARY": "/opt/homebrew/bin/node",
             "LM_STUDIO_BASE_URL": "http://localhost:1234/v1/",
             "LM_STUDIO_MODEL": "qwen"
         ])
@@ -623,6 +723,11 @@ struct CoreTestRunner {
         try expect(!config.referenceReadonly, "readonly bool parse failed")
         try expect(config.lmStudioBaseURL == "http://localhost:1234/v1", "lm studio slash trim failed")
         try expect(config.lmStudioModel == "qwen", "lm studio model parse failed")
+        try expect(config.middlewareAuthAddonMode == .managed, "middleware add-on mode parse failed")
+        try expect(config.middlewareAuthAddonBinaryPath == "/tmp/middleware-codex-oauth", "middleware add-on path parse failed")
+        try expect(config.pocketKernelAddonMode == .external, "PocketKernel add-on mode parse failed")
+        try expect(config.pocketKernelAddonBinaryPath == "/tmp/pocketkernel", "PocketKernel add-on path parse failed")
+        try expect(config.pocketKernelNodeBinaryPath == "/opt/homebrew/bin/node", "Node path parse failed")
     }
 
     static func testServerRoutes() throws {

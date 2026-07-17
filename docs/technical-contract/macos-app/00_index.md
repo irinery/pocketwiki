@@ -12,6 +12,8 @@
 | 6 | `06_ferramentas_adiadas.md` | Itens dificuldade 4+ anotados e não implementados | nenhuma | sim |
 | 7 | `07_ia_local_lmstudio.md` | IA local com LM Studio, streaming e contexto selecionável | `02_core_indexacao.md`, `03_shell_leitor_busca.md` | sim |
 | 8 | `08_mapa_grafo.md` | Grafo visual interativo na aba Mapa | `02_core_indexacao.md`, `03_shell_leitor_busca.md` | sim |
+| 9 | `09_middleware_auth_addon.md` | MiddlewareAuth gerenciado ou externo | `07_ia_local_lmstudio.md` | sim |
+| 10 | `10_pocketkernel_addon.md` | PocketKernel gerenciado com MCP Evidence | `07_ia_local_lmstudio.md`, `09_middleware_auth_addon.md` | sim |
 
 ## Convenções globais
 

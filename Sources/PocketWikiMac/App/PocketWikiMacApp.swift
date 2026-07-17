@@ -12,7 +12,11 @@ struct PocketWikiMacApp: App {
             ContentView(store: store, updater: updater)
                 .frame(minWidth: 980, minHeight: 680)
                 .task {
+                    appDelegate.terminationHandler = { [weak store] in
+                        store?.shutdownManagedServices()
+                    }
                     await store.restoreLastSource()
+                    await store.bootstrapManagedServices()
                 }
         }
         .windowStyle(.hiddenTitleBar)
@@ -49,8 +53,14 @@ struct PocketWikiMacApp: App {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    var terminationHandler: (() -> Void)?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        terminationHandler?()
     }
 }

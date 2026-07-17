@@ -1,0 +1,75 @@
+{
+  "schema_version": "pocket.app.manifest/v1",
+  "id": "dev.pocket.pockettrace",
+  "name": "PocketTrace",
+  "description": "Captura local-first, processamento, revisão e publicação de runbooks.",
+  "version": "0.1.0",
+  "release_channel": "alpha",
+  "release_tag": "alpha-0.1.0",
+  "distribution": {
+    "class": "external-local",
+    "update_strategy": "self-managed"
+  },
+  "interfaces": [
+    {
+      "id": "trace-mcp",
+      "protocol": "mcp",
+      "role": "server",
+      "version": "2025-11-25",
+      "transport": "streamable-http",
+      "endpoint": "http://127.0.0.1:${POCKETTRACE_PORT}/mcp",
+      "auth": "configured-bearer",
+      "required": false,
+      "health": {
+        "method": "GET",
+        "path": "/healthz",
+        "expected_status": 200
+      },
+      "readiness": {
+        "method": "GET",
+        "path": "/readyz",
+        "expected_status": 200
+      }
+    },
+    {
+      "id": "solution-publisher",
+      "protocol": "pocket-http",
+      "role": "client",
+      "version": "1.0",
+      "transport": "http",
+      "auth": "configured-bearer",
+      "required": false
+    }
+  ],
+  "provides": ["trace.session.search", "trace.solution.publish"],
+  "consumes": ["wiki.solution.ingest"],
+  "compatibility": {
+    "host": ">=0.2.0 <1.0.0",
+    "pocket_contract": "1.x",
+    "mcp_protocols": ["2025-11-25"]
+  },
+  "permissions": [
+    {
+      "id": "trace.reviewed.read",
+      "required": false,
+      "approval": "pairing",
+      "reason": "Expor somente sessões e runbooks já revisados e redigidos."
+    },
+    {
+      "id": "trace.solution.publish",
+      "required": false,
+      "approval": "per-operation",
+      "reason": "Publicar uma solução revisada no PocketWiki."
+    }
+  ],
+  "discovery": {
+    "well_known_path": "/.well-known/pocket-app",
+    "mdns_service": "_pocket-app._tcp",
+    "requires_pairing": true
+  },
+  "observability": {
+    "event_schema": "pocket.event/v1",
+    "log_stream": "http",
+    "redaction_required": true
+  }
+}

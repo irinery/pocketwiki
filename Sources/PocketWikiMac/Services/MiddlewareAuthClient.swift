@@ -113,12 +113,17 @@ struct MiddlewareAuthOpenAILoginStatus: Decodable, Sendable {
     let profileId: String?
     let mode: String?
     let status: String?
+    let authenticated: Bool?
     let expiresAt: Int64?
     let completedAt: Int64?
+    let error: MiddlewareAuthPublicError?
 
     var summary: String {
+        if let error {
+            return "\(error.code): \(error.message)"
+        }
         switch status?.pocketTrimmed.lowercased() {
-        case "completed":
+        case "completed", "authenticated":
             return "Login OpenAI concluido."
         case "expired":
             return "Sessao de login OpenAI expirada."
@@ -128,6 +133,11 @@ struct MiddlewareAuthOpenAILoginStatus: Decodable, Sendable {
             return "Login OpenAI pendente."
         }
     }
+}
+
+struct MiddlewareAuthPublicError: Decodable, Sendable {
+    let code: String
+    let message: String
 }
 
 struct MiddlewareAuthLMStudioStatus: Decodable, Sendable {
@@ -191,13 +201,14 @@ struct MiddlewareAuthClient {
 
         var request = URLRequest(url: try MiddlewareAuthEndpointPolicy.endpointURL(
             baseURL: middlewareBaseURL,
-            path: "/v1/projects/\(MiddlewareAuthEndpointPolicy.pathSegment(projectID, fallback: "acme"))/auth/openai/login"
+            path: "/v1/projects/\(MiddlewareAuthEndpointPolicy.pathSegment(projectID, fallback: "acme"))/llm/login"
         ))
         request.httpMethod = "POST"
         request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.httpBody = try JSONEncoder().encode(OpenAILoginStartRequest(
+            providerId: "openai",
             profileId: profileID.pocketTrimmed.pocketIfEmpty("default"),
             mode: mode.pocketTrimmed.pocketIfEmpty("device_code")
         ))
@@ -209,6 +220,7 @@ struct MiddlewareAuthClient {
         middlewareBaseURL: String,
         clientToken: String,
         projectID: String,
+        profileID: String,
         loginSessionID: String
     ) async throws -> MiddlewareAuthOpenAILoginStatus {
         let cleanToken = clientToken.pocketTrimmed
@@ -217,7 +229,11 @@ struct MiddlewareAuthClient {
 
         var request = URLRequest(url: try MiddlewareAuthEndpointPolicy.endpointURL(
             baseURL: middlewareBaseURL,
-            path: "/v1/projects/\(MiddlewareAuthEndpointPolicy.pathSegment(projectID, fallback: "acme"))/auth/openai/login-sessions/\(MiddlewareAuthEndpointPolicy.pathSegment(loginSessionID, fallback: ""))"
+            path: "/v1/projects/\(MiddlewareAuthEndpointPolicy.pathSegment(projectID, fallback: "acme"))/llm/login-sessions/\(MiddlewareAuthEndpointPolicy.pathSegment(loginSessionID, fallback: ""))",
+            queryItems: [
+                URLQueryItem(name: "providerId", value: "openai"),
+                URLQueryItem(name: "profileId", value: profileID.pocketTrimmed.pocketIfEmpty("default"))
+            ]
         ))
         request.httpMethod = "GET"
         request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "Authorization")
@@ -308,6 +324,7 @@ struct MiddlewareAuthClient {
 }
 
 private struct OpenAILoginStartRequest: Encodable {
+    let providerId: String
     let profileId: String
     let mode: String
 }
