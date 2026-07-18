@@ -15,6 +15,7 @@ final class LocalAIChatSession {
     var excludedContextPaths: Set<String> = []
     var messagesRevision = 0
     var contextRevision = 0
+    private(set) var openAILoginPrompt: MiddlewareAuthOpenAILoginStart?
 
     private let kernelClient: PocketKernelClient
     private let middlewareAuthClient: MiddlewareAuthClient
@@ -69,6 +70,8 @@ final class LocalAIChatSession {
         projectID: String,
         profileID: String
     ) async -> MiddlewareAuthOpenAILoginStart? {
+        loginPollTask?.cancel()
+        openAILoginPrompt = nil
         errorMessage = nil
         statusMessage = "Iniciando login OpenAI..."
         do {
@@ -78,8 +81,8 @@ final class LocalAIChatSession {
                 projectID: projectID,
                 profileID: profileID
             )
+            openAILoginPrompt = login
             statusMessage = login.summary
-            loginPollTask?.cancel()
             loginPollTask = Task { [weak self] in
                 await self?.pollOpenAILogin(
                     login,
@@ -117,6 +120,9 @@ final class LocalAIChatSession {
                     profileID: profileID,
                     loginSessionID: login.loginSessionId
                 )
+                if openAILoginPrompt?.loginSessionId == loginStatus.loginSessionId {
+                    openAILoginPrompt = openAILoginPrompt?.merging(loginStatus)
+                }
                 switch loginStatus.status?.pocketTrimmed.lowercased() {
                 case "authenticated", "completed":
                     let providerStatus = try await middlewareAuthClient.openAIStatus(
@@ -125,15 +131,17 @@ final class LocalAIChatSession {
                         projectID: projectID,
                         profileID: profileID
                     )
+                    openAILoginPrompt = nil
                     errorMessage = nil
                     statusMessage = providerStatus.authenticated ? providerStatus.summary : "Login terminou, mas o perfil OpenAI não foi persistido."
                     return
                 case "failed", "expired":
+                    openAILoginPrompt = nil
                     errorMessage = loginStatus.summary
                     statusMessage = loginStatus.summary
                     return
                 default:
-                    statusMessage = loginStatus.summary
+                    statusMessage = openAILoginPrompt?.summary ?? loginStatus.summary
                 }
             } catch is CancellationError {
                 return
@@ -145,6 +153,7 @@ final class LocalAIChatSession {
         }
 
         if !Task.isCancelled {
+            openAILoginPrompt = nil
             errorMessage = "Sessão de login OpenAI expirada."
             statusMessage = "Sessão de login OpenAI expirada."
         }
