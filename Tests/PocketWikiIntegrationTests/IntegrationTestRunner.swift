@@ -35,6 +35,7 @@ struct IntegrationTestRunner {
             ("middleware auth add-on lifecycle", testMiddlewareAuthAddonLifecycle),
             ("PocketKernel add-on and MCP wrapper lifecycle", testPocketKernelAddonLifecycle),
             ("PocketKernel provider bridge routes MiddlewareAuth", testPocketKernelProviderBridge),
+            ("PocketKernel structured answer parsing", testPocketKernelStructuredAnswerParsing),
             ("web runtime assets", testWebRuntimeAssets),
             ("excalidraw editor bundle resolver", testExcalidrawEditorBundleResolver)
         ]
@@ -45,6 +46,15 @@ struct IntegrationTestRunner {
         }
 
         print("\(tests.count) integration tests passing")
+    }
+
+    static func testPocketKernelStructuredAnswerParsing() async throws {
+        let payload = Data(#"{"ok":true,"answer":{"summary":"resposta final","facts":[],"assumptions":[],"missing_evidence":[]},"profile_used":"fast"}"#.utf8)
+        let parsed = try PocketKernelClient.parseResponse(payload)
+
+        try expect(parsed.content == "resposta final", "structured answer summary was not selected")
+        try expect(parsed.profileUsed == "fast", "structured answer profile was not preserved")
+        try expect(parsed.missingEvidence.isEmpty, "structured answer invented missing evidence")
     }
 
     static func testNativeServerHTTPContract() async throws {

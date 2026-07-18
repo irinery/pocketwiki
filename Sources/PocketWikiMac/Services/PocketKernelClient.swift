@@ -80,7 +80,7 @@ struct PocketKernelClient {
     func query(
         baseURL: String,
         text: String,
-        channel: String = "app",
+        channel: String = "api",
         appID: String = "pocketwiki",
         userID: String = "local"
     ) async throws -> PocketKernelResponse {
@@ -109,6 +109,9 @@ struct PocketKernelClient {
         let content = firstString(
             in: object,
             paths: [
+                ["answer", "summary"],
+                ["data", "answer", "summary"],
+                ["result", "answer", "summary"],
                 ["answer"],
                 ["response"],
                 ["text"],

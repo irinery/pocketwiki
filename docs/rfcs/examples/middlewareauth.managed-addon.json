@@ -11,8 +11,8 @@
     "update_strategy": "atomic-with-host"
   },
   "build": {
-    "ref": "3f72cac954ac2420fb1b714395fa749f47a1038c",
-    "sha256": "f4f1e044de2abad93d5d2ea3b8efe4e46cd81d4d2f837570441b94f0ca4da762",
+    "ref": "d175c5b6f822140ed9701531a7d3845daf7b2ae9",
+    "sha256": "972204b94230650a4f576ab9ebb2c77aa187108806df837ba2bbb0d71e4abb83",
     "architectures": ["arm64", "x86_64"]
   },
   "runtime": {
