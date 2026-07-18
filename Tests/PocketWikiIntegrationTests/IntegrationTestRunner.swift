@@ -208,6 +208,8 @@ struct IntegrationTestRunner {
         token = os.environ["MIDDLEWARE_CLIENT_TOKEN"]
 
         class Handler(BaseHTTPRequestHandler):
+            login_status_checks = 0
+
             def send_json(self, status, payload):
                 body = json.dumps(payload).encode("utf-8")
                 self.send_response(status)
@@ -234,7 +236,11 @@ struct IntegrationTestRunner {
                     elif query.get("providerId") != ["openai"] or query.get("profileId") != ["default"]:
                         self.send_json(400, {"error": "bad_query"})
                     else:
-                        self.send_json(200, {"providerId": "openai", "projectId": "acme", "profileId": "default", "loginSessionId": "session-1", "mode": "oauth", "status": "failed", "authenticated": False, "error": {"code": "ERR_TEST_LOGIN", "message": "falha rastreavel"}})
+                        Handler.login_status_checks += 1
+                        if Handler.login_status_checks == 1:
+                            self.send_json(200, {"providerId": "openai", "projectId": "acme", "profileId": "default", "loginSessionId": "session-1", "mode": "device_code", "status": "pending", "authenticated": False, "verificationUrl": "https://auth.example/device", "userCode": "TEST-CODE"})
+                        else:
+                            self.send_json(200, {"providerId": "openai", "projectId": "acme", "profileId": "default", "loginSessionId": "session-1", "mode": "oauth", "status": "failed", "authenticated": False, "error": {"code": "ERR_TEST_LOGIN", "message": "falha rastreavel"}})
                     return
                 self.send_json(404, {"error": "not_found"})
 
@@ -289,6 +295,7 @@ struct IntegrationTestRunner {
                 profileID: "default"
             )
             try expect(login.loginSessionId == "session-1", "canonical login start failed")
+            try expect(login.userCode == "TEST-CODE", "login start hid the device code")
             let loginStatus = try await authClient.openAILoginStatus(
                 middlewareBaseURL: configuration.middlewareAuthBaseURL,
                 clientToken: manager.clientToken,
@@ -296,8 +303,20 @@ struct IntegrationTestRunner {
                 profileID: "default",
                 loginSessionID: login.loginSessionId
             )
-            try expect(loginStatus.status == "failed", "canonical login status failed")
-            try expect(loginStatus.summary.contains("ERR_TEST_LOGIN"), "login terminal error was hidden")
+            try expect(loginStatus.status == "pending", "canonical pending login status failed")
+            try expect(loginStatus.userCode == "TEST-CODE", "polling response hid the device code")
+            try expect(loginStatus.verificationUrl == "https://auth.example/device", "polling response hid the verification URL")
+            let mergedPrompt = login.merging(loginStatus)
+            try expect(mergedPrompt.userCode == "TEST-CODE", "prompt merge lost the device code")
+            let failedLoginStatus = try await authClient.openAILoginStatus(
+                middlewareBaseURL: configuration.middlewareAuthBaseURL,
+                clientToken: manager.clientToken,
+                projectID: "acme",
+                profileID: "default",
+                loginSessionID: login.loginSessionId
+            )
+            try expect(failedLoginStatus.status == "failed", "canonical login status failed")
+            try expect(failedLoginStatus.summary.contains("ERR_TEST_LOGIN"), "login terminal error was hidden")
 
             let previousToken = manager.clientToken
             let rotatedToken = try await manager.rotateManagedClientToken(

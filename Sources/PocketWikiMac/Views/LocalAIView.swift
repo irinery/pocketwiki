@@ -125,6 +125,7 @@ struct LocalAIView: View {
                         runtimeTokenLoaded: store.localAIRuntimeTokenLoaded,
                         isStreaming: chat.isStreaming,
                         providerStatusText: providerStatusText,
+                        openAILoginPrompt: chat.openAILoginPrompt,
                         contextNotice: chat.lastContext?.notice,
                         autoContextPaths: autoContextPaths,
                         manualSources: chat.manualSources,
@@ -132,6 +133,8 @@ struct LocalAIView: View {
                         contextSourceCount: activeContextSourceCount,
                         onPrimaryProviderAction: { await runPrimaryProviderAction() },
                         onRefreshModels: { await refreshProviderStatus() },
+                        onCopyOpenAICode: copyOpenAICode,
+                        onOpenOpenAILogin: openOpenAILogin,
                         onOpenAdvancedSettings: { isAdvancedSettingsPresented = true },
                         onAddContextFiles: addContextFiles,
                         onRemoveManualSource: chat.removeManualSource,
@@ -310,10 +313,20 @@ struct LocalAIView: View {
         ) else {
             return
         }
-        let urlText = login.authUrl?.pocketTrimmed.pocketIfEmpty(login.verificationUrl?.pocketTrimmed ?? "") ?? login.verificationUrl?.pocketTrimmed ?? ""
-        if let url = URL(string: urlText), !urlText.isEmpty {
-            NSWorkspace.shared.open(url)
-        }
+        openOpenAILogin(login.actionURL)
+    }
+
+    @MainActor
+    private func copyOpenAICode(_ code: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(code, forType: .string)
+    }
+
+    @MainActor
+    private func openOpenAILogin(_ urlText: String) {
+        guard !urlText.pocketTrimmed.isEmpty,
+              let url = URL(string: urlText.pocketTrimmed) else { return }
+        NSWorkspace.shared.open(url)
     }
 
     @MainActor

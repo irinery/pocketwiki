@@ -70,6 +70,7 @@ struct LocalAISidePanelContent: View {
     let runtimeTokenLoaded: Bool
     let isStreaming: Bool
     let providerStatusText: String
+    let openAILoginPrompt: MiddlewareAuthOpenAILoginStart?
     let contextNotice: String?
     let autoContextPaths: [String]
     let manualSources: [LocalAIManualContextSource]
@@ -77,6 +78,8 @@ struct LocalAISidePanelContent: View {
     let contextSourceCount: Int
     let onPrimaryProviderAction: () async -> Void
     let onRefreshModels: () async -> Void
+    let onCopyOpenAICode: (String) -> Void
+    let onOpenOpenAILogin: (String) -> Void
     let onOpenAdvancedSettings: () -> Void
     let onAddContextFiles: () -> Void
     let onRemoveManualSource: (UUID) -> Void
@@ -178,6 +181,45 @@ struct LocalAISidePanelContent: View {
                     .foregroundStyle(PocketWikiTheme.dim)
                     .pocketWikiSurface(cornerRadius: 13)
                     .help("Configurações avançadas")
+                }
+
+                if method == .openAI,
+                   let prompt = openAILoginPrompt,
+                   !prompt.actionURL.isEmpty || prompt.userCode?.pocketTrimmed.isEmpty == false {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if let code = prompt.userCode?.pocketTrimmed, !code.isEmpty {
+                            LocalAIFieldLabel("Código de acesso")
+                            Text(code)
+                                .font(.title3.monospaced().weight(.semibold))
+                                .foregroundStyle(PocketWikiTheme.accent)
+                                .textSelection(.enabled)
+
+                            Button {
+                                onCopyOpenAICode(code)
+                            } label: {
+                                Label("Copiar código", systemImage: "doc.on.doc")
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
+
+                        if !prompt.actionURL.isEmpty {
+                            Button {
+                                onOpenOpenAILogin(prompt.actionURL)
+                            } label: {
+                                Label("Abrir login", systemImage: "arrow.up.right.square")
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                    .background(PocketWikiTheme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 11))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 11)
+                            .stroke(PocketWikiTheme.accent.opacity(0.35), lineWidth: 1)
+                    }
                 }
 
                 Text(providerStatusText.pocketTrimmed.pocketIfEmpty(method.statusFallback))

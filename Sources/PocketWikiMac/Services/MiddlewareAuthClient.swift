@@ -89,7 +89,7 @@ struct MiddlewareAuthOpenAIStatus: Decodable, Sendable {
     }
 }
 
-struct MiddlewareAuthOpenAILoginStart: Decodable, Sendable {
+struct MiddlewareAuthOpenAILoginStart: Decodable, Sendable, Equatable {
     let loginSessionId: String
     let authUrl: String?
     let verificationUrl: String?
@@ -105,6 +105,23 @@ struct MiddlewareAuthOpenAILoginStart: Decodable, Sendable {
         }
         return "Login OpenAI iniciado."
     }
+
+    var actionURL: String {
+        authUrl?.pocketTrimmed.pocketIfEmpty(verificationUrl?.pocketTrimmed ?? "")
+            ?? verificationUrl?.pocketTrimmed
+            ?? ""
+    }
+
+    func merging(_ status: MiddlewareAuthOpenAILoginStatus) -> Self {
+        guard status.loginSessionId == loginSessionId else { return self }
+        return Self(
+            loginSessionId: loginSessionId,
+            authUrl: status.authUrl?.pocketTrimmed.pocketIfEmpty(authUrl ?? "") ?? authUrl,
+            verificationUrl: status.verificationUrl?.pocketTrimmed.pocketIfEmpty(verificationUrl ?? "") ?? verificationUrl,
+            userCode: status.userCode?.pocketTrimmed.pocketIfEmpty(userCode ?? "") ?? userCode,
+            expiresAt: status.expiresAt ?? expiresAt
+        )
+    }
 }
 
 struct MiddlewareAuthOpenAILoginStatus: Decodable, Sendable {
@@ -114,6 +131,9 @@ struct MiddlewareAuthOpenAILoginStatus: Decodable, Sendable {
     let mode: String?
     let status: String?
     let authenticated: Bool?
+    let authUrl: String?
+    let verificationUrl: String?
+    let userCode: String?
     let expiresAt: Int64?
     let completedAt: Int64?
     let error: MiddlewareAuthPublicError?
