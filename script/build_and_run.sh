@@ -12,7 +12,7 @@ APP_VERSION="${APP_VERSION:-$("$SCRIPT_DIR/resolve_release_version.sh" --print a
 RELEASE_TAG="${RELEASE_TAG:-$("$SCRIPT_DIR/resolve_release_version.sh" --print release_tag)}"
 BUILD_NUMBER="${BUILD_NUMBER:-$(git -C "$ROOT_DIR" rev-list --count HEAD 2>/dev/null || printf "1")}"
 COMMIT_SHA="${GITHUB_SHA:-$(git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null || printf "unknown")}"
-DIST_DIR="$ROOT_DIR/dist"
+DIST_DIR="${POCKETWIKI_DIST_DIR:-$ROOT_DIR/dist}"
 APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
 APP_CONTENTS="$APP_BUNDLE/Contents"
 APP_MACOS="$APP_CONTENTS/MacOS"
@@ -103,7 +103,11 @@ stop_existing_app() {
   done
 }
 
-stop_existing_app
+case "$MODE" in
+  run|--debug|debug|--logs|logs|--telemetry|telemetry)
+    stop_existing_app
+    ;;
+esac
 
 npm --prefix "$ROOT_DIR" run build:excalidraw
 npm --prefix "$ROOT_DIR" run build:graph-view

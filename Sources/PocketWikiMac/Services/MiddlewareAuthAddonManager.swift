@@ -206,7 +206,7 @@ final class MiddlewareAuthAddonManager {
             } while Date() < readinessDeadline
 
             let reason = child.isRunning
-                ? "health check não ficou pronto em (Int(Self.startupTimeout)) segundos"
+                ? "health check não ficou pronto em \(Int(Self.startupTimeout)) segundos"
                 : "processo encerrou durante a inicialização"
             stop()
             status = .failed(reason)
@@ -350,7 +350,9 @@ final class MiddlewareAuthAddonManager {
             contents: Data(),
             attributes: [.posixPermissions: 0o600]
         )
-        return try FileHandle(forWritingTo: url)
+        let handle = try FileHandle(forWritingTo: url)
+        try handle.truncate(atOffset: 0)
+        return handle
     }
 
     private static func processLogTail(from url: URL) -> String {
