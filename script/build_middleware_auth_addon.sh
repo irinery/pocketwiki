@@ -3,7 +3,7 @@ set -eu
 
 ROOT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
 MIDDLEWARE_AUTH_MODULE="github.com/irinery/middlewareAuth"
-MIDDLEWARE_AUTH_REF="${MIDDLEWARE_AUTH_REF:-196ba5f40ec69c2be2d283b503c1dd6fa5c40b4f}"
+MIDDLEWARE_AUTH_REF="${MIDDLEWARE_AUTH_REF:-3f72cac954ac2420fb1b714395fa749f47a1038c}"
 MACOS_ARCHS="${MACOS_ARCHS:-arm64 x86_64}"
 OUTPUT="${1:-$ROOT_DIR/.build/middleware-auth-addon/middleware-codex-oauth}"
 WORK_DIR="$ROOT_DIR/.build/middleware-auth-addon/work"
