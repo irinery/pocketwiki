@@ -15,15 +15,15 @@ final class LocalAIChatSession {
     var excludedContextPaths: Set<String> = []
     var messagesRevision = 0
     var contextRevision = 0
-    var isAIMemoryConfigured = false
+    var isPocketMemoryConfigured = false
     var savedSessions: [PortableConversationSession] = []
     private(set) var openAILoginPrompt: MiddlewareAuthOpenAILoginStart?
 
     private let kernelClient: PocketKernelClient
     private let middlewareAuthClient: MiddlewareAuthClient
     private let conversationStore: PortableConversationStore
-    private var aiMemoryConfiguration: AIMemoryConfiguration?
-    private var aiMemoryClient: AIMemoryClient?
+    private var pocketMemoryConfiguration: PocketMemoryConfiguration?
+    private var pocketMemoryClient: PocketMemoryClient?
     private var archiveSession: PortableConversationSession
     private var captureRootPath = FileManager.default.currentDirectoryPath
     private var archiveTask: Task<Void, Never>?
@@ -49,13 +49,13 @@ final class LocalAIChatSession {
 
     var memoryFileURL: URL { conversationStore.memoryFileURL }
 
-    func configureAIMemory(_ configuration: AIMemoryConfiguration?, captureRootPath: String) {
+    func configurePocketMemory(_ configuration: PocketMemoryConfiguration?, captureRootPath: String) {
         self.captureRootPath = captureRootPath
         hookDrainTask?.cancel()
         hookDrainTask = nil
-        aiMemoryConfiguration = configuration
-        aiMemoryClient = configuration.map { AIMemoryClient(configuration: $0) }
-        isAIMemoryConfigured = configuration != nil
+        pocketMemoryConfiguration = configuration
+        pocketMemoryClient = configuration.map { PocketMemoryClient(configuration: $0) }
+        isPocketMemoryConfigured = configuration != nil
         scheduleHookDrain()
     }
 
@@ -250,7 +250,7 @@ final class LocalAIChatSession {
 
         let selectedPath = selectedPageID.flatMap { index.page(id: $0)?.path }
         let requestText = buildPortableRequest(question: userText, selectedPath: selectedPath)
-        let memoryClient = aiMemoryClient
+        let memoryClient = pocketMemoryClient
         let sessionID = archiveSession.id
         let startsSession = messages.isEmpty
         let captureRoot = sourceRootPath.pocketTrimmed.isEmpty ? FileManager.default.currentDirectoryPath : sourceRootPath
@@ -294,10 +294,10 @@ final class LocalAIChatSession {
                     do {
                         let recalled = try await memoryClient.recall(question: userText)
                         if !recalled.isEmpty {
-                            enrichedRequest += "\n\n---\n\nMEMORIA RECUPERADA DO AI-MEMORY (fontes historicas; confirme na wiki quando necessario):\n\(recalled)"
+                            enrichedRequest += "\n\n---\n\nMEMORIA RECUPERADA DO POCKETWIKI (fontes historicas; confirme na wiki quando necessario):\n\(recalled)"
                         }
                     } catch {
-                        errorMessage = "Consulta ao ai-memory falhou: \(error.localizedDescription)"
+                        errorMessage = "Consulta à memória PocketWiki falhou: \(error.localizedDescription)"
                     }
                 }
                 try Task.checkCancellation()
@@ -318,7 +318,8 @@ final class LocalAIChatSession {
                 )
                 finishStreaming(assistantID: assistantID, status: "Resposta governada concluida.")
                 enqueueCaptureEvents([
-                    captureEvent("assistant-response", identity: assistantID, sessionID: sessionID, cwd: captureRoot, message: response.content),
+                    captureEvent("assistant-response", identity: assistantID, sessionID: sessionID, cwd: captureRoot,
+                        message: response.content, providerID: providerID, modelID: modelID.pocketTrimmed.isEmpty ? "PocketKernel" : modelID),
                     captureEvent("stop", identity: assistantID, sessionID: sessionID, cwd: captureRoot)
                 ].compactMap { $0 })
             } catch is CancellationError {
@@ -566,37 +567,39 @@ final class LocalAIChatSession {
         sessionID: UUID,
         cwd: String,
         prompt: String? = nil,
-        message: String? = nil
-    ) -> AIMemoryHookEvent? {
-        guard let configuration = aiMemoryConfiguration else { return nil }
+        message: String? = nil,
+        providerID: String? = nil,
+        modelID: String? = nil
+    ) -> PocketMemoryHookEvent? {
+        guard let configuration = pocketMemoryConfiguration else { return nil }
         let key = "pw_\(event.replacingOccurrences(of: "-", with: "_"))_\(identity.uuidString.replacingOccurrences(of: "-", with: "").lowercased())"
-        return AIMemoryHookEvent(
+        return PocketMemoryHookEvent(
             ingestKey: key,
             event: event,
             sessionID: sessionID,
             cwd: cwd,
             prompt: prompt,
             message: message,
-            endpoint: configuration.endpoint.absoluteString,
-            workspace: configuration.workspace,
-            project: configuration.project
+            providerID: providerID,
+            modelID: modelID,
+            endpoint: configuration.endpoint.absoluteString
         )
     }
 
-    private func enqueueCaptureEvents(_ events: [AIMemoryHookEvent]) {
+    private func enqueueCaptureEvents(_ events: [PocketMemoryHookEvent]) {
         guard !events.isEmpty else { return }
         do {
             try conversationStore.enqueueHooks(events)
             scheduleHookDrain()
         } catch {
-            errorMessage = "Nao foi possivel registrar evento pendente do ai-memory: \(error.localizedDescription)"
+            errorMessage = "Nao foi possivel registrar evento pendente do memoria PocketWiki: \(error.localizedDescription)"
         }
     }
 
     private func scheduleHookDrain() {
         guard hookDrainTask == nil,
-              let configuration = aiMemoryConfiguration,
-              let client = aiMemoryClient else { return }
+              let configuration = pocketMemoryConfiguration,
+              let client = pocketMemoryClient else { return }
         hookDrainTask = Task { @MainActor [weak self] in
             guard let self else { return }
             defer { self.hookDrainTask = nil }
@@ -610,7 +613,7 @@ final class LocalAIChatSession {
                     try self.conversationStore.acknowledgeHooks(accepted, for: configuration)
                     if accepted.count < batch.count { return }
                 } catch {
-                    self.errorMessage = "Eventos do ai-memory seguem pendentes: \(error.localizedDescription)"
+                    self.errorMessage = "Eventos do memoria PocketWiki seguem pendentes: \(error.localizedDescription)"
                     return
                 }
             }

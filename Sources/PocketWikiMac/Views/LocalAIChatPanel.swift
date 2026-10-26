@@ -182,8 +182,8 @@ struct LocalAIChatPanel: View {
                 if let context = chat.lastContext, context.mode == .wiki {
                     Text("· \(context.includedPaths.count) fonte(s)")
                 }
-                if chat.isAIMemoryConfigured {
-                    Text("· ai-memory")
+                if chat.isPocketMemoryConfigured {
+                    Text("· memoria PocketWiki")
                 }
                 Spacer()
                 Text("Enter envia · Shift+Enter quebra linha")

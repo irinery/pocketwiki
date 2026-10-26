@@ -6,7 +6,7 @@ import { homedir, networkInterfaces } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handleSolutionPut } from './src/solutions/solution-ingestion.mjs';
-import { createAIMemoryConfiguration, recallMemory, captureMemoryEvents } from './src/ai-memory/client.mjs';
+import { PocketMemoryStore, defaultMemoryDirectory } from './src/memory/store.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ENV_PATH = process.env.POCKETWIKI_ENV_PATH
@@ -23,6 +23,7 @@ const publicHosts = parsePublicHosts(
   'pocketwiki.local,pokectwiki.local'
 );
 const mdnsEnabled = String(envValue('POCKETWIKI_MDNS', startupEnv, 'true')).toLowerCase() !== 'false';
+const memoryStores = new Map();
 
 const server = createServer(async (req, res) => {
   try {
@@ -74,7 +75,7 @@ const server = createServer(async (req, res) => {
         middlewareAuthProfileId: runtime.middlewareAuth.profileId,
         kernelProxy: true,
         middlewareAuthProxy: true,
-        aiMemoryConfigured: runtime.aiMemory !== null && runtime.aiMemoryWebToken.length >= 16
+        memoryConfigured: runtime.memory.token.length >= 16
       });
     }
 
@@ -131,32 +132,48 @@ const server = createServer(async (req, res) => {
       }, runtime.kernel);
     }
 
-    if (req.method === 'POST' && url.pathname === '/api/ai-memory/recall') {
+    if (req.method === 'POST' && url.pathname === '/api/memory/recall') {
       const runtime = await loadRuntimeConfig();
-      if (!runtime.aiMemory || runtime.aiMemoryWebToken.length < 16) return sendJson(res, { error: 'ai_memory_not_configured' }, 503);
-      if (!hasAIMemoryWebAccess(req, runtime.aiMemoryWebToken)) return sendJson(res, { error: 'unauthorized' }, 401);
+      if (runtime.memory.token.length < 16) return sendJson(res, { error: 'memory_not_configured' }, 503);
+      if (!hasPocketMemoryAccess(req, runtime.memory.token)) return sendJson(res, { error: 'unauthorized' }, 401);
       const body = await readJsonBody(req);
-      if (typeof body.question !== 'string' || !body.question.trim()) {
+      if (typeof body.question !== 'string' || !body.question.trim() || body.question.length > 2000) {
         return sendJson(res, { error: 'invalid_question' }, 400);
       }
       try {
-        return sendJson(res, { context: await recallMemory(runtime.aiMemory, body.question) });
+        return sendJson(res, await pocketMemoryStore(runtime.memory.path).recall(body.question));
       } catch {
-        return sendJson(res, { error: 'ai_memory_unavailable' }, 502);
+        return sendJson(res, { error: 'memory_unavailable' }, 500);
       }
     }
 
-    if (req.method === 'POST' && url.pathname === '/api/ai-memory/capture') {
+    if (req.method === 'POST' && url.pathname === '/api/memory/capture') {
       const runtime = await loadRuntimeConfig();
-      if (!runtime.aiMemory || runtime.aiMemoryWebToken.length < 16) return sendJson(res, { error: 'ai_memory_not_configured' }, 503);
-      if (!hasAIMemoryWebAccess(req, runtime.aiMemoryWebToken)) return sendJson(res, { error: 'unauthorized' }, 401);
+      if (runtime.memory.token.length < 16) return sendJson(res, { error: 'memory_not_configured' }, 503);
+      if (!hasPocketMemoryAccess(req, runtime.memory.token)) return sendJson(res, { error: 'unauthorized' }, 401);
       const body = await readJsonBody(req);
       try {
-        const acceptedKeys = await captureMemoryEvents(runtime.aiMemory, body.events, runtime.reference.path);
+        const acceptedKeys = await pocketMemoryStore(runtime.memory.path).capture(body.events);
         return sendJson(res, { accepted_keys: acceptedKeys });
       } catch (error) {
         const invalid = String(error?.message || '').startsWith('invalid');
-        return sendJson(res, { error: invalid ? 'invalid_events' : 'ai_memory_unavailable' }, invalid ? 400 : 502);
+        return sendJson(res, { error: invalid ? 'invalid_events' : 'memory_unavailable' }, invalid ? 400 : 500);
+      }
+    }
+
+    if ((req.method === 'GET' || req.method === 'PUT') && url.pathname === '/api/memory/note') {
+      const runtime = await loadRuntimeConfig();
+      if (runtime.memory.token.length < 16) return sendJson(res, { error: 'memory_not_configured' }, 503);
+      if (!hasPocketMemoryAccess(req, runtime.memory.token)) return sendJson(res, { error: 'unauthorized' }, 401);
+      const store = pocketMemoryStore(runtime.memory.path);
+      if (req.method === 'GET') return sendJson(res, { content:await store.readNote() });
+      const body = await readJsonBody(req);
+      try {
+        await store.writeNote(body.content);
+        return sendJson(res, { saved:true });
+      } catch (error) {
+        const invalid = String(error?.message || '').startsWith('invalid');
+        return sendJson(res, { error:invalid ? 'invalid_memory_note' : 'memory_unavailable' }, invalid ? 400 : 500);
       }
     }
 
@@ -230,12 +247,21 @@ function envValue(key, values, fallback = '') {
   return fallback;
 }
 
-function hasAIMemoryWebAccess(req, expectedToken) {
+function hasPocketMemoryAccess(req, expectedToken) {
   const supplied = req.headers.authorization;
   if (typeof supplied !== 'string' || !supplied.startsWith('Bearer ')) return false;
   const candidate = Buffer.from(supplied.slice(7), 'utf8');
   const expected = Buffer.from(expectedToken, 'utf8');
   return candidate.length === expected.length && timingSafeEqual(candidate, expected);
+}
+
+function pocketMemoryStore(root) {
+  let store = memoryStores.get(root);
+  if (!store) {
+    store = new PocketMemoryStore(root);
+    memoryStores.set(root, store);
+  }
+  return store;
 }
 
 function hasEnvValue(key, values) {
@@ -265,13 +291,10 @@ async function loadRuntimeConfig(opts = {}) {
       apiKey: envValue('LM_STUDIO_API_KEY', values, '') || envValue('LM_API_TOKEN', values, ''),
       model: envValue('LM_STUDIO_MODEL', values, '')
     },
-    aiMemory: createAIMemoryConfiguration({
-      serverURL: envValue('AI_MEMORY_SERVER_URL', values, ''),
-      workspace: envValue('AI_MEMORY_WORKSPACE', values, ''),
-      project: envValue('AI_MEMORY_PROJECT', values, ''),
-      authToken: envValue('AI_MEMORY_AUTH_TOKEN', values, '')
-    }),
-    aiMemoryWebToken: envValue('AI_MEMORY_WEB_TOKEN', values, ''),
+    memory: {
+      path: path.resolve(envValue('POCKETWIKI_MEMORY_PATH', values, '') || defaultMemoryDirectory()),
+      token: envValue('POCKETWIKI_MEMORY_TOKEN', values, '')
+    },
     kernel: {
       baseUrl: trimSlash(envValue('POCKETKERNEL_BASE_URL', values, 'http://127.0.0.1:8080'))
     },

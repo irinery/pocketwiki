@@ -278,7 +278,7 @@ final class WikiAppStore {
         return url.appendingPathComponent("api/kernel/query").absoluteString
     }
 
-    var aiMemoryCaptureRootPath: String {
+    var pocketMemoryCaptureRootPath: String {
         switch sourceMode {
         case .localFolder(let url): url.path
         case .localServer: currentSourceURL?.path ?? serverConfiguration.resolvedReferenceURL.path

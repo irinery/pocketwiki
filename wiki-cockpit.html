@@ -709,7 +709,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
           <div class="field"><label>Profile/User ID</label><input id="ai-settings-profile-id" spellcheck="false" placeholder="default"></div>
         </div>
         <div class="field"><label>Middleware token</label><input id="ai-settings-token" type="password" spellcheck="false" placeholder="MIDDLEWARE_CLIENT_TOKEN"></div>
-        <div class="field"><label>Token web do ai-memory</label><input id="ai-settings-memory-token" type="password" spellcheck="false" placeholder="AI_MEMORY_WEB_TOKEN"></div>
+        <div class="field"><label>Token da memoria PocketWiki</label><input id="ai-settings-memory-token" type="password" spellcheck="false" placeholder="POCKETWIKI_MEMORY_TOKEN"></div>
       </section>
     </div>
     <div class="copy-actions">
@@ -738,7 +738,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 'use strict';
 
 const AI_SESSION_STORAGE_KEY = 'pocketwiki:ai-session-v1';
-const AI_HOOK_OUTBOX_STORAGE_KEY = 'pocketwiki:ai-hook-outbox-v1';
+const MEMORY_OUTBOX_STORAGE_KEY = 'pocketwiki:memory-outbox-v1';
+const LEGACY_AI_HOOK_OUTBOX_STORAGE_KEY = 'pocketwiki:ai-hook-outbox-v1';
 const initialAiSession = restoreAiSession();
 
 const state = {
@@ -773,7 +774,7 @@ const state = {
     middlewareProjectId: localStorage.getItem('pocketwiki:middleware-project-id') || 'acme',
     middlewareProfileId: localStorage.getItem('pocketwiki:middleware-profile-id') || 'default',
     middlewareToken: '',
-    memoryWebToken: globalThis.sessionStorage?.getItem('pocketwiki:ai-memory-web-token') || '',
+    memoryWebToken: globalThis.sessionStorage?.getItem('pocketwiki:memory-token') || '',
     baseUrl: localStorage.getItem('pocketwiki:ai-base-url') || 'http://127.0.0.1:1234',
     apiKey: '',
     model: localStorage.getItem('pocketwiki:ai-model') || 'gpt-5.5',
@@ -783,7 +784,7 @@ const state = {
     sessionId: initialAiSession.id,
     sessionCreatedAt: initialAiSession.createdAt,
     messages: initialAiSession.messages,
-    hookOutbox: restoreAiHookOutbox(),
+    hookOutbox: restoreMemoryOutbox(),
     hookDrainBusy: false,
     connected: false,
     busy: false,
@@ -4077,7 +4078,7 @@ function bindAiSettingsModal(){
   $('#ai-settings-save')?.addEventListener('click', () => {
     state.ai.memoryWebToken = $('#ai-settings-memory-token')?.value.trim() || '';
     saveAiSettings();
-    void drainAiHookOutbox();
+    void drainMemoryOutbox();
     closeAiSettings();
     renderAiPanel();
   });
@@ -4396,8 +4397,8 @@ function saveAiSettings(){
   localStorage.setItem('pocketwiki:ai-model', state.ai.model);
   localStorage.removeItem('pocketwiki:ai-api-key');
   try {
-    if (state.ai.memoryWebToken) sessionStorage.setItem('pocketwiki:ai-memory-web-token', state.ai.memoryWebToken);
-    else sessionStorage.removeItem('pocketwiki:ai-memory-web-token');
+    if (state.ai.memoryWebToken) sessionStorage.setItem('pocketwiki:memory-token', state.ai.memoryWebToken);
+    else sessionStorage.removeItem('pocketwiki:memory-token');
   } catch {}
 }
 
@@ -4716,7 +4717,7 @@ function newAiConversation(){
       showToast('Não consegui arquivar a conversa neste navegador.');
       return;
     }
-    queueAiCapture('session-end', state.ai.sessionId);
+    queueMemoryCapture('session-end', state.ai.sessionId);
   }
   state.ai.sessionId = newAiId();
   state.ai.sessionCreatedAt = aiTimestamp();
@@ -4832,7 +4833,7 @@ function resumeAiSession(id){
     if (state.ai.messages.length) localStorage.setItem(`pocketwiki:ai-archive:${outgoingId}`, current);
     localStorage.setItem(AI_SESSION_STORAGE_KEY, JSON.stringify(target));
     localStorage.removeItem(archiveKey);
-    if (state.ai.messages.length) queueAiCapture('session-end', outgoingId);
+    if (state.ai.messages.length) queueMemoryCapture('session-end', outgoingId);
     const restored = restoreAiSession();
     state.ai.sessionId = restored.id;
     state.ai.sessionCreatedAt = restored.createdAt;
@@ -4867,44 +4868,47 @@ function exportAiSessions(){
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function restoreAiHookOutbox(){
+function restoreMemoryOutbox(){
   try {
-    const saved = JSON.parse(localStorage.getItem(AI_HOOK_OUTBOX_STORAGE_KEY) || '[]');
+    const saved = JSON.parse(localStorage.getItem(MEMORY_OUTBOX_STORAGE_KEY) || localStorage.getItem(LEGACY_AI_HOOK_OUTBOX_STORAGE_KEY) || '[]');
     return Array.isArray(saved) ? saved.filter(item => item?.ingest_key && item?.session_id) : [];
   } catch {
     return [];
   }
 }
 
-function queueAiCapture(event, identity, fields = {}){
-  if (!state.appConfig?.aiMemoryConfigured) return;
+function queueMemoryCapture(event, identity, fields = {}){
+  if (!state.appConfig?.memoryConfigured) return;
   const item = {
     event,
     session_id: state.ai.sessionId,
     ingest_key: `pw_web_${event.replaceAll('-', '_')}_${identity.replaceAll('-', '').toLowerCase()}`,
     ...fields
   };
+  if (typeof item.prompt === 'string') item.prompt = item.prompt.slice(0, 8000);
+  if (typeof item.message === 'string') item.message = item.message.slice(0, 8000);
   if (state.ai.hookOutbox.some(pending => pending.ingest_key === item.ingest_key)) return;
   state.ai.hookOutbox.push(item);
-  persistAiHookOutbox();
-  void drainAiHookOutbox();
+  persistMemoryOutbox();
+  void drainMemoryOutbox();
 }
 
-function persistAiHookOutbox(){
+function persistMemoryOutbox(){
   try {
-    localStorage.setItem(AI_HOOK_OUTBOX_STORAGE_KEY, JSON.stringify(state.ai.hookOutbox));
+    localStorage.setItem(MEMORY_OUTBOX_STORAGE_KEY, JSON.stringify(state.ai.hookOutbox));
+    localStorage.removeItem(LEGACY_AI_HOOK_OUTBOX_STORAGE_KEY);
   } catch {
-    showToast('Fila do ai-memory sem espaço no navegador.');
+    showToast('Fila da memoria PocketWiki sem espaço no navegador.');
   }
 }
 
-async function drainAiHookOutbox(){
-  if (state.ai.hookDrainBusy || !state.appConfig?.aiMemoryConfigured || !state.ai.memoryWebToken || !location.protocol.startsWith('http')) return;
+async function drainMemoryOutbox(){
+  if (state.ai.hookDrainBusy || !state.appConfig?.memoryConfigured || !state.ai.memoryWebToken || !location.protocol.startsWith('http')) return;
   state.ai.hookDrainBusy = true;
   try {
     while (state.ai.hookOutbox.length) {
       const batch = state.ai.hookOutbox.slice(0, 32);
-      const response = await fetch('/api/ai-memory/capture', {
+      const response = await fetch('/api/memory/capture', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${state.ai.memoryWebToken}` },
         body: JSON.stringify({ events: batch })
@@ -4913,7 +4917,7 @@ async function drainAiHookOutbox(){
       const accepted = new Set((await response.json()).accepted_keys || []);
       if (!accepted.size) return;
       state.ai.hookOutbox = state.ai.hookOutbox.filter(item => !accepted.has(item.ingest_key));
-      persistAiHookOutbox();
+      persistMemoryOutbox();
       if (accepted.size < batch.length) return;
     }
   } catch {
@@ -4932,10 +4936,10 @@ function portableAiRequest(question){
   ].filter(Boolean).join('\n\n---\n\n');
 }
 
-async function recallAiMemory(question){
-  if (!state.appConfig?.aiMemoryConfigured || !state.ai.memoryWebToken || !location.protocol.startsWith('http')) return '';
+async function recallMemory(question){
+  if (!state.appConfig?.memoryConfigured || !state.ai.memoryWebToken || !location.protocol.startsWith('http')) return '';
   try {
-    const response = await fetch('/api/ai-memory/recall', {
+    const response = await fetch('/api/memory/recall', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${state.ai.memoryWebToken}` },
       body: JSON.stringify({ question })
@@ -4980,16 +4984,16 @@ async function askAi(preset){
   };
   state.ai.messages.push(assistantMessage);
   persistAiSession();
-  if (isNewSession) queueAiCapture('session-start', state.ai.sessionId);
-  queueAiCapture('user-prompt-submit', userMessage.id, { prompt: question });
+  if (isNewSession) queueMemoryCapture('session-start', state.ai.sessionId);
+  queueMemoryCapture('user-prompt-submit', userMessage.id, { prompt: question });
   state.ai.busy = true;
   renderAiPanel();
 
   try {
     state.ai.lastContext = [];
-    const recalled = await recallAiMemory(question);
+    const recalled = await recallMemory(question);
     const enrichedRequest = recalled
-      ? `${requestText}\n\n---\n\nMEMORIA RECUPERADA DO AI-MEMORY (fontes historicas; confirme na wiki quando necessario):\n${recalled}`
+      ? `${requestText}\n\n---\n\nMEMORIA RECUPERADA DO POCKETWIKI (fontes historicas; confirme na wiki quando necessario):\n${recalled}`
       : requestText;
     const res = await fetchPocketKernel(enrichedRequest);
     if (!res.ok) throw new Error(await res.text());
@@ -4997,7 +5001,7 @@ async function askAi(preset){
     state.ai.connected = true;
     applyAiAnswer(assistantMessage, answer);
     assistantMessage.model = state.ai.model || answer.model || 'PocketKernel';
-    queueAiCapture('assistant-response', assistantMessage.id, { message: assistantMessage.content });
+    queueMemoryCapture('assistant-response', assistantMessage.id, { message: assistantMessage.content, provider_id: assistantMessage.providerId || null, model_id: assistantMessage.model || null });
   } catch (err) {
     state.ai.connected = false;
     assistantMessage.role = 'system';
@@ -5005,7 +5009,7 @@ async function askAi(preset){
     assistantMessage.reasoning = '';
   } finally {
     assistantMessage.streaming = false;
-    queueAiCapture('stop', assistantMessage.id);
+    queueMemoryCapture('stop', assistantMessage.id);
     persistAiSession();
     state.ai.busy = false;
     renderAiPanel();
@@ -5804,7 +5808,7 @@ if (window.marked?.setOptions) marked.setOptions({ gfm:true, breaks:false, mangl
 
 async function initApp(){
   const [config, routes] = await Promise.all([loadAppConfig(), loadRoutes()]);
-  if (config?.aiMemoryConfigured) void drainAiHookOutbox();
+  if (config?.memoryConfigured) void drainMemoryOutbox();
   if (!config && !routes && location.protocol.startsWith('http')) {
     showAccessScreen('A página abriu, mas as APIs locais do PocketWiki não responderam. Pode ser interferência de rota, DNS/mDNS, Tailscale/VPN ou o servidor reiniciando na máquina principal.');
   }

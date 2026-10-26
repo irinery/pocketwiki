@@ -34,6 +34,7 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
     private let queue = DispatchQueue(label: "PocketWiki.HTTPServer")
     private let mdnsResponder: PocketWikiMDNSResponder
     private let solutionIngestion: PocketWikiSolutionIngestion
+    private let memoryStore: PocketMemoryStore
     private var listener: NWListener?
     private var webRoot: URL?
     private var handlers: [UUID: PocketWikiHTTPConnectionHandler] = [:]
@@ -48,6 +49,7 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
         self.log = log
         self.mdnsResponder = PocketWikiMDNSResponder(log: log)
         self.solutionIngestion = PocketWikiSolutionIngestion(writeToken: configuration.writeToken)
+        self.memoryStore = PocketMemoryStore(directory: URL(fileURLWithPath: configuration.memoryPath, isDirectory: true))
     }
 
     func start() async throws -> PocketWikiRouteSnapshot {
@@ -151,6 +153,10 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
             logRequest(request)
             return await jsonResponse(configPayload())
         }
+        if path.hasPrefix("/api/memory/") {
+            logRequest(request)
+            return await handleMemory(request)
+        }
         if request.method == "GET", path == "/api/routes" {
             logRequest(request)
             return jsonResponse(configuration.routes)
@@ -233,8 +239,40 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
             "middlewareAuthProjectId": .string(configuration.middlewareAuthProjectID),
             "middlewareAuthProfileId": .string(configuration.middlewareAuthProfileID),
             "kernelProxy": .bool(true),
-            "middlewareAuthProxy": .bool(true)
+            "middlewareAuthProxy": .bool(true),
+            "memoryConfigured": .bool(configuration.memoryToken.count >= 16)
         ]
+    }
+
+    private func handleMemory(_ request: PocketWikiHTTPRequest) async -> PocketWikiHTTPResponse {
+        let token = configuration.memoryToken
+        guard token.count >= 16 else { return jsonError("memory_not_configured", status: 503) }
+        guard request.headers["authorization"] == "Bearer \(token)" else { return jsonError("unauthorized", status: 401) }
+        do {
+            switch (request.method, request.urlPath) {
+            case ("POST", "/api/memory/capture"):
+                let payload = try JSONDecoder().decode(PocketMemoryCaptureRequest.self, from: request.body)
+                return jsonResponse(["accepted_keys": try await memoryStore.capture(payload.events)])
+            case ("POST", "/api/memory/recall"):
+                let payload = try JSONDecoder().decode(PocketMemoryRecallRequest.self, from: request.body)
+                return jsonResponse(try await memoryStore.recall(payload.question))
+            case ("GET", "/api/memory/note"):
+                return jsonResponse(["content": try await memoryStore.readNote()])
+            case ("PUT", "/api/memory/note"):
+                let payload = try JSONDecoder().decode(PocketMemoryNoteRequest.self, from: request.body)
+                try await memoryStore.writeNote(payload.content)
+                return jsonResponse(["saved": true])
+            default:
+                return jsonError("not_found", status: 404)
+            }
+        } catch is DecodingError {
+            return jsonError("invalid_memory_request", status: 400)
+        } catch PocketMemoryStoreError.invalidInput {
+            return jsonError("invalid_memory_request", status: 400)
+        } catch {
+            log(PocketWikiServerLogEntry(level: .error, message: "Memoria PocketWiki falhou: \(error.localizedDescription)"))
+            return jsonError("memory_unavailable", status: 500)
+        }
     }
 
     static func filesPayload(_ source: PocketWikiServedSource) -> PocketWikiFilesPayload {

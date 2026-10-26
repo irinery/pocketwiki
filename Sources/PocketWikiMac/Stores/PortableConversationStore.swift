@@ -54,7 +54,7 @@ struct PortableConversationStore {
         let memoryDirectory = directoryURL ?? appSupport.appendingPathComponent("PocketWiki/AI Memory", isDirectory: true)
         directory = memoryDirectory
         memoryFileURL = memoryDirectory.appendingPathComponent("MEMORY.md")
-        hookOutboxURL = memoryDirectory.appendingPathComponent("ai-memory-outbox.json")
+        hookOutboxURL = memoryDirectory.appendingPathComponent("pocket-memory-outbox.json")
         activeSessionURL = memoryDirectory.appendingPathComponent("active-session-id")
     }
 
@@ -175,30 +175,26 @@ struct PortableConversationStore {
         return (try? String(contentsOf: memoryFileURL, encoding: .utf8))?.pocketTrimmed ?? ""
     }
 
-    func pendingHooks(for configuration: AIMemoryConfiguration) throws -> [AIMemoryHookEvent] {
+    func pendingHooks(for configuration: PocketMemoryConfiguration) throws -> [PocketMemoryHookEvent] {
         try readHookOutbox().filter {
             $0.endpoint == configuration.endpoint.absoluteString
-                && $0.workspace == configuration.workspace
-                && $0.project == configuration.project
         }
     }
 
-    func enqueueHooks(_ events: [AIMemoryHookEvent]) throws {
+    func enqueueHooks(_ events: [PocketMemoryHookEvent]) throws {
         guard !events.isEmpty else { return }
         var pending = try readHookOutbox()
-        var keys = Set(pending.map { "\($0.endpoint)|\($0.workspace)|\($0.project)|\($0.ingestKey)" })
+        var keys = Set(pending.map { "\($0.endpoint)|\($0.ingestKey)" })
         pending.append(contentsOf: events.filter {
-            keys.insert("\($0.endpoint)|\($0.workspace)|\($0.project)|\($0.ingestKey)").inserted
+            keys.insert("\($0.endpoint)|\($0.ingestKey)").inserted
         })
         try writeHookOutbox(pending)
     }
 
-    func acknowledgeHooks(_ keys: Set<String>, for configuration: AIMemoryConfiguration) throws {
+    func acknowledgeHooks(_ keys: Set<String>, for configuration: PocketMemoryConfiguration) throws {
         guard !keys.isEmpty else { return }
         try writeHookOutbox(readHookOutbox().filter {
             !($0.endpoint == configuration.endpoint.absoluteString
-                && $0.workspace == configuration.workspace
-                && $0.project == configuration.project
                 && keys.contains($0.ingestKey))
         })
     }
@@ -228,12 +224,12 @@ struct PortableConversationStore {
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: activeSessionURL.path)
     }
 
-    private func readHookOutbox() throws -> [AIMemoryHookEvent] {
+    private func readHookOutbox() throws -> [PocketMemoryHookEvent] {
         guard FileManager.default.fileExists(atPath: hookOutboxURL.path) else { return [] }
-        return try JSONDecoder().decode([AIMemoryHookEvent].self, from: Data(contentsOf: hookOutboxURL))
+        return try JSONDecoder().decode([PocketMemoryHookEvent].self, from: Data(contentsOf: hookOutboxURL))
     }
 
-    private func writeHookOutbox(_ events: [AIMemoryHookEvent]) throws {
+    private func writeHookOutbox(_ events: [PocketMemoryHookEvent]) throws {
         try prepareDirectory()
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

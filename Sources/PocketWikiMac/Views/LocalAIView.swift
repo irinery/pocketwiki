@@ -210,7 +210,7 @@ struct LocalAIView: View {
                 userID: middlewareAuthProfileID,
                 index: store.index,
                 selectedPageID: store.selectedPageID,
-                sourceRootPath: store.aiMemoryCaptureRootPath,
+                sourceRootPath: store.pocketMemoryCaptureRootPath,
                 providerID: providerMethod.rawValue,
                 modelID: selectedModelID
             )
@@ -240,7 +240,7 @@ struct LocalAIView: View {
     @MainActor
     private func bootstrapLocalAI() async {
         let runtime = LocalAIRuntimeConfigurationLoader.load()
-        chat.configureAIMemory(runtime.aiMemory, captureRootPath: store.aiMemoryCaptureRootPath)
+        chat.configurePocketMemory(runtime.pocketMemory, captureRootPath: store.pocketMemoryCaptureRootPath)
         if lmStudioModelID.pocketTrimmed.isEmpty,
            providerMethod == .lmStudio,
            let legacyModel = UserDefaults.standard.string(forKey: "PocketWikiMac.localAI.modelID")?.pocketTrimmed,

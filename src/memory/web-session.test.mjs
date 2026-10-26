@@ -114,26 +114,27 @@ test('mantém eventos pendentes e reenvia após recarregar', async () => {
     get length() { return data.size; }
   };
   const offline = browser(storage, async url => {
-    if (url === '/api/ai-memory/recall') return { ok:true, json:async () => ({ context:'nota do ai-memory' }) };
+    if (url === '/api/memory/recall') return { ok:true, json:async () => ({ context:'nota da memoria PocketWiki' }) };
     throw new Error('offline');
   });
-  vm.runInContext("state.appConfig = { aiMemoryConfigured:true }; state.ai.memoryWebToken = 'browser-secret-123456789'", offline.context);
+  vm.runInContext("state.appConfig = { memoryConfigured:true }; state.ai.memoryWebToken = 'browser-secret-123456789'", offline.context);
   offline.input.value = 'Pergunta';
   await vm.runInContext('askAi()', offline.context);
-  assert.match(offline.requests[0], /nota do ai-memory/);
-  const pending = JSON.parse(storage.getItem('pocketwiki:ai-hook-outbox-v1'));
+  assert.match(offline.requests[0], /nota da memoria PocketWiki/);
+  const pending = JSON.parse(storage.getItem('pocketwiki:memory-outbox-v1'));
   assert.deepEqual(pending.map(item => item.event), ['session-start', 'user-prompt-submit', 'assistant-response', 'stop']);
+  assert.equal(pending[2].model_id, vm.runInContext('state.ai.model', offline.context));
   assert(pending.every(item => /^[A-Za-z0-9_-]{1,64}$/.test(item.ingest_key)));
 
   const online = browser(storage, async (url, options) => {
-    assert.equal(url, '/api/ai-memory/capture');
+    assert.equal(url, '/api/memory/capture');
     assert.equal(options.headers.Authorization, 'Bearer browser-secret-123456789');
     const events = JSON.parse(options.body).events;
     return { ok:true, json:async () => ({ accepted_keys:events.map(item => item.ingest_key) }) };
   });
-  vm.runInContext("state.appConfig = { aiMemoryConfigured:true }; state.ai.memoryWebToken = 'browser-secret-123456789'", online.context);
-  await vm.runInContext('drainAiHookOutbox()', online.context);
-  assert.equal(JSON.parse(storage.getItem('pocketwiki:ai-hook-outbox-v1')).length, 0);
+  vm.runInContext("state.appConfig = { memoryConfigured:true }; state.ai.memoryWebToken = 'browser-secret-123456789'", online.context);
+  await vm.runInContext('drainMemoryOutbox()', online.context);
+  assert.equal(JSON.parse(storage.getItem('pocketwiki:memory-outbox-v1')).length, 0);
 });
 
 test('preserva o registro completo além do limite de renderização', () => {
@@ -155,4 +156,20 @@ test('preserva o registro completo além do limite de renderização', () => {
   assert.equal(JSON.parse(storage.getItem('pocketwiki:ai-session-v1')).messages.length, 81);
   const reloaded = browser(storage);
   assert.equal(vm.runInContext('state.ai.messages.length', reloaded.context), 81);
+});
+
+test('limita o evento enviado sem cortar a transcricao local', () => {
+  const data = new Map();
+  const storage = {
+    getItem: key => data.get(key) ?? null,
+    setItem: (key, value) => data.set(key, String(value)),
+    removeItem: key => data.delete(key),
+    key: index => [...data.keys()][index],
+    get length() { return data.size; }
+  };
+  const page = browser(storage);
+  vm.runInContext("state.appConfig = { memoryConfigured:true }; state.ai.messages.push({id:newAiId(), role:'user', content:'x'.repeat(9000), createdAt:aiTimestamp()}); persistAiSession(); queueMemoryCapture('user-prompt-submit', newAiId(), {prompt:'x'.repeat(9000)})", page.context);
+  const pending = JSON.parse(storage.getItem('pocketwiki:memory-outbox-v1'));
+  assert.equal(pending[0].prompt.length, 8000);
+  assert.equal(JSON.parse(storage.getItem('pocketwiki:ai-session-v1')).messages[0].content.length, 9000);
 });
