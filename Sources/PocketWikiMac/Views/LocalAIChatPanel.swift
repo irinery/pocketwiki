@@ -1,8 +1,10 @@
 import AppKit
 import MarkdownUI
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct LocalAIChatPanel: View {
+    @State private var isImportingSessions = false
     @Bindable var chat: LocalAIChatSession
     let index: WikiIndex
     let connectionLabel: String
@@ -36,6 +38,12 @@ struct LocalAIChatPanel: View {
             return .handled
         })
         .pocketWikiCard()
+        .fileImporter(isPresented: $isImportingSessions, allowedContentTypes: [.json]) { result in
+            switch result {
+            case .success(let url): chat.importSessions(from: url)
+            case .failure(let error): chat.errorMessage = "Nao foi possivel selecionar o JSON: \(error.localizedDescription)"
+            }
+        }
     }
 
     private var header: some View {
@@ -50,6 +58,28 @@ struct LocalAIChatPanel: View {
                 .font(.caption.monospaced())
                 .foregroundStyle(PocketWikiTheme.muted)
                 .lineLimit(1)
+
+            Menu {
+                if chat.savedSessions.isEmpty {
+                    Text("Nenhuma conversa arquivada")
+                } else {
+                    ForEach(chat.savedSessions, id: \.id) { session in
+                        Button {
+                            chat.resumeSession(id: session.id)
+                        } label: {
+                            Text(session.messages.first(where: { $0.role == "user" })?.content.prefix(70) ?? "Conversa")
+                        }
+                    }
+                }
+                Divider()
+                Button("Importar JSON...") { isImportingSessions = true }
+            } label: {
+                Label("Sessões", systemImage: "clock.arrow.circlepath")
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.roundedRectangle(radius: 8))
+            .controlSize(.small)
+            .disabled(chat.isStreaming)
 
             Button {
                 NSWorkspace.shared.open(chat.memoryFileURL)

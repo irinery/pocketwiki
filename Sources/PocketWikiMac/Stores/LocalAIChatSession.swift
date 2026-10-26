@@ -16,6 +16,7 @@ final class LocalAIChatSession {
     var messagesRevision = 0
     var contextRevision = 0
     var isAIMemoryConfigured = false
+    var savedSessions: [PortableConversationSession] = []
     private(set) var openAILoginPrompt: MiddlewareAuthOpenAILoginStart?
 
     private let kernelClient: PocketKernelClient
@@ -43,6 +44,7 @@ final class LocalAIChatSession {
             guard let role = LocalAIChatRole(rawValue: record.role) else { return nil }
             return LocalAIChatMessage(role: role, content: record.content, providerID: record.providerID, modelID: record.modelID, createdAt: record.createdAt)
         }
+        savedSessions = store.savedSessions(excluding: archiveSession.id)
     }
 
     var memoryFileURL: URL { conversationStore.memoryFileURL }
@@ -357,6 +359,7 @@ final class LocalAIChatSession {
         errorMessage = nil
         lastContext = nil
         statusMessage = "Historico limpo."
+        savedSessions = conversationStore.savedSessions(excluding: archiveSession.id)
         messagesRevision += 1
     }
 
@@ -376,8 +379,50 @@ final class LocalAIChatSession {
         lastContext = nil
         excludedContextPaths.removeAll()
         statusMessage = "Reset aplicado. Proxima resposta volta a consultar o indice da wiki."
+        savedSessions = conversationStore.savedSessions(excluding: archiveSession.id)
         contextRevision += 1
         messagesRevision += 1
+    }
+
+    func resumeSession(id: UUID) {
+        guard !isStreaming, id != archiveSession.id else { return }
+        guard persistArchive() else { return }
+        do {
+            let restored = try conversationStore.loadSession(id: id)
+            try conversationStore.activateSession(id: id)
+            let oldSessionID = archiveSession.id
+            if !messages.isEmpty {
+                enqueueCaptureEvents([
+                    captureEvent("session-end", identity: oldSessionID, sessionID: oldSessionID, cwd: captureRootPath)
+                ].compactMap { $0 })
+            }
+            archiveSession = restored
+            messages = restored.messages.compactMap { record in
+                guard let role = LocalAIChatRole(rawValue: record.role) else { return nil }
+                return LocalAIChatMessage(role: role, content: record.content, providerID: record.providerID, modelID: record.modelID, createdAt: record.createdAt)
+            }
+            prompt = ""
+            lastContext = nil
+            errorMessage = nil
+            statusMessage = "Conversa retomada."
+            savedSessions = conversationStore.savedSessions(excluding: archiveSession.id)
+            messagesRevision += 1
+        } catch {
+            errorMessage = "Nao foi possivel abrir a conversa: \(error.localizedDescription)"
+        }
+    }
+
+    func importSessions(from url: URL) {
+        let accessGranted = url.startAccessingSecurityScopedResource()
+        defer { if accessGranted { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let count = try conversationStore.importSessions(from: Data(contentsOf: url))
+            savedSessions = conversationStore.savedSessions(excluding: archiveSession.id)
+            errorMessage = nil
+            statusMessage = count == 0 ? "Essas conversas ja estao salvas." : "\(count) conversa(s) importada(s)."
+        } catch {
+            errorMessage = "Nao foi possivel importar o JSON: \(error.localizedDescription)"
+        }
     }
 
     func addManualSources(_ sources: [LocalAIManualContextSource]) {
@@ -492,14 +537,17 @@ final class LocalAIChatSession {
         }
     }
 
-    private func persistArchive() {
+    @discardableResult
+    private func persistArchive() -> Bool {
         archiveTask?.cancel()
         archiveSession.updatedAt = Date()
         archiveSession.messages = messagesToArchive()
         do {
             try conversationStore.save(archiveSession, messages: messages)
+            return true
         } catch {
             errorMessage = "Nao foi possivel salvar o registro portavel da conversa: \(error.localizedDescription)"
+            return false
         }
     }
 

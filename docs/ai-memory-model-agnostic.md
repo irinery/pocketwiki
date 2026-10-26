@@ -7,7 +7,8 @@ Manter transcrições e contexto durável fora do provider/modelo selecionado. A
 ## App macOS
 
 - Transcrições são gravadas em `~/Library/Application Support/PocketWiki/AI Memory/session-<uuid>.json`.
-- Ao iniciar, o app restaura a sessão mais recente. **Limpar** e **Reset** começam outra sessão; os arquivos anteriores continuam disponíveis no diretório.
+- Ao iniciar, o app restaura a sessão ativa indicada por `active-session-id` (ou a mais recente em instalações antigas). **Limpar** e **Reset** começam outra sessão; as anteriores podem ser retomadas pelo menu **Sessões**.
+- O menu **Sessões** importa um JSON individual do app macOS ou o pacote JSON exportado pelo cockpit web. IDs já existentes são ignorados, e importar não troca a sessão ativa. O botão de pasta continua abrindo os arquivos diretamente.
 - O histórico recente (até 12 mensagens e 8.000 caracteres) acompanha cada nova pergunta, preservando os papéis `user` e `assistant` quando o modelo muda.
 - `MEMORY.md`, no mesmo diretório, começa vazio e pode ser editado pelo usuário. Até 4.000 caracteres dela acompanham cada pergunta. Ela não é reescrita por um modelo.
 - Cada resposta registra `provider_id` e `model_id` como metadados opcionais. O conteúdo não depende desses campos. Mensagens de sistema e raciocínio interno do modelo não são persistidos.
