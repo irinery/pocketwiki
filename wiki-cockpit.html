@@ -718,6 +718,10 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 <script>
 'use strict';
 
+const AI_SESSION_STORAGE_KEY = 'pocketwiki:ai-session-v1';
+const AI_HOOK_OUTBOX_STORAGE_KEY = 'pocketwiki:ai-hook-outbox-v1';
+const initialAiSession = restoreAiSession();
+
 const state = {
   pages: new Map(),
   rawFiles: new Map(),
@@ -756,7 +760,11 @@ const state = {
     models: [],
     modelsBusy: false,
     providerStatus: '',
-    messages: [],
+    sessionId: initialAiSession.id,
+    sessionCreatedAt: initialAiSession.createdAt,
+    messages: initialAiSession.messages,
+    hookOutbox: restoreAiHookOutbox(),
+    hookDrainBusy: false,
     connected: false,
     busy: false,
     lastContext: [],
@@ -3853,7 +3861,7 @@ function renderAiPanel(){
     </div>
     <div class="ai-grid">
       <div class="card ai-chat">
-        <div class="card-title">${cardTitle('ai', 'Conversa', state.ai.connected ? 'pronto' : 'PocketKernel Harness')}</div>
+        <div class="card-title">${cardTitle('ai', 'Conversa', state.ai.connected ? 'pronto' : 'PocketKernel Harness')}<button class="btn small" id="ai-export" title="Baixar registros em JSON">Exportar</button><button class="btn small" id="ai-new" title="Arquivar e iniciar outra conversa" ${state.ai.busy ? 'disabled' : ''}>Nova</button></div>
         <div class="ai-messages" id="ai-messages"></div>
         <div class="ai-composer">
           <div class="ai-input">
@@ -3984,6 +3992,8 @@ function bindAiPanel(){
   $('#ai-refresh-status')?.addEventListener('click', () => refreshAiModels());
   $('#ai-open-settings')?.addEventListener('click', openAiSettings);
   $('#ai-send')?.addEventListener('click', () => askAi());
+  $('#ai-export')?.addEventListener('click', exportAiSessions);
+  $('#ai-new')?.addEventListener('click', newAiConversation);
   $('#ai-method')?.addEventListener('change', () => { saveAiSettings(); state.ai.providerStatus = ''; renderAiPanel(); });
   $('#ai-reasoning')?.addEventListener('change', saveAiSettings);
   $('#ai-model')?.addEventListener('change', saveAiSettings);
@@ -4079,7 +4089,9 @@ function renderAiMessages(){
     box.innerHTML = '<div class="ai-msg system">Configure o provider no MiddlewareAuth e faça uma pergunta. A resposta passa pelo PocketKernel Harness.</div>';
     return;
   }
-  box.innerHTML = state.ai.messages.map((message, index) => renderAiMessage(message, index)).join('');
+  const firstVisible = Math.max(0, state.ai.messages.length - 80);
+  box.innerHTML = (firstVisible ? '<div class="ai-msg system">Mensagens anteriores preservadas no JSON exportável.</div>' : '') +
+    state.ai.messages.slice(firstVisible).map((message, index) => renderAiMessage(message, firstVisible + index)).join('');
   bindAiMessageLinks(box);
   bindAiReasoningToggles(box);
   syncAiLiveReasoningScroll(box);
@@ -4602,6 +4614,187 @@ Use Markdown simples quando ajudar: **negrito**, *itálico* e listas.
 Não use tags XML/HTML nem placeholders.
 Se o sistema disser que a wiki não trouxe resultado, mencione isso em uma frase curta só quando for relevante, e continue ajudando normalmente.`;
 
+function newAiId(){
+  if (globalThis.crypto?.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, ch => {
+    const value = Math.floor(Math.random() * 16);
+    return (ch === 'x' ? value : (value & 3) | 8).toString(16);
+  });
+}
+
+function aiTimestamp(value = Date.now()){
+  const date = new Date(value);
+  return (Number.isNaN(date.getTime()) ? new Date() : date).toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+function restoreAiSession(){
+  try {
+    const saved = JSON.parse(localStorage.getItem(AI_SESSION_STORAGE_KEY) || 'null');
+    if (saved?.schema_version === 1 && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(saved.id) && Array.isArray(saved.messages)) {
+      return {
+        id: saved.id,
+        createdAt: aiTimestamp(saved.created_at),
+        messages: saved.messages.filter(item =>
+          ['user', 'assistant'].includes(item?.role) && typeof item.content === 'string' && item.content.trim()
+        ).map(item => ({
+          id: typeof item.id === 'string' ? item.id : newAiId(),
+          role: item.role,
+          content: item.content,
+          providerId: item.provider_id || null,
+          model: item.model_id || '',
+          createdAt: aiTimestamp(item.created_at),
+          reasoning: '', finishReason: '', usage: null, streaming: false
+        }))
+      };
+    }
+  } catch {}
+  return { id: newAiId(), createdAt: aiTimestamp(), messages: [] };
+}
+
+function persistAiSession(){
+  try {
+    localStorage.setItem(AI_SESSION_STORAGE_KEY, JSON.stringify({
+      schema_version: 1,
+      id: state.ai.sessionId,
+      created_at: state.ai.sessionCreatedAt,
+      updated_at: aiTimestamp(),
+      messages: state.ai.messages.filter(item =>
+        ['user', 'assistant'].includes(item.role) && item.content?.trim() && !item.streaming
+      ).map(item => ({
+        id: item.id,
+        role: item.role,
+        content: item.content,
+        provider_id: item.providerId || null,
+        model_id: item.model || null,
+        created_at: item.createdAt
+      }))
+    }));
+    return true;
+  } catch {
+    showToast('Não consegui salvar a conversa neste navegador.');
+    return false;
+  }
+}
+
+function newAiConversation(){
+  if (state.ai.busy) return;
+  if (state.ai.messages.length) {
+    if (!persistAiSession()) return;
+    try {
+      localStorage.setItem(`pocketwiki:ai-archive:${state.ai.sessionId}`, localStorage.getItem(AI_SESSION_STORAGE_KEY));
+    } catch {
+      showToast('Não consegui arquivar a conversa neste navegador.');
+      return;
+    }
+    queueAiCapture('session-end', state.ai.sessionId);
+  }
+  state.ai.sessionId = newAiId();
+  state.ai.sessionCreatedAt = aiTimestamp();
+  state.ai.messages = [];
+  state.ai.lastContext = [];
+  persistAiSession();
+  renderAiPanel();
+}
+
+function exportAiSessions(){
+  persistAiSession();
+  const sessions = [];
+  for (let index = 0; index < localStorage.length; index++) {
+    const key = localStorage.key(index);
+    if (key !== AI_SESSION_STORAGE_KEY && !key?.startsWith('pocketwiki:ai-archive:')) continue;
+    try {
+      const session = JSON.parse(localStorage.getItem(key));
+      if (session?.schema_version === 1) sessions.push(session);
+    } catch {}
+  }
+  const url = URL.createObjectURL(new Blob([JSON.stringify({ schema_version:1, sessions }, null, 2)], { type:'application/json' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `pocketwiki-conversas-${new Date().toISOString().slice(0, 10)}.json`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function restoreAiHookOutbox(){
+  try {
+    const saved = JSON.parse(localStorage.getItem(AI_HOOK_OUTBOX_STORAGE_KEY) || '[]');
+    return Array.isArray(saved) ? saved.filter(item => item?.ingest_key && item?.session_id) : [];
+  } catch {
+    return [];
+  }
+}
+
+function queueAiCapture(event, identity, fields = {}){
+  if (!state.appConfig?.aiMemoryConfigured) return;
+  const item = {
+    event,
+    session_id: state.ai.sessionId,
+    ingest_key: `pw_web_${event.replaceAll('-', '_')}_${identity.replaceAll('-', '').toLowerCase()}`,
+    ...fields
+  };
+  if (state.ai.hookOutbox.some(pending => pending.ingest_key === item.ingest_key)) return;
+  state.ai.hookOutbox.push(item);
+  persistAiHookOutbox();
+  void drainAiHookOutbox();
+}
+
+function persistAiHookOutbox(){
+  try {
+    localStorage.setItem(AI_HOOK_OUTBOX_STORAGE_KEY, JSON.stringify(state.ai.hookOutbox));
+  } catch {
+    showToast('Fila do ai-memory sem espaço no navegador.');
+  }
+}
+
+async function drainAiHookOutbox(){
+  if (state.ai.hookDrainBusy || !state.appConfig?.aiMemoryConfigured || !location.protocol.startsWith('http')) return;
+  state.ai.hookDrainBusy = true;
+  try {
+    while (state.ai.hookOutbox.length) {
+      const batch = state.ai.hookOutbox.slice(0, 32);
+      const response = await fetch('/api/ai-memory/capture', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ events: batch })
+      });
+      if (!response.ok) return;
+      const accepted = new Set((await response.json()).accepted_keys || []);
+      if (!accepted.size) return;
+      state.ai.hookOutbox = state.ai.hookOutbox.filter(item => !accepted.has(item.ingest_key));
+      persistAiHookOutbox();
+      if (accepted.size < batch.length) return;
+    }
+  } catch {
+    // Pendências continuam no armazenamento local para a próxima tentativa.
+  } finally {
+    state.ai.hookDrainBusy = false;
+  }
+}
+
+function portableAiRequest(question){
+  const history = state.ai.messages.filter(item =>
+    ['user', 'assistant'].includes(item.role) && item.content?.trim() && !item.streaming
+  ).slice(-12).map(item => `[${item.role}]\n${item.content}`).join('\n\n').slice(-8000);
+  return [`PERGUNTA ATUAL:\n${question}`,
+    history ? `HISTORICO PORTAVEL DA CONVERSA (mensagens comuns, independente do modelo):\n${history}` : ''
+  ].filter(Boolean).join('\n\n---\n\n');
+}
+
+async function recallAiMemory(question){
+  if (!state.appConfig?.aiMemoryConfigured || !location.protocol.startsWith('http')) return '';
+  try {
+    const response = await fetch('/api/ai-memory/recall', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question })
+    });
+    if (!response.ok) return '';
+    return String((await response.json()).context || '').slice(0, 5000);
+  } catch {
+    return '';
+  }
+}
+
 async function askAi(preset){
   if (state.ai.busy) return;
   const input = $('#ai-question');
@@ -4617,28 +4810,42 @@ async function askAi(preset){
     state.ai.draft = '';
   }
 
-  state.ai.messages.push({ role:'user', content:question });
+  const requestText = portableAiRequest(question);
+  const isNewSession = state.ai.messages.length === 0;
+  const userMessage = { id:newAiId(), role:'user', content:question, createdAt:aiTimestamp() };
+  state.ai.messages.push(userMessage);
   const assistantMessage = {
+    id:newAiId(),
     role:'assistant',
     content:'',
     reasoning:'',
     finishReason:'',
     usage:null,
-    model:'PocketKernel',
+    providerId: aiProvider(),
+    model:state.ai.model || 'PocketKernel',
+    createdAt:aiTimestamp(),
     streaming:true
   };
   state.ai.messages.push(assistantMessage);
-  trimAiMessages();
+  persistAiSession();
+  if (isNewSession) queueAiCapture('session-start', state.ai.sessionId);
+  queueAiCapture('user-prompt-submit', userMessage.id, { prompt: question });
   state.ai.busy = true;
   renderAiPanel();
 
   try {
     state.ai.lastContext = [];
-    const res = await fetchPocketKernel(question);
+    const recalled = await recallAiMemory(question);
+    const enrichedRequest = recalled
+      ? `${requestText}\n\n---\n\nMEMORIA RECUPERADA DO AI-MEMORY (fontes historicas; confirme na wiki quando necessario):\n${recalled}`
+      : requestText;
+    const res = await fetchPocketKernel(enrichedRequest);
     if (!res.ok) throw new Error(await res.text());
     const answer = normalizePocketKernelResponse(await res.json());
     state.ai.connected = true;
     applyAiAnswer(assistantMessage, answer);
+    assistantMessage.model = state.ai.model || answer.model || 'PocketKernel';
+    queueAiCapture('assistant-response', assistantMessage.id, { message: assistantMessage.content });
   } catch (err) {
     state.ai.connected = false;
     assistantMessage.role = 'system';
@@ -4646,7 +4853,8 @@ async function askAi(preset){
     assistantMessage.reasoning = '';
   } finally {
     assistantMessage.streaming = false;
-    trimAiMessages();
+    queueAiCapture('stop', assistantMessage.id);
+    persistAiSession();
     state.ai.busy = false;
     renderAiPanel();
   }
@@ -4810,13 +5018,6 @@ function cleanAiText(value){
 async function waitForAiModels(){
   for (let i = 0; i < 50 && state.ai.modelsBusy; i++) {
     await new Promise(resolve => setTimeout(resolve, 100));
-  }
-}
-
-function trimAiMessages(){
-  const maxMessages = 80;
-  if (state.ai.messages.length > maxMessages) {
-    state.ai.messages.splice(0, state.ai.messages.length - maxMessages);
   }
 }
 
@@ -5442,6 +5643,7 @@ if (window.marked?.setOptions) marked.setOptions({ gfm:true, breaks:false, mangl
 
 async function initApp(){
   const [config, routes] = await Promise.all([loadAppConfig(), loadRoutes()]);
+  if (config?.aiMemoryConfigured) void drainAiHookOutbox();
   if (!config && !routes && location.protocol.startsWith('http')) {
     showAccessScreen('A página abriu, mas as APIs locais do PocketWiki não responderam. Pode ser interferência de rota, DNS/mDNS, Tailscale/VPN ou o servidor reiniciando na máquina principal.');
   }

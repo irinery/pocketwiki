@@ -4,7 +4,7 @@
 
 Manter transcrições e contexto durável fora do provider/modelo selecionado. A conversa pode continuar depois de reiniciar o app ou trocar entre OpenAI e LM Studio. Os registros são arquivos JSON comuns; as preferências e decisões duráveis ficam em Markdown editável.
 
-## Primeiro corte no PocketWiki
+## App macOS
 
 - Transcrições são gravadas em `~/Library/Application Support/PocketWiki/AI Memory/session-<uuid>.json`.
 - Ao iniciar, o app restaura a sessão mais recente. **Limpar** e **Reset** começam outra sessão; os arquivos anteriores continuam disponíveis no diretório.
@@ -25,6 +25,12 @@ AI_MEMORY_AUTH_TOKEN="<chave-do-servidor>"
 ```
 
 O servidor precisa estar rodando separadamente com o endpoint `/mcp`. Em instalações sem autenticação no loopback, o token pode ficar vazio. O PocketWiki só habilita essa conexão quando URL, workspace e projeto estão preenchidos. O nome do projeto é o escopo do ai-memory, não o ID de projeto do MiddlewareAuth.
+
+Para carregar um `.env` fora do checkout ao iniciar `server.mjs`, defina `POCKETWIKI_ENV_PATH=/caminho/para/.env` no ambiente do processo.
+
+No cockpit web servido por `server.mjs`, a mesma configuração habilita `POST /api/ai-memory/recall` e `POST /api/ai-memory/capture`. O servidor guarda a chave e encaminha as chamadas ao `/mcp` e `/hook/batch`; `/api/config` expõe apenas `aiMemoryConfigured`. O browser persiste a sessão ativa em `localStorage`, arquiva a anterior ao clicar em **Nova** e exporta as sessões em JSON pelo botão **Exportar**. O próximo prompt inclui até 12 mensagens anteriores mesmo após recarregar a página ou trocar de provider/modelo. Os eventos pendentes ficam em `localStorage` até o servidor confirmar os `ingest_key` enviados.
+
+Os registros do browser e do app macOS usam campos compatíveis (`schema_version`, `id`, `created_at`, `updated_at`, `messages`, `provider_id`, `model_id`), mas ainda são armazenados em lugares distintos. A recuperação via ai-memory usa o mesmo workspace/projeto quando ambos apontam para o mesmo servidor.
 
 Antes de cada pergunta, o app chama `memory_query` e lê até três páginas relevantes por `memory_read_page`. O conteúdo recuperado entra no contexto com o caminho de origem. Para capturar a conversa, envia eventos `session-start`, `user-prompt-submit`, `assistant-response` e `stop` a `/hook/batch`; **Limpar** e **Reset** enviam `session-end`. A resposta entra como evento de extensão `pocketwiki`, já que o protocolo `stop` de `agent=other` não armazena texto do assistente. O servidor consolida as observações em páginas segundo sua própria política.
 
@@ -65,6 +71,8 @@ Exemplo do envelope da sessão (datas ISO 8601):
 2. Ação explícita para promover um trecho confirmado à memória durável, sempre com revisão do usuário.
 3. Opcionalmente apontar o arquivo de memória para uma pasta do wiki sincronizada entre dispositivos, mantendo o padrão local como default.
 4. Mostrar o estado da fila de eventos e permitir reenviar sem esperar o próximo prompt ou a reabertura do chat.
+
+Validação rápida do servidor e do cockpit: `npm run test:ai-memory`.
 
 ## Referência
 

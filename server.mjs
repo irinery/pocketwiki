@@ -5,9 +5,12 @@ import { homedir, networkInterfaces } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handleSolutionPut } from './src/solutions/solution-ingestion.mjs';
+import { createAIMemoryConfiguration, recallMemory, captureMemoryEvents } from './src/ai-memory/client.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ENV_PATH = path.join(__dirname, '.env');
+const ENV_PATH = process.env.POCKETWIKI_ENV_PATH
+  ? path.resolve(process.env.POCKETWIKI_ENV_PATH)
+  : path.join(__dirname, '.env');
 const DEFAULT_REFERENCE_PATH = path.join(__dirname, 'SKILL/wiki-reference');
 const startupEnv = await readEnv(ENV_PATH);
 
@@ -69,7 +72,8 @@ const server = createServer(async (req, res) => {
         middlewareAuthProjectId: runtime.middlewareAuth.projectId,
         middlewareAuthProfileId: runtime.middlewareAuth.profileId,
         kernelProxy: true,
-        middlewareAuthProxy: true
+        middlewareAuthProxy: true,
+        aiMemoryConfigured: runtime.aiMemory !== null
       });
     }
 
@@ -124,6 +128,33 @@ const server = createServer(async (req, res) => {
         method: 'POST',
         body: JSON.stringify(body)
       }, runtime.kernel);
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/ai-memory/recall') {
+      const runtime = await loadRuntimeConfig();
+      if (!runtime.aiMemory) return sendJson(res, { error: 'ai_memory_not_configured' }, 503);
+      const body = await readJsonBody(req);
+      if (typeof body.question !== 'string' || !body.question.trim()) {
+        return sendJson(res, { error: 'invalid_question' }, 400);
+      }
+      try {
+        return sendJson(res, { context: await recallMemory(runtime.aiMemory, body.question) });
+      } catch {
+        return sendJson(res, { error: 'ai_memory_unavailable' }, 502);
+      }
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/ai-memory/capture') {
+      const runtime = await loadRuntimeConfig();
+      if (!runtime.aiMemory) return sendJson(res, { error: 'ai_memory_not_configured' }, 503);
+      const body = await readJsonBody(req);
+      try {
+        const acceptedKeys = await captureMemoryEvents(runtime.aiMemory, body.events, runtime.reference.path);
+        return sendJson(res, { accepted_keys: acceptedKeys });
+      } catch (error) {
+        const invalid = String(error?.message || '').startsWith('invalid');
+        return sendJson(res, { error: invalid ? 'invalid_events' : 'ai_memory_unavailable' }, invalid ? 400 : 502);
+      }
     }
 
     if (req.method === 'POST' && url.pathname === '/api/middleware/lmstudio/api-key') {
@@ -223,6 +254,12 @@ async function loadRuntimeConfig(opts = {}) {
       apiKey: envValue('LM_STUDIO_API_KEY', values, '') || envValue('LM_API_TOKEN', values, ''),
       model: envValue('LM_STUDIO_MODEL', values, '')
     },
+    aiMemory: createAIMemoryConfiguration({
+      serverURL: envValue('AI_MEMORY_SERVER_URL', values, ''),
+      workspace: envValue('AI_MEMORY_WORKSPACE', values, ''),
+      project: envValue('AI_MEMORY_PROJECT', values, ''),
+      authToken: envValue('AI_MEMORY_AUTH_TOKEN', values, '')
+    }),
     kernel: {
       baseUrl: trimSlash(envValue('POCKETKERNEL_BASE_URL', values, 'http://127.0.0.1:8080'))
     },

@@ -250,6 +250,7 @@ final class LocalAIChatSession {
         let requestText = buildPortableRequest(question: userText, selectedPath: selectedPath)
         let memoryClient = aiMemoryClient
         let sessionID = archiveSession.id
+        let startsSession = messages.isEmpty
         let captureRoot = sourceRootPath.pocketTrimmed.isEmpty ? FileManager.default.currentDirectoryPath : sourceRootPath
         captureRootPath = captureRoot
         let userMessage = LocalAIChatMessage(role: .user, content: userText)
@@ -279,7 +280,7 @@ final class LocalAIChatSession {
         messages.append(assistantMessage)
         persistArchive()
         enqueueCaptureEvents([
-            captureEvent("session-start", identity: sessionID, sessionID: sessionID, cwd: captureRoot),
+            startsSession ? captureEvent("session-start", identity: sessionID, sessionID: sessionID, cwd: captureRoot) : nil,
             captureEvent("user-prompt-submit", identity: userMessage.id, sessionID: sessionID, cwd: captureRoot, prompt: userText)
         ].compactMap { $0 })
         messagesRevision += 1
