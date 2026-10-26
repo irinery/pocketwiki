@@ -43,7 +43,7 @@ O servidor funciona sem provider LLM: cria resumos heurísticos de sessões e pe
 
 Para carregar um `.env` fora do checkout ao iniciar `server.mjs`, defina `POCKETWIKI_ENV_PATH=/caminho/para/.env` no ambiente do processo.
 
-No cockpit web servido por `server.mjs`, a configuração com o token web habilita `POST /api/ai-memory/recall` e `POST /api/ai-memory/capture`. O servidor guarda a chave upstream e encaminha as chamadas ao `/mcp` e `/hook/batch`; `/api/config` expõe apenas `aiMemoryConfigured`. O browser persiste a sessão ativa em `localStorage`, arquiva a anterior ao clicar em **Nova** e exporta as sessões em JSON pelo botão **Exportar**. O próximo prompt inclui até 12 mensagens anteriores mesmo após recarregar a página ou trocar de provider/modelo. Os eventos pendentes ficam em `localStorage` até o servidor confirmar os `ingest_key` enviados; a aba precisa manter o token web em `sessionStorage` para reenviá-los após recarregar.
+No cockpit web servido por `server.mjs`, a configuração com o token web habilita `POST /api/ai-memory/recall` e `POST /api/ai-memory/capture`. O servidor guarda a chave upstream e encaminha as chamadas ao `/mcp` e `/hook/batch`; `/api/config` expõe apenas `aiMemoryConfigured`. O browser persiste a sessão ativa em `localStorage` e arquiva a anterior ao clicar em **Nova**. Em **Sessões**, dá para retomar uma conversa arquivada, importar um `session-<uuid>.json` do app macOS ou um pacote exportado pelo cockpit, e exportar todas as sessões em JSON. A importação ignora IDs já presentes para não sobrescrever conversas. O próximo prompt inclui até 12 mensagens anteriores mesmo após recarregar a página, importar uma sessão ou trocar de provider/modelo. Os eventos pendentes ficam em `localStorage` até o servidor confirmar os `ingest_key` enviados; a aba precisa manter o token web em `sessionStorage` para reenviá-los após recarregar.
 
 Os registros do browser e do app macOS usam campos compatíveis (`schema_version`, `id`, `created_at`, `updated_at`, `messages`, `provider_id`, `model_id`), mas ainda são armazenados em lugares distintos. A recuperação via ai-memory usa o mesmo workspace/projeto quando ambos apontam para o mesmo servidor.
 
@@ -84,7 +84,7 @@ Exemplo do envelope da sessão (datas ISO 8601):
 
 ## Próximos passos
 
-1. Navegador de sessões com busca, restauração e exportação/importação de JSON/Markdown.
+1. Busca no navegador de sessões e exportação/importação adicional em Markdown.
 2. Ação explícita para promover um trecho confirmado à memória durável, sempre com revisão do usuário.
 3. Opcionalmente apontar o arquivo de memória para uma pasta do wiki sincronizada entre dispositivos, mantendo o padrão local como default.
 4. Mostrar o estado da fila de eventos e permitir reenviar sem esperar o próximo prompt ou a reabertura do chat.

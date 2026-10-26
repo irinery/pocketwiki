@@ -135,7 +135,7 @@ O contrato proposto para integrar toda a família — add-ons internos, aplicaç
 
 O chat também mantém transcrições por sessão em JSON legível e uma nota pessoal `MEMORY.md` local em `~/Library/Application Support/PocketWiki/AI Memory/`. A sessão mais recente é restaurada ao abrir o app; cada pergunta recebe até 12 mensagens anteriores e até 4.000 caracteres da nota, permitindo continuar a conversa após trocar de provider/modelo. Se `AI_MEMORY_SERVER_URL`, `AI_MEMORY_WORKSPACE` e `AI_MEMORY_PROJECT` estiverem configurados, o app recupera páginas pelo MCP oficial e captura a conversa pelo endpoint de hooks do ai-memory. O formato, a configuração e os limites atuais estão em [`Memória independente do modelo`](docs/ai-memory-model-agnostic.md).
 
-No cockpit web, a conversa também é restaurada após recarregar e mantém o contexto ao trocar de provider. As sessões anteriores ficam arquivadas no navegador ao iniciar uma nova conversa e podem ser exportadas em JSON. Para usar o ai-memory, configure `AI_MEMORY_WEB_TOKEN` no servidor e informe o valor em **Configurações da IA** no navegador; o proxy protege as rotas de memória e mantém a chave do ai-memory apenas no servidor.
+No cockpit web, a conversa também é restaurada após recarregar e mantém o contexto ao trocar de provider. Em **Sessões**, dá para retomar conversas arquivadas e importar/exportar JSON compatível com o app macOS. Para usar o ai-memory, configure `AI_MEMORY_WEB_TOKEN` no servidor e informe o valor em **Configurações da IA** no navegador; o proxy protege as rotas de memória e mantém a chave do ai-memory apenas no servidor.
 
 Para gerar e abrir o app local:
 

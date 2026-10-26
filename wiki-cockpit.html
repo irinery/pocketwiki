@@ -207,6 +207,10 @@ button{cursor:pointer;color:inherit}
 .ai-settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .ai-settings-section{border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.025);padding:12px}
 .ai-settings-section h3{font-size:13px;margin-bottom:10px}
+.ai-session-list{display:grid;gap:8px;max-height:min(52vh,440px);overflow:auto;margin:14px 0}
+.ai-session-row{width:100%;text-align:left;border:1px solid var(--border2);background:var(--bg3);border-radius:12px;padding:10px 12px;color:var(--text);cursor:pointer}
+.ai-session-row:hover{border-color:var(--accent)}
+.ai-session-row small{display:block;margin-top:4px;color:var(--muted)}
 #ai .ai-provider-card>.field{margin:0 0 10px}
 #ai .ai-provider-card .field-row{min-width:0;gap:10px;margin-bottom:12px}
 #ai .ai-provider-card .field-row .field{min-width:0;margin:0}
@@ -711,6 +715,20 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
     <div class="copy-actions">
       <button class="btn" id="ai-settings-refresh" data-icon="refresh"><span class="btn-text">Atualizar status</span></button>
       <button class="btn primary" id="ai-settings-save" data-icon="check"><span class="btn-text">Salvar</span></button>
+    </div>
+  </div>
+</div>
+<div class="copy-modal hidden" id="ai-sessions-modal">
+  <div class="copy-box ai-settings-box">
+    <div class="copy-head">
+      <b>Conversas salvas</b>
+      <button class="btn small" id="ai-sessions-close" data-icon="close"><span class="btn-text">Fechar</span></button>
+    </div>
+    <div class="ai-session-list" id="ai-session-list"></div>
+    <div class="copy-actions">
+      <button class="btn" id="ai-session-import">Importar JSON</button>
+      <button class="btn" id="ai-session-export">Exportar JSON</button>
+      <input id="ai-session-file" type="file" accept=".json,application/json" hidden>
     </div>
   </div>
 </div>
@@ -3863,7 +3881,7 @@ function renderAiPanel(){
     </div>
     <div class="ai-grid">
       <div class="card ai-chat">
-        <div class="card-title">${cardTitle('ai', 'Conversa', state.ai.connected ? 'pronto' : 'PocketKernel Harness')}<button class="btn small" id="ai-export" title="Baixar registros em JSON">Exportar</button><button class="btn small" id="ai-new" title="Arquivar e iniciar outra conversa" ${state.ai.busy ? 'disabled' : ''}>Nova</button></div>
+        <div class="card-title">${cardTitle('ai', 'Conversa', state.ai.connected ? 'pronto' : 'PocketKernel Harness')}<button class="btn small" id="ai-sessions" title="Retomar ou transferir conversas">Sessões</button><button class="btn small" id="ai-new" title="Arquivar e iniciar outra conversa" ${state.ai.busy ? 'disabled' : ''}>Nova</button></div>
         <div class="ai-messages" id="ai-messages"></div>
         <div class="ai-composer">
           <div class="ai-input">
@@ -3994,7 +4012,7 @@ function bindAiPanel(){
   $('#ai-refresh-status')?.addEventListener('click', () => refreshAiModels());
   $('#ai-open-settings')?.addEventListener('click', openAiSettings);
   $('#ai-send')?.addEventListener('click', () => askAi());
-  $('#ai-export')?.addEventListener('click', exportAiSessions);
+  $('#ai-sessions')?.addEventListener('click', openAiSessions);
   $('#ai-new')?.addEventListener('click', newAiConversation);
   $('#ai-method')?.addEventListener('change', () => { saveAiSettings(); state.ai.providerStatus = ''; renderAiPanel(); });
   $('#ai-reasoning')?.addEventListener('change', saveAiSettings);
@@ -4706,6 +4724,128 @@ function newAiConversation(){
   state.ai.lastContext = [];
   persistAiSession();
   renderAiPanel();
+}
+
+function parsePortableAiSession(value){
+  const validDate = date => typeof date === 'string' && !Number.isNaN(Date.parse(date));
+  if (value?.schema_version !== 1 ||
+      !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value.id || '') ||
+      !validDate(value.created_at) || !Array.isArray(value.messages) || value.messages.length > 5000) {
+    throw new Error('Sessão JSON inválida');
+  }
+  return {
+    schema_version: 1,
+    id: value.id.toLowerCase(),
+    created_at: aiTimestamp(value.created_at),
+    updated_at: validDate(value.updated_at) ? aiTimestamp(value.updated_at) : aiTimestamp(value.created_at),
+    messages: value.messages.map(item => {
+      if (!['user', 'assistant'].includes(item?.role) || typeof item.content !== 'string' ||
+          !item.content.trim() || !validDate(item.created_at)) throw new Error('Mensagem JSON inválida');
+      return {
+        ...(typeof item.id === 'string' ? { id: item.id } : {}),
+        role: item.role,
+        content: item.content,
+        created_at: aiTimestamp(item.created_at),
+        provider_id: typeof item.provider_id === 'string' ? item.provider_id : null,
+        model_id: typeof item.model_id === 'string' ? item.model_id : null
+      };
+    })
+  };
+}
+
+function importAiSessionsData(payload){
+  const source = Array.isArray(payload?.sessions) ? payload.sessions : [payload];
+  if (!source.length || source.length > 250) throw new Error('Pacote de sessões inválido');
+  const sessions = source.map(parsePortableAiSession);
+  const seen = new Set();
+  for (const session of sessions) {
+    if (seen.has(session.id)) throw new Error('Pacote contém sessões duplicadas');
+    seen.add(session.id);
+  }
+  const activeId = state.ai.sessionId.toLowerCase();
+  let imported = 0;
+  for (const session of sessions) {
+    const key = `pocketwiki:ai-archive:${session.id}`;
+    if (session.id === activeId || localStorage.getItem(key)) continue;
+    localStorage.setItem(key, JSON.stringify(session));
+    imported++;
+  }
+  return imported;
+}
+
+async function importAiSessions(file){
+  if (!file) return;
+  try {
+    if (file.size > 16 * 1024 * 1024) throw new Error('JSON maior que 16 MiB');
+    const imported = importAiSessionsData(JSON.parse(await file.text()));
+    renderAiSessionList();
+    showToast(imported ? `${imported} conversa(s) importada(s).` : 'Essas conversas já estão salvas.');
+  } catch (error) {
+    showToast(`Não consegui importar: ${error.message}`);
+  } finally {
+    const input = $('#ai-session-file');
+    if (input) input.value = '';
+  }
+}
+
+function archivedAiSessions(){
+  const sessions = [];
+  for (let index = 0; index < localStorage.length; index++) {
+    const key = localStorage.key(index);
+    if (!key?.startsWith('pocketwiki:ai-archive:')) continue;
+    try {
+      const value = parsePortableAiSession(JSON.parse(localStorage.getItem(key)));
+      if (key === `pocketwiki:ai-archive:${value.id}`) sessions.push(value);
+    } catch {}
+  }
+  return sessions.sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
+}
+
+function renderAiSessionList(){
+  const list = $('#ai-session-list');
+  if (!list) return;
+  const sessions = archivedAiSessions();
+  list.innerHTML = sessions.length ? sessions.map(session => {
+    const title = session.messages.find(item => item.role === 'user')?.content.slice(0, 100) || 'Conversa vazia';
+    return `<button class="ai-session-row" data-ai-session-id="${attr(session.id)}"><span>${esc(title)}</span><small>${esc(session.updated_at)} · ${session.messages.length} mensagens</small></button>`;
+  }).join('') : '<p>Nenhuma conversa arquivada. Importe um JSON ou inicie uma conversa nova.</p>';
+}
+
+function openAiSessions(){
+  renderAiSessionList();
+  $('#ai-sessions-modal')?.classList.remove('hidden');
+}
+
+function closeAiSessions(){
+  $('#ai-sessions-modal')?.classList.add('hidden');
+}
+
+function resumeAiSession(id){
+  if (state.ai.busy || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id || '') ||
+      id.toLowerCase() === state.ai.sessionId.toLowerCase()) return false;
+  const archiveKey = `pocketwiki:ai-archive:${id.toLowerCase()}`;
+  try {
+    const target = parsePortableAiSession(JSON.parse(localStorage.getItem(archiveKey)));
+    if (target.id !== id.toLowerCase() || !persistAiSession()) return false;
+    const current = localStorage.getItem(AI_SESSION_STORAGE_KEY);
+    const outgoingId = state.ai.sessionId;
+    if (state.ai.messages.length) localStorage.setItem(`pocketwiki:ai-archive:${outgoingId}`, current);
+    localStorage.setItem(AI_SESSION_STORAGE_KEY, JSON.stringify(target));
+    localStorage.removeItem(archiveKey);
+    if (state.ai.messages.length) queueAiCapture('session-end', outgoingId);
+    const restored = restoreAiSession();
+    state.ai.sessionId = restored.id;
+    state.ai.sessionCreatedAt = restored.createdAt;
+    state.ai.messages = restored.messages;
+    state.ai.draft = '';
+    state.ai.lastContext = [];
+    closeAiSessions();
+    renderAiPanel();
+    return true;
+  } catch {
+    showToast('Não consegui abrir essa conversa.');
+    return false;
+  }
 }
 
 function exportAiSessions(){
@@ -5648,7 +5788,16 @@ $('#copy-modal-copy').addEventListener('click', async () => {
 });
 $('#copy-modal').addEventListener('click', e => { if (e.target.id === 'copy-modal') closeCopyFallback(); });
 bindAiSettingsModal();
-document.addEventListener('keydown', e => { const k=e.key.toLowerCase(); if((e.metaKey||e.ctrlKey) && k==='k'){ e.preventDefault(); openPalette(); } if(k==='escape'){ closePalette(); closeCopyFallback(); closeAiSettings(); $('#search-overlay').classList.remove('visible'); }});
+$('#ai-sessions-close').addEventListener('click', closeAiSessions);
+$('#ai-sessions-modal').addEventListener('click', e => { if (e.target.id === 'ai-sessions-modal') closeAiSessions(); });
+$('#ai-session-list').addEventListener('click', e => {
+  const row = e.target.closest('[data-ai-session-id]');
+  if (row) resumeAiSession(row.dataset.aiSessionId);
+});
+$('#ai-session-import').addEventListener('click', () => $('#ai-session-file').click());
+$('#ai-session-file').addEventListener('change', e => { void importAiSessions(e.target.files?.[0]); });
+$('#ai-session-export').addEventListener('click', exportAiSessions);
+document.addEventListener('keydown', e => { const k=e.key.toLowerCase(); if((e.metaKey||e.ctrlKey) && k==='k'){ e.preventDefault(); openPalette(); } if(k==='escape'){ closePalette(); closeCopyFallback(); closeAiSettings(); closeAiSessions(); $('#search-overlay').classList.remove('visible'); }});
 window.addEventListener('resize', () => { if(state.activePanel==='graph') { resizeGraphCanvas(); requestGraphFrame(); } });
 
 if (window.marked?.setOptions) marked.setOptions({ gfm:true, breaks:false, mangle:false, headerIds:false });

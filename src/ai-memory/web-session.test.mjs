@@ -70,6 +70,40 @@ test('restaura conversa e mantém o histórico ao trocar provider/modelo', async
   assert.equal(JSON.parse(storage.getItem('pocketwiki:ai-session-v1')).messages.length, 0);
 });
 
+test('importa sessão JSON do app Mac, retoma arquivo e continua com outro modelo', async () => {
+  const data = new Map();
+  const storage = {
+    getItem: key => data.get(key) ?? null,
+    setItem: (key, value) => data.set(key, String(value)),
+    removeItem: key => data.delete(key),
+    key: index => [...data.keys()][index],
+    get length() { return data.size; }
+  };
+  const page = browser(storage);
+  const imported = {
+    schema_version: 1,
+    id: '0ce8f327-c7d3-4d5a-a633-8e46d6b922cf',
+    created_at: '2026-10-26T13:00:00Z',
+    updated_at: '2026-10-26T13:01:00Z',
+    messages: [
+      { role:'user', content:'Como funciona a VLAN 207?', created_at:'2026-10-26T13:00:00Z', provider_id:null, model_id:null },
+      { role:'assistant', content:'A VLAN 207 isola IoT.', created_at:'2026-10-26T13:01:00Z', provider_id:'openai', model_id:'gpt-5.5' }
+    ]
+  };
+  page.context.imported = imported;
+  assert.equal(vm.runInContext('importAiSessionsData(imported)', page.context), 1);
+  assert.equal(vm.runInContext('importAiSessionsData(imported)', page.context), 0);
+  assert.equal(vm.runInContext('resumeAiSession(imported.id)', page.context), true);
+  assert.equal(vm.runInContext('state.ai.messages.length', page.context), 2);
+  vm.runInContext("state.ai.providerMethod = 'lmstudio'; state.ai.model = 'modelo-local'", page.context);
+  page.input.value = 'E as câmeras?';
+  await vm.runInContext('askAi()', page.context);
+  assert.match(page.requests[0], /A VLAN 207 isola IoT/);
+  const active = JSON.parse(storage.getItem('pocketwiki:ai-session-v1'));
+  assert.equal(active.messages[3].model_id, 'modelo-local');
+  assert.equal(active.id, imported.id);
+});
+
 test('mantém eventos pendentes e reenvia após recarregar', async () => {
   const data = new Map();
   const storage = {
