@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { timingSafeEqual } from 'node:crypto';
 import dgram from 'node:dgram';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { homedir, networkInterfaces } from 'node:os';
@@ -73,7 +74,7 @@ const server = createServer(async (req, res) => {
         middlewareAuthProfileId: runtime.middlewareAuth.profileId,
         kernelProxy: true,
         middlewareAuthProxy: true,
-        aiMemoryConfigured: runtime.aiMemory !== null
+        aiMemoryConfigured: runtime.aiMemory !== null && runtime.aiMemoryWebToken.length >= 16
       });
     }
 
@@ -132,7 +133,8 @@ const server = createServer(async (req, res) => {
 
     if (req.method === 'POST' && url.pathname === '/api/ai-memory/recall') {
       const runtime = await loadRuntimeConfig();
-      if (!runtime.aiMemory) return sendJson(res, { error: 'ai_memory_not_configured' }, 503);
+      if (!runtime.aiMemory || runtime.aiMemoryWebToken.length < 16) return sendJson(res, { error: 'ai_memory_not_configured' }, 503);
+      if (!hasAIMemoryWebAccess(req, runtime.aiMemoryWebToken)) return sendJson(res, { error: 'unauthorized' }, 401);
       const body = await readJsonBody(req);
       if (typeof body.question !== 'string' || !body.question.trim()) {
         return sendJson(res, { error: 'invalid_question' }, 400);
@@ -146,7 +148,8 @@ const server = createServer(async (req, res) => {
 
     if (req.method === 'POST' && url.pathname === '/api/ai-memory/capture') {
       const runtime = await loadRuntimeConfig();
-      if (!runtime.aiMemory) return sendJson(res, { error: 'ai_memory_not_configured' }, 503);
+      if (!runtime.aiMemory || runtime.aiMemoryWebToken.length < 16) return sendJson(res, { error: 'ai_memory_not_configured' }, 503);
+      if (!hasAIMemoryWebAccess(req, runtime.aiMemoryWebToken)) return sendJson(res, { error: 'unauthorized' }, 401);
       const body = await readJsonBody(req);
       try {
         const acceptedKeys = await captureMemoryEvents(runtime.aiMemory, body.events, runtime.reference.path);
@@ -227,6 +230,14 @@ function envValue(key, values, fallback = '') {
   return fallback;
 }
 
+function hasAIMemoryWebAccess(req, expectedToken) {
+  const supplied = req.headers.authorization;
+  if (typeof supplied !== 'string' || !supplied.startsWith('Bearer ')) return false;
+  const candidate = Buffer.from(supplied.slice(7), 'utf8');
+  const expected = Buffer.from(expectedToken, 'utf8');
+  return candidate.length === expected.length && timingSafeEqual(candidate, expected);
+}
+
 function hasEnvValue(key, values) {
   return Object.prototype.hasOwnProperty.call(process.env, key) ||
     Boolean(values && Object.prototype.hasOwnProperty.call(values, key));
@@ -260,6 +271,7 @@ async function loadRuntimeConfig(opts = {}) {
       project: envValue('AI_MEMORY_PROJECT', values, ''),
       authToken: envValue('AI_MEMORY_AUTH_TOKEN', values, '')
     }),
+    aiMemoryWebToken: envValue('AI_MEMORY_WEB_TOKEN', values, ''),
     kernel: {
       baseUrl: trimSlash(envValue('POCKETKERNEL_BASE_URL', values, 'http://127.0.0.1:8080'))
     },

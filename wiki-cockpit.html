@@ -705,6 +705,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
           <div class="field"><label>Profile/User ID</label><input id="ai-settings-profile-id" spellcheck="false" placeholder="default"></div>
         </div>
         <div class="field"><label>Middleware token</label><input id="ai-settings-token" type="password" spellcheck="false" placeholder="MIDDLEWARE_CLIENT_TOKEN"></div>
+        <div class="field"><label>Token web do ai-memory</label><input id="ai-settings-memory-token" type="password" spellcheck="false" placeholder="AI_MEMORY_WEB_TOKEN"></div>
       </section>
     </div>
     <div class="copy-actions">
@@ -754,6 +755,7 @@ const state = {
     middlewareProjectId: localStorage.getItem('pocketwiki:middleware-project-id') || 'acme',
     middlewareProfileId: localStorage.getItem('pocketwiki:middleware-profile-id') || 'default',
     middlewareToken: '',
+    memoryWebToken: globalThis.sessionStorage?.getItem('pocketwiki:ai-memory-web-token') || '',
     baseUrl: localStorage.getItem('pocketwiki:ai-base-url') || 'http://127.0.0.1:1234',
     apiKey: '',
     model: localStorage.getItem('pocketwiki:ai-model') || 'gpt-5.5',
@@ -4043,7 +4045,8 @@ function syncAiSettingsForm(){
     'ai-settings-middleware-base-url': state.ai.middlewareBaseUrl,
     'ai-settings-project-id': state.ai.middlewareProjectId,
     'ai-settings-profile-id': state.ai.middlewareProfileId,
-    'ai-settings-token': state.ai.middlewareToken
+    'ai-settings-token': state.ai.middlewareToken,
+    'ai-settings-memory-token': state.ai.memoryWebToken
   };
   for (const [id, value] of Object.entries(values)) {
     const el = document.getElementById(id);
@@ -4054,7 +4057,9 @@ function syncAiSettingsForm(){
 function bindAiSettingsModal(){
   $('#ai-settings-close')?.addEventListener('click', closeAiSettings);
   $('#ai-settings-save')?.addEventListener('click', () => {
+    state.ai.memoryWebToken = $('#ai-settings-memory-token')?.value.trim() || '';
     saveAiSettings();
+    void drainAiHookOutbox();
     closeAiSettings();
     renderAiPanel();
   });
@@ -4075,7 +4080,8 @@ function bindAiSettingsModal(){
     'ai-settings-middleware-base-url',
     'ai-settings-project-id',
     'ai-settings-profile-id',
-    'ai-settings-token'
+    'ai-settings-token',
+    'ai-settings-memory-token'
   ].forEach(id => {
     document.getElementById(id)?.addEventListener('input', syncAiSettingsFromInputs);
     document.getElementById(id)?.addEventListener('change', syncAiSettingsFromInputs);
@@ -4371,6 +4377,10 @@ function saveAiSettings(){
   localStorage.setItem('pocketwiki:ai-base-url', state.ai.baseUrl);
   localStorage.setItem('pocketwiki:ai-model', state.ai.model);
   localStorage.removeItem('pocketwiki:ai-api-key');
+  try {
+    if (state.ai.memoryWebToken) sessionStorage.setItem('pocketwiki:ai-memory-web-token', state.ai.memoryWebToken);
+    else sessionStorage.removeItem('pocketwiki:ai-memory-web-token');
+  } catch {}
 }
 
 function syncAiSettingsFromInputs(){
@@ -4381,6 +4391,7 @@ function syncAiSettingsFromInputs(){
   const middlewareProjectId = $('#ai-settings-project-id')?.value.trim();
   const middlewareProfileId = $('#ai-settings-profile-id')?.value.trim();
   const middlewareToken = $('#ai-settings-token')?.value.trim();
+  const memoryWebToken = $('#ai-settings-memory-token')?.value.trim();
   const baseUrl = $('#ai-settings-base-url')?.value.trim();
   const model = $('#ai-model')?.value?.trim() || $('#ai-settings-model')?.value.trim();
   const apiKeyInput = $('#ai-settings-api-key');
@@ -4394,6 +4405,7 @@ function syncAiSettingsFromInputs(){
     state.ai.kernelUserId = middlewareProfileId;
   }
   if (middlewareToken !== undefined) state.ai.middlewareToken = middlewareToken;
+  if (memoryWebToken) state.ai.memoryWebToken = memoryWebToken;
   if (baseUrl) state.ai.baseUrl = trimLMStudioBaseUrl(baseUrl);
   if (model !== undefined) state.ai.model = model;
   if (apiKeyInput) state.ai.apiKey = apiKeyInput.value.trim();
@@ -4747,14 +4759,14 @@ function persistAiHookOutbox(){
 }
 
 async function drainAiHookOutbox(){
-  if (state.ai.hookDrainBusy || !state.appConfig?.aiMemoryConfigured || !location.protocol.startsWith('http')) return;
+  if (state.ai.hookDrainBusy || !state.appConfig?.aiMemoryConfigured || !state.ai.memoryWebToken || !location.protocol.startsWith('http')) return;
   state.ai.hookDrainBusy = true;
   try {
     while (state.ai.hookOutbox.length) {
       const batch = state.ai.hookOutbox.slice(0, 32);
       const response = await fetch('/api/ai-memory/capture', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${state.ai.memoryWebToken}` },
         body: JSON.stringify({ events: batch })
       });
       if (!response.ok) return;
@@ -4781,11 +4793,11 @@ function portableAiRequest(question){
 }
 
 async function recallAiMemory(question){
-  if (!state.appConfig?.aiMemoryConfigured || !location.protocol.startsWith('http')) return '';
+  if (!state.appConfig?.aiMemoryConfigured || !state.ai.memoryWebToken || !location.protocol.startsWith('http')) return '';
   try {
     const response = await fetch('/api/ai-memory/recall', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${state.ai.memoryWebToken}` },
       body: JSON.stringify({ question })
     });
     if (!response.ok) return '';

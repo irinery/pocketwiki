@@ -83,7 +83,7 @@ test('mantém eventos pendentes e reenvia após recarregar', async () => {
     if (url === '/api/ai-memory/recall') return { ok:true, json:async () => ({ context:'nota do ai-memory' }) };
     throw new Error('offline');
   });
-  vm.runInContext('state.appConfig = { aiMemoryConfigured:true }', offline.context);
+  vm.runInContext("state.appConfig = { aiMemoryConfigured:true }; state.ai.memoryWebToken = 'browser-secret-123456789'", offline.context);
   offline.input.value = 'Pergunta';
   await vm.runInContext('askAi()', offline.context);
   assert.match(offline.requests[0], /nota do ai-memory/);
@@ -93,10 +93,11 @@ test('mantém eventos pendentes e reenvia após recarregar', async () => {
 
   const online = browser(storage, async (url, options) => {
     assert.equal(url, '/api/ai-memory/capture');
+    assert.equal(options.headers.Authorization, 'Bearer browser-secret-123456789');
     const events = JSON.parse(options.body).events;
     return { ok:true, json:async () => ({ accepted_keys:events.map(item => item.ingest_key) }) };
   });
-  vm.runInContext('state.appConfig = { aiMemoryConfigured:true }', online.context);
+  vm.runInContext("state.appConfig = { aiMemoryConfigured:true }; state.ai.memoryWebToken = 'browser-secret-123456789'", online.context);
   await vm.runInContext('drainAiHookOutbox()', online.context);
   assert.equal(JSON.parse(storage.getItem('pocketwiki:ai-hook-outbox-v1')).length, 0);
 });

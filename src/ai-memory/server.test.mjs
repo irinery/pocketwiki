@@ -52,7 +52,8 @@ test('proxy web consulta e captura com token apenas no servidor', async () => {
       AI_MEMORY_SERVER_URL: `http://127.0.0.1:${upstream.address().port}`,
       AI_MEMORY_WORKSPACE: 'team',
       AI_MEMORY_PROJECT: 'wiki',
-      AI_MEMORY_AUTH_TOKEN: 'server-secret'
+      AI_MEMORY_AUTH_TOKEN: 'server-secret',
+      AI_MEMORY_WEB_TOKEN: 'browser-secret-123456789'
     },
     stdio: ['ignore', 'pipe', 'pipe']
   });
@@ -73,13 +74,17 @@ test('proxy web consulta e captura com token apenas no servidor', async () => {
     assert(config, `servidor PocketWiki não iniciou: ${childOutput}`);
     assert.equal(config.aiMemoryConfigured, true);
     assert(!JSON.stringify(config).includes('server-secret'));
-    const recall = await fetch(`${root}/api/ai-memory/recall`, {
+    assert(!JSON.stringify(config).includes('browser-secret'));
+    assert.equal((await fetch(`${root}/api/ai-memory/recall`, {
       method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ question:'teste' })
+    })).status, 401);
+    const recall = await fetch(`${root}/api/ai-memory/recall`, {
+      method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer browser-secret-123456789' }, body:JSON.stringify({ question:'teste' })
     });
     assert.equal(recall.status, 200);
     assert.match((await recall.json()).context, /Memória compartilhada/);
     const capture = await fetch(`${root}/api/ai-memory/capture`, {
-      method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ events:[{
+      method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer browser-secret-123456789' }, body:JSON.stringify({ events:[{
         event:'user-prompt-submit', session_id:'0ce8f327-c7d3-4d5a-a633-8e46d6b922cf', ingest_key:'web_event_1', prompt:'teste'
       }] })
     });

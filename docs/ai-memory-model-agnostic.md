@@ -22,17 +22,34 @@ AI_MEMORY_SERVER_URL="http://127.0.0.1:49374"
 AI_MEMORY_WORKSPACE="default"
 AI_MEMORY_PROJECT="pocketwiki"
 AI_MEMORY_AUTH_TOKEN="<chave-do-servidor>"
+AI_MEMORY_WEB_TOKEN="<token-aleatorio-de-pelo-menos-16-caracteres>"
 ```
 
 O servidor precisa estar rodando separadamente com o endpoint `/mcp`. Em instalações sem autenticação no loopback, o token pode ficar vazio. O PocketWiki só habilita essa conexão quando URL, workspace e projeto estão preenchidos. O nome do projeto é o escopo do ai-memory, não o ID de projeto do MiddlewareAuth.
 
+Para testar localmente com a versão `3.2.2` usada na validação desta integração:
+
+```sh
+docker run -d --name ai-memory -p 127.0.0.1:49374:49374 \
+  -v ai-memory-data:/data akitaonrails/ai-memory:3.2.2
+curl -fsS http://127.0.0.1:49374/healthz
+```
+
+Nesse teste local, use `AI_MEMORY_SERVER_URL="http://127.0.0.1:49374"` e deixe `AI_MEMORY_AUTH_TOKEN` vazio. Para acesso por rede, configure autenticação e permissões conforme o [guia de instalação do ai-memory](https://github.com/akitaonrails/ai-memory/blob/main/docs/install.md). O volume `/data` mantém as páginas e observações depois de reiniciar o contêiner.
+
+`AI_MEMORY_WEB_TOKEN` protege o proxy do cockpit, independentemente da chave do servidor ai-memory. Gere um valor longo (por exemplo, `openssl rand -hex 24`) e informe o mesmo token em **Configurações da IA → Token web do ai-memory** no navegador. O cockpit o mantém apenas na sessão da aba. Sem esse token configurado no servidor, as rotas web de memória ficam desabilitadas; o app macOS pode continuar usando o MCP diretamente. Quem tiver acesso ao cockpit e a esse token pode consultar a memória do workspace/projeto configurado, então publique o cockpit por HTTPS com controle de acesso se ele sair da sua máquina ou tailnet.
+
+O servidor funciona sem provider LLM: cria resumos heurísticos de sessões e permite busca textual. Se quiser consolidação narrativa, configure um provider no processo do **servidor ai-memory**, separadamente do provider que responde no PocketWiki. Por exemplo, para um endpoint OpenAI compatível, são necessários `AI_MEMORY_LLM_PROVIDER=openai-compat`, `AI_MEMORY_LLM_BASE_URL` e `AI_MEMORY_LLM_MODEL`; não há modelo padrão seguro para esse provider. Essa configuração não altera o formato dos registros do PocketWiki nem prende a conversa a um modelo.
+
 Para carregar um `.env` fora do checkout ao iniciar `server.mjs`, defina `POCKETWIKI_ENV_PATH=/caminho/para/.env` no ambiente do processo.
 
-No cockpit web servido por `server.mjs`, a mesma configuração habilita `POST /api/ai-memory/recall` e `POST /api/ai-memory/capture`. O servidor guarda a chave e encaminha as chamadas ao `/mcp` e `/hook/batch`; `/api/config` expõe apenas `aiMemoryConfigured`. O browser persiste a sessão ativa em `localStorage`, arquiva a anterior ao clicar em **Nova** e exporta as sessões em JSON pelo botão **Exportar**. O próximo prompt inclui até 12 mensagens anteriores mesmo após recarregar a página ou trocar de provider/modelo. Os eventos pendentes ficam em `localStorage` até o servidor confirmar os `ingest_key` enviados.
+No cockpit web servido por `server.mjs`, a configuração com o token web habilita `POST /api/ai-memory/recall` e `POST /api/ai-memory/capture`. O servidor guarda a chave upstream e encaminha as chamadas ao `/mcp` e `/hook/batch`; `/api/config` expõe apenas `aiMemoryConfigured`. O browser persiste a sessão ativa em `localStorage`, arquiva a anterior ao clicar em **Nova** e exporta as sessões em JSON pelo botão **Exportar**. O próximo prompt inclui até 12 mensagens anteriores mesmo após recarregar a página ou trocar de provider/modelo. Os eventos pendentes ficam em `localStorage` até o servidor confirmar os `ingest_key` enviados; a aba precisa manter o token web em `sessionStorage` para reenviá-los após recarregar.
 
 Os registros do browser e do app macOS usam campos compatíveis (`schema_version`, `id`, `created_at`, `updated_at`, `messages`, `provider_id`, `model_id`), mas ainda são armazenados em lugares distintos. A recuperação via ai-memory usa o mesmo workspace/projeto quando ambos apontam para o mesmo servidor.
 
-Antes de cada pergunta, o app chama `memory_query` e lê até três páginas relevantes por `memory_read_page`. O conteúdo recuperado entra no contexto com o caminho de origem. Para capturar a conversa, envia eventos `session-start`, `user-prompt-submit`, `assistant-response` e `stop` a `/hook/batch`; **Limpar** e **Reset** enviam `session-end`. A resposta entra como evento de extensão `pocketwiki`, já que o protocolo `stop` de `agent=other` não armazena texto do assistente. O servidor consolida as observações em páginas segundo sua própria política.
+Antes de cada pergunta, o app chama `memory_query` e lê até três páginas relevantes por `memory_read_page`. O conteúdo recuperado entra no contexto com o caminho de origem. Para capturar a conversa, envia eventos `session-start`, `user-prompt-submit`, `assistant-response` e `stop` a `/hook/batch`; **Limpar**, **Reset** e **Nova** enviam `session-end`. A resposta entra como evento de extensão `pocketwiki`, já que o protocolo `stop` de `agent=other` não armazena texto do assistente. O servidor consolida as observações em páginas segundo sua própria política.
+
+No teste com o servidor oficial `3.2.2` sem LLM, os cinco eventos foram aceitos e o prompt apareceu numa página `sessions/<id>.md`, recuperável por `memory_query`. O texto da resposta **não** apareceu nessa página heurística, apesar de o evento `assistant-response` constar entre as observações. Por isso, os JSON locais são a fonte completa da conversa; a página gerada pelo servidor serve como memória pesquisável, não como backup integral da transcrição. Promover uma conclusão revisada a uma página durável por `memory_write_page` ainda depende de uma ação explícita.
 
 Cada evento recebe um `ingest_key` estável e fica em `ai-memory-outbox.json` até o lote confirmar seu índice. O app tenta reenviar pendências no próximo envio ou ao abrir o chat. Os JSON locais continuam completos mesmo se o servidor estiver fora do ar. Erros de leitura não impedem a resposta, e falhas de entrega ficam visíveis no chat.
 
