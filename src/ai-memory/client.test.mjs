@@ -57,3 +57,61 @@ test('recusa eventos malformados antes de enviar', async () => {
   const config = createAIMemoryConfiguration({ serverURL: 'http://127.0.0.1:49374', workspace: 'w', project: 'p' });
   await assert.rejects(captureMemoryEvents(config, [{ event: 'unknown', session_id: 'x', ingest_key: 'bad key' }], '/wiki'), /invalid ai-memory event/);
 });
+
+test('não trata HTTP 200 com erro JSON-RPC ou isError como memória válida', async () => {
+  let failure = 'rpc';
+  const server = createServer(async (request, response) => {
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    const body = JSON.parse(Buffer.concat(chunks).toString());
+    response.setHeader('Content-Type', 'application/json');
+    response.end(JSON.stringify(body.method === 'initialize'
+      ? { jsonrpc:'2.0', id:body.id, result:{ protocolVersion:'2024-11-05' } }
+      : failure === 'rpc'
+        ? { jsonrpc:'2.0', id:body.id, error:{ code:-32602, message:'escopo inválido' } }
+        : { jsonrpc:'2.0', id:body.id, result:{ isError:true, content:[{ type:'text', text:'negado' }] } }));
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  try {
+    const config = createAIMemoryConfiguration({
+      serverURL:`http://127.0.0.1:${server.address().port}`, workspace:'team', project:'wiki'
+    });
+    await assert.rejects(recallMemory(config, 'teste'), /escopo inválido/);
+    failure = 'tool';
+    await assert.rejects(recallMemory(config, 'teste'), /memory_query failed/);
+  } finally {
+    server.close();
+    await once(server, 'close');
+  }
+});
+
+test('preserva confirmações parciais de /hook/batch para reenviar só pendências', async () => {
+  const replies = [
+    { status:429, body:{ accepted_indices:[1, 3], failed_index:0 } },
+    { status:429, body:{ accepted:2, failed_index:2 } },
+    { status:429, body:{ accepted_indices:[], failed_index:0 } }
+  ];
+  const server = createServer(async (_request, response) => {
+    const reply = replies.shift();
+    response.writeHead(reply.status, { 'Content-Type':'application/json' });
+    response.end(JSON.stringify(reply.body));
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  try {
+    const config = createAIMemoryConfiguration({
+      serverURL:`http://127.0.0.1:${server.address().port}`, workspace:'team', project:'wiki'
+    });
+    const session_id = '0ce8f327-c7d3-4d5a-a633-8e46d6b922cf';
+    const events = ['session-start', 'user-prompt-submit', 'stop', 'session-end'].map((event, index) => ({
+      event, session_id, ingest_key:`event_${index}`
+    }));
+    assert.deepEqual(await captureMemoryEvents(config, events, '/wiki'), ['event_1', 'event_3']);
+    assert.deepEqual(await captureMemoryEvents(config, events.slice(0, 2), '/wiki'), ['event_0', 'event_1']);
+    await assert.rejects(captureMemoryEvents(config, events, '/wiki'), /HTTP 429/);
+  } finally {
+    server.close();
+    await once(server, 'close');
+  }
+});

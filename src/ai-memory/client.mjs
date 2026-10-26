@@ -31,7 +31,7 @@ function headers(config, accept = 'application/json') {
   };
 }
 
-async function postJSON(url, body, config, accept) {
+async function postJSON(url, body, config, accept, allowPartial = false) {
   const response = await fetch(url, {
     method: 'POST',
     headers: headers(config, accept),
@@ -39,7 +39,10 @@ async function postJSON(url, body, config, accept) {
     signal: AbortSignal.timeout(4000)
   });
   const payload = await response.json();
-  if (!response.ok) throw new Error(`ai-memory HTTP ${response.status}`);
+  if (!response.ok && !(allowPartial && (
+    (Array.isArray(payload?.accepted_indices) && payload.accepted_indices.length > 0) ||
+    Number(payload?.accepted) > 0
+  ))) throw new Error(`ai-memory HTTP ${response.status}`);
   return payload;
 }
 
@@ -125,7 +128,7 @@ export async function captureMemoryEvents(config, events, cwd) {
   });
   const hookURL = new URL('hook/batch', config.endpoint);
   hookURL.pathname = config.endpoint.pathname.replace(/\/mcp$/, '/hook/batch');
-  const result = await postJSON(hookURL, batch, config);
+  const result = await postJSON(hookURL, batch, config, 'application/json', true);
   const indices = Array.isArray(result.accepted_indices)
     ? result.accepted_indices
     : Array.from({ length: Math.min(Number(result.accepted) || 0, events.length) }, (_, index) => index);

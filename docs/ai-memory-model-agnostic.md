@@ -90,7 +90,7 @@ Exemplo do envelope da sessão (datas ISO 8601):
 3. Opcionalmente apontar o arquivo de memória para uma pasta do wiki sincronizada entre dispositivos, mantendo o padrão local como default.
 4. Mostrar o estado da fila de eventos e permitir reenviar sem esperar o próximo prompt ou a reabertura do chat.
 
-Validação rápida do servidor e do cockpit: `npm run test:ai-memory`.
+Validação rápida do cliente, proxy e cockpit com servidores simulados: `npm run test:ai-memory`. Para validar o contrato real, rode `npm run test:ai-memory:live` com Docker disponível. Esse teste inicia um contêiner descartável da imagem `akitaonrails/ai-memory:3.2.2`, executa `initialize`, `tools/list`, `memory_write_page`, `memory_query`, `memory_read_page` e `/hook/batch`, confere isolamento de escopo e reenvio com o mesmo `ingest_key`, e remove o contêiner ao terminar. `AI_MEMORY_TEST_IMAGE` permite testar outra versão da imagem.
 
 ## Referência
 
