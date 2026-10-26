@@ -7,6 +7,7 @@ Funcionalidades:
 - Usa layout responsivo para celular, tablet, notebook e telas grandes;
 - Usa icones compactos nas areas principais para reduzir ruido em telas pequenas;
 - Usa IA via PocketKernel Harness, com provider OpenAI ou LM Studio configurado pelo MiddlewareAuth;
+- Persiste conversas em formato independente do modelo e injeta histórico recente junto da nota local editável `MEMORY.md`;
 - Pode iniciar o MiddlewareAuth como add-on macOS, sem exigir um segundo processo manual;
 - Pode iniciar o PocketKernel como add-on macOS e conectar o MCP Evidence sem start manual;
 - Interpreta desenhos Excalidraw como fontes visuais pesquisaveis e indexaveis.
@@ -131,6 +132,8 @@ O PocketKernel também possui um card operacional com os modos `automatic`, `man
 Falhas de inicialização aparecem como alerta global e como `ERROR` no log da aba **Servidor**. Se um helper já validado cair, o PocketWiki registra `WARNING` e tenta recuperá-lo até três vezes em 60 segundos, com backoff de 1, 5 e 15 segundos; uma recuperação bem-sucedida não interrompe o usuário com modal. O alerta global só aparece quando a recuperação falha ou entra em crash loop, e a saída completa fica em `~/Library/Application Support/PocketWiki/{MiddlewareAuth,PocketKernel}/`. Os add-ons não fazem auto-update isolado: cada release do PocketWiki publica e valida os refs e SHA-256 dos dois helpers, mostra a diferença da próxima versão na aba **Servidor** e recusa instalar um pacote inconsistente.
 
 O contrato proposto para integrar toda a família — add-ons internos, aplicações locais independentes e serviços remotos — está na [`RFC-0001 — Pocket Interop Contract`](docs/rfcs/0001-pocket-interop-contract.md). A RFC inclui schema validável e exemplos para PocketKernel, MiddlewareAuth, PocketTrace e PocketCli.
+
+O chat também mantém transcrições por sessão em JSON legível e uma nota pessoal `MEMORY.md` local em `~/Library/Application Support/PocketWiki/AI Memory/`. A sessão mais recente é restaurada ao abrir o app; cada pergunta recebe até 12 mensagens anteriores e até 4.000 caracteres da nota, permitindo continuar a conversa após trocar de provider/modelo. Se `AI_MEMORY_SERVER_URL`, `AI_MEMORY_WORKSPACE` e `AI_MEMORY_PROJECT` estiverem configurados, o app recupera páginas pelo MCP oficial e captura a conversa pelo endpoint de hooks do ai-memory. O formato, a configuração e os limites atuais estão em [`Memória independente do modelo`](docs/ai-memory-model-agnostic.md).
 
 Para gerar e abrir o app local:
 

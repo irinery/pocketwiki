@@ -51,6 +51,26 @@ struct LocalAIChatPanel: View {
                 .foregroundStyle(PocketWikiTheme.muted)
                 .lineLimit(1)
 
+            Button {
+                NSWorkspace.shared.open(chat.memoryFileURL)
+            } label: {
+                Label("Memória", systemImage: "brain")
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.roundedRectangle(radius: 8))
+            .controlSize(.small)
+            .help("Abrir MEMORY.md portável e editável")
+
+            Button {
+                NSWorkspace.shared.open(chat.memoryFileURL.deletingLastPathComponent())
+            } label: {
+                Image(systemName: "folder")
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.roundedRectangle(radius: 8))
+            .controlSize(.small)
+            .help("Abrir transcrições JSON e memória local")
+
             Button(action: onReset) {
                 Label("Reset", systemImage: "arrow.counterclockwise.circle")
             }
@@ -131,6 +151,9 @@ struct LocalAIChatPanel: View {
                 Label(contextScope.title, systemImage: contextScope.systemImage)
                 if let context = chat.lastContext, context.mode == .wiki {
                     Text("· \(context.includedPaths.count) fonte(s)")
+                }
+                if chat.isAIMemoryConfigured {
+                    Text("· ai-memory")
                 }
                 Spacer()
                 Text("Enter envia · Shift+Enter quebra linha")

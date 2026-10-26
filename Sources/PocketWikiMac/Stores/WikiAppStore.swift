@@ -278,6 +278,14 @@ final class WikiAppStore {
         return url.appendingPathComponent("api/kernel/query").absoluteString
     }
 
+    var aiMemoryCaptureRootPath: String {
+        switch sourceMode {
+        case .localFolder(let url): url.path
+        case .localServer: currentSourceURL?.path ?? serverConfiguration.resolvedReferenceURL.path
+        case .remoteServer, .none: FileManager.default.currentDirectoryPath
+        }
+    }
+
     var localMCPEvidence: PocketWikiMCPEvidenceStatus {
         if let configured = pocketKernelAddon.configuredEvidence {
             return configured

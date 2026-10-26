@@ -4,6 +4,7 @@ struct LocalAIRuntimeConfiguration: Hashable, Sendable {
     let baseURL: String
     let apiKey: String
     let modelID: String
+    let aiMemory: AIMemoryConfiguration?
     let sourcePath: String?
 
     var hasToken: Bool {
@@ -14,6 +15,7 @@ struct LocalAIRuntimeConfiguration: Hashable, Sendable {
         baseURL: LocalAIEndpointPolicy.defaultBaseURL,
         apiKey: "",
         modelID: "",
+        aiMemory: nil,
         sourcePath: nil
     )
 }
@@ -35,6 +37,12 @@ enum LocalAIRuntimeConfigurationLoader {
             apiKey: value("LM_STUDIO_API_KEY", environment: environment, fileValues: fileValues)
                 .ifEmpty(value("LM_API_TOKEN", environment: environment, fileValues: fileValues)),
             modelID: value("LM_STUDIO_MODEL", environment: environment, fileValues: fileValues),
+            aiMemory: AIMemoryConfiguration(
+                serverURL: value("AI_MEMORY_SERVER_URL", environment: environment, fileValues: fileValues),
+                workspace: value("AI_MEMORY_WORKSPACE", environment: environment, fileValues: fileValues),
+                project: value("AI_MEMORY_PROJECT", environment: environment, fileValues: fileValues),
+                authToken: value("AI_MEMORY_AUTH_TOKEN", environment: environment, fileValues: fileValues)
+            ),
             sourcePath: envFile?.url.path
         )
     }
