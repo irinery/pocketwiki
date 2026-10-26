@@ -35,13 +35,15 @@ test('nota MEMORY.md e conversa local entram no contexto sem provider', async ()
   await withStore(async (store, root) => {
     await store.writeNote('# Preferencias\nResponder em portugues.');
     await writeFile(path.join(root, `session-${SESSION}.json`), JSON.stringify({
-      id:SESSION, created_at:'2026-10-20T00:00:00Z', updated_at:'2026-10-20T00:00:00Z',
+      id:SESSION.toUpperCase(), created_at:'2026-10-20T00:00:00Z', updated_at:'2026-10-20T00:00:00Z',
       messages:[{ role:'user', content:'Zabbix monitorando PowerEdge' }, { role:'assistant', content:'Use IPMI para o iDRAC' }]
     }));
+    await store.capture([{ event:'user-prompt-submit', session_id:SESSION, ingest_key:'duplicate_root_1', prompt:'PowerEdge' }]);
     const result = await store.recall('PowerEdge');
     assert.match(result.context, /Responder em portugues/);
     assert.match(result.context, /IPMI para o iDRAC/);
     assert.equal(result.hits[0].source, 'local');
+    assert.equal(result.hits.length, 1);
     assert.equal(await new PocketMemoryStore(root).readNote(), '# Preferencias\nResponder em portugues.');
   });
 });

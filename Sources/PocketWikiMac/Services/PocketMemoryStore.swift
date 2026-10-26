@@ -160,8 +160,9 @@ actor PocketMemoryStore {
         var candidates: [String: Candidate] = [:]
         for file in files.prefix(500) {
                 guard let record = try? readObject(file.url),
-                      let id = record["id"] as? String, UUID(uuidString: id) != nil,
+                      let rawID = record["id"] as? String, UUID(uuidString: rawID) != nil,
                       let messages = record["messages"] as? [[String: Any]] else { continue }
+                let id = rawID.lowercased()
                 let recent = Array(messages.suffix(500))
                 var bestScore = 0
                 var bestIndex = -1

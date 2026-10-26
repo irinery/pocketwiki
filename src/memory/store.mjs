@@ -129,6 +129,7 @@ export class PocketMemoryStore {
     const byID = new Map();
     for (const { source, record } of candidates) {
       if (!UUID.test(record?.id || '') || !Array.isArray(record.messages)) continue;
+      const sessionID = record.id.toLowerCase();
       const messages = record.messages.slice(-500).filter(item =>
         ['user', 'assistant'].includes(item?.role) && typeof item.content === 'string'
       );
@@ -140,11 +141,11 @@ export class PocketMemoryStore {
       if (best.index < 0) continue;
       const excerpt = messages.slice(Math.max(0, best.index - 1), Math.min(messages.length, best.index + 2))
         .map(item => `[${item.role}] ${item.content}`).join('\n\n').slice(0, 2200);
-      const candidate = { source, id:record.id, score:best.score, excerpt,
+      const candidate = { source, id:sessionID, score:best.score, excerpt,
         updated:Date.parse(record.updated_at || record.created_at) || 0 };
-      const prior = byID.get(record.id);
+      const prior = byID.get(sessionID);
       if (!prior || candidate.score > prior.score || (candidate.score === prior.score && source === 'local')) {
-        byID.set(record.id, candidate);
+        byID.set(sessionID, candidate);
       }
     }
     const hits = [...byID.values()].sort((a, b) => b.score - a.score || b.updated - a.updated).slice(0, limit);

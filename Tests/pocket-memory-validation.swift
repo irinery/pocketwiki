@@ -26,15 +26,18 @@ struct PocketMemoryValidation {
 
         try await store.writeNote("Responder em portugues.")
         let localID = UUID().uuidString.lowercased()
-        let local: [String: Any] = ["id": localID, "messages": [
+        let local: [String: Any] = ["id": localID.uppercased(), "messages": [
             ["role": "user", "content": "PowerEdge no Zabbix", "model_id": "gpt"],
             ["role": "assistant", "content": "Monitorar iDRAC por IPMI", "model_id": "qwen"]
         ]]
         try JSONSerialization.data(withJSONObject: local).write(to: root.appendingPathComponent("session-\(localID).json"))
+        _ = try await store.capture([PocketMemoryIncomingEvent(event: "user-prompt-submit", sessionID: localID,
+            ingestKey: "local_duplicate_1", prompt: "PowerEdge", message: nil, providerID: nil, modelID: nil)])
         let context = try await store.recall("Zabbix PowerEdge")
         precondition(context.context.contains("Responder em portugues"))
         precondition(context.context.contains("Monitorar iDRAC"))
         precondition(context.hits.first?.source == "local")
+        precondition(context.hits.count == 1)
 
         let invalid = PocketMemoryIncomingEvent(event: "user-prompt-submit", sessionID: "../../etc/passwd", ingestKey: "bad_1",
             prompt: "teste", message: nil, providerID: nil, modelID: nil)
