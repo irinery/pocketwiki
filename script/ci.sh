@@ -9,7 +9,8 @@ fi
 
 npm --prefix "$ROOT_DIR" run build:excalidraw
 npm --prefix "$ROOT_DIR" run build:graph-view
-npm --prefix "$ROOT_DIR" run test:graph-view
+npm --prefix "$ROOT_DIR" test
+npm --prefix "$ROOT_DIR" run test:memory:swift
 "$ROOT_DIR"/Tests/ReleaseScripts/resolve_release_version_test.sh
 swift build --package-path "$ROOT_DIR"
 "$ROOT_DIR"/script/run_core_tests.sh

@@ -30,6 +30,7 @@ struct IntegrationTestRunner {
     static func main() async throws {
         let tests: [(String, () async throws -> Void)] = [
             ("native server http contract", testNativeServerHTTPContract),
+            ("native memory http contract", testNativeMemoryHTTPContract),
             ("native solutions ingestion contract", testNativeSolutionsIngestionContract),
             ("remote client against native server", testRemoteClientAgainstNativeServer),
             ("middleware auth add-on lifecycle", testMiddlewareAuthAddonLifecycle),
@@ -100,6 +101,45 @@ struct IntegrationTestRunner {
             try expect(messages.contains("GET /"), "server did not log index request")
             try expect(messages.contains("GET /api/config"), "server did not log config request")
             try expect(messages.contains("GET /api/wiki/files"), "server did not log files request")
+        }
+    }
+
+    static func testNativeMemoryHTTPContract() async throws {
+        let token = "integration-memory-token-123456"
+        try await withRunningServer(memoryToken: token) { baseURL, _, _ in
+            let endpoint = baseURL.appendingPathComponent("api/memory")
+            let config = try jsonObject((try await request(baseURL.appendingPathComponent("api/config"))).body)
+            try expect(config["memoryConfigured"] as? Bool == true, "native memory not configured")
+            try expect(!String(describing: config).contains(token), "native config leaked memory token")
+
+            let unauthorized = try await request(endpoint.appendingPathComponent("recall"), method: "POST",
+                headers: ["Content-Type": "application/json"], body: Data(#"{"question":"VLAN"}"#.utf8))
+            try expect(unauthorized.status == 401, "native memory accepted missing token")
+
+            let headers = ["Authorization": "Bearer \(token)", "Content-Type": "application/json"]
+            let sessionID = UUID().uuidString.lowercased()
+            let events: [String: Any] = ["events": [
+                ["event": "user-prompt-submit", "session_id": sessionID, "ingest_key": "prompt_1", "prompt": "VLAN IoT no MikroTik"],
+                ["event": "assistant-response", "session_id": sessionID, "ingest_key": "answer_1", "message": "Use VLAN 30 na bridge", "provider_id": "local", "model_id": "test"]
+            ]]
+            let body = try JSONSerialization.data(withJSONObject: events)
+            let capture = try await request(endpoint.appendingPathComponent("capture"), method: "POST", headers: headers, body: body)
+            try expect(capture.status == 200, "native memory capture failed: \(capture.text)")
+            let replay = try await request(endpoint.appendingPathComponent("capture"), method: "POST", headers: headers, body: body)
+            let accepted = try require(try jsonObject(replay.body)["accepted_keys"] as? [String], "native memory keys missing")
+            try expect(accepted == ["prompt_1", "answer_1"], "native memory replay failed")
+
+            let note = try await request(endpoint.appendingPathComponent("note"), method: "PUT", headers: headers,
+                body: Data(#"{"content":"Responder em portugues."}"#.utf8))
+            try expect(note.status == 200, "native memory note write failed")
+            let loadedNote = try await request(endpoint.appendingPathComponent("note"), headers: headers)
+            let loadedNoteJSON = try jsonObject(loadedNote.body)
+            try expect(loadedNoteJSON["content"] as? String == "Responder em portugues.", "native memory note read failed")
+
+            let client = try require(PocketMemoryConfiguration(serverURL: baseURL.absoluteString, authToken: token), "native memory client configuration failed")
+            let context = try await PocketMemoryClient(configuration: client).recall(question: "VLAN MikroTik")
+            try expect(context.contains("VLAN 30"), "native memory recall missed captured answer")
+            try expect(context.contains("Responder em portugues"), "native memory recall missed note")
         }
     }
 
@@ -681,9 +721,12 @@ struct IntegrationTestRunner {
         try expect(fontResource.mimeType == "font/woff2", "excalidraw font mime failed")
     }
 
-    private static func withRunningServer(_ body: (URL, PocketWikiHTTPServer, IntegrationLogSink) async throws -> Void) async throws {
+    private static func withRunningServer(memoryToken: String = "", _ body: (URL, PocketWikiHTTPServer, IntegrationLogSink) async throws -> Void) async throws {
         let port = try availablePort()
-        let config = serverConfiguration(port: port)
+        let memoryRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PocketWikiMemoryHTTP-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: memoryRoot) }
+        let config = serverConfiguration(port: port, memoryPath: memoryRoot.path, memoryToken: memoryToken)
         let logs = IntegrationLogSink()
         let server = PocketWikiHTTPServer(
             configuration: config,
@@ -789,7 +832,9 @@ struct IntegrationTestRunner {
         port: Int,
         referencePath: String = "",
         referenceReadonly: Bool = true,
-        writeToken: String = ""
+        writeToken: String = "",
+        memoryPath: String = "",
+        memoryToken: String = ""
     ) -> PocketWikiServerConfiguration {
         PocketWikiServerConfiguration(
             port: port,
@@ -800,6 +845,8 @@ struct IntegrationTestRunner {
             referenceReadonly: referenceReadonly,
             writeToken: writeToken,
             writeMaxBytes: PocketWikiSolutionIngestion.minimumRequestBytes,
+            memoryPath: memoryPath.isEmpty ? FileManager.default.temporaryDirectory.appendingPathComponent("PocketWikiMemoryHTTP-\(port)").path : memoryPath,
+            memoryToken: memoryToken,
             lmStudioBaseURL: "http://127.0.0.1:9/v1",
             lmStudioAPIKey: "",
             lmStudioModel: "",
