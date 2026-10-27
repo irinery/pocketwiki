@@ -72,11 +72,12 @@ final class WikiAppStore {
 
     private let folderPicker: WikiFolderPicker
     private let bookmarkStore: WikiBookmarkStore
-    private let folderLoader: WikiFolderLoader
     private let indexer: WikiIndexer
     private let remoteClient: RemoteWikiClient
     private var currentSourceURL: URL?
     private var currentFiles: [WikiFile] = []
+    private var sourceLoadGeneration = 0
+    private var contentSnapshotGeneration = 0
     private var localServer: PocketWikiHTTPServer?
     private var pendingAddonAlerts: [PocketAddonAlert] = []
     private var lastAddonStatusSignature: [PocketAddonService: String] = [:]
@@ -86,13 +87,11 @@ final class WikiAppStore {
     init(
         folderPicker: WikiFolderPicker = WikiFolderPicker(),
         bookmarkStore: WikiBookmarkStore = WikiBookmarkStore(),
-        folderLoader: WikiFolderLoader = WikiFolderLoader(),
         indexer: WikiIndexer = WikiIndexer(),
         remoteClient: RemoteWikiClient = RemoteWikiClient()
     ) {
         self.folderPicker = folderPicker
         self.bookmarkStore = bookmarkStore
-        self.folderLoader = folderLoader
         self.indexer = indexer
         self.remoteClient = remoteClient
         let configuredMode = serverConfiguration.middlewareAuthAddonMode
@@ -347,6 +346,14 @@ final class WikiAppStore {
         await loadSource(url: url, persistBookmark: true)
     }
 
+    func cancelSourceLoad() {
+        guard isLoading else { return }
+        sourceLoadGeneration += 1
+        contentSnapshotGeneration += 1
+        isLoading = false
+        statusMessage = "Carregamento cancelado."
+    }
+
     func restoreLastSource() async {
         guard index.pages.isEmpty else { return }
         do {
@@ -406,7 +413,7 @@ final class WikiAppStore {
 
         let destination = try WikiFilePathResolver.fileURL(root: currentSourceURL, relativePath: path)
         try content.write(to: destination, atomically: true, encoding: .utf8)
-        try reloadLocalSourceAfterWrite(root: currentSourceURL, selectingPath: path, status: "Excalidraw salvo")
+        try await reloadLocalSourceAfterWrite(root: currentSourceURL, selectingPath: path, status: "Excalidraw salvo")
     }
 
     func createExcalidrawDocument(near page: WikiPage?) async throws -> WikiPage? {
@@ -431,7 +438,7 @@ final class WikiAppStore {
         let destination = try WikiFilePathResolver.fileURL(root: currentSourceURL, relativePath: path)
         try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
         try content.write(to: destination, atomically: true, encoding: .utf8)
-        try reloadLocalSourceAfterWrite(root: currentSourceURL, selectingPath: path, status: "Novo Excalidraw criado")
+        try await reloadLocalSourceAfterWrite(root: currentSourceURL, selectingPath: path, status: "Novo Excalidraw criado")
         return index.page(id: WikiTextParser.pathToSlug(path))
     }
 
@@ -498,6 +505,10 @@ final class WikiAppStore {
     }
 
     func connectRemoteServer() async {
+        sourceLoadGeneration += 1
+        contentSnapshotGeneration += 1
+        let generation = sourceLoadGeneration
+        isLoading = false
         serverMode = .external
         errorMessage = nil
         remoteConnectionMessage = "Conectando..."
@@ -505,6 +516,7 @@ final class WikiAppStore {
 
         do {
             let result = try await remoteClient.connect(to: remoteServerURLText)
+            guard generation == sourceLoadGeneration else { return }
             UserDefaults.standard.set(result.baseURL.absoluteString, forKey: "PocketWikiMac.remoteServerURL")
             remoteServerURLText = result.baseURL.absoluteString
             remoteMCPEvidence = result.config.mcpEvidence
@@ -519,6 +531,7 @@ final class WikiAppStore {
             remoteConnectionMessage = "Conectado em \(result.baseURL.absoluteString)"
             appendServerLog(PocketWikiServerLogEntry(level: .info, message: remoteConnectionMessage))
         } catch {
+            guard generation == sourceLoadGeneration else { return }
             remoteMCPEvidence = nil
             serverStatus = .failed(error.localizedDescription)
             remoteConnectionMessage = error.localizedDescription
@@ -542,9 +555,18 @@ final class WikiAppStore {
     }
 
     private func loadSource(url: URL, persistBookmark: Bool) async {
+        sourceLoadGeneration += 1
+        contentSnapshotGeneration += 1
+        let generation = sourceLoadGeneration
+        let snapshotGeneration = contentSnapshotGeneration
         isLoading = true
         errorMessage = nil
         statusMessage = "Carregando \(url.lastPathComponent)..."
+        defer {
+            if generation == sourceLoadGeneration {
+                isLoading = false
+            }
+        }
 
         let didStartScope = url.startAccessingSecurityScopedResource()
         defer {
@@ -558,14 +580,24 @@ final class WikiAppStore {
                 _ = try bookmarkStore.save(url: url)
             }
 
-            let loaded = try folderLoader.loadFiles(from: url)
+            let loaded = try await WikiFolderLoader.loadFilesAsync(from: url)
+            guard generation == sourceLoadGeneration,
+                  snapshotGeneration == contentSnapshotGeneration else { return }
+            let pendingCloudFiles = loaded.issues.filter {
+                $0.hasPrefix("arquivo do iCloud aguardando download:")
+            }.count
             applyLoadedFiles(
                 files: loaded.files,
                 sourceName: url.lastPathComponent,
                 loadIssues: loaded.issues,
                 selectedMode: .localFolder(url),
-                status: "\(loaded.files.count) paginas carregadas"
+                status: pendingCloudFiles == 0
+                    ? "\(loaded.files.count) paginas carregadas"
+                    : "\(loaded.files.count) paginas carregadas; \(pendingCloudFiles) arquivo(s) do iCloud pendentes"
             )
+            if loaded.files.isEmpty && pendingCloudFiles > 0 {
+                errorMessage = "Arquivos do iCloud ainda nao foram baixados. Aguarde e recarregue a pasta."
+            }
             currentSourceURL = url
             if pocketKernelAddon.managedProcessID != nil {
                 pocketKernelAddon.stop()
@@ -575,10 +607,10 @@ final class WikiAppStore {
                 await ensurePocketKernelAddon(baseURL: kernelBaseURL)
             }
         } catch {
-            errorMessage = "Falha ao carregar \(url.lastPathComponent): \(error.localizedDescription)"
+            if generation == sourceLoadGeneration {
+                errorMessage = "Falha ao carregar \(url.lastPathComponent): \(error.localizedDescription)"
+            }
         }
-
-        isLoading = false
     }
 
     private func applyLoadedFiles(files: [WikiFile], sourceName: String, loadIssues: [String], selectedMode: WikiSourceMode, status: String) {
@@ -591,8 +623,13 @@ final class WikiAppStore {
         statusMessage = status
     }
 
-    private func reloadLocalSourceAfterWrite(root: URL, selectingPath: String, status: String) throws {
-        let loaded = try folderLoader.loadFiles(from: root)
+    private func reloadLocalSourceAfterWrite(root: URL, selectingPath: String, status: String) async throws {
+        contentSnapshotGeneration += 1
+        let sourceGeneration = sourceLoadGeneration
+        let snapshotGeneration = contentSnapshotGeneration
+        let loaded = try await WikiFolderLoader.loadFilesAsync(from: root)
+        guard sourceGeneration == sourceLoadGeneration,
+              snapshotGeneration == contentSnapshotGeneration else { return }
         let selectedID = WikiTextParser.pathToSlug(selectingPath)
         let previousTab = selectedTab
         let previousMode = sourceMode
@@ -662,7 +699,7 @@ final class WikiAppStore {
 
         let referenceURL = configuration.resolvedReferenceURL
         do {
-            let loaded = try folderLoader.loadFiles(from: referenceURL)
+            let loaded = try await WikiFolderLoader.loadFilesAsync(from: referenceURL)
             return PocketWikiServedSource(
                 rootName: referenceURL.lastPathComponent,
                 rootPath: referenceURL.path,
