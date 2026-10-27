@@ -4,6 +4,7 @@ struct LocalAIRuntimeConfiguration: Hashable, Sendable {
     let baseURL: String
     let apiKey: String
     let modelID: String
+    let pocketMemory: PocketMemoryConfiguration?
     let sourcePath: String?
 
     var hasToken: Bool {
@@ -14,6 +15,7 @@ struct LocalAIRuntimeConfiguration: Hashable, Sendable {
         baseURL: LocalAIEndpointPolicy.defaultBaseURL,
         apiKey: "",
         modelID: "",
+        pocketMemory: nil,
         sourcePath: nil
     )
 }
@@ -35,6 +37,11 @@ enum LocalAIRuntimeConfigurationLoader {
             apiKey: value("LM_STUDIO_API_KEY", environment: environment, fileValues: fileValues)
                 .ifEmpty(value("LM_API_TOKEN", environment: environment, fileValues: fileValues)),
             modelID: value("LM_STUDIO_MODEL", environment: environment, fileValues: fileValues),
+            pocketMemory: PocketMemoryConfiguration(
+                serverURL: value("POCKETWIKI_MEMORY_SERVER_URL", environment: environment, fileValues: fileValues,
+                    fallback: "http://127.0.0.1:\(value("POCKETWIKI_PORT", environment: environment, fileValues: fileValues, fallback: "8787"))"),
+                authToken: value("POCKETWIKI_MEMORY_TOKEN", environment: environment, fileValues: fileValues)
+            ),
             sourcePath: envFile?.url.path
         )
     }

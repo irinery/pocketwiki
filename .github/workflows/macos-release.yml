@@ -76,6 +76,9 @@ jobs:
       - name: Dependencies
         run: npm ci --include=dev
 
+      - name: CI gate before release
+        run: ./script/ci.sh
+
       - name: Resolve release version
         id: version
         run: ./script/resolve_release_version.sh --github-env "$GITHUB_ENV" --github-output "$GITHUB_OUTPUT"

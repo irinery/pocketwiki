@@ -19,8 +19,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
       - name: Toolchain
         run: |
+          node --version
+          npm --version
           swift --version
           xcodebuild -version
 

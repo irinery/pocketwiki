@@ -13,6 +13,7 @@ struct LocalAIChatMessage: Identifiable, Hashable, Sendable {
     var reasoning: String
     var finishReason: String?
     var usageSummary: String?
+    var providerID: String?
     var modelID: String?
     let createdAt: Date
     var isStreaming: Bool
@@ -24,6 +25,7 @@ struct LocalAIChatMessage: Identifiable, Hashable, Sendable {
         reasoning: String = "",
         finishReason: String? = nil,
         usageSummary: String? = nil,
+        providerID: String? = nil,
         modelID: String? = nil,
         createdAt: Date = Date(),
         isStreaming: Bool = false
@@ -34,6 +36,7 @@ struct LocalAIChatMessage: Identifiable, Hashable, Sendable {
         self.reasoning = reasoning
         self.finishReason = finishReason
         self.usageSummary = usageSummary
+        self.providerID = providerID
         self.modelID = modelID
         self.createdAt = createdAt
         self.isStreaming = isStreaming

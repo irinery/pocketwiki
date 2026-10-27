@@ -81,6 +81,8 @@ struct PocketWikiServerConfiguration: Equatable, Sendable {
     var referenceReadonly: Bool
     var writeToken: String
     var writeMaxBytes: Int
+    var memoryPath: String
+    var memoryToken: String
     var lmStudioBaseURL: String
     var lmStudioAPIKey: String
     var lmStudioModel: String
@@ -111,6 +113,8 @@ struct PocketWikiServerConfiguration: Equatable, Sendable {
             referenceReadonly: true,
             writeToken: "",
             writeMaxBytes: minimumWriteRequestBytes,
+            memoryPath: defaultMemoryPath,
+            memoryToken: "",
             lmStudioBaseURL: LocalAIEndpointPolicy.defaultBaseURL,
             lmStudioAPIKey: "",
             lmStudioModel: "",
@@ -134,6 +138,10 @@ struct PocketWikiServerConfiguration: Equatable, Sendable {
 
     var resolvedReferenceURL: URL {
         URL(fileURLWithPath: Self.resolvePath(referencePath))
+    }
+
+    static var defaultMemoryPath: String {
+        PortableConversationStore().memoryFileURL.deletingLastPathComponent().path
     }
 
     static func load(
@@ -163,6 +171,8 @@ struct PocketWikiServerConfiguration: Equatable, Sendable {
                 Int(value("POCKETWIKI_WRITE_MAX_BYTES", environment: environment, fileValues: fileValues)) ?? minimumWriteRequestBytes,
                 minimumWriteRequestBytes
             ),
+            memoryPath: Self.resolvePath(value("POCKETWIKI_MEMORY_PATH", environment: environment, fileValues: fileValues).ifEmpty(defaultMemoryPath)),
+            memoryToken: value("POCKETWIKI_MEMORY_TOKEN", environment: environment, fileValues: fileValues),
             lmStudioBaseURL: value("LM_STUDIO_BASE_URL", environment: environment, fileValues: fileValues, fallback: LocalAIEndpointPolicy.defaultBaseURL).trimmedSlash,
             lmStudioAPIKey: value("LM_STUDIO_API_KEY", environment: environment, fileValues: fileValues)
                 .ifEmpty(value("LM_API_TOKEN", environment: environment, fileValues: fileValues)),

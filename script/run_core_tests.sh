@@ -16,6 +16,7 @@ swiftc \
   "$ROOT_DIR"/Sources/PocketWikiMac/Support/WikiMarkdownFormatter.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Support/LocalAIResponseLinkifier.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/LocalAIEndpointPolicy.swift \
+  "$ROOT_DIR"/Sources/PocketWikiMac/Services/PocketMemoryClient.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/LocalAIRuntimeConfiguration.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/LocalAIContextBuilder.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/LMStudioClient.swift \
@@ -31,6 +32,7 @@ swiftc \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/WikiFolderLoader.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/WikiAnalytics.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/WikiSidebarExplorer.swift \
+  "$ROOT_DIR"/Sources/PocketWikiMac/Stores/PortableConversationStore.swift \
   "$ROOT_DIR"/Tests/PocketWikiCoreTests/CoreTestRunner.swift \
   -o "$BIN"
 

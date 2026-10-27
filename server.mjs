@@ -1,13 +1,17 @@
 import { createServer } from 'node:http';
+import { timingSafeEqual } from 'node:crypto';
 import dgram from 'node:dgram';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { homedir, networkInterfaces } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handleSolutionPut } from './src/solutions/solution-ingestion.mjs';
+import { PocketMemoryStore, defaultMemoryDirectory } from './src/memory/store.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ENV_PATH = path.join(__dirname, '.env');
+const ENV_PATH = process.env.POCKETWIKI_ENV_PATH
+  ? path.resolve(process.env.POCKETWIKI_ENV_PATH)
+  : path.join(__dirname, '.env');
 const DEFAULT_REFERENCE_PATH = path.join(__dirname, 'SKILL/wiki-reference');
 const startupEnv = await readEnv(ENV_PATH);
 
@@ -19,6 +23,7 @@ const publicHosts = parsePublicHosts(
   'pocketwiki.local,pokectwiki.local'
 );
 const mdnsEnabled = String(envValue('POCKETWIKI_MDNS', startupEnv, 'true')).toLowerCase() !== 'false';
+const memoryStores = new Map();
 
 const server = createServer(async (req, res) => {
   try {
@@ -69,7 +74,8 @@ const server = createServer(async (req, res) => {
         middlewareAuthProjectId: runtime.middlewareAuth.projectId,
         middlewareAuthProfileId: runtime.middlewareAuth.profileId,
         kernelProxy: true,
-        middlewareAuthProxy: true
+        middlewareAuthProxy: true,
+        memoryConfigured: runtime.memory.token.length >= 16
       });
     }
 
@@ -124,6 +130,51 @@ const server = createServer(async (req, res) => {
         method: 'POST',
         body: JSON.stringify(body)
       }, runtime.kernel);
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/memory/recall') {
+      const runtime = await loadRuntimeConfig();
+      if (runtime.memory.token.length < 16) return sendJson(res, { error: 'memory_not_configured' }, 503);
+      if (!hasPocketMemoryAccess(req, runtime.memory.token)) return sendJson(res, { error: 'unauthorized' }, 401);
+      const body = await readJsonBody(req);
+      if (typeof body.question !== 'string' || !body.question.trim() || body.question.length > 2000) {
+        return sendJson(res, { error: 'invalid_question' }, 400);
+      }
+      try {
+        return sendJson(res, await pocketMemoryStore(runtime.memory.path).recall(body.question));
+      } catch {
+        return sendJson(res, { error: 'memory_unavailable' }, 500);
+      }
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/memory/capture') {
+      const runtime = await loadRuntimeConfig();
+      if (runtime.memory.token.length < 16) return sendJson(res, { error: 'memory_not_configured' }, 503);
+      if (!hasPocketMemoryAccess(req, runtime.memory.token)) return sendJson(res, { error: 'unauthorized' }, 401);
+      const body = await readJsonBody(req);
+      try {
+        const acceptedKeys = await pocketMemoryStore(runtime.memory.path).capture(body.events);
+        return sendJson(res, { accepted_keys: acceptedKeys });
+      } catch (error) {
+        const invalid = String(error?.message || '').startsWith('invalid');
+        return sendJson(res, { error: invalid ? 'invalid_events' : 'memory_unavailable' }, invalid ? 400 : 500);
+      }
+    }
+
+    if ((req.method === 'GET' || req.method === 'PUT') && url.pathname === '/api/memory/note') {
+      const runtime = await loadRuntimeConfig();
+      if (runtime.memory.token.length < 16) return sendJson(res, { error: 'memory_not_configured' }, 503);
+      if (!hasPocketMemoryAccess(req, runtime.memory.token)) return sendJson(res, { error: 'unauthorized' }, 401);
+      const store = pocketMemoryStore(runtime.memory.path);
+      if (req.method === 'GET') return sendJson(res, { content:await store.readNote() });
+      const body = await readJsonBody(req);
+      try {
+        await store.writeNote(body.content);
+        return sendJson(res, { saved:true });
+      } catch (error) {
+        const invalid = String(error?.message || '').startsWith('invalid');
+        return sendJson(res, { error:invalid ? 'invalid_memory_note' : 'memory_unavailable' }, invalid ? 400 : 500);
+      }
     }
 
     if (req.method === 'POST' && url.pathname === '/api/middleware/lmstudio/api-key') {
@@ -196,6 +247,23 @@ function envValue(key, values, fallback = '') {
   return fallback;
 }
 
+function hasPocketMemoryAccess(req, expectedToken) {
+  const supplied = req.headers.authorization;
+  if (typeof supplied !== 'string' || !supplied.startsWith('Bearer ')) return false;
+  const candidate = Buffer.from(supplied.slice(7), 'utf8');
+  const expected = Buffer.from(expectedToken, 'utf8');
+  return candidate.length === expected.length && timingSafeEqual(candidate, expected);
+}
+
+function pocketMemoryStore(root) {
+  let store = memoryStores.get(root);
+  if (!store) {
+    store = new PocketMemoryStore(root);
+    memoryStores.set(root, store);
+  }
+  return store;
+}
+
 function hasEnvValue(key, values) {
   return Object.prototype.hasOwnProperty.call(process.env, key) ||
     Boolean(values && Object.prototype.hasOwnProperty.call(values, key));
@@ -222,6 +290,10 @@ async function loadRuntimeConfig(opts = {}) {
       baseUrl: trimSlash(envValue('LM_STUDIO_BASE_URL', values, 'http://localhost:1234/v1')),
       apiKey: envValue('LM_STUDIO_API_KEY', values, '') || envValue('LM_API_TOKEN', values, ''),
       model: envValue('LM_STUDIO_MODEL', values, '')
+    },
+    memory: {
+      path: path.resolve(envValue('POCKETWIKI_MEMORY_PATH', values, '') || defaultMemoryDirectory()),
+      token: envValue('POCKETWIKI_MEMORY_TOKEN', values, '')
     },
     kernel: {
       baseUrl: trimSlash(envValue('POCKETKERNEL_BASE_URL', values, 'http://127.0.0.1:8080'))

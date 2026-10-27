@@ -207,6 +207,10 @@ button{cursor:pointer;color:inherit}
 .ai-settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .ai-settings-section{border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.025);padding:12px}
 .ai-settings-section h3{font-size:13px;margin-bottom:10px}
+.ai-session-list{display:grid;gap:8px;max-height:min(52vh,440px);overflow:auto;margin:14px 0}
+.ai-session-row{width:100%;text-align:left;border:1px solid var(--border2);background:var(--bg3);border-radius:12px;padding:10px 12px;color:var(--text);cursor:pointer}
+.ai-session-row:hover{border-color:var(--accent)}
+.ai-session-row small{display:block;margin-top:4px;color:var(--muted)}
 #ai .ai-provider-card>.field{margin:0 0 10px}
 #ai .ai-provider-card .field-row{min-width:0;gap:10px;margin-bottom:12px}
 #ai .ai-provider-card .field-row .field{min-width:0;margin:0}
@@ -705,6 +709,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
           <div class="field"><label>Profile/User ID</label><input id="ai-settings-profile-id" spellcheck="false" placeholder="default"></div>
         </div>
         <div class="field"><label>Middleware token</label><input id="ai-settings-token" type="password" spellcheck="false" placeholder="MIDDLEWARE_CLIENT_TOKEN"></div>
+        <div class="field"><label>Token da memoria PocketWiki</label><input id="ai-settings-memory-token" type="password" spellcheck="false" placeholder="POCKETWIKI_MEMORY_TOKEN"></div>
       </section>
     </div>
     <div class="copy-actions">
@@ -713,10 +718,29 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
     </div>
   </div>
 </div>
+<div class="copy-modal hidden" id="ai-sessions-modal">
+  <div class="copy-box ai-settings-box">
+    <div class="copy-head">
+      <b>Conversas salvas</b>
+      <button class="btn small" id="ai-sessions-close" data-icon="close"><span class="btn-text">Fechar</span></button>
+    </div>
+    <div class="ai-session-list" id="ai-session-list"></div>
+    <div class="copy-actions">
+      <button class="btn" id="ai-session-import">Importar JSON</button>
+      <button class="btn" id="ai-session-export">Exportar JSON</button>
+      <input id="ai-session-file" type="file" accept=".json,application/json" hidden>
+    </div>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
 'use strict';
+
+const AI_SESSION_STORAGE_KEY = 'pocketwiki:ai-session-v1';
+const MEMORY_OUTBOX_STORAGE_KEY = 'pocketwiki:memory-outbox-v1';
+const LEGACY_AI_HOOK_OUTBOX_STORAGE_KEY = 'pocketwiki:ai-hook-outbox-v1';
+const initialAiSession = restoreAiSession();
 
 const state = {
   pages: new Map(),
@@ -750,13 +774,18 @@ const state = {
     middlewareProjectId: localStorage.getItem('pocketwiki:middleware-project-id') || 'acme',
     middlewareProfileId: localStorage.getItem('pocketwiki:middleware-profile-id') || 'default',
     middlewareToken: '',
+    memoryWebToken: globalThis.sessionStorage?.getItem('pocketwiki:memory-token') || '',
     baseUrl: localStorage.getItem('pocketwiki:ai-base-url') || 'http://127.0.0.1:1234',
     apiKey: '',
     model: localStorage.getItem('pocketwiki:ai-model') || 'gpt-5.5',
     models: [],
     modelsBusy: false,
     providerStatus: '',
-    messages: [],
+    sessionId: initialAiSession.id,
+    sessionCreatedAt: initialAiSession.createdAt,
+    messages: initialAiSession.messages,
+    hookOutbox: restoreMemoryOutbox(),
+    hookDrainBusy: false,
     connected: false,
     busy: false,
     lastContext: [],
@@ -3853,7 +3882,7 @@ function renderAiPanel(){
     </div>
     <div class="ai-grid">
       <div class="card ai-chat">
-        <div class="card-title">${cardTitle('ai', 'Conversa', state.ai.connected ? 'pronto' : 'PocketKernel Harness')}</div>
+        <div class="card-title">${cardTitle('ai', 'Conversa', state.ai.connected ? 'pronto' : 'PocketKernel Harness')}<button class="btn small" id="ai-sessions" title="Retomar ou transferir conversas">Sessões</button><button class="btn small" id="ai-new" title="Arquivar e iniciar outra conversa" ${state.ai.busy ? 'disabled' : ''}>Nova</button></div>
         <div class="ai-messages" id="ai-messages"></div>
         <div class="ai-composer">
           <div class="ai-input">
@@ -3984,6 +4013,8 @@ function bindAiPanel(){
   $('#ai-refresh-status')?.addEventListener('click', () => refreshAiModels());
   $('#ai-open-settings')?.addEventListener('click', openAiSettings);
   $('#ai-send')?.addEventListener('click', () => askAi());
+  $('#ai-sessions')?.addEventListener('click', openAiSessions);
+  $('#ai-new')?.addEventListener('click', newAiConversation);
   $('#ai-method')?.addEventListener('change', () => { saveAiSettings(); state.ai.providerStatus = ''; renderAiPanel(); });
   $('#ai-reasoning')?.addEventListener('change', saveAiSettings);
   $('#ai-model')?.addEventListener('change', saveAiSettings);
@@ -4033,7 +4064,8 @@ function syncAiSettingsForm(){
     'ai-settings-middleware-base-url': state.ai.middlewareBaseUrl,
     'ai-settings-project-id': state.ai.middlewareProjectId,
     'ai-settings-profile-id': state.ai.middlewareProfileId,
-    'ai-settings-token': state.ai.middlewareToken
+    'ai-settings-token': state.ai.middlewareToken,
+    'ai-settings-memory-token': state.ai.memoryWebToken
   };
   for (const [id, value] of Object.entries(values)) {
     const el = document.getElementById(id);
@@ -4044,7 +4076,9 @@ function syncAiSettingsForm(){
 function bindAiSettingsModal(){
   $('#ai-settings-close')?.addEventListener('click', closeAiSettings);
   $('#ai-settings-save')?.addEventListener('click', () => {
+    state.ai.memoryWebToken = $('#ai-settings-memory-token')?.value.trim() || '';
     saveAiSettings();
+    void drainMemoryOutbox();
     closeAiSettings();
     renderAiPanel();
   });
@@ -4065,7 +4099,8 @@ function bindAiSettingsModal(){
     'ai-settings-middleware-base-url',
     'ai-settings-project-id',
     'ai-settings-profile-id',
-    'ai-settings-token'
+    'ai-settings-token',
+    'ai-settings-memory-token'
   ].forEach(id => {
     document.getElementById(id)?.addEventListener('input', syncAiSettingsFromInputs);
     document.getElementById(id)?.addEventListener('change', syncAiSettingsFromInputs);
@@ -4079,7 +4114,9 @@ function renderAiMessages(){
     box.innerHTML = '<div class="ai-msg system">Configure o provider no MiddlewareAuth e faça uma pergunta. A resposta passa pelo PocketKernel Harness.</div>';
     return;
   }
-  box.innerHTML = state.ai.messages.map((message, index) => renderAiMessage(message, index)).join('');
+  const firstVisible = Math.max(0, state.ai.messages.length - 80);
+  box.innerHTML = (firstVisible ? '<div class="ai-msg system">Mensagens anteriores preservadas no JSON exportável.</div>' : '') +
+    state.ai.messages.slice(firstVisible).map((message, index) => renderAiMessage(message, firstVisible + index)).join('');
   bindAiMessageLinks(box);
   bindAiReasoningToggles(box);
   syncAiLiveReasoningScroll(box);
@@ -4359,6 +4396,10 @@ function saveAiSettings(){
   localStorage.setItem('pocketwiki:ai-base-url', state.ai.baseUrl);
   localStorage.setItem('pocketwiki:ai-model', state.ai.model);
   localStorage.removeItem('pocketwiki:ai-api-key');
+  try {
+    if (state.ai.memoryWebToken) sessionStorage.setItem('pocketwiki:memory-token', state.ai.memoryWebToken);
+    else sessionStorage.removeItem('pocketwiki:memory-token');
+  } catch {}
 }
 
 function syncAiSettingsFromInputs(){
@@ -4369,6 +4410,7 @@ function syncAiSettingsFromInputs(){
   const middlewareProjectId = $('#ai-settings-project-id')?.value.trim();
   const middlewareProfileId = $('#ai-settings-profile-id')?.value.trim();
   const middlewareToken = $('#ai-settings-token')?.value.trim();
+  const memoryWebToken = $('#ai-settings-memory-token')?.value.trim();
   const baseUrl = $('#ai-settings-base-url')?.value.trim();
   const model = $('#ai-model')?.value?.trim() || $('#ai-settings-model')?.value.trim();
   const apiKeyInput = $('#ai-settings-api-key');
@@ -4382,6 +4424,7 @@ function syncAiSettingsFromInputs(){
     state.ai.kernelUserId = middlewareProfileId;
   }
   if (middlewareToken !== undefined) state.ai.middlewareToken = middlewareToken;
+  if (memoryWebToken) state.ai.memoryWebToken = memoryWebToken;
   if (baseUrl) state.ai.baseUrl = trimLMStudioBaseUrl(baseUrl);
   if (model !== undefined) state.ai.model = model;
   if (apiKeyInput) state.ai.apiKey = apiKeyInput.value.trim();
@@ -4602,6 +4645,312 @@ Use Markdown simples quando ajudar: **negrito**, *itálico* e listas.
 Não use tags XML/HTML nem placeholders.
 Se o sistema disser que a wiki não trouxe resultado, mencione isso em uma frase curta só quando for relevante, e continue ajudando normalmente.`;
 
+function newAiId(){
+  if (globalThis.crypto?.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, ch => {
+    const value = Math.floor(Math.random() * 16);
+    return (ch === 'x' ? value : (value & 3) | 8).toString(16);
+  });
+}
+
+function aiTimestamp(value = Date.now()){
+  const date = new Date(value);
+  return (Number.isNaN(date.getTime()) ? new Date() : date).toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+function restoreAiSession(){
+  try {
+    const saved = JSON.parse(localStorage.getItem(AI_SESSION_STORAGE_KEY) || 'null');
+    if (saved?.schema_version === 1 && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(saved.id) && Array.isArray(saved.messages)) {
+      return {
+        id: saved.id,
+        createdAt: aiTimestamp(saved.created_at),
+        messages: saved.messages.filter(item =>
+          ['user', 'assistant'].includes(item?.role) && typeof item.content === 'string' && item.content.trim()
+        ).map(item => ({
+          id: typeof item.id === 'string' ? item.id : newAiId(),
+          role: item.role,
+          content: item.content,
+          providerId: item.provider_id || null,
+          model: item.model_id || '',
+          createdAt: aiTimestamp(item.created_at),
+          reasoning: '', finishReason: '', usage: null, streaming: false
+        }))
+      };
+    }
+  } catch {}
+  return { id: newAiId(), createdAt: aiTimestamp(), messages: [] };
+}
+
+function persistAiSession(){
+  try {
+    localStorage.setItem(AI_SESSION_STORAGE_KEY, JSON.stringify({
+      schema_version: 1,
+      id: state.ai.sessionId,
+      created_at: state.ai.sessionCreatedAt,
+      updated_at: aiTimestamp(),
+      messages: state.ai.messages.filter(item =>
+        ['user', 'assistant'].includes(item.role) && item.content?.trim() && !item.streaming
+      ).map(item => ({
+        id: item.id,
+        role: item.role,
+        content: item.content,
+        provider_id: item.providerId || null,
+        model_id: item.model || null,
+        created_at: item.createdAt
+      }))
+    }));
+    return true;
+  } catch {
+    showToast('Não consegui salvar a conversa neste navegador.');
+    return false;
+  }
+}
+
+function newAiConversation(){
+  if (state.ai.busy) return;
+  if (state.ai.messages.length) {
+    if (!persistAiSession()) return;
+    try {
+      localStorage.setItem(`pocketwiki:ai-archive:${state.ai.sessionId}`, localStorage.getItem(AI_SESSION_STORAGE_KEY));
+    } catch {
+      showToast('Não consegui arquivar a conversa neste navegador.');
+      return;
+    }
+    queueMemoryCapture('session-end', state.ai.sessionId);
+  }
+  state.ai.sessionId = newAiId();
+  state.ai.sessionCreatedAt = aiTimestamp();
+  state.ai.messages = [];
+  state.ai.lastContext = [];
+  persistAiSession();
+  renderAiPanel();
+}
+
+function parsePortableAiSession(value){
+  const validDate = date => typeof date === 'string' && !Number.isNaN(Date.parse(date));
+  if (value?.schema_version !== 1 ||
+      !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value.id || '') ||
+      !validDate(value.created_at) || !Array.isArray(value.messages) || value.messages.length > 5000) {
+    throw new Error('Sessão JSON inválida');
+  }
+  return {
+    schema_version: 1,
+    id: value.id.toLowerCase(),
+    created_at: aiTimestamp(value.created_at),
+    updated_at: validDate(value.updated_at) ? aiTimestamp(value.updated_at) : aiTimestamp(value.created_at),
+    messages: value.messages.map(item => {
+      if (!['user', 'assistant'].includes(item?.role) || typeof item.content !== 'string' ||
+          !item.content.trim() || !validDate(item.created_at)) throw new Error('Mensagem JSON inválida');
+      return {
+        ...(typeof item.id === 'string' ? { id: item.id } : {}),
+        role: item.role,
+        content: item.content,
+        created_at: aiTimestamp(item.created_at),
+        provider_id: typeof item.provider_id === 'string' ? item.provider_id : null,
+        model_id: typeof item.model_id === 'string' ? item.model_id : null
+      };
+    })
+  };
+}
+
+function importAiSessionsData(payload){
+  const source = Array.isArray(payload?.sessions) ? payload.sessions : [payload];
+  if (!source.length || source.length > 250) throw new Error('Pacote de sessões inválido');
+  const sessions = source.map(parsePortableAiSession);
+  const seen = new Set();
+  for (const session of sessions) {
+    if (seen.has(session.id)) throw new Error('Pacote contém sessões duplicadas');
+    seen.add(session.id);
+  }
+  const activeId = state.ai.sessionId.toLowerCase();
+  let imported = 0;
+  for (const session of sessions) {
+    const key = `pocketwiki:ai-archive:${session.id}`;
+    if (session.id === activeId || localStorage.getItem(key)) continue;
+    localStorage.setItem(key, JSON.stringify(session));
+    imported++;
+  }
+  return imported;
+}
+
+async function importAiSessions(file){
+  if (!file) return;
+  try {
+    if (file.size > 16 * 1024 * 1024) throw new Error('JSON maior que 16 MiB');
+    const imported = importAiSessionsData(JSON.parse(await file.text()));
+    renderAiSessionList();
+    showToast(imported ? `${imported} conversa(s) importada(s).` : 'Essas conversas já estão salvas.');
+  } catch (error) {
+    showToast(`Não consegui importar: ${error.message}`);
+  } finally {
+    const input = $('#ai-session-file');
+    if (input) input.value = '';
+  }
+}
+
+function archivedAiSessions(){
+  const sessions = [];
+  for (let index = 0; index < localStorage.length; index++) {
+    const key = localStorage.key(index);
+    if (!key?.startsWith('pocketwiki:ai-archive:')) continue;
+    try {
+      const value = parsePortableAiSession(JSON.parse(localStorage.getItem(key)));
+      if (key === `pocketwiki:ai-archive:${value.id}`) sessions.push(value);
+    } catch {}
+  }
+  return sessions.sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
+}
+
+function renderAiSessionList(){
+  const list = $('#ai-session-list');
+  if (!list) return;
+  const sessions = archivedAiSessions();
+  list.innerHTML = sessions.length ? sessions.map(session => {
+    const title = session.messages.find(item => item.role === 'user')?.content.slice(0, 100) || 'Conversa vazia';
+    return `<button class="ai-session-row" data-ai-session-id="${attr(session.id)}"><span>${esc(title)}</span><small>${esc(session.updated_at)} · ${session.messages.length} mensagens</small></button>`;
+  }).join('') : '<p>Nenhuma conversa arquivada. Importe um JSON ou inicie uma conversa nova.</p>';
+}
+
+function openAiSessions(){
+  renderAiSessionList();
+  $('#ai-sessions-modal')?.classList.remove('hidden');
+}
+
+function closeAiSessions(){
+  $('#ai-sessions-modal')?.classList.add('hidden');
+}
+
+function resumeAiSession(id){
+  if (state.ai.busy || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id || '') ||
+      id.toLowerCase() === state.ai.sessionId.toLowerCase()) return false;
+  const archiveKey = `pocketwiki:ai-archive:${id.toLowerCase()}`;
+  try {
+    const target = parsePortableAiSession(JSON.parse(localStorage.getItem(archiveKey)));
+    if (target.id !== id.toLowerCase() || !persistAiSession()) return false;
+    const current = localStorage.getItem(AI_SESSION_STORAGE_KEY);
+    const outgoingId = state.ai.sessionId;
+    if (state.ai.messages.length) localStorage.setItem(`pocketwiki:ai-archive:${outgoingId}`, current);
+    localStorage.setItem(AI_SESSION_STORAGE_KEY, JSON.stringify(target));
+    localStorage.removeItem(archiveKey);
+    if (state.ai.messages.length) queueMemoryCapture('session-end', outgoingId);
+    const restored = restoreAiSession();
+    state.ai.sessionId = restored.id;
+    state.ai.sessionCreatedAt = restored.createdAt;
+    state.ai.messages = restored.messages;
+    state.ai.draft = '';
+    state.ai.lastContext = [];
+    closeAiSessions();
+    renderAiPanel();
+    return true;
+  } catch {
+    showToast('Não consegui abrir essa conversa.');
+    return false;
+  }
+}
+
+function exportAiSessions(){
+  persistAiSession();
+  const sessions = [];
+  for (let index = 0; index < localStorage.length; index++) {
+    const key = localStorage.key(index);
+    if (key !== AI_SESSION_STORAGE_KEY && !key?.startsWith('pocketwiki:ai-archive:')) continue;
+    try {
+      const session = JSON.parse(localStorage.getItem(key));
+      if (session?.schema_version === 1) sessions.push(session);
+    } catch {}
+  }
+  const url = URL.createObjectURL(new Blob([JSON.stringify({ schema_version:1, sessions }, null, 2)], { type:'application/json' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `pocketwiki-conversas-${new Date().toISOString().slice(0, 10)}.json`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function restoreMemoryOutbox(){
+  try {
+    const saved = JSON.parse(localStorage.getItem(MEMORY_OUTBOX_STORAGE_KEY) || localStorage.getItem(LEGACY_AI_HOOK_OUTBOX_STORAGE_KEY) || '[]');
+    return Array.isArray(saved) ? saved.filter(item => item?.ingest_key && item?.session_id) : [];
+  } catch {
+    return [];
+  }
+}
+
+function queueMemoryCapture(event, identity, fields = {}){
+  if (!state.appConfig?.memoryConfigured) return;
+  const item = {
+    event,
+    session_id: state.ai.sessionId,
+    ingest_key: `pw_web_${event.replaceAll('-', '_')}_${identity.replaceAll('-', '').toLowerCase()}`,
+    ...fields
+  };
+  if (typeof item.prompt === 'string') item.prompt = item.prompt.slice(0, 8000);
+  if (typeof item.message === 'string') item.message = item.message.slice(0, 8000);
+  if (state.ai.hookOutbox.some(pending => pending.ingest_key === item.ingest_key)) return;
+  state.ai.hookOutbox.push(item);
+  persistMemoryOutbox();
+  void drainMemoryOutbox();
+}
+
+function persistMemoryOutbox(){
+  try {
+    localStorage.setItem(MEMORY_OUTBOX_STORAGE_KEY, JSON.stringify(state.ai.hookOutbox));
+    localStorage.removeItem(LEGACY_AI_HOOK_OUTBOX_STORAGE_KEY);
+  } catch {
+    showToast('Fila da memoria PocketWiki sem espaço no navegador.');
+  }
+}
+
+async function drainMemoryOutbox(){
+  if (state.ai.hookDrainBusy || !state.appConfig?.memoryConfigured || !state.ai.memoryWebToken || !location.protocol.startsWith('http')) return;
+  state.ai.hookDrainBusy = true;
+  try {
+    while (state.ai.hookOutbox.length) {
+      const batch = state.ai.hookOutbox.slice(0, 32);
+      const response = await fetch('/api/memory/capture', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${state.ai.memoryWebToken}` },
+        body: JSON.stringify({ events: batch })
+      });
+      if (!response.ok) return;
+      const accepted = new Set((await response.json()).accepted_keys || []);
+      if (!accepted.size) return;
+      state.ai.hookOutbox = state.ai.hookOutbox.filter(item => !accepted.has(item.ingest_key));
+      persistMemoryOutbox();
+      if (accepted.size < batch.length) return;
+    }
+  } catch {
+    // Pendências continuam no armazenamento local para a próxima tentativa.
+  } finally {
+    state.ai.hookDrainBusy = false;
+  }
+}
+
+function portableAiRequest(question){
+  const history = state.ai.messages.filter(item =>
+    ['user', 'assistant'].includes(item.role) && item.content?.trim() && !item.streaming
+  ).slice(-12).map(item => `[${item.role}]\n${item.content}`).join('\n\n').slice(-8000);
+  return [`PERGUNTA ATUAL:\n${question}`,
+    history ? `HISTORICO PORTAVEL DA CONVERSA (mensagens comuns, independente do modelo):\n${history}` : ''
+  ].filter(Boolean).join('\n\n---\n\n');
+}
+
+async function recallMemory(question){
+  if (!state.appConfig?.memoryConfigured || !state.ai.memoryWebToken || !location.protocol.startsWith('http')) return '';
+  try {
+    const response = await fetch('/api/memory/recall', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${state.ai.memoryWebToken}` },
+      body: JSON.stringify({ question })
+    });
+    if (!response.ok) return '';
+    return String((await response.json()).context || '').slice(0, 5000);
+  } catch {
+    return '';
+  }
+}
+
 async function askAi(preset){
   if (state.ai.busy) return;
   const input = $('#ai-question');
@@ -4617,28 +4966,42 @@ async function askAi(preset){
     state.ai.draft = '';
   }
 
-  state.ai.messages.push({ role:'user', content:question });
+  const requestText = portableAiRequest(question);
+  const isNewSession = state.ai.messages.length === 0;
+  const userMessage = { id:newAiId(), role:'user', content:question, createdAt:aiTimestamp() };
+  state.ai.messages.push(userMessage);
   const assistantMessage = {
+    id:newAiId(),
     role:'assistant',
     content:'',
     reasoning:'',
     finishReason:'',
     usage:null,
-    model:'PocketKernel',
+    providerId: aiProvider(),
+    model:state.ai.model || 'PocketKernel',
+    createdAt:aiTimestamp(),
     streaming:true
   };
   state.ai.messages.push(assistantMessage);
-  trimAiMessages();
+  persistAiSession();
+  if (isNewSession) queueMemoryCapture('session-start', state.ai.sessionId);
+  queueMemoryCapture('user-prompt-submit', userMessage.id, { prompt: question });
   state.ai.busy = true;
   renderAiPanel();
 
   try {
     state.ai.lastContext = [];
-    const res = await fetchPocketKernel(question);
+    const recalled = await recallMemory(question);
+    const enrichedRequest = recalled
+      ? `${requestText}\n\n---\n\nMEMORIA RECUPERADA DO POCKETWIKI (fontes historicas; confirme na wiki quando necessario):\n${recalled}`
+      : requestText;
+    const res = await fetchPocketKernel(enrichedRequest);
     if (!res.ok) throw new Error(await res.text());
     const answer = normalizePocketKernelResponse(await res.json());
     state.ai.connected = true;
     applyAiAnswer(assistantMessage, answer);
+    assistantMessage.model = state.ai.model || answer.model || 'PocketKernel';
+    queueMemoryCapture('assistant-response', assistantMessage.id, { message: assistantMessage.content, provider_id: assistantMessage.providerId || null, model_id: assistantMessage.model || null });
   } catch (err) {
     state.ai.connected = false;
     assistantMessage.role = 'system';
@@ -4646,7 +5009,8 @@ async function askAi(preset){
     assistantMessage.reasoning = '';
   } finally {
     assistantMessage.streaming = false;
-    trimAiMessages();
+    queueMemoryCapture('stop', assistantMessage.id);
+    persistAiSession();
     state.ai.busy = false;
     renderAiPanel();
   }
@@ -4810,13 +5174,6 @@ function cleanAiText(value){
 async function waitForAiModels(){
   for (let i = 0; i < 50 && state.ai.modelsBusy; i++) {
     await new Promise(resolve => setTimeout(resolve, 100));
-  }
-}
-
-function trimAiMessages(){
-  const maxMessages = 80;
-  if (state.ai.messages.length > maxMessages) {
-    state.ai.messages.splice(0, state.ai.messages.length - maxMessages);
   }
 }
 
@@ -5435,13 +5792,23 @@ $('#copy-modal-copy').addEventListener('click', async () => {
 });
 $('#copy-modal').addEventListener('click', e => { if (e.target.id === 'copy-modal') closeCopyFallback(); });
 bindAiSettingsModal();
-document.addEventListener('keydown', e => { const k=e.key.toLowerCase(); if((e.metaKey||e.ctrlKey) && k==='k'){ e.preventDefault(); openPalette(); } if(k==='escape'){ closePalette(); closeCopyFallback(); closeAiSettings(); $('#search-overlay').classList.remove('visible'); }});
+$('#ai-sessions-close').addEventListener('click', closeAiSessions);
+$('#ai-sessions-modal').addEventListener('click', e => { if (e.target.id === 'ai-sessions-modal') closeAiSessions(); });
+$('#ai-session-list').addEventListener('click', e => {
+  const row = e.target.closest('[data-ai-session-id]');
+  if (row) resumeAiSession(row.dataset.aiSessionId);
+});
+$('#ai-session-import').addEventListener('click', () => $('#ai-session-file').click());
+$('#ai-session-file').addEventListener('change', e => { void importAiSessions(e.target.files?.[0]); });
+$('#ai-session-export').addEventListener('click', exportAiSessions);
+document.addEventListener('keydown', e => { const k=e.key.toLowerCase(); if((e.metaKey||e.ctrlKey) && k==='k'){ e.preventDefault(); openPalette(); } if(k==='escape'){ closePalette(); closeCopyFallback(); closeAiSettings(); closeAiSessions(); $('#search-overlay').classList.remove('visible'); }});
 window.addEventListener('resize', () => { if(state.activePanel==='graph') { resizeGraphCanvas(); requestGraphFrame(); } });
 
 if (window.marked?.setOptions) marked.setOptions({ gfm:true, breaks:false, mangle:false, headerIds:false });
 
 async function initApp(){
   const [config, routes] = await Promise.all([loadAppConfig(), loadRoutes()]);
+  if (config?.memoryConfigured) void drainMemoryOutbox();
   if (!config && !routes && location.protocol.startsWith('http')) {
     showAccessScreen('A página abriu, mas as APIs locais do PocketWiki não responderam. Pode ser interferência de rota, DNS/mDNS, Tailscale/VPN ou o servidor reiniciando na máquina principal.');
   }
