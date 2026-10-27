@@ -30,6 +30,7 @@ struct IntegrationTestRunner {
     static func main() async throws {
         let tests: [(String, () async throws -> Void)] = [
             ("native server http contract", testNativeServerHTTPContract),
+            ("slow wiki read keeps main actor responsive", testSlowWikiReadKeepsMainActorResponsive),
             ("native memory http contract", testNativeMemoryHTTPContract),
             ("native solutions ingestion contract", testNativeSolutionsIngestionContract),
             ("remote client against native server", testRemoteClientAgainstNativeServer),
@@ -141,6 +142,25 @@ struct IntegrationTestRunner {
             try expect(context.contains("VLAN 30"), "native memory recall missed captured answer")
             try expect(context.contains("Responder em portugues"), "native memory recall missed note")
         }
+    }
+
+    static func testSlowWikiReadKeepsMainActorResponsive() async throws {
+        let (startedStream, startedContinuation) = AsyncStream<Date>.makeStream()
+        let load = Task { @MainActor in
+            startedContinuation.yield(Date())
+            startedContinuation.finish()
+            return try await WikiFolderLoader.loadFilesAsync(from: FileManager.default.temporaryDirectory) { _ in
+                Thread.sleep(forTimeInterval: 0.7)
+                return ([], [])
+            }
+        }
+
+        var iterator = startedStream.makeAsyncIterator()
+        let startedAt = try require(await iterator.next(), "slow wiki load did not start")
+        let tickAt = await MainActor.run { Date() }
+        let loaded = try await load.value
+        try expect(tickAt.timeIntervalSince(startedAt) < 0.4, "slow file read blocked the main actor")
+        try expect(loaded.files.isEmpty, "slow wiki load returned unexpected files")
     }
 
     static func testNativeSolutionsIngestionContract() async throws {
