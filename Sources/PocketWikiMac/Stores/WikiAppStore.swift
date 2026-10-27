@@ -77,6 +77,7 @@ final class WikiAppStore {
     private var currentSourceURL: URL?
     private var currentFiles: [WikiFile] = []
     private var sourceLoadGeneration = 0
+    private var contentSnapshotGeneration = 0
     private var localServer: PocketWikiHTTPServer?
     private var pendingAddonAlerts: [PocketAddonAlert] = []
     private var lastAddonStatusSignature: [PocketAddonService: String] = [:]
@@ -348,6 +349,7 @@ final class WikiAppStore {
     func cancelSourceLoad() {
         guard isLoading else { return }
         sourceLoadGeneration += 1
+        contentSnapshotGeneration += 1
         isLoading = false
         statusMessage = "Carregamento cancelado."
     }
@@ -503,6 +505,10 @@ final class WikiAppStore {
     }
 
     func connectRemoteServer() async {
+        sourceLoadGeneration += 1
+        contentSnapshotGeneration += 1
+        let generation = sourceLoadGeneration
+        isLoading = false
         serverMode = .external
         errorMessage = nil
         remoteConnectionMessage = "Conectando..."
@@ -510,6 +516,7 @@ final class WikiAppStore {
 
         do {
             let result = try await remoteClient.connect(to: remoteServerURLText)
+            guard generation == sourceLoadGeneration else { return }
             UserDefaults.standard.set(result.baseURL.absoluteString, forKey: "PocketWikiMac.remoteServerURL")
             remoteServerURLText = result.baseURL.absoluteString
             remoteMCPEvidence = result.config.mcpEvidence
@@ -524,6 +531,7 @@ final class WikiAppStore {
             remoteConnectionMessage = "Conectado em \(result.baseURL.absoluteString)"
             appendServerLog(PocketWikiServerLogEntry(level: .info, message: remoteConnectionMessage))
         } catch {
+            guard generation == sourceLoadGeneration else { return }
             remoteMCPEvidence = nil
             serverStatus = .failed(error.localizedDescription)
             remoteConnectionMessage = error.localizedDescription
@@ -548,7 +556,9 @@ final class WikiAppStore {
 
     private func loadSource(url: URL, persistBookmark: Bool) async {
         sourceLoadGeneration += 1
+        contentSnapshotGeneration += 1
         let generation = sourceLoadGeneration
+        let snapshotGeneration = contentSnapshotGeneration
         isLoading = true
         errorMessage = nil
         statusMessage = "Carregando \(url.lastPathComponent)..."
@@ -571,7 +581,8 @@ final class WikiAppStore {
             }
 
             let loaded = try await WikiFolderLoader.loadFilesAsync(from: url)
-            guard generation == sourceLoadGeneration else { return }
+            guard generation == sourceLoadGeneration,
+                  snapshotGeneration == contentSnapshotGeneration else { return }
             let pendingCloudFiles = loaded.issues.filter {
                 $0.hasPrefix("arquivo do iCloud aguardando download:")
             }.count
@@ -613,9 +624,12 @@ final class WikiAppStore {
     }
 
     private func reloadLocalSourceAfterWrite(root: URL, selectingPath: String, status: String) async throws {
-        let generation = sourceLoadGeneration
+        contentSnapshotGeneration += 1
+        let sourceGeneration = sourceLoadGeneration
+        let snapshotGeneration = contentSnapshotGeneration
         let loaded = try await WikiFolderLoader.loadFilesAsync(from: root)
-        guard generation == sourceLoadGeneration else { return }
+        guard sourceGeneration == sourceLoadGeneration,
+              snapshotGeneration == contentSnapshotGeneration else { return }
         let selectedID = WikiTextParser.pathToSlug(selectingPath)
         let previousTab = selectedTab
         let previousMode = sourceMode
