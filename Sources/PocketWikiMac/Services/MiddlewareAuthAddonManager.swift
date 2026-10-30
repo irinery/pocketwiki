@@ -471,7 +471,9 @@ final class MiddlewareAuthAddonManager {
 
     private func isHealthy(_ baseURL: URL) async -> Bool {
         var request = URLRequest(url: baseURL.appendingPathComponent("healthz"))
-        request.timeoutInterval = 0.6
+        // A short false-negative here starts a second helper on an external
+        // service's occupied loopback port.
+        request.timeoutInterval = 3
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("close", forHTTPHeaderField: "Connection")
         do {

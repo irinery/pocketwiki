@@ -480,11 +480,13 @@ struct IntegrationTestRunner {
         from http.server import BaseHTTPRequestHandler, HTTPServer
         import json
         import os
+        import time
 
         token = os.environ["MOCK_EXTERNAL_TOKEN"]
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self):
                 if self.path == "/healthz":
+                    time.sleep(0.8)
                     status, payload = 200, {"status":"ok","checks":[{"name":"http","status":"ok"}]}
                 elif "/auth/openai/status" in self.path:
                     status = 200 if self.headers.get("Authorization") == "Bearer " + token else 401
