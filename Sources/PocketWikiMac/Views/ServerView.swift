@@ -68,7 +68,9 @@ struct ServerView: View {
             }
             Button("Cancelar", role: .cancel) {}
         } message: {
-            Text("O helper será reiniciado e a senha anterior deixará de funcionar imediatamente.")
+            Text(middlewareUsesManagedPassword
+                ? "O helper será reiniciado e a senha anterior deixará de funcionar imediatamente."
+                : "O MiddlewareAuth externo invalidará a senha anterior imediatamente para todos os clientes.")
         }
     }
 
@@ -462,7 +464,7 @@ struct ServerView: View {
 
     private var externalPasswordPanel: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Senha emitida pelo servidor remoto")
+            Text("Credencial do MiddlewareAuth externo")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(PocketWikiTheme.muted)
             SecureField("MIDDLEWARE_CLIENT_TOKEN", text: $store.middlewareAuthClientToken)
@@ -471,9 +473,27 @@ struct ServerView: View {
                 .onSubmit {
                     Task { await refreshMiddlewareAuth() }
                 }
-            Text("O PocketWiki não consegue trocar a senha de um servidor que ele não iniciou.")
+            HStack(spacing: 10) {
+                Button {
+                    confirmsPasswordRotation = true
+                } label: {
+                    Label("Gerar nova senha", systemImage: "key.horizontal")
+                }
+                .buttonStyle(.bordered)
+                .disabled(store.middlewareAuthClientToken.pocketTrimmed.isEmpty)
+
+                Button {
+                    copyToClipboard(store.middlewareAuthClientToken)
+                    middlewareOperationMessage = "Senha copiada."
+                } label: {
+                    Label("Copiar", systemImage: "doc.on.doc")
+                }
+                .buttonStyle(.bordered)
+                .disabled(store.middlewareAuthClientToken.pocketTrimmed.isEmpty)
+            }
+            Text("A troca exige a senha atual. A nova senha será salva neste Mac; atualize também os outros clientes do MiddlewareAuth.")
                 .font(.caption)
-                .foregroundStyle(PocketWikiTheme.warn)
+                .foregroundStyle(PocketWikiTheme.muted)
         }
     }
 
@@ -516,6 +536,9 @@ struct ServerView: View {
         service: PocketAddonService,
         integrity: PocketAddonIntegrityStatus
     ) -> String {
+        if integrity == .externalUntracked {
+            return "Instância externa sem manifesto: o PocketWiki não controla a versão nem reinicia esse serviço. Para usar o helper atualizado junto com o app, libere a porta e selecione Neste Mac."
+        }
         guard let release = updater.availableRelease else {
             return "Atualização atômica: o helper é validado e substituído junto com o PocketWiki.app."
         }
@@ -838,7 +861,10 @@ struct ServerView: View {
     }
 
     private var middlewareBoundaryNotice: String {
-        switch store.middlewareAuthRuntimeMode {
+        if store.middlewareAuthAddon.integrityStatus == .externalUntracked {
+            return "Este endpoint pertence a um processo externo. O PocketWiki não troca nem reinicia esse binário; para receber o helper empacotado com o app, libere a porta e selecione Neste Mac."
+        }
+        return switch store.middlewareAuthRuntimeMode {
         case .external:
             "Modo remoto: este app só consome a URL informada. Exponha o MiddlewareAuth separado via HTTPS, VPN ou reverse proxy."
         case .disabled:
@@ -880,6 +906,16 @@ struct ServerView: View {
 
     @MainActor
     private func rotateMiddlewarePassword() async {
+        if !middlewareUsesManagedPassword {
+            middlewareOperationMessage = "Solicitando nova senha ao MiddlewareAuth externo..."
+            do {
+                _ = try await store.rotateExternalMiddlewareAuthPassword(baseURL: middlewareAuthBaseURL)
+                middlewareOperationMessage = "Nova senha salva e conexão validada. A anterior foi invalidada."
+            } catch {
+                middlewareOperationMessage = "Falha ao trocar a senha externa: \(error.localizedDescription)"
+            }
+            return
+        }
         store.middlewareAuthRuntimeMode = .managed
         if !isLoopbackMiddlewareURL(middlewareAuthBaseURL) {
             middlewareAuthBaseURL = MiddlewareAuthEndpointPolicy.defaultBaseURL

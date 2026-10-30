@@ -35,6 +35,9 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
     private let mdnsResponder: PocketWikiMDNSResponder
     private let solutionIngestion: PocketWikiSolutionIngestion
     private let memoryStore: PocketMemoryStore
+    private let middlewareTokenLock = NSLock()
+    private var middlewareToken: String
+    private var middlewareBaseURL: String
     private var listener: NWListener?
     private var webRoot: URL?
     private var handlers: [UUID: PocketWikiHTTPConnectionHandler] = [:]
@@ -45,11 +48,37 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
         log: @escaping Logger
     ) {
         self.configuration = configuration
+        self.middlewareToken = configuration.middlewareAuthClientToken
+        self.middlewareBaseURL = configuration.middlewareAuthBaseURL
         self.sourceProvider = sourceProvider
         self.log = log
         self.mdnsResponder = PocketWikiMDNSResponder(log: log)
         self.solutionIngestion = PocketWikiSolutionIngestion(writeToken: configuration.writeToken)
         self.memoryStore = PocketMemoryStore(directory: URL(fileURLWithPath: configuration.memoryPath, isDirectory: true))
+    }
+
+    func updateMiddlewareToken(_ token: String) {
+        middlewareTokenLock.lock()
+        middlewareToken = token
+        middlewareTokenLock.unlock()
+    }
+
+    func updateMiddlewareBaseURL(_ baseURL: String) {
+        middlewareTokenLock.lock()
+        middlewareBaseURL = baseURL
+        middlewareTokenLock.unlock()
+    }
+
+    private func currentMiddlewareToken() -> String {
+        middlewareTokenLock.lock()
+        defer { middlewareTokenLock.unlock() }
+        return middlewareToken
+    }
+
+    private func currentMiddlewareBaseURL() -> String {
+        middlewareTokenLock.lock()
+        defer { middlewareTokenLock.unlock() }
+        return middlewareBaseURL
     }
 
     func start() async throws -> PocketWikiRouteSnapshot {
@@ -311,12 +340,12 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
 
     private func proxyMiddlewareLMStudioAPIKey(body: Data) async -> PocketWikiHTTPResponse {
         let input = requestObject(body)
-        let baseURL = stringValue(input["middlewareBaseUrl"]).pocketIfEmpty(configuration.middlewareAuthBaseURL)
+        let baseURL = currentMiddlewareBaseURL()
         let projectID = stringValue(input["projectId"]).pocketIfEmpty(configuration.middlewareAuthProjectID).pocketIfEmpty("acme")
         let profileID = stringValue(input["profileId"]).pocketIfEmpty(configuration.middlewareAuthProfileID).pocketIfEmpty("default")
         let lmStudioBaseURL = stringValue(input["baseUrl"]).pocketIfEmpty(configuration.lmStudioBaseURL).pocketIfEmpty("http://127.0.0.1:1234")
         let apiKey = stringValue(input["apiKey"])
-        guard !configuration.middlewareAuthClientToken.pocketTrimmed.isEmpty else {
+        guard !currentMiddlewareToken().pocketTrimmed.isEmpty else {
             return jsonError("middlewareauth_token_missing", status: 401)
         }
         guard !apiKey.pocketTrimmed.isEmpty else {
@@ -341,10 +370,10 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
 
     private func proxyMiddlewareLMStudioStatus(body: Data) async -> PocketWikiHTTPResponse {
         let input = requestObject(body)
-        let baseURL = stringValue(input["middlewareBaseUrl"]).pocketIfEmpty(configuration.middlewareAuthBaseURL)
+        let baseURL = currentMiddlewareBaseURL()
         let projectID = stringValue(input["projectId"]).pocketIfEmpty(configuration.middlewareAuthProjectID).pocketIfEmpty("acme")
         let profileID = stringValue(input["profileId"]).pocketIfEmpty(configuration.middlewareAuthProfileID).pocketIfEmpty("default")
-        guard !configuration.middlewareAuthClientToken.pocketTrimmed.isEmpty else {
+        guard !currentMiddlewareToken().pocketTrimmed.isEmpty else {
             return jsonError("middlewareauth_token_missing", status: 401)
         }
 
@@ -362,11 +391,11 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
 
     private func proxyMiddlewareOpenAILogin(body: Data) async -> PocketWikiHTTPResponse {
         let input = requestObject(body)
-        let baseURL = stringValue(input["middlewareBaseUrl"]).pocketIfEmpty(configuration.middlewareAuthBaseURL)
+        let baseURL = currentMiddlewareBaseURL()
         let projectID = stringValue(input["projectId"]).pocketIfEmpty(configuration.middlewareAuthProjectID).pocketIfEmpty("acme")
         let profileID = stringValue(input["profileId"]).pocketIfEmpty(configuration.middlewareAuthProfileID).pocketIfEmpty("default")
         let mode = stringValue(input["mode"]).pocketIfEmpty("device_code")
-        guard !configuration.middlewareAuthClientToken.pocketTrimmed.isEmpty else {
+        guard !currentMiddlewareToken().pocketTrimmed.isEmpty else {
             return jsonError("middlewareauth_token_missing", status: 401)
         }
 
@@ -387,10 +416,10 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
 
     private func proxyMiddlewareOpenAIStatus(body: Data) async -> PocketWikiHTTPResponse {
         let input = requestObject(body)
-        let baseURL = stringValue(input["middlewareBaseUrl"]).pocketIfEmpty(configuration.middlewareAuthBaseURL)
+        let baseURL = currentMiddlewareBaseURL()
         let projectID = stringValue(input["projectId"]).pocketIfEmpty(configuration.middlewareAuthProjectID).pocketIfEmpty("acme")
         let profileID = stringValue(input["profileId"]).pocketIfEmpty(configuration.middlewareAuthProfileID).pocketIfEmpty("default")
-        guard !configuration.middlewareAuthClientToken.pocketTrimmed.isEmpty else {
+        guard !currentMiddlewareToken().pocketTrimmed.isEmpty else {
             return jsonError("middlewareauth_token_missing", status: 401)
         }
 
@@ -409,13 +438,16 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
     private func proxyMiddlewareAuth(url: URL, method: String, body: Data?) async -> PocketWikiHTTPResponse {
         var request = URLRequest(url: url)
         request.httpMethod = method
-        request.setValue("Bearer \(configuration.middlewareAuthClientToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(currentMiddlewareToken())", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.httpBody = body
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.data(
+                for: request,
+                delegate: MiddlewareAuthNoRedirectDelegate()
+            )
             let status = (response as? HTTPURLResponse)?.statusCode ?? 200
             let contentType = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Type") ?? "application/json; charset=utf-8"
             return PocketWikiHTTPResponse(

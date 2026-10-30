@@ -5,6 +5,9 @@ enum MiddlewareAuthClientError: Error, LocalizedError {
     case missingClientToken
     case missingLMStudioAPIKey
     case missingLoginSession
+    case invalidRotationResponse
+    case rotatedTokenNotSaved
+    case rotatedTokenNotVerified
     case badStatus(Int, String?)
 
     var errorDescription: String? {
@@ -17,6 +20,12 @@ enum MiddlewareAuthClientError: Error, LocalizedError {
             "Informe a API key do LM Studio para registrar o provider."
         case .missingLoginSession:
             "Sessao de login OpenAI nao informada."
+        case .invalidRotationResponse:
+            "MiddlewareAuth não retornou uma nova senha válida."
+        case .rotatedTokenNotSaved:
+            "A nova senha já está ativa, mas não foi salva neste Mac. Copie a senha exibida antes de fechar o app."
+        case .rotatedTokenNotVerified:
+            "A nova senha foi salva, mas o MiddlewareAuth externo não confirmou o acesso."
         case .badStatus(let status, let detail):
             if let detail, !detail.isEmpty {
                 "MiddlewareAuth respondeu HTTP \(status): \(detail)"
@@ -33,7 +42,11 @@ enum MiddlewareAuthEndpointPolicy {
     static func normalizedBaseURL(_ rawValue: String) throws -> URL {
         let value = rawValue.pocketTrimmed.isEmpty ? defaultBaseURL : rawValue.pocketTrimmed
         guard let rawURL = URL(string: value),
-              LocalAIEndpointPolicy.isAllowedLocalBaseURL(rawURL),
+              let scheme = rawURL.scheme?.lowercased(),
+              let host = rawURL.host, !host.isEmpty,
+              rawURL.user == nil, rawURL.password == nil,
+              rawURL.query == nil, rawURL.fragment == nil,
+              (scheme == "https" || scheme == "http" && LocalAIEndpointPolicy.isAllowedLocalBaseURL(rawURL)),
               var components = URLComponents(url: rawURL, resolvingAgainstBaseURL: false) else {
             throw MiddlewareAuthClientError.invalidEndpoint
         }
@@ -181,11 +194,44 @@ struct MiddlewareAuthLMStudioStatus: Decodable, Sendable {
     }
 }
 
+struct MiddlewareAuthClientTokenRotation: Decodable, Sendable {
+    let clientToken: String
+}
+
+final class MiddlewareAuthNoRedirectDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping (URLRequest?) -> Void
+    ) {
+        completionHandler(nil)
+    }
+}
+
 struct MiddlewareAuthClient {
     private let session: URLSession
 
     init(session: URLSession = .shared) {
         self.session = session
+    }
+
+    func rotateClientToken(middlewareBaseURL: String, clientToken: String) async throws -> String {
+        let cleanToken = clientToken.pocketTrimmed
+        guard !cleanToken.isEmpty else { throw MiddlewareAuthClientError.missingClientToken }
+        var request = URLRequest(url: try MiddlewareAuthEndpointPolicy.endpointURL(
+            baseURL: middlewareBaseURL,
+            path: "/v1/auth/client-token/rotate"
+        ))
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        let response: MiddlewareAuthClientTokenRotation = try await send(request, noRedirects: true)
+        guard response.clientToken.count >= 32 else { throw MiddlewareAuthClientError.invalidRotationResponse }
+        return response.clientToken
     }
 
     func openAIStatus(
@@ -312,8 +358,13 @@ struct MiddlewareAuthClient {
         return try await send(request)
     }
 
-    private func send<T: Decodable>(_ request: URLRequest) async throws -> T {
-        let (data, response) = try await session.data(for: request)
+    private func send<T: Decodable>(_ request: URLRequest, noRedirects: Bool = false) async throws -> T {
+        let (data, response): (Data, URLResponse)
+        if noRedirects {
+            (data, response) = try await session.data(for: request, delegate: MiddlewareAuthNoRedirectDelegate())
+        } else {
+            (data, response) = try await session.data(for: request)
+        }
         if let http = response as? HTTPURLResponse, !(200..<300 ~= http.statusCode) {
             throw MiddlewareAuthClientError.badStatus(http.statusCode, Self.errorDetail(from: data))
         }

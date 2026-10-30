@@ -113,6 +113,24 @@ final class MiddlewareAuthAddonManager {
             activeEndpoint = baseURL
             healthAvailable = true
             clientToken = configuration.middlewareAuthClientToken
+            integrityStatus = .externalUntracked
+
+            // "Neste Mac" promises that PocketWiki owns the helper lifecycle. A healthy
+            // endpoint alone is not proof of ownership; adopting it here would make app
+            // updates silently keep using an unrelated, potentially stale binary.
+            if configuration.middlewareAuthAddonMode == .managed {
+                accessVerified = await isAuthorized(
+                    baseURL,
+                    token: clientToken,
+                    projectID: configuration.middlewareAuthProjectID,
+                    profileID: configuration.middlewareAuthProfileID
+                )
+                status = .failed(
+                    "porta ocupada por um MiddlewareAuth externo; encerre essa instância para o PocketWiki iniciar e atualizar o helper local"
+                )
+                return
+            }
+
             if clientToken.isEmpty,
                configuration.middlewareAuthAddonMode == .automatic,
                isManagedLoopbackURL(baseURL) {
@@ -124,8 +142,14 @@ final class MiddlewareAuthAddonManager {
                 projectID: configuration.middlewareAuthProjectID,
                 profileID: configuration.middlewareAuthProfileID
             )
-            integrityStatus = .externalUntracked
-            status = .external
+            if accessVerified {
+                status = .external
+            } else {
+                let reason = clientToken.pocketTrimmed.isEmpty
+                    ? "serviço HTTP online, mas o token de acesso não foi informado"
+                    : "serviço HTTP online, mas o token não foi confirmado; confira o token e tente novamente"
+                status = .failed(reason)
+            }
             return
         }
 
