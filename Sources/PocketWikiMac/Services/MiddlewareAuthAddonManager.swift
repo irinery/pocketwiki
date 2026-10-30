@@ -142,14 +142,9 @@ final class MiddlewareAuthAddonManager {
                 projectID: configuration.middlewareAuthProjectID,
                 profileID: configuration.middlewareAuthProfileID
             )
-            if accessVerified {
-                status = .external
-            } else {
-                let reason = clientToken.pocketTrimmed.isEmpty
-                    ? "serviço HTTP online, mas o token de acesso não foi informado"
-                    : "serviço HTTP online, mas o token não foi confirmado; confira o token e tente novamente"
-                status = .failed(reason)
-            }
+            // Keep ownership independent from authentication: an unhealthy credential
+            // must not make the UI treat an external process as a managed helper.
+            status = .external
             return
         }
 

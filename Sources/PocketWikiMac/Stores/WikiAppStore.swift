@@ -174,6 +174,10 @@ final class WikiAppStore {
         guard middlewareAuthAddon.accessVerified else {
             throw MiddlewareAuthClientError.rotatedTokenNotVerified
         }
+        var providerRoute = currentPocketKernelProviderRoute()
+        providerRoute.middlewareBaseURL = baseURL
+        providerRoute.middlewareClientToken = token
+        pocketKernelAddon.updateProviderRoute(providerRoute)
         return token
     }
 

@@ -77,6 +77,20 @@ final class PocketKernelAddonManager {
         eventHandler = handler
     }
 
+    func updateProviderRoute(_ route: PocketKernelProviderRoute) {
+        guard providerBridge.isReady else { return }
+        providerBridge.update(configuration: route)
+        providerAvailable = true
+        if let context = restartContext {
+            restartContext = RestartContext(
+                configuration: context.configuration,
+                baseURL: context.baseURL,
+                evidence: context.evidence,
+                providerRoute: route
+            )
+        }
+    }
+
     func start(
         configuration: PocketWikiServerConfiguration,
         baseURL rawBaseURL: String,
