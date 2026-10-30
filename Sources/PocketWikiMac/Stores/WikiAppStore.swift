@@ -133,11 +133,13 @@ final class WikiAppStore {
                     : nil),
             integrity: middlewareAuthAddon.integrityStatus
         )
-        if middlewareAuthAddon.status.isReady {
+        if middlewareAuthAddon.accessVerified {
             middlewareAuthClientToken = middlewareAuthAddon.clientToken
             middlewareAuthRuntimeTokenLoaded = !middlewareAuthAddon.clientToken.isEmpty
             localServer?.updateMiddlewareToken(middlewareAuthClientToken)
             localServer?.updateMiddlewareBaseURL(baseURL)
+        } else {
+            middlewareAuthRuntimeTokenLoaded = false
         }
     }
 
@@ -194,11 +196,15 @@ final class WikiAppStore {
         let evidence = PocketWikiMCPEvidenceStatus.make(
             rootPath: currentSourceURL?.path ?? serverConfiguration.resolvedReferenceURL.path
         )
+        var route = providerRoute ?? currentPocketKernelProviderRoute()
+        if !middlewareAuthAddon.accessVerified {
+            route.middlewareClientToken = ""
+        }
         await pocketKernelAddon.start(
             configuration: configuration,
             baseURL: baseURL,
             evidence: evidence,
-            providerRoute: providerRoute ?? currentPocketKernelProviderRoute()
+            providerRoute: route
         )
         reportAddonStatus(
             service: .pocketKernel,
@@ -242,7 +248,7 @@ final class WikiAppStore {
         let route = PocketKernelProviderRoute(
             providerID: providerID,
             middlewareBaseURL: middlewareBaseURL,
-            middlewareClientToken: middlewareAuthClientToken,
+            middlewareClientToken: middlewareAuthAddon.accessVerified ? middlewareAuthClientToken : "",
             projectID: projectID,
             profileID: profileID,
             modelID: modelID,
@@ -277,7 +283,7 @@ final class WikiAppStore {
             middlewareBaseURL: defaults.string(forKey: "PocketWikiMac.localAI.middlewareBaseURL")
                 .map { $0.pocketTrimmed.pocketIfEmpty(serverConfiguration.middlewareAuthBaseURL) }
                 ?? serverConfiguration.middlewareAuthBaseURL,
-            middlewareClientToken: middlewareAuthClientToken,
+            middlewareClientToken: middlewareAuthAddon.accessVerified ? middlewareAuthClientToken : "",
             projectID: defaults.string(forKey: "PocketWikiMac.localAI.middlewareProjectID")
                 .map { $0.pocketTrimmed.pocketIfEmpty(serverConfiguration.middlewareAuthProjectID) }
                 ?? serverConfiguration.middlewareAuthProjectID,
