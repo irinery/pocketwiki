@@ -35,6 +35,7 @@ struct IntegrationTestRunner {
             ("native solutions ingestion contract", testNativeSolutionsIngestionContract),
             ("remote client against native server", testRemoteClientAgainstNativeServer),
             ("middleware auth add-on lifecycle", testMiddlewareAuthAddonLifecycle),
+            ("middleware auth external ownership and credentials", testMiddlewareAuthExternalOwnershipAndCredentials),
             ("PocketKernel add-on and MCP wrapper lifecycle", testPocketKernelAddonLifecycle),
             ("PocketKernel provider bridge routes MiddlewareAuth", testPocketKernelProviderBridge),
             ("PocketKernel structured answer parsing", testPocketKernelStructuredAnswerParsing),
@@ -60,7 +61,7 @@ struct IntegrationTestRunner {
     }
 
     static func testNativeServerHTTPContract() async throws {
-        try await withRunningServer { baseURL, _, logs in
+        try await withRunningServer { baseURL, server, logs in
             let indexResponse = try await request(baseURL.appendingPathComponent("/"))
             try expect(indexResponse.status == 200, "index status failed")
             try expect(indexResponse.contentType?.contains("text/html") == true, "index content type failed")
@@ -97,6 +98,20 @@ struct IntegrationTestRunner {
             let missingResponse = try await request(baseURL.appendingPathComponent("/api/unknown"))
             try expect(missingResponse.status == 404, "api missing status failed")
             try expect(missingResponse.text.contains("not_found"), "api missing body failed")
+
+            server.updateMiddlewareToken("integration-proxy-token-with-32-characters")
+            let overrideBody = try JSONSerialization.data(withJSONObject: [
+                "middlewareBaseUrl": baseURL.absoluteString,
+                "projectId": "acme",
+                "profileId": "default"
+            ])
+            let overrideResponse = try await request(
+                baseURL.appendingPathComponent("/api/middleware/openai/status"),
+                method: "POST",
+                headers: ["Content-Type": "application/json"],
+                body: overrideBody
+            )
+            try expect(overrideResponse.status == 502, "web payload redirected MiddlewareAuth bearer to another host")
 
             let messages = await logs.messages
             try expect(messages.contains("GET /"), "server did not log index request")
@@ -440,6 +455,161 @@ struct IntegrationTestRunner {
         }.value
     }
 
+    static func testMiddlewareAuthExternalOwnershipAndCredentials() async throws {
+        let remoteHTTPS = try MiddlewareAuthEndpointPolicy.endpointURL(
+            baseURL: "https://auth.example.com",
+            path: "/v1/auth/client-token/rotate"
+        )
+        try expect(remoteHTTPS.host == "auth.example.com", "public HTTPS MiddlewareAuth endpoint was rejected")
+        for unsafeURL in ["http://auth.example.com", "https://user:secret@auth.example.com"] {
+            do {
+                _ = try MiddlewareAuthEndpointPolicy.normalizedBaseURL(unsafeURL)
+                try expect(false, "unsafe MiddlewareAuth endpoint was accepted")
+            } catch MiddlewareAuthClientError.invalidEndpoint {
+                // Expected: public HTTP and embedded credentials are not allowed.
+            }
+        }
+
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PocketWikiMiddlewareExternal-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let externalToken = "integration-external-token"
+        let serverScript = #"""
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+        import json
+        import os
+
+        token = os.environ["MOCK_EXTERNAL_TOKEN"]
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path == "/healthz":
+                    status, payload = 200, {"status":"ok","checks":[{"name":"http","status":"ok"}]}
+                elif "/auth/openai/status" in self.path:
+                    status = 200 if self.headers.get("Authorization") == "Bearer " + token else 401
+                    payload = {"authenticated":False}
+                else:
+                    status, payload = 404, {"error":"not_found"}
+                body = json.dumps(payload).encode()
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            def do_POST(self):
+                global token
+                if self.path == "/v1/auth/client-token/rotate" and self.headers.get("Authorization") == "Bearer " + token:
+                    token = "rotated-integration-token-with-32-characters"
+                    status, payload = 200, {"clientToken": token}
+                else:
+                    status, payload = 401, {"error": {"code": "ERR_MIDDLEWARE_UNAUTHORIZED"}}
+                body = json.dumps(payload).encode()
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            def log_message(self, format, *args):
+                pass
+        server = HTTPServer(("127.0.0.1", 0), Handler)
+        print(server.server_address[1], flush=True)
+        server.serve_forever()
+        """#
+        let external = Process()
+        external.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+        external.arguments = ["-c", serverScript]
+        external.environment = ProcessInfo.processInfo.environment.merging([
+            "MOCK_EXTERNAL_TOKEN": externalToken,
+        ]) { _, new in new }
+        let readyPipe = Pipe()
+        external.standardOutput = readyPipe.fileHandleForWriting
+        external.standardError = FileHandle.nullDevice
+        try external.run()
+        try? readyPipe.fileHandleForWriting.close()
+        defer {
+            if external.isRunning {
+                external.terminate()
+                external.waitUntilExit()
+            }
+        }
+        var readyDescriptor = pollfd(
+            fd: readyPipe.fileHandleForReading.fileDescriptor,
+            events: Int16(POLLIN),
+            revents: 0
+        )
+        try expect(Darwin.poll(&readyDescriptor, 1, 5_000) > 0, "external MiddlewareAuth fixture did not start")
+        var portBuffer = [UInt8](repeating: 0, count: 32)
+        let portByteCount = portBuffer.withUnsafeMutableBytes {
+            Darwin.read(readyPipe.fileHandleForReading.fileDescriptor, $0.baseAddress, $0.count)
+        }
+        try expect(portByteCount > 0, "external MiddlewareAuth fixture did not report its port")
+        let portText = String(bytes: portBuffer.prefix(portByteCount), encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let port = try require(portText.flatMap(Int.init), "external MiddlewareAuth fixture reported an invalid port")
+
+        try await Task { @MainActor in
+            let endpoint = "http://127.0.0.1:\(port)"
+            var configuration = serverConfiguration(port: 9)
+            configuration.middlewareAuthBaseURL = endpoint
+            configuration.middlewareAuthAddonMode = .automatic
+            configuration.middlewareAuthClientToken = "stale-token-from-another-instance"
+            let manager = MiddlewareAuthAddonManager(applicationSupportURL: root.appendingPathComponent("support"))
+            defer { manager.stop() }
+
+            await manager.start(configuration: configuration, baseURL: endpoint)
+            try expect(manager.healthAvailable, "external HTTP service was not detected")
+            try expect(!manager.accessVerified, "stale external token was accepted")
+            try expect(manager.status == .external, "authentication failure changed external process ownership")
+            try expect(!manager.accessVerified, "unauthorized external service was incorrectly authenticated")
+            try expect(manager.managedProcessID == nil, "automatic mode unexpectedly launched a second helper")
+
+            configuration.middlewareAuthAddonMode = .managed
+            configuration.middlewareAuthClientToken = externalToken
+            await manager.start(configuration: configuration, baseURL: endpoint)
+            try expect(manager.healthAvailable, "managed mode did not report the occupied HTTP endpoint")
+            try expect(manager.accessVerified, "valid external token was not independently verified")
+            try expect(manager.status.failureReason?.contains("porta ocupada") == true, "managed mode silently adopted a process it does not own")
+            try expect(manager.managedProcessID == nil, "managed mode claimed an external process")
+
+            let client = MiddlewareAuthClient()
+            let rotated = try await client.rotateClientToken(
+                middlewareBaseURL: endpoint,
+                clientToken: externalToken
+            )
+            try expect(rotated != externalToken, "external token did not rotate")
+            let tokenStore = ExternalMiddlewareTokenStore(applicationSupportURL: root.appendingPathComponent("support"))
+            try tokenStore.save(baseURL: endpoint, clientToken: rotated)
+            try expect(tokenStore.load(baseURL: endpoint) == rotated, "rotated external token was not persisted")
+            try expect(tokenStore.load(baseURL: "http://127.0.0.1:1") == nil, "external token leaked to another endpoint")
+            let tokenPath = root.appendingPathComponent("support/PocketWiki/MiddlewareAuth/external-client-token.json")
+            let tokenAttributes = try FileManager.default.attributesOfItem(atPath: tokenPath.path)
+            try expect(
+                tokenAttributes[.posixPermissions] as? Int == 0o600,
+                "external token file permissions were not restricted"
+            )
+            let oldTokenRejected: Bool
+            do {
+                _ = try await client.openAIStatus(
+                    middlewareBaseURL: endpoint,
+                    clientToken: externalToken,
+                    projectID: "acme",
+                    profileID: "default"
+                )
+                oldTokenRejected = false
+            } catch MiddlewareAuthClientError.badStatus(401, _) {
+                oldTokenRejected = true
+            }
+            try expect(oldTokenRejected, "old external token was still accepted")
+            _ = try await client.openAIStatus(
+                middlewareBaseURL: endpoint,
+                clientToken: rotated,
+                projectID: "acme",
+                profileID: "default"
+            )
+        }.value
+    }
+
     static func testPocketKernelAddonLifecycle() async throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("PocketWiki Kernel Addon-\(UUID().uuidString)", isDirectory: true)
@@ -616,6 +786,10 @@ struct IntegrationTestRunner {
         token = "bridge-middleware-token"
         class Handler(BaseHTTPRequestHandler):
             def do_POST(self):
+                global token
+                if self.path == "/test/rotate-token" and self.headers.get("Authorization") == "Bearer " + token:
+                    token = "bridge-middleware-token-rotated"
+                    self.send_response(200); self.end_headers(); return
                 if self.headers.get("Authorization") != "Bearer " + token:
                     self.send_response(401); self.end_headers(); return
                 length = int(self.headers.get("Content-Length", "0"))
@@ -689,6 +863,22 @@ struct IntegrationTestRunner {
         )
         try expect(lmResponse.status == 200, "LM Studio bridge status failed: \(lmResponse.text)")
         try expect(lmResponse.text.contains("lmstudio:default:model-a"), "LM Studio bridge routing failed")
+
+        let rotation = try await request(
+            middlewareBaseURL.appendingPathComponent("test/rotate-token"),
+            method: "POST",
+            headers: ["Authorization": "Bearer bridge-middleware-token"]
+        )
+        try expect(rotation.status == 200, "mock MiddlewareAuth token rotation failed")
+        route.middlewareClientToken = "bridge-middleware-token-rotated"
+        bridge.update(configuration: route)
+        let rotatedTokenResponse = try await request(
+            runtime.baseURL.appendingPathComponent("v1/chat/completions"),
+            method: "POST",
+            headers: headers,
+            body: chatBody
+        )
+        try expect(rotatedTokenResponse.status == 200, "provider bridge kept using the pre-rotation MiddlewareAuth token")
 
         route.providerID = "openai"
         route.modelID = "gpt-5.5"
