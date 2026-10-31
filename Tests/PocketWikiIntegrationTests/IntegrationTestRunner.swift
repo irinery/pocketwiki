@@ -30,6 +30,7 @@ struct IntegrationTestRunner {
     static func main() async throws {
         let tests: [(String, () async throws -> Void)] = [
             ("native server http contract", testNativeServerHTTPContract),
+            ("slow wiki read keeps main actor responsive", testSlowWikiReadKeepsMainActorResponsive),
             ("native memory http contract", testNativeMemoryHTTPContract),
             ("native solutions ingestion contract", testNativeSolutionsIngestionContract),
             ("remote client against native server", testRemoteClientAgainstNativeServer),
@@ -156,6 +157,25 @@ struct IntegrationTestRunner {
             try expect(context.contains("VLAN 30"), "native memory recall missed captured answer")
             try expect(context.contains("Responder em portugues"), "native memory recall missed note")
         }
+    }
+
+    static func testSlowWikiReadKeepsMainActorResponsive() async throws {
+        let (startedStream, startedContinuation) = AsyncStream<Date>.makeStream()
+        let load = Task { @MainActor in
+            startedContinuation.yield(Date())
+            startedContinuation.finish()
+            return try await WikiFolderLoader.loadFilesAsync(from: FileManager.default.temporaryDirectory) { _ in
+                Thread.sleep(forTimeInterval: 0.7)
+                return ([], [])
+            }
+        }
+
+        var iterator = startedStream.makeAsyncIterator()
+        let startedAt = try require(await iterator.next(), "slow wiki load did not start")
+        let tickAt = await MainActor.run { Date() }
+        let loaded = try await load.value
+        try expect(tickAt.timeIntervalSince(startedAt) < 0.4, "slow file read blocked the main actor")
+        try expect(loaded.files.isEmpty, "slow wiki load returned unexpected files")
     }
 
     static func testNativeSolutionsIngestionContract() async throws {
@@ -519,11 +539,13 @@ struct IntegrationTestRunner {
         from http.server import BaseHTTPRequestHandler, HTTPServer
         import json
         import os
+        import time
 
         token = os.environ["MOCK_EXTERNAL_TOKEN"]
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self):
                 if self.path == "/healthz":
+                    time.sleep(0.8)
                     status, payload = 200, {"status":"ok","checks":[{"name":"http","status":"ok"}]}
                 elif "/auth/openai/status" in self.path:
                     status = 200 if self.headers.get("Authorization") == "Bearer " + token else 401
@@ -599,8 +621,8 @@ struct IntegrationTestRunner {
             await manager.start(configuration: configuration, baseURL: endpoint)
             try expect(manager.healthAvailable, "external HTTP service was not detected")
             try expect(!manager.accessVerified, "stale external token was accepted")
-            try expect(manager.status.failureReason?.contains("token") == true, "missing/invalid external token was not reported clearly")
-            try expect(!manager.status.isReady, "unauthorized external service was incorrectly marked ready")
+            try expect(manager.status == .external, "authentication failure changed external process ownership")
+            try expect(!manager.accessVerified, "unauthorized external service was incorrectly authenticated")
             try expect(manager.managedProcessID == nil, "automatic mode unexpectedly launched a second helper")
 
             configuration.middlewareAuthAddonMode = .managed
@@ -825,6 +847,10 @@ struct IntegrationTestRunner {
         token = "bridge-middleware-token"
         class Handler(BaseHTTPRequestHandler):
             def do_POST(self):
+                global token
+                if self.path == "/test/rotate-token" and self.headers.get("Authorization") == "Bearer " + token:
+                    token = "bridge-middleware-token-rotated"
+                    self.send_response(200); self.end_headers(); return
                 if self.headers.get("Authorization") != "Bearer " + token:
                     self.send_response(401); self.end_headers(); return
                 length = int(self.headers.get("Content-Length", "0"))
@@ -898,6 +924,22 @@ struct IntegrationTestRunner {
         )
         try expect(lmResponse.status == 200, "LM Studio bridge status failed: \(lmResponse.text)")
         try expect(lmResponse.text.contains("lmstudio:default:model-a"), "LM Studio bridge routing failed")
+
+        let rotation = try await request(
+            middlewareBaseURL.appendingPathComponent("test/rotate-token"),
+            method: "POST",
+            headers: ["Authorization": "Bearer bridge-middleware-token"]
+        )
+        try expect(rotation.status == 200, "mock MiddlewareAuth token rotation failed")
+        route.middlewareClientToken = "bridge-middleware-token-rotated"
+        bridge.update(configuration: route)
+        let rotatedTokenResponse = try await request(
+            runtime.baseURL.appendingPathComponent("v1/chat/completions"),
+            method: "POST",
+            headers: headers,
+            body: chatBody
+        )
+        try expect(rotatedTokenResponse.status == 200, "provider bridge kept using the pre-rotation MiddlewareAuth token")
 
         route.providerID = "openai"
         route.modelID = "gpt-5.5"

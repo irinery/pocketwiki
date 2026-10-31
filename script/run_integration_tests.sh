@@ -90,4 +90,4 @@ plutil -extract NSBonjourServices xml1 -o - "$INFO_PLIST" | grep -q "_http._tcp"
 plutil -extract NSAppTransportSecurity.NSAllowsLocalNetworking raw -o - "$INFO_PLIST" | grep -q "true"
 
 echo "ok - app bundle contract"
-echo "11 integration checks passing"
+echo "12 integration checks passing"

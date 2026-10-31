@@ -142,14 +142,9 @@ final class MiddlewareAuthAddonManager {
                 projectID: configuration.middlewareAuthProjectID,
                 profileID: configuration.middlewareAuthProfileID
             )
-            if accessVerified {
-                status = .external
-            } else {
-                let reason = clientToken.pocketTrimmed.isEmpty
-                    ? "serviço HTTP online, mas o token de acesso não foi informado"
-                    : "serviço HTTP online, mas o token não foi confirmado; confira o token e tente novamente"
-                status = .failed(reason)
-            }
+            // Keep ownership independent from authentication: an unhealthy credential
+            // must not make the UI treat an external process as a managed helper.
+            status = .external
             return
         }
 
@@ -476,7 +471,9 @@ final class MiddlewareAuthAddonManager {
 
     private func isHealthy(_ baseURL: URL) async -> Bool {
         var request = URLRequest(url: baseURL.appendingPathComponent("healthz"))
-        request.timeoutInterval = 0.6
+        // A short false-negative here starts a second helper on an external
+        // service's occupied loopback port.
+        request.timeoutInterval = 3
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("close", forHTTPHeaderField: "Connection")
         do {

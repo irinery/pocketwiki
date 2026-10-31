@@ -29,8 +29,13 @@ struct DetailContainerView: View {
                     .padding(.bottom, 8)
 
                 if store.isLoading {
-                    ProgressView(store.statusMessage)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    VStack(spacing: 16) {
+                        ProgressView(store.statusMessage)
+                        Button("Cancelar carregamento") {
+                            store.cancelSourceLoad()
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if store.index.pages.isEmpty {
                     WelcomeView(store: store)
                 } else {

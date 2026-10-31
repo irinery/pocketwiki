@@ -12,6 +12,17 @@ struct WikiFolderLoader {
         self.fileManager = fileManager
     }
 
+    static func loadFilesAsync(
+        from root: URL,
+        using load: @escaping @Sendable (URL) throws -> (files: [WikiFile], issues: [String]) = {
+            try WikiFolderLoader().loadFiles(from: $0)
+        }
+    ) async throws -> (files: [WikiFile], issues: [String]) {
+        try await Task.detached(priority: .userInitiated) {
+            try load(root)
+        }.value
+    }
+
     func loadFiles(from root: URL) throws -> (files: [WikiFile], issues: [String]) {
         var files: [WikiFile] = []
         var issues: [String] = []
@@ -49,12 +60,12 @@ struct WikiFolderLoader {
     private func walk(root: URL, current: URL, files: inout [WikiFile], issues: inout [String]) throws {
         let urls = try fileManager.contentsOfDirectory(
             at: current,
-            includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey],
+            includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey,
+                                         .isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey],
             options: [.skipsPackageDescendants]
         )
 
         for url in urls {
-            let values = try url.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey])
             let rootPath = comparableFileSystemPath(root.path).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
             let childPath = comparableFileSystemPath(url.path)
             let rootPrefix = "/\(rootPath)/"
@@ -63,6 +74,14 @@ struct WikiFolderLoader {
                 continue
             }
             let relativePath = String(childPath.dropFirst(rootPrefix.count))
+            let values: URLResourceValues
+            do {
+                values = try url.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey,
+                                                          .isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey])
+            } catch {
+                issues.append("nao foi possivel consultar \(relativePath)")
+                continue
+            }
             let isDirectory = values.isDirectory == true
 
             guard isEligible(relativePath: relativePath, isDirectory: isDirectory, sizeBytes: values.fileSize) else {
@@ -77,6 +96,13 @@ struct WikiFolderLoader {
 
             guard let kind = kind(for: relativePath) else { continue }
             let size = values.fileSize ?? 0
+
+            if values.isUbiquitousItem == true,
+               values.ubiquitousItemDownloadingStatus == .notDownloaded {
+                try? fileManager.startDownloadingUbiquitousItem(at: url)
+                issues.append("arquivo do iCloud aguardando download: \(relativePath)")
+                continue
+            }
 
             do {
                 let content = try String(contentsOf: url, encoding: .utf8)

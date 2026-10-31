@@ -77,6 +77,20 @@ final class PocketKernelAddonManager {
         eventHandler = handler
     }
 
+    func updateProviderRoute(_ route: PocketKernelProviderRoute) {
+        guard providerBridge.isReady else { return }
+        providerBridge.update(configuration: route)
+        providerAvailable = true
+        if let context = restartContext {
+            restartContext = RestartContext(
+                configuration: context.configuration,
+                baseURL: context.baseURL,
+                evidence: context.evidence,
+                providerRoute: route
+            )
+        }
+    }
+
     func start(
         configuration: PocketWikiServerConfiguration,
         baseURL rawBaseURL: String,
@@ -571,7 +585,8 @@ final class PocketKernelAddonManager {
     private func isHealthy(_ kernelURL: URL) async -> Bool {
         var request = URLRequest(url: kernelURL)
         request.httpMethod = "GET"
-        request.timeoutInterval = 0.7
+        // Allow loopback services a brief scheduling stall before declaring them down.
+        request.timeoutInterval = 3
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("close", forHTTPHeaderField: "Connection")
         do {
