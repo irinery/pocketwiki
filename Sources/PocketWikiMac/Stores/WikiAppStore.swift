@@ -274,10 +274,20 @@ final class WikiAppStore {
         let defaults = UserDefaults.standard
         let providerID = defaults.string(forKey: "PocketWikiMac.localAI.providerMethod")
             .map { $0.pocketTrimmed.pocketIfEmpty("openai") } ?? "openai"
-        let modelKey = providerID.lowercased() == "lmstudio"
-            ? "PocketWikiMac.localAI.lmStudioModelID"
-            : "PocketWikiMac.localAI.openAIModelID"
-        let modelFallback = providerID.lowercased() == "lmstudio" ? "local-model" : "gpt-5.5"
+        let normalizedProviderID = providerID.pocketTrimmed.lowercased().pocketIfEmpty("openai")
+        let modelKey: String
+        let modelFallback: String
+        switch normalizedProviderID {
+        case "lmstudio":
+            modelKey = "PocketWikiMac.localAI.lmStudioModelID"
+            modelFallback = "local-model"
+        case "openai":
+            modelKey = "PocketWikiMac.localAI.openAIModelID"
+            modelFallback = "gpt-5.5"
+        default:
+            modelKey = "PocketWikiMac.localAI.providerModel.\(normalizedProviderID)"
+            modelFallback = ""
+        }
         return PocketKernelProviderRoute(
             providerID: providerID,
             middlewareBaseURL: defaults.string(forKey: "PocketWikiMac.localAI.middlewareBaseURL")

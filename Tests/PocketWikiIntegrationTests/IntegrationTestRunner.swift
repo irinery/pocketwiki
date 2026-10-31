@@ -307,13 +307,37 @@ struct IntegrationTestRunner {
                 if self.path == "/healthz":
                     self.send_json(200, {"status": "ok", "checks": [{"name": "http", "status": "ok"}]})
                     return
+                parsed = urlparse(self.path)
+                if parsed.path == "/v1/projects/acme/llm/providers":
+                    query = parse_qs(parsed.query)
+                    if self.headers.get("Authorization") != "Bearer " + token:
+                        self.send_json(401, {"error": "unauthorized"})
+                    elif query.get("profileId") != ["default"]:
+                        self.send_json(400, {"error": "bad_profile"})
+                    else:
+                        self.send_json(200, {"contractVersion": "middlewareauth.llm.v1", "providers": [
+                            {"id": "openai", "title": "OpenAI", "auth": {"required": True, "modes": ["device_code"], "defaultMode": "device_code", "fields": []}, "defaults": {"profileId": "default", "model": "gpt-test"}, "models": [{"id": "gpt-test", "title": "GPT test", "defaultReasoningEffort": "low", "reasoningEfforts": [{"id": "low", "title": "Low"}]}], "capabilities": {"reasoningEffort": True}},
+                            {"id": "lmstudio", "title": "LM Studio", "auth": {"required": True, "modes": ["api_key"], "defaultMode": "api_key", "fields": [{"id": "baseUrl", "title": "Base URL", "type": "url", "required": True, "secret": False}, {"id": "apiKey", "title": "API key", "type": "password", "required": True, "secret": True}]}, "defaults": {"profileId": "default", "model": "local-model"}, "models": [], "capabilities": {}},
+                            {"id": "anthropic", "title": "Claude (API)", "auth": {"required": True, "modes": ["api_key"], "defaultMode": "api_key", "fields": [{"id": "apiKey", "title": "Claude API key", "type": "password", "required": True, "secret": True}]}, "defaults": {"profileId": "default", "model": "claude-test"}, "models": [], "capabilities": {}},
+                            {"id": "openrouter", "title": "OpenRouter", "auth": {"required": True, "modes": ["api_key"], "defaultMode": "api_key", "fields": [{"id": "apiKey", "title": "OpenRouter API key", "type": "password", "required": True, "secret": True}]}, "defaults": {"profileId": "default", "model": "openrouter-test"}, "models": [], "capabilities": {}}
+                        ]})
+                    return
+                if parsed.path == "/v1/projects/acme/llm/status":
+                    query = parse_qs(parsed.query)
+                    if self.headers.get("Authorization") != "Bearer " + token:
+                        self.send_json(401, {"error": "unauthorized"})
+                    elif query.get("providerId") not in [["openai"], ["lmstudio"], ["anthropic"], ["openrouter"]]:
+                        self.send_json(400, {"error": "bad_provider"})
+                    else:
+                        provider_id = query["providerId"][0]
+                        self.send_json(200, {"authenticated": True, "providerId": provider_id, "projectId": "acme", "profileId": "default", "accountId": provider_id + ":configured"})
+                    return
                 if "/auth/openai/status" in self.path:
                     if self.headers.get("Authorization") == "Bearer " + token:
                         self.send_json(200, {"authenticated": False, "profileId": "default"})
                     else:
                         self.send_json(401, {"error": "unauthorized"})
                     return
-                parsed = urlparse(self.path)
                 if parsed.path == "/v1/projects/acme/llm/login-sessions/session-1":
                     query = parse_qs(parsed.query)
                     if self.headers.get("Authorization") != "Bearer " + token:
@@ -337,6 +361,12 @@ struct IntegrationTestRunner {
                     self.send_json(401, {"error": "unauthorized"})
                     return
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))))
+                if body.get("providerId") == "anthropic":
+                    if body.get("profileId") != "default" or body.get("mode") != "api_key" or body.get("authFields", {}).get("apiKey") != "anthropic-test-key":
+                        self.send_json(400, {"error": "bad_provider_login"})
+                        return
+                    self.send_json(200, {"providerId": "anthropic", "projectId": "acme", "profileId": "default", "loginSessionId": "anthropic-api-key-default", "mode": "api_key", "status": "authenticated", "authenticated": True})
+                    return
                 if body.get("providerId") != "openai" or body.get("profileId") != "default" or body.get("mode") != "device_code":
                     self.send_json(400, {"error": "bad_login_contract"})
                     return
@@ -373,6 +403,35 @@ struct IntegrationTestRunner {
             try expect(manager.integrityStatus == .externalUntracked, "custom helper should be marked untracked")
 
             let authClient = MiddlewareAuthClient()
+            let providerCatalog = try await authClient.llmProviders(
+                middlewareBaseURL: configuration.middlewareAuthBaseURL,
+                clientToken: manager.clientToken,
+                projectID: "acme",
+                profileID: "default"
+            )
+            let providerIDs = Set(providerCatalog.providers.map(\.normalizedID))
+            try expect(providerIDs == ["openai", "lmstudio", "anthropic", "openrouter"], "PocketWiki did not use the MiddlewareAuth provider catalog")
+            let anthropic = try require(providerCatalog.providers.first(where: { $0.normalizedID == "anthropic" }), "MiddlewareAuth catalog omitted Claude")
+            try expect(anthropic.auth.fields.first?.secret == true, "provider catalog did not preserve secret field metadata")
+            let providerStatus = try await authClient.llmStatus(
+                middlewareBaseURL: configuration.middlewareAuthBaseURL,
+                clientToken: manager.clientToken,
+                projectID: "acme",
+                profileID: "default",
+                providerID: "anthropic"
+            )
+            try expect(providerStatus.authenticated && providerStatus.providerId == "anthropic", "generic provider status used the wrong MiddlewareAuth route")
+            let anthropicLogin = try await authClient.startLLMLogin(
+                middlewareBaseURL: configuration.middlewareAuthBaseURL,
+                clientToken: manager.clientToken,
+                projectID: "acme",
+                profileID: "default",
+                providerID: "anthropic",
+                mode: "api_key",
+                authFields: ["apiKey": "anthropic-test-key"]
+            )
+            try expect(anthropicLogin.authenticated == true && anthropicLogin.providerId == "anthropic", "generic provider API-key login failed")
+
             let login = try await authClient.startOpenAILogin(
                 middlewareBaseURL: configuration.middlewareAuthBaseURL,
                 clientToken: manager.clientToken,
@@ -896,6 +955,21 @@ struct IntegrationTestRunner {
         )
         try expect(openAIResponse.status == 200, "OpenAI bridge status failed: \(openAIResponse.text)")
         try expect(openAIResponse.text.contains("openai:default:gpt-5.5"), "OpenAI bridge routing failed")
+
+        route.providerID = "anthropic"
+        route.modelID = "claude-test"
+        bridge.update(configuration: route)
+        let anthropicResponse = try await request(
+            runtime.baseURL.appendingPathComponent("v1/chat/completions"),
+            method: "POST",
+            headers: headers,
+            body: try JSONSerialization.data(withJSONObject: [
+                "model": "claude-test",
+                "messages": [["role": "user", "content": "oi"]]
+            ])
+        )
+        try expect(anthropicResponse.status == 200, "Anthropic bridge status failed: \(anthropicResponse.text)")
+        try expect(anthropicResponse.text.contains("anthropic:default:claude-test"), "Anthropic provider ID was rewritten by the bridge")
 
         let unauthorized = try await request(runtime.baseURL.appendingPathComponent("v1/models"))
         try expect(unauthorized.status == 401, "bridge accepted request without internal token")

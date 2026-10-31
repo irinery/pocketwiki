@@ -4,7 +4,7 @@ import SwiftUI
 struct LocalAIView: View {
     @Bindable var store: WikiAppStore
 
-    @AppStorage("PocketWikiMac.localAI.providerMethod") private var providerMethodRaw = LocalAIProviderMethod.openAI.rawValue
+    @AppStorage("PocketWikiMac.localAI.providerMethod") private var providerMethodRaw = "openai"
     @AppStorage("PocketWikiMac.localAI.reasoningEffort") private var reasoningEffortRaw = LocalAIReasoningEffort.medium.rawValue
     @AppStorage("PocketWikiMac.localAI.baseURL") private var baseURL = "http://127.0.0.1:1234"
     @AppStorage("PocketWikiMac.localAI.kernelBaseURL") private var kernelBaseURL = PocketKernelEndpointPolicy.defaultBaseURL
@@ -13,6 +13,8 @@ struct LocalAIView: View {
     @AppStorage("PocketWikiMac.localAI.middlewareProfileID") private var middlewareAuthProfileID = "default"
     @AppStorage("PocketWikiMac.localAI.openAIModelID") private var openAIModelID = "gpt-5.5"
     @AppStorage("PocketWikiMac.localAI.lmStudioModelID") private var lmStudioModelID = ""
+    @State private var providerModelIDs: [String: String] = [:]
+    @State private var providerCredentialFields: [String: [String: String]] = [:]
     @AppStorage("PocketWikiMac.localAI.contextScope") private var contextScopeRaw = LocalAIContextScope.automatic.rawValue
     @AppStorage("PocketWikiMac.localAI.maxContextCharacters") private var maxContextCharacters = 12_000
     @AppStorage("PocketWikiMac.localAI.temperature") private var temperature = 0.2
@@ -46,25 +48,69 @@ struct LocalAIView: View {
         store.remoteKernelQueryURL == nil ? "PocketKernel Harness" : "PocketKernel remoto"
     }
 
-    private var providerMethod: LocalAIProviderMethod {
-        LocalAIProviderMethod.value(for: providerMethodRaw)
+    private var providerMethod: MiddlewareAuthLLMProvider? {
+        chat.availableProviders.first { $0.normalizedID == providerMethodRaw.pocketTrimmed.lowercased() }
     }
 
     private var selectedModelID: String {
-        providerMethod == .openAI ? openAIModelID : lmStudioModelID
+        switch providerMethodRaw.pocketTrimmed.lowercased() {
+        case "openai": openAIModelID
+        case "lmstudio": lmStudioModelID
+        default:
+            providerModelIDs[providerMethodRaw]
+                ?? UserDefaults.standard.string(forKey: modelPreferenceKey(for: providerMethodRaw))
+                ?? providerMethod?.defaultModelID
+                ?? ""
+        }
     }
 
     private var selectedModelIDBinding: Binding<String> {
         Binding(
             get: { selectedModelID },
             set: { value in
-                if providerMethod == .openAI {
+                switch providerMethodRaw.pocketTrimmed.lowercased() {
+                case "openai":
                     openAIModelID = value
-                } else {
+                case "lmstudio":
                     lmStudioModelID = value
+                default:
+                    providerModelIDs[providerMethodRaw] = value
+                    UserDefaults.standard.set(value, forKey: modelPreferenceKey(for: providerMethodRaw))
                 }
             }
         )
+    }
+
+    private var selectedProviderAuthFields: Binding<[String: String]> {
+        Binding(
+            get: {
+                var values = providerCredentialFields[providerMethodRaw] ?? [:]
+                if providerMethodRaw == "lmstudio" {
+                    values["baseUrl"] = baseURL
+                    values["apiKey"] = store.localAIAPIKey
+                }
+                return values
+            },
+            set: { values in
+                providerCredentialFields[providerMethodRaw] = values
+                if providerMethodRaw == "lmstudio" {
+                    baseURL = values["baseUrl"] ?? baseURL
+                    store.localAIAPIKey = values["apiKey"] ?? ""
+                }
+            }
+        )
+    }
+
+    private func modelPreferenceKey(for providerID: String) -> String {
+        "PocketWikiMac.localAI.providerModel.\(providerID.pocketTrimmed.lowercased())"
+    }
+
+    private func reconcileReasoningEffort() {
+        guard let model = providerMethod?.models.first(where: { $0.id == selectedModelID }),
+              let options = model.reasoningEfforts,
+              !options.isEmpty,
+              !options.contains(where: { $0.id == reasoningEffortRaw }) else { return }
+        reasoningEffortRaw = model.defaultReasoningEffort ?? options.first?.id ?? "medium"
     }
 
     private var providerStatusText: String {
@@ -73,7 +119,7 @@ struct LocalAIView: View {
         }
         let status = chat.statusMessage.pocketTrimmed
         if status.isEmpty || status == "Pronto para conversar com a IA local." {
-            return providerMethod.statusFallback
+            return providerMethod?.statusFallback ?? "Carregando provedores do MiddlewareAuth..."
         }
         return status
     }
@@ -111,6 +157,8 @@ struct LocalAIView: View {
                     LocalAISidePanelContent(
                         panel: activePanel,
                         providerMethodRaw: $providerMethodRaw,
+                        availableProviders: chat.availableProviders,
+                        selectedProvider: providerMethod,
                         reasoningEffortRaw: $reasoningEffortRaw,
                         kernelBaseURL: $kernelBaseURL,
                         middlewareAuthBaseURL: $middlewareAuthBaseURL,
@@ -120,12 +168,13 @@ struct LocalAIView: View {
                         modelID: selectedModelIDBinding,
                         middlewareAuthToken: $store.middlewareAuthClientToken,
                         apiKey: $store.localAIAPIKey,
+                        providerAuthFields: selectedProviderAuthFields,
                         availableModels: chat.availableModels,
                         middlewareRuntimeTokenLoaded: store.middlewareAuthRuntimeTokenLoaded,
                         runtimeTokenLoaded: store.localAIRuntimeTokenLoaded,
                         isStreaming: chat.isStreaming,
                         providerStatusText: providerStatusText,
-                        openAILoginPrompt: chat.openAILoginPrompt,
+                        providerLoginPrompt: chat.providerLoginPrompt,
                         contextNotice: chat.lastContext?.notice,
                         autoContextPaths: autoContextPaths,
                         manualSources: chat.manualSources,
@@ -148,6 +197,9 @@ struct LocalAIView: View {
         .sheet(isPresented: $isAdvancedSettingsPresented) {
             LocalAIAdvancedSettingsSheet(
                 providerMethodRaw: $providerMethodRaw,
+                availableProviders: chat.availableProviders,
+                selectedProvider: providerMethod,
+                providerAuthFields: selectedProviderAuthFields,
                 reasoningEffortRaw: $reasoningEffortRaw,
                 kernelBaseURL: $kernelBaseURL,
                 middlewareAuthBaseURL: $middlewareAuthBaseURL,
@@ -174,11 +226,30 @@ struct LocalAIView: View {
         .task {
             await bootstrapLocalAI()
         }
+        .onChange(of: providerMethodRaw) { _, _ in
+            guard let providerMethod else { return }
+            if selectedModelID.pocketTrimmed.isEmpty ||
+                (!providerMethod.models.isEmpty && !providerMethod.models.contains(where: { $0.id == selectedModelID })) {
+                selectedModelIDBinding.wrappedValue = providerMethod.models.first(where: { $0.id == providerMethod.defaultModelID })?.id
+                    ?? providerMethod.models.first?.id
+                    ?? providerMethod.defaultModelID
+            }
+            reconcileReasoningEffort()
+            Task {
+                await refreshProviderStatus()
+                await syncPocketKernelProvider()
+            }
+        }
+        .onChange(of: selectedModelID) { _, _ in
+            reconcileReasoningEffort()
+        }
     }
 
     private var canSendPrompt: Bool {
         guard !chat.prompt.pocketTrimmed.isEmpty else { return false }
-        return !effectiveKernelBaseURL.pocketTrimmed.isEmpty
+        return providerMethod != nil
+            && !selectedModelID.pocketTrimmed.isEmpty
+            && !effectiveKernelBaseURL.pocketTrimmed.isEmpty
     }
 
     private var autoContextPaths: [String] {
@@ -194,9 +265,23 @@ struct LocalAIView: View {
     private func sendPrompt() {
         guard canSendPrompt else { return }
         Task {
-            if providerMethod == .lmStudio, !pendingLMStudioAPIKey.isEmpty {
+            if let providerMethod, providerMethod.needsCredentials,
+               providerMethod.auth.fields.contains(where: {
+                   $0.required && $0.secret
+                       && !(selectedProviderAuthFields.wrappedValue[$0.id] ?? "").pocketTrimmed.isEmpty
+               }) {
                 await configureProvider(silent: true)
                 if chat.errorMessage != nil { return }
+            }
+            if chat.providerAuthenticated != true {
+                await refreshProviderStatus()
+            }
+            guard chat.providerAuthenticated == true else {
+                chat.errorMessage = "Autentique \(providerMethod?.title ?? "um provider") no MiddlewareAuth antes de enviar."
+                if providerMethod?.needsCredentials == true {
+                    isAdvancedSettingsPresented = true
+                }
+                return
             }
             await syncPocketKernelProvider()
             guard store.pocketKernelAddon.healthAvailable,
@@ -211,7 +296,7 @@ struct LocalAIView: View {
                 index: store.index,
                 selectedPageID: store.selectedPageID,
                 sourceRootPath: store.pocketMemoryCaptureRootPath,
-                providerID: providerMethod.rawValue,
+                providerID: providerMethodRaw,
                 modelID: selectedModelID
             )
         }
@@ -241,12 +326,6 @@ struct LocalAIView: View {
     private func bootstrapLocalAI() async {
         let runtime = LocalAIRuntimeConfigurationLoader.load()
         chat.configurePocketMemory(runtime.pocketMemory, captureRootPath: store.pocketMemoryCaptureRootPath)
-        if lmStudioModelID.pocketTrimmed.isEmpty,
-           providerMethod == .lmStudio,
-           let legacyModel = UserDefaults.standard.string(forKey: "PocketWikiMac.localAI.modelID")?.pocketTrimmed,
-           !legacyModel.isEmpty {
-            lmStudioModelID = legacyModel
-        }
         store.localAIConfiguredModelID = runtime.modelID
         store.localAIRuntimeAPIKey = runtime.apiKey
         store.localAIRuntimeTokenLoaded = runtime.hasToken
@@ -265,40 +344,69 @@ struct LocalAIView: View {
             middlewareAuthProfileID = store.serverConfiguration.middlewareAuthProfileID
         }
         await store.ensureMiddlewareAuthAddon(baseURL: middlewareAuthBaseURL)
+        await refreshProviderCatalog()
+
+        if providerMethod == nil, let defaultProvider = chat.availableProviders.first(where: { $0.normalizedID == "openai" })
+            ?? chat.availableProviders.first {
+            providerMethodRaw = defaultProvider.normalizedID
+        }
+        if let providerMethod,
+           selectedModelID.pocketTrimmed.isEmpty ||
+            (!providerMethod.models.isEmpty && !providerMethod.models.contains(where: { $0.id == selectedModelID })) {
+            selectedModelIDBinding.wrappedValue = providerMethod.models.first(where: { $0.id == providerMethod.defaultModelID })?.id
+                ?? providerMethod.models.first?.id
+                ?? providerMethod.defaultModelID
+        }
+        reconcileReasoningEffort()
 
         let runtimeBaseURL = runtime.baseURL.pocketTrimmed
         if !runtimeBaseURL.isEmpty, baseURL.pocketTrimmed.isEmpty || baseURL == LocalAIEndpointPolicy.defaultBaseURL {
             baseURL = runtimeBaseURL
         }
-        if lmStudioModelID.pocketTrimmed.isEmpty, !runtime.modelID.pocketTrimmed.isEmpty {
+        if providerMethodRaw == "lmstudio", lmStudioModelID.pocketTrimmed.isEmpty, !runtime.modelID.pocketTrimmed.isEmpty {
             lmStudioModelID = runtime.modelID
         }
         if openAIModelID.pocketTrimmed.isEmpty {
             openAIModelID = "gpt-5.5"
         }
         normalizeBaseURLPreference()
+        await refreshProviderStatus()
         await syncPocketKernelProvider()
     }
 
     @MainActor
     private func runPrimaryProviderAction() async {
-        switch providerMethod {
-        case .openAI:
-            await startOpenAILogin()
-        case .lmStudio:
-            if pendingLMStudioAPIKey.isEmpty {
-                await refreshProviderStatus()
-            } else {
+        guard let providerMethod else {
+            await refreshProviderCatalog()
+            return
+        }
+        if providerMethod.auth.modes.contains("oauth") || providerMethod.auth.modes.contains("device_code") {
+            await startProviderLogin()
+        } else if providerMethod.needsCredentials {
+            let hasRequiredFields = providerMethod.auth.fields
+                .filter(\.required)
+                .allSatisfy { !(selectedProviderAuthFields.wrappedValue[$0.id] ?? "").pocketTrimmed.isEmpty }
+            if hasRequiredFields {
                 await configureProvider()
+            } else {
+                await refreshProviderStatus()
+                if chat.providerAuthenticated != true {
+                    isAdvancedSettingsPresented = true
+                }
             }
+        } else {
+            await refreshProviderStatus()
         }
     }
 
     @MainActor
     private func refreshProviderStatus() async {
         await store.ensureMiddlewareAuthAddon(baseURL: middlewareAuthBaseURL)
+        await refreshProviderCatalog()
+        guard let providerMethod else { return }
         await chat.refreshProviderStatus(
-            method: providerMethod,
+            providerID: providerMethod.normalizedID,
+            providerTitle: providerMethod.title,
             middlewareBaseURL: middlewareAuthBaseURL,
             clientToken: store.middlewareAuthClientToken,
             projectID: middlewareAuthProjectID,
@@ -307,17 +415,32 @@ struct LocalAIView: View {
     }
 
     @MainActor
-    private func startOpenAILogin() async {
-        await store.ensureMiddlewareAuthAddon(baseURL: middlewareAuthBaseURL)
-        guard let login = await chat.startOpenAILogin(
+    private func refreshProviderCatalog() async {
+        await chat.refreshProviderCatalog(
             middlewareBaseURL: middlewareAuthBaseURL,
             clientToken: store.middlewareAuthClientToken,
             projectID: middlewareAuthProjectID,
             profileID: middlewareAuthProfileID
+        )
+    }
+
+    @MainActor
+    private func startProviderLogin() async {
+        guard let providerMethod else { return }
+        await store.ensureMiddlewareAuthAddon(baseURL: middlewareAuthBaseURL)
+        guard let login = await chat.startProviderLogin(
+            middlewareBaseURL: middlewareAuthBaseURL,
+            clientToken: store.middlewareAuthClientToken,
+            projectID: middlewareAuthProjectID,
+            profileID: middlewareAuthProfileID,
+            provider: providerMethod,
+            authFields: selectedProviderAuthFields.wrappedValue
         ) else {
             return
         }
-        openOpenAILogin(login.actionURL)
+        if !login.actionURL.isEmpty {
+            openOpenAILogin(login.actionURL)
+        }
     }
 
     @MainActor
@@ -335,29 +458,31 @@ struct LocalAIView: View {
 
     @MainActor
     private func configureProvider(silent: Bool = false) async {
+        guard let providerMethod else { return }
         await store.ensureMiddlewareAuthAddon(baseURL: middlewareAuthBaseURL)
         normalizeBaseURLPreference()
         if silent {
             chat.errorMessage = nil
         }
-        let selected = await chat.configureLMStudioProvider(
+        let selected = await chat.configureProvider(
             middlewareBaseURL: middlewareAuthBaseURL,
             clientToken: store.middlewareAuthClientToken,
             projectID: middlewareAuthProjectID,
             profileID: middlewareAuthProfileID,
-            lmStudioBaseURL: baseURL,
-            apiKey: pendingLMStudioAPIKey,
+            provider: providerMethod,
+            authFields: selectedProviderAuthFields.wrappedValue,
             preferredModelID: selectedModelID,
             configuredModelID: store.localAIConfiguredModelID
         )
-        if let selected {
-            lmStudioModelID = selected
-        } else if lmStudioModelID.pocketTrimmed.isEmpty, !store.localAIConfiguredModelID.pocketTrimmed.isEmpty {
-            lmStudioModelID = store.localAIConfiguredModelID
+        if let selected, selectedModelID.pocketTrimmed.isEmpty {
+            selectedModelIDBinding.wrappedValue = selected
         }
         if chat.errorMessage == nil {
-            // MiddlewareAuth passa a ser o único dono persistente do secret.
-            store.localAIAPIKey = ""
+            var values = selectedProviderAuthFields.wrappedValue
+            for field in providerMethod.auth.fields where field.secret {
+                values[field.id] = ""
+            }
+            selectedProviderAuthFields.wrappedValue = values
             await syncPocketKernelProvider()
         }
     }
@@ -367,7 +492,7 @@ struct LocalAIView: View {
         await store.ensureMiddlewareAuthAddon(baseURL: middlewareAuthBaseURL)
         await store.configurePocketKernelProvider(
             baseURL: kernelBaseURL,
-            providerID: providerMethod.rawValue,
+            providerID: providerMethodRaw,
             modelID: selectedModelID,
             reasoningEffort: reasoningEffortRaw,
             middlewareBaseURL: middlewareAuthBaseURL,
