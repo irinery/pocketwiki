@@ -266,7 +266,10 @@ struct LocalAIView: View {
         guard canSendPrompt else { return }
         Task {
             if let providerMethod, providerMethod.needsCredentials,
-               providerMethod.auth.fields.contains(where: { $0.required && !(selectedProviderAuthFields.wrappedValue[$0.id] ?? "").pocketTrimmed.isEmpty }) {
+               providerMethod.auth.fields.contains(where: {
+                   $0.required && $0.secret
+                       && !(selectedProviderAuthFields.wrappedValue[$0.id] ?? "").pocketTrimmed.isEmpty
+               }) {
                 await configureProvider(silent: true)
                 if chat.errorMessage != nil { return }
             }
