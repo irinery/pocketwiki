@@ -10,6 +10,8 @@ final class LocalAIChatSession {
     var statusMessage = "Pronto para conversar com a IA local."
     var errorMessage: String?
     var availableModels: [LocalAIModel] = []
+    var availableProviders: [MiddlewareAuthLLMProvider] = []
+    var providerAuthenticated: Bool?
     var lastContext: LocalAIContextPayload?
     var manualSources: [LocalAIManualContextSource] = []
     var excludedContextPaths: Set<String> = []
@@ -17,7 +19,7 @@ final class LocalAIChatSession {
     var contextRevision = 0
     var isPocketMemoryConfigured = false
     var savedSessions: [PortableConversationSession] = []
-    private(set) var openAILoginPrompt: MiddlewareAuthOpenAILoginStart?
+    private(set) var providerLoginPrompt: MiddlewareAuthLLMLoginStart?
 
     private let kernelClient: PocketKernelClient
     private let middlewareAuthClient: MiddlewareAuthClient
@@ -59,8 +61,34 @@ final class LocalAIChatSession {
         scheduleHookDrain()
     }
 
+    func refreshProviderCatalog(
+        middlewareBaseURL: String,
+        clientToken: String,
+        projectID: String,
+        profileID: String
+    ) async {
+        do {
+            let catalog = try await middlewareAuthClient.llmProviders(
+                middlewareBaseURL: middlewareBaseURL,
+                clientToken: clientToken,
+                projectID: projectID,
+                profileID: profileID
+            )
+            let unique = Dictionary(catalog.providers.map { ($0.normalizedID, $0) }, uniquingKeysWith: { first, _ in first })
+            availableProviders = unique.values.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+            if availableProviders.isEmpty {
+                errorMessage = "MiddlewareAuth não publicou provedores de IA."
+                statusMessage = "Catálogo de provedores vazio."
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+            statusMessage = "Não foi possível carregar o catálogo do MiddlewareAuth."
+        }
+    }
+
     func refreshProviderStatus(
-        method: LocalAIProviderMethod,
+        providerID: String,
+        providerTitle: String,
         middlewareBaseURL: String,
         clientToken: String,
         projectID: String,
@@ -69,68 +97,73 @@ final class LocalAIChatSession {
         errorMessage = nil
         statusMessage = "Consultando MiddlewareAuth..."
         do {
-            switch method {
-            case .openAI:
-                let status = try await middlewareAuthClient.openAIStatus(
-                    middlewareBaseURL: middlewareBaseURL,
-                    clientToken: clientToken,
-                    projectID: projectID,
-                    profileID: profileID
-                )
-                statusMessage = status.summary
-            case .lmStudio:
-                let status = try await middlewareAuthClient.lmStudioStatus(
-                    middlewareBaseURL: middlewareBaseURL,
-                    clientToken: clientToken,
-                    projectID: projectID,
-                    profileID: profileID
-                )
-                statusMessage = status.summary
-            }
-        } catch {
-            errorMessage = error.localizedDescription
-            statusMessage = "Nao foi possivel consultar o provider."
-        }
-    }
-
-    func startOpenAILogin(
-        middlewareBaseURL: String,
-        clientToken: String,
-        projectID: String,
-        profileID: String
-    ) async -> MiddlewareAuthOpenAILoginStart? {
-        loginPollTask?.cancel()
-        openAILoginPrompt = nil
-        errorMessage = nil
-        statusMessage = "Iniciando login OpenAI..."
-        do {
-            let login = try await middlewareAuthClient.startOpenAILogin(
+            let status = try await middlewareAuthClient.llmStatus(
                 middlewareBaseURL: middlewareBaseURL,
                 clientToken: clientToken,
                 projectID: projectID,
-                profileID: profileID
+                profileID: profileID,
+                providerID: providerID
             )
-            openAILoginPrompt = login
+            providerAuthenticated = status.authenticated
+            statusMessage = status.summary(providerTitle: providerTitle)
+        } catch {
+            providerAuthenticated = false
+            errorMessage = error.localizedDescription
+            statusMessage = "Não foi possível consultar o provider."
+        }
+    }
+
+    func startProviderLogin(
+        middlewareBaseURL: String,
+        clientToken: String,
+        projectID: String,
+        profileID: String,
+        provider: MiddlewareAuthLLMProvider,
+        authFields: [String: String]
+    ) async -> MiddlewareAuthLLMLoginStart? {
+        loginPollTask?.cancel()
+        providerLoginPrompt = nil
+        errorMessage = nil
+        statusMessage = "Conectando \(provider.title) pelo MiddlewareAuth..."
+        do {
+            let login = try await middlewareAuthClient.startLLMLogin(
+                middlewareBaseURL: middlewareBaseURL,
+                clientToken: clientToken,
+                projectID: projectID,
+                profileID: profileID,
+                providerID: provider.normalizedID,
+                mode: provider.defaultMode,
+                authFields: authFields
+            )
+            providerLoginPrompt = login
             statusMessage = login.summary
-            loginPollTask = Task { [weak self] in
-                await self?.pollOpenAILogin(
-                    login,
-                    middlewareBaseURL: middlewareBaseURL,
-                    clientToken: clientToken,
-                    projectID: projectID,
-                    profileID: profileID
-                )
+            providerAuthenticated = login.authenticated
+            if provider.auth.modes.contains("oauth") || provider.auth.modes.contains("device_code") {
+                loginPollTask = Task { [weak self] in
+                    await self?.pollProviderLogin(
+                        login,
+                        provider: provider,
+                        middlewareBaseURL: middlewareBaseURL,
+                        clientToken: clientToken,
+                        projectID: projectID,
+                        profileID: profileID
+                    )
+                }
+            } else if login.authenticated == true {
+                errorMessage = nil
+                statusMessage = login.summary
             }
             return login
         } catch {
             errorMessage = error.localizedDescription
-            statusMessage = "Nao foi possivel iniciar login OpenAI."
+            statusMessage = "Não foi possível conectar \(provider.title)."
             return nil
         }
     }
 
-    private func pollOpenAILogin(
-        _ login: MiddlewareAuthOpenAILoginStart,
+    private func pollProviderLogin(
+        _ login: MiddlewareAuthLLMLoginStart,
+        provider: MiddlewareAuthLLMProvider,
         middlewareBaseURL: String,
         clientToken: String,
         projectID: String,
@@ -142,93 +175,96 @@ final class LocalAIChatSession {
         while !Task.isCancelled, Date().timeIntervalSince1970 * 1_000 < deadline {
             do {
                 try await Task.sleep(for: .seconds(1))
-                let loginStatus = try await middlewareAuthClient.openAILoginStatus(
+                let loginStatus = try await middlewareAuthClient.llmLoginStatus(
                     middlewareBaseURL: middlewareBaseURL,
                     clientToken: clientToken,
                     projectID: projectID,
                     profileID: profileID,
+                    providerID: provider.normalizedID,
                     loginSessionID: login.loginSessionId
                 )
-                if openAILoginPrompt?.loginSessionId == loginStatus.loginSessionId {
-                    openAILoginPrompt = openAILoginPrompt?.merging(loginStatus)
+                if providerLoginPrompt?.loginSessionId == loginStatus.loginSessionId {
+                    providerLoginPrompt = loginStatus
                 }
                 switch loginStatus.status?.pocketTrimmed.lowercased() {
                 case "authenticated", "completed":
-                    let providerStatus = try await middlewareAuthClient.openAIStatus(
+                    let providerStatus = try await middlewareAuthClient.llmStatus(
                         middlewareBaseURL: middlewareBaseURL,
                         clientToken: clientToken,
                         projectID: projectID,
-                        profileID: profileID
+                        profileID: profileID,
+                        providerID: provider.normalizedID
                     )
-                    openAILoginPrompt = nil
+                    providerLoginPrompt = nil
                     errorMessage = nil
-                    statusMessage = providerStatus.authenticated ? providerStatus.summary : "Login terminou, mas o perfil OpenAI não foi persistido."
+                    statusMessage = providerStatus.authenticated
+                        ? providerStatus.summary(providerTitle: provider.title)
+                        : "Login terminou, mas o perfil \(provider.title) não foi persistido."
+                    providerAuthenticated = providerStatus.authenticated
                     return
                 case "failed", "expired":
-                    openAILoginPrompt = nil
+                    providerLoginPrompt = nil
                     errorMessage = loginStatus.summary
                     statusMessage = loginStatus.summary
                     return
                 default:
-                    statusMessage = openAILoginPrompt?.summary ?? loginStatus.summary
+                    statusMessage = providerLoginPrompt?.summary ?? loginStatus.summary
                 }
             } catch is CancellationError {
                 return
             } catch {
                 errorMessage = error.localizedDescription
-                statusMessage = "Falha ao acompanhar o login OpenAI."
+                statusMessage = "Falha ao acompanhar a conexão de \(provider.title)."
                 return
             }
         }
 
         if !Task.isCancelled {
-            openAILoginPrompt = nil
-            errorMessage = "Sessão de login OpenAI expirada."
-            statusMessage = "Sessão de login OpenAI expirada."
+            providerLoginPrompt = nil
+            errorMessage = "Sessão de login de \(provider.title) expirada."
+            statusMessage = "Sessão de login de \(provider.title) expirada."
         }
     }
 
-    func configureLMStudioProvider(
+    func configureProvider(
         middlewareBaseURL: String,
         clientToken: String,
         projectID: String,
         profileID: String,
-        lmStudioBaseURL: String,
-        apiKey: String,
+        provider: MiddlewareAuthLLMProvider,
+        authFields: [String: String],
         preferredModelID: String = "",
         configuredModelID: String = ""
     ) async -> String? {
         errorMessage = nil
-        statusMessage = apiKey.pocketTrimmed.isEmpty
-            ? "Consultando MiddlewareAuth..."
-            : "Registrando LM Studio no MiddlewareAuth..."
+        statusMessage = "Configurando \(provider.title) no MiddlewareAuth..."
         do {
-            let status: MiddlewareAuthLMStudioStatus
-            if apiKey.pocketTrimmed.isEmpty {
-                status = try await middlewareAuthClient.lmStudioStatus(
-                    middlewareBaseURL: middlewareBaseURL,
-                    clientToken: clientToken,
-                    projectID: projectID,
-                    profileID: profileID
-                )
-            } else {
-                status = try await middlewareAuthClient.configureLMStudio(
-                    middlewareBaseURL: middlewareBaseURL,
-                    clientToken: clientToken,
-                    projectID: projectID,
-                    profileID: profileID,
-                    lmStudioBaseURL: lmStudioBaseURL,
-                    apiKey: apiKey
-                )
+            let requiredFields = provider.auth.fields.filter(\.required)
+            let missingField = requiredFields.first { authFields[$0.id]?.pocketTrimmed.isEmpty != false }
+            if let missingField {
+                throw MiddlewareAuthClientError.missingProviderField(missingField.title)
             }
-
-            availableModels = []
+            let status = try await middlewareAuthClient.startLLMLogin(
+                middlewareBaseURL: middlewareBaseURL,
+                clientToken: clientToken,
+                projectID: projectID,
+                profileID: profileID,
+                providerID: provider.normalizedID,
+                mode: provider.defaultMode,
+                authFields: authFields
+            )
             let selectedModelID = preferredModelID.pocketTrimmed.pocketIfEmpty(configuredModelID.pocketTrimmed)
-            statusMessage = status.summary
+            if status.authenticated == true {
+                providerAuthenticated = true
+                statusMessage = status.summary
+            } else {
+                providerAuthenticated = status.authenticated
+                statusMessage = "Configuração de \(provider.title) enviada ao MiddlewareAuth."
+            }
             return selectedModelID.isEmpty ? nil : selectedModelID
         } catch {
             errorMessage = error.localizedDescription
-            statusMessage = "Nao foi possivel configurar o provider."
+            statusMessage = "Não foi possível configurar \(provider.title)."
             return nil
         }
     }

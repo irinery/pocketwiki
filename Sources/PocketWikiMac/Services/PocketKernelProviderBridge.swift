@@ -11,11 +11,16 @@ struct PocketKernelProviderRoute: Equatable, Sendable {
     var reasoningEffort: String
 
     var normalizedProviderID: String {
-        providerID.pocketTrimmed.lowercased() == "lmstudio" ? "lmstudio" : "openai"
+        providerID.pocketTrimmed.lowercased().pocketIfEmpty("openai")
     }
 
     var normalizedModelID: String {
-        let fallback = normalizedProviderID == "openai" ? "gpt-5.5" : "local-model"
+        let fallback: String
+        switch normalizedProviderID {
+        case "openai": fallback = "gpt-5.5"
+        case "lmstudio": fallback = "local-model"
+        default: fallback = ""
+        }
         return modelID.pocketTrimmed.pocketIfEmpty(fallback)
     }
 }

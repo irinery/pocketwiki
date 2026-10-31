@@ -56,6 +56,8 @@ struct LocalAISideRail: View {
 struct LocalAISidePanelContent: View {
     let panel: LocalAISidePanel
     @Binding var providerMethodRaw: String
+    let availableProviders: [MiddlewareAuthLLMProvider]
+    let selectedProvider: MiddlewareAuthLLMProvider?
     @Binding var reasoningEffortRaw: String
     @Binding var kernelBaseURL: String
     @Binding var middlewareAuthBaseURL: String
@@ -65,12 +67,13 @@ struct LocalAISidePanelContent: View {
     @Binding var modelID: String
     @Binding var middlewareAuthToken: String
     @Binding var apiKey: String
+    @Binding var providerAuthFields: [String: String]
     let availableModels: [LocalAIModel]
     let middlewareRuntimeTokenLoaded: Bool
     let runtimeTokenLoaded: Bool
     let isStreaming: Bool
     let providerStatusText: String
-    let openAILoginPrompt: MiddlewareAuthOpenAILoginStart?
+    let providerLoginPrompt: MiddlewareAuthLLMLoginStart?
     let contextNotice: String?
     let autoContextPaths: [String]
     let manualSources: [LocalAIManualContextSource]
@@ -97,60 +100,57 @@ struct LocalAISidePanelContent: View {
     }
 
     private var llmPanel: some View {
-        let method = LocalAIProviderMethod.value(for: providerMethodRaw)
+        let method = selectedProvider
         return LocalAISideCard(
             title: "IA",
-            subtitle: method.title,
-            systemImage: method.systemImage,
+            subtitle: method?.title ?? "MiddlewareAuth",
+            systemImage: method?.systemImage ?? "brain.head.profile",
             close: onClose
         ) {
             VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 5) {
                     LocalAIFieldLabel("Método")
                     Picker("", selection: $providerMethodRaw) {
-                        ForEach(LocalAIProviderMethod.allCases) { provider in
+                        ForEach(availableProviders) { provider in
                             Label(provider.title, systemImage: provider.systemImage)
-                                .tag(provider.rawValue)
+                                .tag(provider.normalizedID)
                         }
                     }
                     .labelsHidden()
                     .pickerStyle(.menu)
                     .localAIInputChrome()
+                    .disabled(availableProviders.isEmpty || isStreaming)
                 }
 
                 HStack(spacing: 8) {
                     VStack(alignment: .leading, spacing: 5) {
                         LocalAIFieldLabel("Modelo")
-                        Picker("", selection: $modelID) {
-                            ForEach(modelOptions(for: method), id: \.self) { model in
-                                Text(model).tag(model)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .localAIInputChrome()
+                        modelSelector(for: method)
                     }
                     .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
 
-                    VStack(alignment: .leading, spacing: 5) {
-                        LocalAIFieldLabel("Raciocínio")
-                        Picker("", selection: $reasoningEffortRaw) {
-                            ForEach(LocalAIReasoningEffort.allCases) { effort in
-                                Text(effort.title).tag(effort.rawValue)
+                    if let reasoningOptions = method?.models.first(where: { $0.id == modelID })?.reasoningEfforts,
+                       !reasoningOptions.isEmpty {
+                        VStack(alignment: .leading, spacing: 5) {
+                            LocalAIFieldLabel("Raciocínio")
+                            Picker("", selection: $reasoningEffortRaw) {
+                                ForEach(reasoningOptions) { effort in
+                                    Text(effort.title).tag(effort.id)
+                                }
                             }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                            .localAIInputChrome()
                         }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .localAIInputChrome()
+                        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                     }
-                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                 }
 
                 HStack(spacing: 8) {
                     Button {
                         Task { await onPrimaryProviderAction() }
                     } label: {
-                        Label(method.primaryActionTitle, systemImage: method == .openAI ? "person.crop.circle.badge.checkmark" : "wrench.and.screwdriver")
+                        Label(method?.primaryActionTitle ?? "Conectar", systemImage: method?.auth.fields.isEmpty == true ? "person.crop.circle.badge.checkmark" : "key")
                             .lineLimit(1)
                             .frame(maxWidth: .infinity)
                             .frame(height: 38)
@@ -158,7 +158,7 @@ struct LocalAISidePanelContent: View {
                     .buttonStyle(.plain)
                     .foregroundStyle(PocketWikiTheme.text)
                     .pocketWikiSurface(cornerRadius: 13, tint: PocketWikiTheme.accent)
-                    .disabled(isStreaming)
+                    .disabled(isStreaming || method == nil)
                     .frame(minWidth: 0, maxWidth: .infinity)
 
                     Button {
@@ -183,8 +183,7 @@ struct LocalAISidePanelContent: View {
                     .help("Configurações avançadas")
                 }
 
-                if method == .openAI,
-                   let prompt = openAILoginPrompt,
+                if let prompt = providerLoginPrompt,
                    !prompt.actionURL.isEmpty || prompt.userCode?.pocketTrimmed.isEmpty == false {
                     VStack(alignment: .leading, spacing: 8) {
                         if let code = prompt.userCode?.pocketTrimmed, !code.isEmpty {
@@ -222,7 +221,7 @@ struct LocalAISidePanelContent: View {
                     }
                 }
 
-                Text(providerStatusText.pocketTrimmed.pocketIfEmpty(method.statusFallback))
+                Text(providerStatusText.pocketTrimmed.pocketIfEmpty(method?.statusFallback ?? "Carregando provedores do MiddlewareAuth..."))
                     .font(.caption.monospaced())
                     .foregroundStyle(PocketWikiTheme.muted)
                     .padding(.top, 1)
@@ -231,25 +230,24 @@ struct LocalAISidePanelContent: View {
         }
     }
 
-    private func modelOptions(for method: LocalAIProviderMethod) -> [String] {
-        let current = modelID.pocketTrimmed
-        let defaults: [String]
-        switch method {
-        case .openAI:
-            defaults = ["gpt-5.5"]
-        case .lmStudio:
-            defaults = availableModels.map(\.id)
-        }
-        var values: [String] = []
-        for value in ([current] + defaults).map(\.pocketTrimmed).filter({ !$0.isEmpty }) {
-            if !values.contains(value) {
-                values.append(value)
+    @ViewBuilder
+    private func modelSelector(for provider: MiddlewareAuthLLMProvider?) -> some View {
+        let models = provider?.models ?? []
+        if !models.isEmpty {
+            Picker("", selection: $modelID) {
+                ForEach(models) { model in
+                    Text(model.title?.pocketTrimmed.pocketIfEmpty(model.id) ?? model.id).tag(model.id)
+                }
             }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .localAIInputChrome()
+        } else {
+            TextField("", text: $modelID, prompt: Text(provider?.defaultModelID ?? "ID do modelo"))
+                .textFieldStyle(.plain)
+                .font(.caption.monospaced())
+                .localAIInputChrome()
         }
-        if !values.isEmpty {
-            return values
-        }
-        return method == .openAI ? ["gpt-5.5"] : ["modelo local"]
     }
 
     private var contextPanel: some View {
@@ -335,6 +333,9 @@ struct LocalAIAdvancedSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @Binding var providerMethodRaw: String
+    let availableProviders: [MiddlewareAuthLLMProvider]
+    let selectedProvider: MiddlewareAuthLLMProvider?
+    @Binding var providerAuthFields: [String: String]
     @Binding var reasoningEffortRaw: String
     @Binding var kernelBaseURL: String
     @Binding var middlewareAuthBaseURL: String
@@ -383,59 +384,104 @@ struct LocalAIAdvancedSettingsSheet: View {
 
     private var providerSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Provider", systemImage: LocalAIProviderMethod.value(for: providerMethodRaw).systemImage)
+            Label("Provider", systemImage: selectedProvider?.systemImage ?? "brain.head.profile")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(PocketWikiTheme.text)
 
             LocalAIFieldLabel("Método")
             Picker("", selection: $providerMethodRaw) {
-                ForEach(LocalAIProviderMethod.allCases) { provider in
-                    Text(provider.title).tag(provider.rawValue)
+                ForEach(availableProviders) { provider in
+                    Text(provider.title).tag(provider.normalizedID)
                 }
             }
             .labelsHidden()
-            .pickerStyle(.segmented)
+            .pickerStyle(.menu)
+            .localAIInputChrome()
+            .disabled(availableProviders.isEmpty)
 
             HStack(spacing: 8) {
                 VStack(alignment: .leading, spacing: 5) {
                     LocalAIFieldLabel("Modelo")
-                    TextField("", text: $modelID, prompt: Text("gpt-5.5 ou modelo local"))
-                        .textFieldStyle(.plain)
-                        .font(.caption.monospaced())
-                        .localAIInputChrome()
+                    modelSelector
                 }
 
-                VStack(alignment: .leading, spacing: 5) {
-                    LocalAIFieldLabel("Raciocínio")
-                    Picker("", selection: $reasoningEffortRaw) {
-                        ForEach(LocalAIReasoningEffort.allCases) { effort in
-                            Text(effort.title).tag(effort.rawValue)
+                if let reasoningOptions = selectedProvider?.models.first(where: { $0.id == modelID })?.reasoningEfforts,
+                   !reasoningOptions.isEmpty {
+                    VStack(alignment: .leading, spacing: 5) {
+                        LocalAIFieldLabel("Raciocínio")
+                        Picker("", selection: $reasoningEffortRaw) {
+                            ForEach(reasoningOptions) { effort in
+                                Text(effort.title).tag(effort.id)
+                            }
                         }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .localAIInputChrome()
                     }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .localAIInputChrome()
                 }
             }
 
-            LocalAIFieldLabel("LM Studio base URL")
-            TextField("", text: $baseURL, prompt: Text("http://127.0.0.1:1234"))
+            ForEach(selectedProvider?.auth.fields ?? []) { field in
+                LocalAIFieldLabel(field.title + (field.required ? " *" : ""))
+                Group {
+                    if field.secret {
+                        SecureField("", text: authFieldBinding(field), prompt: Text(fieldPlaceholder(field)))
+                    } else {
+                        TextField("", text: authFieldBinding(field), prompt: Text(fieldPlaceholder(field)))
+                    }
+                }
                 .textFieldStyle(.plain)
                 .font(.caption.monospaced())
                 .localAIInputChrome()
+            }
 
-            LocalAIFieldLabel("LM Studio API key")
-            SecureField("", text: $apiKey, prompt: Text("nova chave, somente para configurar"))
-                .textFieldStyle(.plain)
-                .font(.caption.monospaced())
-                .localAIInputChrome()
-
-            Text("OpenAI usa login/status pelo MiddlewareAuth. LM Studio só substitui a credencial quando uma nova chave é informada; em branco, mantém a já armazenada.")
+            Text(providerHelpText)
                 .font(.caption.monospaced())
                 .foregroundStyle(PocketWikiTheme.muted)
         }
         .padding(14)
         .pocketWikiCard()
+    }
+
+    @ViewBuilder
+    private var modelSelector: some View {
+        if let models = selectedProvider?.models, !models.isEmpty {
+            Picker("", selection: $modelID) {
+                ForEach(models) { model in
+                    Text(model.title?.pocketTrimmed.pocketIfEmpty(model.id) ?? model.id).tag(model.id)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .localAIInputChrome()
+        } else {
+            TextField("", text: $modelID, prompt: Text(selectedProvider?.defaultModelID ?? "ID do modelo"))
+                .textFieldStyle(.plain)
+                .font(.caption.monospaced())
+                .localAIInputChrome()
+        }
+    }
+
+    private func authFieldBinding(_ field: MiddlewareAuthLLMProviderAuthField) -> Binding<String> {
+        Binding(
+            get: { providerAuthFields[field.id] ?? "" },
+            set: { providerAuthFields[field.id] = $0 }
+        )
+    }
+
+    private func fieldPlaceholder(_ field: MiddlewareAuthLLMProviderAuthField) -> String {
+        if field.secret { return "Nova credencial, somente para configurar" }
+        if field.id == "baseUrl" { return "http://127.0.0.1:1234" }
+        return "Informe \(field.title.lowercased())"
+    }
+
+    private var providerHelpText: String {
+        guard let selectedProvider else { return "Carregando opções publicadas pelo MiddlewareAuth..." }
+        let modes = selectedProvider.auth.modes.joined(separator: " / ")
+        if selectedProvider.auth.fields.isEmpty {
+            return "Autenticação e opções carregadas do catálogo MiddlewareAuth (\(modes))."
+        }
+        return "Os campos e a autenticação vêm do catálogo do MiddlewareAuth. Segredos são enviados para configuração e limpos da interface depois."
     }
 
     private var infraSection: some View {

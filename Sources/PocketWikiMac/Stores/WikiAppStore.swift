@@ -75,6 +75,7 @@ final class WikiAppStore {
     private let folderLoader: WikiFolderLoader
     private let indexer: WikiIndexer
     private let remoteClient: RemoteWikiClient
+    private let externalMiddlewareTokenStore: ExternalMiddlewareTokenStore
     private var currentSourceURL: URL?
     private var currentFiles: [WikiFile] = []
     private var localServer: PocketWikiHTTPServer?
@@ -95,9 +96,13 @@ final class WikiAppStore {
         self.folderLoader = folderLoader
         self.indexer = indexer
         self.remoteClient = remoteClient
+        self.externalMiddlewareTokenStore = ExternalMiddlewareTokenStore()
         let configuredMode = serverConfiguration.middlewareAuthAddonMode
         let persistedMode = UserDefaults.standard.string(forKey: "PocketWikiMac.middlewareAuth.addonMode")
         middlewareAuthRuntimeMode = persistedMode.map(MiddlewareAuthAddonMode.parse) ?? configuredMode
+        middlewareAuthClientToken = externalMiddlewareTokenStore.load(
+            baseURL: serverConfiguration.middlewareAuthBaseURL
+        ) ?? serverConfiguration.middlewareAuthClientToken
         let configuredKernelMode = serverConfiguration.pocketKernelAddonMode
         let persistedKernelMode = UserDefaults.standard.string(forKey: "PocketWikiMac.pocketKernel.addonMode")
         pocketKernelRuntimeMode = persistedKernelMode.map(PocketKernelAddonMode.parse) ?? configuredKernelMode
@@ -112,7 +117,11 @@ final class WikiAppStore {
     func ensureMiddlewareAuthAddon(baseURL: String) async {
         var configuration = serverConfiguration
         configuration.middlewareAuthAddonMode = middlewareAuthRuntimeMode
-        if configuration.middlewareAuthClientToken.isEmpty {
+        if let saved = externalMiddlewareTokenStore.load(baseURL: baseURL),
+           middlewareAuthClientToken.isEmpty || middlewareAuthClientToken == serverConfiguration.middlewareAuthClientToken {
+            configuration.middlewareAuthClientToken = saved
+            middlewareAuthClientToken = saved
+        } else if !middlewareAuthClientToken.isEmpty {
             configuration.middlewareAuthClientToken = middlewareAuthClientToken
         }
         await middlewareAuthAddon.start(configuration: configuration, baseURL: baseURL)
@@ -128,6 +137,8 @@ final class WikiAppStore {
         if middlewareAuthAddon.status.isReady {
             middlewareAuthClientToken = middlewareAuthAddon.clientToken
             middlewareAuthRuntimeTokenLoaded = !middlewareAuthAddon.clientToken.isEmpty
+            localServer?.updateMiddlewareToken(middlewareAuthClientToken)
+            localServer?.updateMiddlewareBaseURL(baseURL)
         }
     }
 
@@ -140,6 +151,30 @@ final class WikiAppStore {
         )
         middlewareAuthClientToken = token
         middlewareAuthRuntimeTokenLoaded = true
+        return token
+    }
+
+    func rotateExternalMiddlewareAuthPassword(baseURL: String) async throws -> String {
+        let current = middlewareAuthClientToken.pocketTrimmed.pocketIfEmpty(
+            serverConfiguration.middlewareAuthClientToken.pocketTrimmed
+        )
+        let token = try await MiddlewareAuthClient().rotateClientToken(
+            middlewareBaseURL: baseURL,
+            clientToken: current
+        )
+        middlewareAuthClientToken = token
+        serverConfiguration.middlewareAuthClientToken = token
+        middlewareAuthRuntimeTokenLoaded = true
+        localServer?.updateMiddlewareToken(token)
+        do {
+            try externalMiddlewareTokenStore.save(baseURL: baseURL, clientToken: token)
+        } catch {
+            throw MiddlewareAuthClientError.rotatedTokenNotSaved
+        }
+        await ensureMiddlewareAuthAddon(baseURL: baseURL)
+        guard middlewareAuthAddon.accessVerified else {
+            throw MiddlewareAuthClientError.rotatedTokenNotVerified
+        }
         return token
     }
 
@@ -230,10 +265,20 @@ final class WikiAppStore {
         let defaults = UserDefaults.standard
         let providerID = defaults.string(forKey: "PocketWikiMac.localAI.providerMethod")
             .map { $0.pocketTrimmed.pocketIfEmpty("openai") } ?? "openai"
-        let modelKey = providerID.lowercased() == "lmstudio"
-            ? "PocketWikiMac.localAI.lmStudioModelID"
-            : "PocketWikiMac.localAI.openAIModelID"
-        let modelFallback = providerID.lowercased() == "lmstudio" ? "local-model" : "gpt-5.5"
+        let normalizedProviderID = providerID.pocketTrimmed.lowercased().pocketIfEmpty("openai")
+        let modelKey: String
+        let modelFallback: String
+        switch normalizedProviderID {
+        case "lmstudio":
+            modelKey = "PocketWikiMac.localAI.lmStudioModelID"
+            modelFallback = "local-model"
+        case "openai":
+            modelKey = "PocketWikiMac.localAI.openAIModelID"
+            modelFallback = "gpt-5.5"
+        default:
+            modelKey = "PocketWikiMac.localAI.providerModel.\(normalizedProviderID)"
+            modelFallback = ""
+        }
         return PocketKernelProviderRoute(
             providerID: providerID,
             middlewareBaseURL: defaults.string(forKey: "PocketWikiMac.localAI.middlewareBaseURL")
@@ -463,6 +508,11 @@ final class WikiAppStore {
                 Task { @MainActor in self?.appendServerLog(entry) }
             }
         )
+        if middlewareAuthAddon.accessVerified,
+           let activeEndpoint = middlewareAuthAddon.activeEndpoint {
+            server.updateMiddlewareBaseURL(activeEndpoint.absoluteString)
+            server.updateMiddlewareToken(middlewareAuthClientToken)
+        }
         localServer = server
 
         do {

@@ -31,6 +31,7 @@ swiftc \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/PocketKernelAddonManager.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/PocketKernelProviderBridge.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/MiddlewareAuthClient.swift \
+  "$ROOT_DIR"/Sources/PocketWikiMac/Services/ExternalMiddlewareTokenStore.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/PocketKernelClient.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/PocketWikiMDNSResponder.swift \
   "$ROOT_DIR"/Sources/PocketWikiMac/Services/PocketWikiHTTPServer.swift \

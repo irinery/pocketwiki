@@ -34,6 +34,7 @@ struct IntegrationTestRunner {
             ("native solutions ingestion contract", testNativeSolutionsIngestionContract),
             ("remote client against native server", testRemoteClientAgainstNativeServer),
             ("middleware auth add-on lifecycle", testMiddlewareAuthAddonLifecycle),
+            ("middleware auth external ownership and credentials", testMiddlewareAuthExternalOwnershipAndCredentials),
             ("PocketKernel add-on and MCP wrapper lifecycle", testPocketKernelAddonLifecycle),
             ("PocketKernel provider bridge routes MiddlewareAuth", testPocketKernelProviderBridge),
             ("PocketKernel structured answer parsing", testPocketKernelStructuredAnswerParsing),
@@ -59,7 +60,7 @@ struct IntegrationTestRunner {
     }
 
     static func testNativeServerHTTPContract() async throws {
-        try await withRunningServer { baseURL, _, logs in
+        try await withRunningServer { baseURL, server, logs in
             let indexResponse = try await request(baseURL.appendingPathComponent("/"))
             try expect(indexResponse.status == 200, "index status failed")
             try expect(indexResponse.contentType?.contains("text/html") == true, "index content type failed")
@@ -96,6 +97,20 @@ struct IntegrationTestRunner {
             let missingResponse = try await request(baseURL.appendingPathComponent("/api/unknown"))
             try expect(missingResponse.status == 404, "api missing status failed")
             try expect(missingResponse.text.contains("not_found"), "api missing body failed")
+
+            server.updateMiddlewareToken("integration-proxy-token-with-32-characters")
+            let overrideBody = try JSONSerialization.data(withJSONObject: [
+                "middlewareBaseUrl": baseURL.absoluteString,
+                "projectId": "acme",
+                "profileId": "default"
+            ])
+            let overrideResponse = try await request(
+                baseURL.appendingPathComponent("/api/middleware/openai/status"),
+                method: "POST",
+                headers: ["Content-Type": "application/json"],
+                body: overrideBody
+            )
+            try expect(overrideResponse.status == 502, "web payload redirected MiddlewareAuth bearer to another host")
 
             let messages = await logs.messages
             try expect(messages.contains("GET /"), "server did not log index request")
@@ -272,13 +287,37 @@ struct IntegrationTestRunner {
                 if self.path == "/healthz":
                     self.send_json(200, {"status": "ok", "checks": [{"name": "http", "status": "ok"}]})
                     return
+                parsed = urlparse(self.path)
+                if parsed.path == "/v1/projects/acme/llm/providers":
+                    query = parse_qs(parsed.query)
+                    if self.headers.get("Authorization") != "Bearer " + token:
+                        self.send_json(401, {"error": "unauthorized"})
+                    elif query.get("profileId") != ["default"]:
+                        self.send_json(400, {"error": "bad_profile"})
+                    else:
+                        self.send_json(200, {"contractVersion": "middlewareauth.llm.v1", "providers": [
+                            {"id": "openai", "title": "OpenAI", "auth": {"required": True, "modes": ["device_code"], "defaultMode": "device_code", "fields": []}, "defaults": {"profileId": "default", "model": "gpt-test"}, "models": [{"id": "gpt-test", "title": "GPT test", "defaultReasoningEffort": "low", "reasoningEfforts": [{"id": "low", "title": "Low"}]}], "capabilities": {"reasoningEffort": True}},
+                            {"id": "lmstudio", "title": "LM Studio", "auth": {"required": True, "modes": ["api_key"], "defaultMode": "api_key", "fields": [{"id": "baseUrl", "title": "Base URL", "type": "url", "required": True, "secret": False}, {"id": "apiKey", "title": "API key", "type": "password", "required": True, "secret": True}]}, "defaults": {"profileId": "default", "model": "local-model"}, "models": [], "capabilities": {}},
+                            {"id": "anthropic", "title": "Claude (API)", "auth": {"required": True, "modes": ["api_key"], "defaultMode": "api_key", "fields": [{"id": "apiKey", "title": "Claude API key", "type": "password", "required": True, "secret": True}]}, "defaults": {"profileId": "default", "model": "claude-test"}, "models": [], "capabilities": {}},
+                            {"id": "openrouter", "title": "OpenRouter", "auth": {"required": True, "modes": ["api_key"], "defaultMode": "api_key", "fields": [{"id": "apiKey", "title": "OpenRouter API key", "type": "password", "required": True, "secret": True}]}, "defaults": {"profileId": "default", "model": "openrouter-test"}, "models": [], "capabilities": {}}
+                        ]})
+                    return
+                if parsed.path == "/v1/projects/acme/llm/status":
+                    query = parse_qs(parsed.query)
+                    if self.headers.get("Authorization") != "Bearer " + token:
+                        self.send_json(401, {"error": "unauthorized"})
+                    elif query.get("providerId") not in [["openai"], ["lmstudio"], ["anthropic"], ["openrouter"]]:
+                        self.send_json(400, {"error": "bad_provider"})
+                    else:
+                        provider_id = query["providerId"][0]
+                        self.send_json(200, {"authenticated": True, "providerId": provider_id, "projectId": "acme", "profileId": "default", "accountId": provider_id + ":configured"})
+                    return
                 if "/auth/openai/status" in self.path:
                     if self.headers.get("Authorization") == "Bearer " + token:
                         self.send_json(200, {"authenticated": False, "profileId": "default"})
                     else:
                         self.send_json(401, {"error": "unauthorized"})
                     return
-                parsed = urlparse(self.path)
                 if parsed.path == "/v1/projects/acme/llm/login-sessions/session-1":
                     query = parse_qs(parsed.query)
                     if self.headers.get("Authorization") != "Bearer " + token:
@@ -302,6 +341,12 @@ struct IntegrationTestRunner {
                     self.send_json(401, {"error": "unauthorized"})
                     return
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))))
+                if body.get("providerId") == "anthropic":
+                    if body.get("profileId") != "default" or body.get("mode") != "api_key" or body.get("authFields", {}).get("apiKey") != "anthropic-test-key":
+                        self.send_json(400, {"error": "bad_provider_login"})
+                        return
+                    self.send_json(200, {"providerId": "anthropic", "projectId": "acme", "profileId": "default", "loginSessionId": "anthropic-api-key-default", "mode": "api_key", "status": "authenticated", "authenticated": True})
+                    return
                 if body.get("providerId") != "openai" or body.get("profileId") != "default" or body.get("mode") != "device_code":
                     self.send_json(400, {"error": "bad_login_contract"})
                     return
@@ -338,6 +383,35 @@ struct IntegrationTestRunner {
             try expect(manager.integrityStatus == .externalUntracked, "custom helper should be marked untracked")
 
             let authClient = MiddlewareAuthClient()
+            let providerCatalog = try await authClient.llmProviders(
+                middlewareBaseURL: configuration.middlewareAuthBaseURL,
+                clientToken: manager.clientToken,
+                projectID: "acme",
+                profileID: "default"
+            )
+            let providerIDs = Set(providerCatalog.providers.map(\.normalizedID))
+            try expect(providerIDs == ["openai", "lmstudio", "anthropic", "openrouter"], "PocketWiki did not use the MiddlewareAuth provider catalog")
+            let anthropic = try require(providerCatalog.providers.first(where: { $0.normalizedID == "anthropic" }), "MiddlewareAuth catalog omitted Claude")
+            try expect(anthropic.auth.fields.first?.secret == true, "provider catalog did not preserve secret field metadata")
+            let providerStatus = try await authClient.llmStatus(
+                middlewareBaseURL: configuration.middlewareAuthBaseURL,
+                clientToken: manager.clientToken,
+                projectID: "acme",
+                profileID: "default",
+                providerID: "anthropic"
+            )
+            try expect(providerStatus.authenticated && providerStatus.providerId == "anthropic", "generic provider status used the wrong MiddlewareAuth route")
+            let anthropicLogin = try await authClient.startLLMLogin(
+                middlewareBaseURL: configuration.middlewareAuthBaseURL,
+                clientToken: manager.clientToken,
+                projectID: "acme",
+                profileID: "default",
+                providerID: "anthropic",
+                mode: "api_key",
+                authFields: ["apiKey": "anthropic-test-key"]
+            )
+            try expect(anthropicLogin.authenticated == true && anthropicLogin.providerId == "anthropic", "generic provider API-key login failed")
+
             let login = try await authClient.startOpenAILogin(
                 middlewareBaseURL: configuration.middlewareAuthBaseURL,
                 clientToken: manager.clientToken,
@@ -417,6 +491,161 @@ struct IntegrationTestRunner {
             try expect(terminalEvent.message.count < 400, "MiddlewareAuth modal is too verbose")
             manager.stop()
             try expect(kill(recoveredPID, 0) == -1 && errno == ESRCH, "managed add-on survived manager stop")
+        }.value
+    }
+
+    static func testMiddlewareAuthExternalOwnershipAndCredentials() async throws {
+        let remoteHTTPS = try MiddlewareAuthEndpointPolicy.endpointURL(
+            baseURL: "https://auth.example.com",
+            path: "/v1/auth/client-token/rotate"
+        )
+        try expect(remoteHTTPS.host == "auth.example.com", "public HTTPS MiddlewareAuth endpoint was rejected")
+        for unsafeURL in ["http://auth.example.com", "https://user:secret@auth.example.com"] {
+            do {
+                _ = try MiddlewareAuthEndpointPolicy.normalizedBaseURL(unsafeURL)
+                try expect(false, "unsafe MiddlewareAuth endpoint was accepted")
+            } catch MiddlewareAuthClientError.invalidEndpoint {
+                // Expected: public HTTP and embedded credentials are not allowed.
+            }
+        }
+
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PocketWikiMiddlewareExternal-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let externalToken = "integration-external-token"
+        let serverScript = #"""
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+        import json
+        import os
+
+        token = os.environ["MOCK_EXTERNAL_TOKEN"]
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path == "/healthz":
+                    status, payload = 200, {"status":"ok","checks":[{"name":"http","status":"ok"}]}
+                elif "/auth/openai/status" in self.path:
+                    status = 200 if self.headers.get("Authorization") == "Bearer " + token else 401
+                    payload = {"authenticated":False}
+                else:
+                    status, payload = 404, {"error":"not_found"}
+                body = json.dumps(payload).encode()
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            def do_POST(self):
+                global token
+                if self.path == "/v1/auth/client-token/rotate" and self.headers.get("Authorization") == "Bearer " + token:
+                    token = "rotated-integration-token-with-32-characters"
+                    status, payload = 200, {"clientToken": token}
+                else:
+                    status, payload = 401, {"error": {"code": "ERR_MIDDLEWARE_UNAUTHORIZED"}}
+                body = json.dumps(payload).encode()
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            def log_message(self, format, *args):
+                pass
+        server = HTTPServer(("127.0.0.1", 0), Handler)
+        print(server.server_address[1], flush=True)
+        server.serve_forever()
+        """#
+        let external = Process()
+        external.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+        external.arguments = ["-c", serverScript]
+        external.environment = ProcessInfo.processInfo.environment.merging([
+            "MOCK_EXTERNAL_TOKEN": externalToken,
+        ]) { _, new in new }
+        let readyPipe = Pipe()
+        external.standardOutput = readyPipe.fileHandleForWriting
+        external.standardError = FileHandle.nullDevice
+        try external.run()
+        try? readyPipe.fileHandleForWriting.close()
+        defer {
+            if external.isRunning {
+                external.terminate()
+                external.waitUntilExit()
+            }
+        }
+        var readyDescriptor = pollfd(
+            fd: readyPipe.fileHandleForReading.fileDescriptor,
+            events: Int16(POLLIN),
+            revents: 0
+        )
+        try expect(Darwin.poll(&readyDescriptor, 1, 5_000) > 0, "external MiddlewareAuth fixture did not start")
+        var portBuffer = [UInt8](repeating: 0, count: 32)
+        let portByteCount = portBuffer.withUnsafeMutableBytes {
+            Darwin.read(readyPipe.fileHandleForReading.fileDescriptor, $0.baseAddress, $0.count)
+        }
+        try expect(portByteCount > 0, "external MiddlewareAuth fixture did not report its port")
+        let portText = String(bytes: portBuffer.prefix(portByteCount), encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let port = try require(portText.flatMap(Int.init), "external MiddlewareAuth fixture reported an invalid port")
+
+        try await Task { @MainActor in
+            let endpoint = "http://127.0.0.1:\(port)"
+            var configuration = serverConfiguration(port: 9)
+            configuration.middlewareAuthBaseURL = endpoint
+            configuration.middlewareAuthAddonMode = .automatic
+            configuration.middlewareAuthClientToken = "stale-token-from-another-instance"
+            let manager = MiddlewareAuthAddonManager(applicationSupportURL: root.appendingPathComponent("support"))
+            defer { manager.stop() }
+
+            await manager.start(configuration: configuration, baseURL: endpoint)
+            try expect(manager.healthAvailable, "external HTTP service was not detected")
+            try expect(!manager.accessVerified, "stale external token was accepted")
+            try expect(manager.status.failureReason?.contains("token") == true, "missing/invalid external token was not reported clearly")
+            try expect(!manager.status.isReady, "unauthorized external service was incorrectly marked ready")
+            try expect(manager.managedProcessID == nil, "automatic mode unexpectedly launched a second helper")
+
+            configuration.middlewareAuthAddonMode = .managed
+            configuration.middlewareAuthClientToken = externalToken
+            await manager.start(configuration: configuration, baseURL: endpoint)
+            try expect(manager.healthAvailable, "managed mode did not report the occupied HTTP endpoint")
+            try expect(manager.accessVerified, "valid external token was not independently verified")
+            try expect(manager.status.failureReason?.contains("porta ocupada") == true, "managed mode silently adopted a process it does not own")
+            try expect(manager.managedProcessID == nil, "managed mode claimed an external process")
+
+            let client = MiddlewareAuthClient()
+            let rotated = try await client.rotateClientToken(
+                middlewareBaseURL: endpoint,
+                clientToken: externalToken
+            )
+            try expect(rotated != externalToken, "external token did not rotate")
+            let tokenStore = ExternalMiddlewareTokenStore(applicationSupportURL: root.appendingPathComponent("support"))
+            try tokenStore.save(baseURL: endpoint, clientToken: rotated)
+            try expect(tokenStore.load(baseURL: endpoint) == rotated, "rotated external token was not persisted")
+            try expect(tokenStore.load(baseURL: "http://127.0.0.1:1") == nil, "external token leaked to another endpoint")
+            let tokenPath = root.appendingPathComponent("support/PocketWiki/MiddlewareAuth/external-client-token.json")
+            let tokenAttributes = try FileManager.default.attributesOfItem(atPath: tokenPath.path)
+            try expect(
+                tokenAttributes[.posixPermissions] as? Int == 0o600,
+                "external token file permissions were not restricted"
+            )
+            let oldTokenRejected: Bool
+            do {
+                _ = try await client.openAIStatus(
+                    middlewareBaseURL: endpoint,
+                    clientToken: externalToken,
+                    projectID: "acme",
+                    profileID: "default"
+                )
+                oldTokenRejected = false
+            } catch MiddlewareAuthClientError.badStatus(401, _) {
+                oldTokenRejected = true
+            }
+            try expect(oldTokenRejected, "old external token was still accepted")
+            _ = try await client.openAIStatus(
+                middlewareBaseURL: endpoint,
+                clientToken: rotated,
+                projectID: "acme",
+                profileID: "default"
+            )
         }.value
     }
 
@@ -684,6 +913,21 @@ struct IntegrationTestRunner {
         )
         try expect(openAIResponse.status == 200, "OpenAI bridge status failed: \(openAIResponse.text)")
         try expect(openAIResponse.text.contains("openai:default:gpt-5.5"), "OpenAI bridge routing failed")
+
+        route.providerID = "anthropic"
+        route.modelID = "claude-test"
+        bridge.update(configuration: route)
+        let anthropicResponse = try await request(
+            runtime.baseURL.appendingPathComponent("v1/chat/completions"),
+            method: "POST",
+            headers: headers,
+            body: try JSONSerialization.data(withJSONObject: [
+                "model": "claude-test",
+                "messages": [["role": "user", "content": "oi"]]
+            ])
+        )
+        try expect(anthropicResponse.status == 200, "Anthropic bridge status failed: \(anthropicResponse.text)")
+        try expect(anthropicResponse.text.contains("anthropic:default:claude-test"), "Anthropic provider ID was rewritten by the bridge")
 
         let unauthorized = try await request(runtime.baseURL.appendingPathComponent("v1/models"))
         try expect(unauthorized.status == 401, "bridge accepted request without internal token")

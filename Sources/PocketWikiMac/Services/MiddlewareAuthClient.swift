@@ -4,7 +4,11 @@ enum MiddlewareAuthClientError: Error, LocalizedError {
     case invalidEndpoint
     case missingClientToken
     case missingLMStudioAPIKey
+    case missingProviderField(String)
     case missingLoginSession
+    case invalidRotationResponse
+    case rotatedTokenNotSaved
+    case rotatedTokenNotVerified
     case badStatus(Int, String?)
 
     var errorDescription: String? {
@@ -15,8 +19,16 @@ enum MiddlewareAuthClientError: Error, LocalizedError {
             "MiddlewareAuth exige MIDDLEWARE_CLIENT_TOKEN."
         case .missingLMStudioAPIKey:
             "Informe a API key do LM Studio para registrar o provider."
+        case .missingProviderField(let title):
+            "Preencha o campo \(title) para conectar este provider."
         case .missingLoginSession:
             "Sessao de login OpenAI nao informada."
+        case .invalidRotationResponse:
+            "MiddlewareAuth não retornou uma nova senha válida."
+        case .rotatedTokenNotSaved:
+            "A nova senha já está ativa, mas não foi salva neste Mac. Copie a senha exibida antes de fechar o app."
+        case .rotatedTokenNotVerified:
+            "A nova senha foi salva, mas o MiddlewareAuth externo não confirmou o acesso."
         case .badStatus(let status, let detail):
             if let detail, !detail.isEmpty {
                 "MiddlewareAuth respondeu HTTP \(status): \(detail)"
@@ -33,7 +45,11 @@ enum MiddlewareAuthEndpointPolicy {
     static func normalizedBaseURL(_ rawValue: String) throws -> URL {
         let value = rawValue.pocketTrimmed.isEmpty ? defaultBaseURL : rawValue.pocketTrimmed
         guard let rawURL = URL(string: value),
-              LocalAIEndpointPolicy.isAllowedLocalBaseURL(rawURL),
+              let scheme = rawURL.scheme?.lowercased(),
+              let host = rawURL.host, !host.isEmpty,
+              rawURL.user == nil, rawURL.password == nil,
+              rawURL.query == nil, rawURL.fragment == nil,
+              (scheme == "https" || scheme == "http" && LocalAIEndpointPolicy.isAllowedLocalBaseURL(rawURL)),
               var components = URLComponents(url: rawURL, resolvingAgainstBaseURL: false) else {
             throw MiddlewareAuthClientError.invalidEndpoint
         }
@@ -181,11 +197,287 @@ struct MiddlewareAuthLMStudioStatus: Decodable, Sendable {
     }
 }
 
+struct MiddlewareAuthClientTokenRotation: Decodable, Sendable {
+    let clientToken: String
+}
+
+struct MiddlewareAuthLLMProviderCatalog: Decodable, Sendable {
+    let contractVersion: String?
+    let providers: [MiddlewareAuthLLMProvider]
+}
+
+struct MiddlewareAuthLLMProvider: Decodable, Sendable, Identifiable, Hashable {
+    let id: String
+    let title: String
+    let auth: MiddlewareAuthLLMProviderAuth
+    let defaults: MiddlewareAuthLLMProviderDefaults
+    let models: [MiddlewareAuthLLMProviderModel]
+    let capabilities: MiddlewareAuthLLMProviderCapabilities
+
+    var normalizedID: String { id.pocketTrimmed.lowercased() }
+    var defaultModelID: String { defaults.model?.pocketTrimmed ?? "" }
+    var defaultMode: String { auth.defaultMode?.pocketTrimmed ?? auth.modes.first ?? "" }
+    var supportsReasoningEffort: Bool { capabilities.reasoningEffort == true }
+    var needsCredentials: Bool { auth.fields.contains(where: \.required) }
+
+    var systemImage: String {
+        switch normalizedID {
+        case "openai": "sparkles"
+        case "lmstudio": "point.3.connected.trianglepath.dotted"
+        case "anthropic": "a.circle"
+        case "openrouter": "arrow.triangle.branch"
+        default: "brain.head.profile"
+        }
+    }
+
+    var primaryActionTitle: String {
+        auth.fields.isEmpty ? "Login" : "Conectar"
+    }
+
+    var statusFallback: String {
+        "Conecte \(title) pelo MiddlewareAuth."
+    }
+}
+
+struct MiddlewareAuthLLMProviderAuth: Decodable, Sendable, Hashable {
+    let required: Bool
+    let modes: [String]
+    let defaultMode: String?
+    let fields: [MiddlewareAuthLLMProviderAuthField]
+}
+
+struct MiddlewareAuthLLMProviderAuthField: Decodable, Sendable, Identifiable, Hashable {
+    let id: String
+    let title: String
+    let type: String
+    let required: Bool
+    let secret: Bool
+}
+
+struct MiddlewareAuthLLMProviderDefaults: Decodable, Sendable, Hashable {
+    let profileId: String?
+    let model: String?
+}
+
+struct MiddlewareAuthLLMProviderModel: Decodable, Sendable, Identifiable, Hashable {
+    let id: String
+    let title: String?
+    let description: String?
+    let defaultReasoningEffort: String?
+    let reasoningEfforts: [MiddlewareAuthLLMProviderOption]?
+    let serviceTiers: [MiddlewareAuthLLMProviderOption]?
+}
+
+struct MiddlewareAuthLLMProviderOption: Decodable, Sendable, Identifiable, Hashable {
+    let id: String
+    let title: String
+    let description: String?
+}
+
+struct MiddlewareAuthLLMProviderCapabilities: Decodable, Sendable, Hashable {
+    let stream: Bool?
+    let refresh: Bool?
+    let intelligence: Bool?
+    let reasoningEffort: Bool?
+    let serviceTier: Bool?
+    let outputContract: Bool?
+    let systemInstructions: Bool?
+    let tools: Bool?
+    let store: Bool?
+}
+
+struct MiddlewareAuthLLMLoginRequest: Encodable, Sendable {
+    let providerId: String
+    let profileId: String
+    let mode: String
+    let authFields: [String: String]?
+}
+
+struct MiddlewareAuthLLMLoginStart: Decodable, Sendable, Equatable {
+    let providerId: String
+    let projectId: String?
+    let profileId: String?
+    let loginSessionId: String
+    let mode: String?
+    let status: String?
+    let authenticated: Bool?
+    let authUrl: String?
+    let verificationUrl: String?
+    let userCode: String?
+    let expiresAt: Int64?
+    let accountId: String?
+    let email: String?
+    let savedAt: Int64?
+
+    var actionURL: String {
+        authUrl?.pocketTrimmed.pocketIfEmpty(verificationUrl?.pocketTrimmed ?? "")
+            ?? verificationUrl?.pocketTrimmed
+            ?? ""
+    }
+
+    var summary: String {
+        if let userCode, !userCode.pocketTrimmed.isEmpty {
+            return "Login iniciado. Use o código \(userCode.pocketTrimmed)."
+        }
+        if authenticated == true || status?.lowercased() == "authenticated" {
+            return "\(providerId) autenticado no MiddlewareAuth."
+        }
+        return actionURL.isEmpty ? "Login de \(providerId) iniciado." : "Login iniciado no navegador."
+    }
+}
+
+struct MiddlewareAuthLLMProviderStatus: Decodable, Sendable {
+    let authenticated: Bool
+    let providerId: String?
+    let projectId: String?
+    let profileId: String?
+    let accountId: String?
+    let email: String?
+    let modelCount: Int?
+    let baseUrl: String?
+
+    func summary(providerTitle: String) -> String {
+        guard authenticated else { return "Conecte \(providerTitle) pelo MiddlewareAuth." }
+        let account = email?.pocketTrimmed.pocketIfEmpty(accountId?.pocketTrimmed ?? "")
+            ?? accountId?.pocketTrimmed
+            ?? ""
+        let models = modelCount.map { " · \($0) modelo(s)" } ?? ""
+        let suffix = account.isEmpty ? models : " · \(account)\(models)"
+        return "\(providerTitle) autenticado no MiddlewareAuth\(suffix)."
+    }
+}
+
+final class MiddlewareAuthNoRedirectDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping (URLRequest?) -> Void
+    ) {
+        completionHandler(nil)
+    }
+}
+
 struct MiddlewareAuthClient {
     private let session: URLSession
 
     init(session: URLSession = .shared) {
         self.session = session
+    }
+
+    func rotateClientToken(middlewareBaseURL: String, clientToken: String) async throws -> String {
+        let cleanToken = clientToken.pocketTrimmed
+        guard !cleanToken.isEmpty else { throw MiddlewareAuthClientError.missingClientToken }
+        var request = URLRequest(url: try MiddlewareAuthEndpointPolicy.endpointURL(
+            baseURL: middlewareBaseURL,
+            path: "/v1/auth/client-token/rotate"
+        ))
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        let response: MiddlewareAuthClientTokenRotation = try await send(request, noRedirects: true)
+        guard response.clientToken.count >= 32 else { throw MiddlewareAuthClientError.invalidRotationResponse }
+        return response.clientToken
+    }
+
+    func llmProviders(
+        middlewareBaseURL: String,
+        clientToken: String,
+        projectID: String,
+        profileID: String
+    ) async throws -> MiddlewareAuthLLMProviderCatalog {
+        let cleanToken = clientToken.pocketTrimmed
+        guard !cleanToken.isEmpty else { throw MiddlewareAuthClientError.missingClientToken }
+        var request = URLRequest(url: try MiddlewareAuthEndpointPolicy.endpointURL(
+            baseURL: middlewareBaseURL,
+            path: "/v1/projects/\(MiddlewareAuthEndpointPolicy.pathSegment(projectID, fallback: "acme"))/llm/providers",
+            queryItems: [URLQueryItem(name: "profileId", value: profileID.pocketTrimmed.pocketIfEmpty("default"))]
+        ))
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        return try await send(request, noRedirects: true)
+    }
+
+    func llmStatus(
+        middlewareBaseURL: String,
+        clientToken: String,
+        projectID: String,
+        profileID: String,
+        providerID: String
+    ) async throws -> MiddlewareAuthLLMProviderStatus {
+        let cleanToken = clientToken.pocketTrimmed
+        guard !cleanToken.isEmpty else { throw MiddlewareAuthClientError.missingClientToken }
+        var request = URLRequest(url: try MiddlewareAuthEndpointPolicy.endpointURL(
+            baseURL: middlewareBaseURL,
+            path: "/v1/projects/\(MiddlewareAuthEndpointPolicy.pathSegment(projectID, fallback: "acme"))/llm/status",
+            queryItems: [
+                URLQueryItem(name: "providerId", value: providerID.pocketTrimmed.lowercased()),
+                URLQueryItem(name: "profileId", value: profileID.pocketTrimmed.pocketIfEmpty("default"))
+            ]
+        ))
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        return try await send(request, noRedirects: true)
+    }
+
+    func startLLMLogin(
+        middlewareBaseURL: String,
+        clientToken: String,
+        projectID: String,
+        profileID: String,
+        providerID: String,
+        mode: String,
+        authFields: [String: String]
+    ) async throws -> MiddlewareAuthLLMLoginStart {
+        let cleanToken = clientToken.pocketTrimmed
+        guard !cleanToken.isEmpty else { throw MiddlewareAuthClientError.missingClientToken }
+        var request = URLRequest(url: try MiddlewareAuthEndpointPolicy.endpointURL(
+            baseURL: middlewareBaseURL,
+            path: "/v1/projects/\(MiddlewareAuthEndpointPolicy.pathSegment(projectID, fallback: "acme"))/llm/login"
+        ))
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.httpBody = try JSONEncoder().encode(MiddlewareAuthLLMLoginRequest(
+            providerId: providerID.pocketTrimmed.lowercased(),
+            profileId: profileID.pocketTrimmed.pocketIfEmpty("default"),
+            mode: mode.pocketTrimmed,
+            authFields: authFields.isEmpty ? nil : authFields
+        ))
+        return try await send(request, noRedirects: true)
+    }
+
+    func llmLoginStatus(
+        middlewareBaseURL: String,
+        clientToken: String,
+        projectID: String,
+        profileID: String,
+        providerID: String,
+        loginSessionID: String
+    ) async throws -> MiddlewareAuthLLMLoginStart {
+        let cleanToken = clientToken.pocketTrimmed
+        guard !cleanToken.isEmpty else { throw MiddlewareAuthClientError.missingClientToken }
+        guard !loginSessionID.pocketTrimmed.isEmpty else { throw MiddlewareAuthClientError.missingLoginSession }
+        var request = URLRequest(url: try MiddlewareAuthEndpointPolicy.endpointURL(
+            baseURL: middlewareBaseURL,
+            path: "/v1/projects/\(MiddlewareAuthEndpointPolicy.pathSegment(projectID, fallback: "acme"))/llm/login-sessions/\(MiddlewareAuthEndpointPolicy.pathSegment(loginSessionID, fallback: ""))",
+            queryItems: [
+                URLQueryItem(name: "providerId", value: providerID.pocketTrimmed.lowercased()),
+                URLQueryItem(name: "profileId", value: profileID.pocketTrimmed.pocketIfEmpty("default"))
+            ]
+        ))
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        return try await send(request, noRedirects: true)
     }
 
     func openAIStatus(
@@ -312,8 +604,13 @@ struct MiddlewareAuthClient {
         return try await send(request)
     }
 
-    private func send<T: Decodable>(_ request: URLRequest) async throws -> T {
-        let (data, response) = try await session.data(for: request)
+    private func send<T: Decodable>(_ request: URLRequest, noRedirects: Bool = false) async throws -> T {
+        let (data, response): (Data, URLResponse)
+        if noRedirects {
+            (data, response) = try await session.data(for: request, delegate: MiddlewareAuthNoRedirectDelegate())
+        } else {
+            (data, response) = try await session.data(for: request)
+        }
         if let http = response as? HTTPURLResponse, !(200..<300 ~= http.statusCode) {
             throw MiddlewareAuthClientError.badStatus(http.statusCode, Self.errorDetail(from: data))
         }
