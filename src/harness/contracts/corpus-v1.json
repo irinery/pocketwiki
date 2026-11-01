@@ -1,0 +1,17 @@
+{
+  "protocol": "harness.v1",
+  "source_sha": "5311a8aae2876c572f25b79540f38ee0acac7121",
+  "slots": [
+    { "id": "NH00-ENV-001", "schema": "command", "accept": true, "value": { "protocol_major": 1, "command_id": "11111111-1111-4111-8111-111111111111", "environment_id": "22222222-2222-4222-8222-222222222222", "expected_revision": 0, "operation": "runtime.dispatch", "input": { "thread_id": "33333333-3333-4333-8333-333333333333", "operation": "submit", "text": "hello" } } },
+    { "id": "NH00-ENV-002", "schema": "command", "accept": false, "value": { "protocol_major": 1, "command_id": "11111111-1111-4111-8111-111111111111", "environment_id": "22222222-2222-4222-8222-222222222222", "expected_revision": 0, "operation": "runtime.dispatch", "input": {}, "user_id": "33333333-3333-4333-8333-333333333333" } },
+    { "id": "NH00-ENV-003", "schema": "command", "accept": false, "value": { "protocol_major": 2, "command_id": "11111111-1111-4111-8111-111111111111", "environment_id": "22222222-2222-4222-8222-222222222222", "expected_revision": 0, "operation": "runtime.dispatch", "input": {} } },
+    { "id": "NH00-ERR-001", "schema": "harnessError", "accept": true, "value": { "code": "ERR_FORBIDDEN", "message": "denied", "correlation_id": "11111111-1111-4111-8111-111111111111", "retryable": false } },
+    { "id": "NH00-ERR-002", "schema": "harnessError", "accept": false, "value": { "code": "ERR_FORBIDDEN", "message": "denied", "correlation_id": "not-a-uuid", "retryable": false } },
+    { "id": "NH00-SNAP-001", "schema": "snapshotEnvelope", "accept": true, "value": { "module": "threads", "data": { "snapshot_id": "11111111-1111-4111-8111-111111111111", "revision": 2, "as_of_seq": 9, "next_cursor": "opaque" } } },
+    { "id": "NH00-SNAP-002", "schema": "snapshotEnvelope", "accept": false, "value": { "module": "unknown", "data": { "snapshot_id": "11111111-1111-4111-8111-111111111111", "revision": 2, "as_of_seq": 9 } } },
+    { "id": "NH00-STREAM-001", "schema": "streamEnvelope", "accept": true, "value": { "protocol_major": 1, "event_id": "11111111-1111-4111-8111-111111111111", "environment_id": "22222222-2222-4222-8222-222222222222", "thread_id": "33333333-3333-4333-8333-333333333333", "seq": 3, "committed_at_ms": 1700000000000, "module": "threads", "delivery": "inline", "payload": { "entity_type": "RunRecord", "entity_key": "\"44444444-4444-4444-8444-444444444444\"", "change": "upsert", "value": {} } } },
+    { "id": "NH00-STREAM-002", "schema": "streamEnvelope", "accept": false, "value": { "protocol_major": 1, "event_id": "11111111-1111-4111-8111-111111111111", "environment_id": "22222222-2222-4222-8222-222222222222", "seq": 3, "committed_at_ms": 1700000000000, "module": "threads", "delivery": "reference", "payload_ref": "33333333-3333-4333-8333-333333333333", "payload": {} } },
+    { "id": "NH00-AUTH-001", "schema": "localCredentialMetadata", "accept": true, "value": { "principal_id": "11111111-1111-4111-8111-111111111111", "environment_id": "22222222-2222-4222-8222-222222222222", "scopes": ["read", "submit"], "audience": "pocketkernel.local", "expires_at_ms": 1700000300000 } },
+    { "id": "NH00-AUTH-002", "schema": "localCredentialMetadata", "accept": false, "value": { "principal_id": "11111111-1111-4111-8111-111111111111", "environment_id": "22222222-2222-4222-8222-222222222222", "scopes": ["admin"], "audience": "pocketkernel.local", "expires_at_ms": 1700000300000 } }
+  ]
+}

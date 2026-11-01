@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pocketwiki.local/schemas/harness-v1.schema.json",
+  "title": "PocketWiki Harness v1 integration envelopes",
+  "type": "object",
+  "$defs": {
+    "uuid": { "type": "string", "format": "uuid" },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "moduleId": {
+      "type": "string",
+      "enum": ["runtime", "providers", "threads", "composer", "permissions", "workspaces", "checkpoints", "terminal", "environments", "orchestrator-mcp", "handoffs", "memory", "source-control", "navigation", "diagnostics"]
+    },
+    "scope": {
+      "type": "string",
+      "enum": ["read", "submit", "approve", "execute", "context.read", "memory.personal.read", "memory.write", "scm.write", "scm.merge"]
+    },
+    "harnessError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "correlation_id", "retryable"],
+      "properties": {
+        "code": { "type": "string", "enum": ["ERR_INVALID", "ERR_FORBIDDEN", "ERR_NOT_FOUND", "ERR_CURSOR_EXPIRED", "ERR_INCOMPATIBLE", "ERR_UNAVAILABLE", "ERR_TIMEOUT", "ERR_CONFLICT", "ERR_UNCERTAIN", "ERR_UNSUPPORTED", "ERR_PROVIDER_UNAVAILABLE", "ERR_CATALOG_STALE", "ERR_ACTION_CHANGED", "ERR_NOT_RESUMABLE", "ERR_EXPIRED", "ERR_CONTEXT_STALE", "ERR_RATE_LIMIT", "ERR_PAIRING", "ERR_IDENTITY_CHANGED", "ERR_SESSION_EXPIRED", "ERR_REVOKED", "ERR_REFRESH_REUSED"] },
+        "message": { "type": "string", "maxLength": 1024 },
+        "correlation_id": { "$ref": "#/$defs/uuid" },
+        "retryable": { "type": "boolean" }
+      }
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_major", "command_id", "environment_id", "expected_revision", "operation", "input"],
+      "properties": {
+        "protocol_major": { "const": 1 },
+        "command_id": { "$ref": "#/$defs/uuid" },
+        "environment_id": { "$ref": "#/$defs/uuid" },
+        "expected_revision": { "type": "integer", "minimum": 0 },
+        "operation": { "type": "string", "minLength": 1 },
+        "input": { "type": "object" }
+      }
+    },
+    "commandReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["receipt_id", "revision", "state"],
+      "properties": {
+        "receipt_id": { "$ref": "#/$defs/uuid" },
+        "revision": { "type": "integer", "minimum": 0 },
+        "state": { "enum": ["accepted", "duplicate"] }
+      }
+    },
+    "snapshotPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["snapshot_id", "revision", "as_of_seq"],
+      "properties": {
+        "snapshot_id": { "$ref": "#/$defs/uuid" },
+        "revision": { "type": "integer", "minimum": 0 },
+        "as_of_seq": { "type": "integer", "minimum": 0 },
+        "next_cursor": { "type": "string", "maxLength": 512 }
+      }
+    },
+    "streamEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_major", "event_id", "environment_id", "seq", "committed_at_ms", "module", "delivery"],
+      "properties": {
+        "protocol_major": { "const": 1 },
+        "event_id": { "$ref": "#/$defs/uuid" },
+        "environment_id": { "$ref": "#/$defs/uuid" },
+        "thread_id": { "$ref": "#/$defs/uuid" },
+        "seq": { "type": "integer", "minimum": 0 },
+        "committed_at_ms": { "type": "integer", "minimum": 0 },
+        "module": { "$ref": "#/$defs/moduleId" },
+        "delivery": { "enum": ["inline", "reference"] },
+        "payload_ref": { "$ref": "#/$defs/uuid" },
+        "payload": { "type": "object" }
+      },
+      "oneOf": [
+        { "properties": { "delivery": { "const": "inline" }, "payload": { "type": "object" } }, "required": ["payload"], "not": { "required": ["payload_ref"] } },
+        { "properties": { "delivery": { "const": "reference" } }, "required": ["payload_ref"], "not": { "required": ["payload"] } }
+      ]
+    },
+    "snapshotEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["module", "data"],
+      "properties": {
+        "module": { "$ref": "#/$defs/moduleId" },
+        "data": { "$ref": "#/$defs/snapshotPage" }
+      }
+    },
+    "sessionGrant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["session_id", "access_token", "refresh_token", "expires_at_ms", "scopes", "audience"],
+      "properties": {
+        "session_id": { "$ref": "#/$defs/uuid" },
+        "access_token": { "type": "string", "minLength": 1 },
+        "refresh_token": { "type": "string", "minLength": 1 },
+        "expires_at_ms": { "type": "integer", "minimum": 0 },
+        "scopes": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/scope" } },
+        "audience": { "type": "string", "minLength": 1 }
+      }
+    },
+    "localCredentialMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principal_id", "environment_id", "scopes", "audience", "expires_at_ms"],
+      "properties": {
+        "principal_id": { "$ref": "#/$defs/uuid" },
+        "environment_id": { "$ref": "#/$defs/uuid" },
+        "thread_id": { "$ref": "#/$defs/uuid" },
+        "scopes": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/scope" } },
+        "audience": { "type": "string", "minLength": 1 },
+        "expires_at_ms": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}
