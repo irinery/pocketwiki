@@ -32,4 +32,3 @@ Draft 0.1.0 · 2026-11-01 · [Milestone New Harness.](https://github.com/irinery
 | GATE-E6 | [#44](https://github.com/irinery/pocketwiki/issues/44) | [Gate E6] Revisão e E2E determinístico da etapa integrada |
 
 Os detalhes de dependências, arquivos exclusivos, divisão por fase e evidência de teste estão no [plano de worktrees](plano-worktrees.md). Os gates só fecham após revisão e execução real sobre a união da etapa. A issue de RFC acompanha ambas as fases; completar backend não encerra a feature.
-
