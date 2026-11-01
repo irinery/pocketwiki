@@ -61,6 +61,55 @@ struct IntegrationTestRunner {
     }
 
     static func testNativeServerHTTPContract() async throws {
+        let upstreamScript = #"""
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+        import json
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                body = json.dumps({"ok": True, "upstream": "managed-pocketkernel"}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            def log_message(self, format, *args):
+                pass
+        server = HTTPServer(("127.0.0.1", 0), Handler)
+        print(server.server_address[1], flush=True)
+        server.serve_forever()
+        """#
+        let upstream = Process()
+        upstream.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+        upstream.arguments = ["-c", upstreamScript]
+        let readyPipe = Pipe()
+        upstream.standardOutput = readyPipe.fileHandleForWriting
+        upstream.standardError = FileHandle.nullDevice
+        try upstream.run()
+        try? readyPipe.fileHandleForWriting.close()
+        defer {
+            if upstream.isRunning {
+                upstream.terminate()
+                upstream.waitUntilExit()
+            }
+        }
+        var readyDescriptor = pollfd(
+            fd: readyPipe.fileHandleForReading.fileDescriptor,
+            events: Int16(POLLIN),
+            revents: 0
+        )
+        try expect(Darwin.poll(&readyDescriptor, 1, 5_000) > 0, "PocketKernel upstream fixture did not start")
+        var portBuffer = [UInt8](repeating: 0, count: 32)
+        let portByteCount = portBuffer.withUnsafeMutableBytes {
+            Darwin.read(readyPipe.fileHandleForReading.fileDescriptor, $0.baseAddress, $0.count)
+        }
+        try expect(portByteCount > 0, "PocketKernel upstream fixture did not report its port")
+        let upstreamPortText = String(bytes: portBuffer.prefix(portByteCount), encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let upstreamPort = try require(
+            upstreamPortText.flatMap { Int($0) },
+            "PocketKernel upstream fixture reported an invalid port"
+        )
+
         try await withRunningServer { baseURL, server, logs in
             let indexResponse = try await request(baseURL.appendingPathComponent("/"))
             try expect(indexResponse.status == 200, "index status failed")
@@ -112,6 +161,26 @@ struct IntegrationTestRunner {
                 body: overrideBody
             )
             try expect(overrideResponse.status == 502, "web payload redirected MiddlewareAuth bearer to another host")
+
+            let alternateKernelURL = "http://127.0.0.1:\(upstreamPort)"
+            server.updatePocketKernelBaseURL(alternateKernelURL)
+            let updatedConfig = try jsonObject((try await request(baseURL.appendingPathComponent("/api/config"))).body)
+            try expect(
+                updatedConfig["pocketKernelBaseUrl"] as? String == alternateKernelURL,
+                "server config did not expose the updated PocketKernel endpoint"
+            )
+            let kernelResponse = try await request(
+                baseURL.appendingPathComponent("/api/kernel/query"),
+                method: "POST",
+                headers: ["Content-Type": "application/json"],
+                body: Data(#"{"question":"test"}"#.utf8)
+            )
+            try expect(kernelResponse.status == 200, "running server did not proxy to updated PocketKernel endpoint")
+            let kernelPayload = try jsonObject(kernelResponse.body)
+            try expect(
+                kernelPayload["upstream"] as? String == "managed-pocketkernel",
+                "PocketKernel proxy used stale upstream after endpoint update"
+            )
 
             let messages = await logs.messages
             try expect(messages.contains("GET /"), "server did not log index request")

@@ -36,8 +36,10 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
     private let solutionIngestion: PocketWikiSolutionIngestion
     private let memoryStore: PocketMemoryStore
     private let middlewareTokenLock = NSLock()
+    private let pocketKernelBaseURLLock = NSLock()
     private var middlewareToken: String
     private var middlewareBaseURL: String
+    private var pocketKernelBaseURL: String
     private var listener: NWListener?
     private var webRoot: URL?
     private var handlers: [UUID: PocketWikiHTTPConnectionHandler] = [:]
@@ -50,6 +52,7 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
         self.configuration = configuration
         self.middlewareToken = configuration.middlewareAuthClientToken
         self.middlewareBaseURL = configuration.middlewareAuthBaseURL
+        self.pocketKernelBaseURL = configuration.pocketKernelBaseURL
         self.sourceProvider = sourceProvider
         self.log = log
         self.mdnsResponder = PocketWikiMDNSResponder(log: log)
@@ -69,6 +72,12 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
         middlewareTokenLock.unlock()
     }
 
+    func updatePocketKernelBaseURL(_ baseURL: String) {
+        pocketKernelBaseURLLock.lock()
+        pocketKernelBaseURL = baseURL
+        pocketKernelBaseURLLock.unlock()
+    }
+
     private func currentMiddlewareToken() -> String {
         middlewareTokenLock.lock()
         defer { middlewareTokenLock.unlock() }
@@ -79,6 +88,12 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
         middlewareTokenLock.lock()
         defer { middlewareTokenLock.unlock() }
         return middlewareBaseURL
+    }
+
+    private func currentPocketKernelBaseURL() -> String {
+        pocketKernelBaseURLLock.lock()
+        defer { pocketKernelBaseURLLock.unlock() }
+        return pocketKernelBaseURL
     }
 
     func start() async throws -> PocketWikiRouteSnapshot {
@@ -263,8 +278,8 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
             ).jsonValue,
             "lmStudioModel": .string(configuration.lmStudioModel),
             "lmStudioBaseUrl": .string(configuration.lmStudioBaseURL),
-            "pocketKernelBaseUrl": .string(configuration.pocketKernelBaseURL),
-            "middlewareAuthBaseUrl": .string(configuration.middlewareAuthBaseURL),
+            "pocketKernelBaseUrl": .string(currentPocketKernelBaseURL()),
+            "middlewareAuthBaseUrl": .string(currentMiddlewareBaseURL()),
             "middlewareAuthProjectId": .string(configuration.middlewareAuthProjectID),
             "middlewareAuthProfileId": .string(configuration.middlewareAuthProfileID),
             "kernelProxy": .bool(true),
@@ -311,7 +326,7 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
     private func proxyPocketKernel(body: Data) async -> PocketWikiHTTPResponse {
         let url: URL
         do {
-            url = try PocketKernelEndpointPolicy.kernelURL(configuration.pocketKernelBaseURL)
+            url = try PocketKernelEndpointPolicy.kernelURL(currentPocketKernelBaseURL())
         } catch {
             return jsonError("invalid_pocketkernel_endpoint", status: 502)
         }
