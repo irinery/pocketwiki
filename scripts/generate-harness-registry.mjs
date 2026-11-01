@@ -12,16 +12,16 @@ const classes = {
   'threads.message': 'mutation', 'threads.create': 'mutation', 'threads.list': 'read', 'threads.history': 'read',
   'composer.prepare': 'mutation', 'composer.stage': 'local', 'composer.draft.save': 'local', 'composer.resolve': 'local', 'composer.pin': 'local',
   'permissions.respond': 'mutation', 'permissions.pending': 'read', 'permissions.mode': 'mutation',
-  'workspaces.prepare': 'mutation', 'workspaces.release': 'mutation', 'workspaces.settings': 'read', 'workspaces.register_project': 'mutation',
+  'workspaces.prepare': 'mutation', 'workspaces.release': 'mutation', 'workspaces.settings': 'mutation', 'workspaces.register_project': 'mutation',
   'checkpoints.restore': 'mutation', 'checkpoints.capture': 'mutation', 'checkpoints.preview': 'read', 'checkpoints.diff': 'read',
   'terminal.open': 'mutation', 'terminal.input': 'mutation', 'terminal.resize': 'mutation', 'terminal.close': 'mutation', 'terminal.read': 'read',
   'environments.pair': 'bootstrap', 'environments.challenge': 'bootstrap', 'environments.revoke': 'bootstrap', 'environments.refresh': 'bootstrap',
   'mcp.thread.call': 'mutation',
   'handoffs.prepare': 'mutation', 'handoffs.export': 'read', 'handoffs.import': 'mutation',
-  'memory.recall_scoped': 'read', 'memory.capture_scoped': 'mutation', 'memory.note.get': 'read', 'memory.note.put': 'mutation', 'memory.map_legacy': 'read',
+  'memory.recall_scoped': 'read', 'memory.capture_scoped': 'mutation', 'memory.note.get': 'read', 'memory.note.put': 'mutation', 'memory.map_legacy': 'mutation',
   'source_control.preview': 'mutation', 'source_control.execute': 'mutation', 'source_control.links': 'read',
   'navigation.update': 'mutation', 'navigation.list': 'read',
-  'diagnostics.snapshot': 'read', 'diagnostics.export': 'read'
+  'diagnostics.snapshot': 'read', 'diagnostics.export': 'mutation'
 };
 
 const operations = [];

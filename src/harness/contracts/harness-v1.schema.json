@@ -154,6 +154,7 @@
             "permissions.mode",
             "workspaces.prepare",
             "workspaces.release",
+            "workspaces.settings",
             "workspaces.register_project",
             "checkpoints.restore",
             "checkpoints.capture",
@@ -166,9 +167,11 @@
             "handoffs.import",
             "memory.capture_scoped",
             "memory.note.put",
+            "memory.map_legacy",
             "source_control.preview",
             "source_control.execute",
-            "navigation.update"
+            "navigation.update",
+            "diagnostics.export"
           ]
         },
         "input": {
@@ -293,6 +296,21 @@
             },
             "input": {
               "$ref": "#/$defs/operationInput_workspaces_release"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "operation",
+            "input"
+          ],
+          "properties": {
+            "operation": {
+              "const": "workspaces.settings"
+            },
+            "input": {
+              "$ref": "#/$defs/operationInput_workspaces_settings"
             }
           }
         },
@@ -484,6 +502,21 @@
           ],
           "properties": {
             "operation": {
+              "const": "memory.map_legacy"
+            },
+            "input": {
+              "$ref": "#/$defs/operationInput_memory_map_legacy"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "operation",
+            "input"
+          ],
+          "properties": {
+            "operation": {
               "const": "source_control.preview"
             },
             "input": {
@@ -518,6 +551,21 @@
             },
             "input": {
               "$ref": "#/$defs/operationInput_navigation_update"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "operation",
+            "input"
+          ],
+          "properties": {
+            "operation": {
+              "const": "diagnostics.export"
+            },
+            "input": {
+              "$ref": "#/$defs/operationInput_diagnostics_export"
             }
           }
         }

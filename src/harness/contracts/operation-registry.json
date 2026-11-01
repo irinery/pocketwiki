@@ -599,7 +599,7 @@
       "module": "workspaces",
       "rfc": 7,
       "owner": "PocketKernel",
-      "class": "read",
+      "class": "mutation",
       "input_schema": "operationInput_workspaces_settings",
       "input_fields": [
         {
@@ -1296,7 +1296,7 @@
       "module": "memory",
       "rfc": 13,
       "owner": "PocketWiki",
-      "class": "read",
+      "class": "mutation",
       "input_schema": "operationInput_memory_map_legacy",
       "input_fields": [
         {
@@ -1564,7 +1564,7 @@
       "module": "diagnostics",
       "rfc": 16,
       "owner": "PocketWiki + PocketKernel",
-      "class": "read",
+      "class": "mutation",
       "input_schema": "operationInput_diagnostics_export",
       "input_fields": [
         {

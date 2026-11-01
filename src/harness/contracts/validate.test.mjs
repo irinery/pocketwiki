@@ -23,4 +23,7 @@ test('capabilities expose only implemented operations', () => {
   assert.deepEqual(listCapabilities(), []);
   assert.ok(operationRegistry.length >= 40);
   assert.ok(operationRegistry.every(({ owner, test_slot, class: operationClass }) => owner && test_slot && ['read', 'mutation', 'bootstrap', 'local'].includes(operationClass)));
+  assert.equal(operationRegistry.find(({ name }) => name === 'workspaces.settings').class, 'mutation');
+  assert.equal(operationRegistry.find(({ name }) => name === 'memory.map_legacy').class, 'mutation');
+  assert.equal(operationRegistry.find(({ name }) => name === 'diagnostics.export').class, 'mutation');
 });
