@@ -1,10 +1,10 @@
 # New Harness — evolução da aba IA
 
-Draft 0.1.0 · 2026-11-01 · [Milestone New Harness.](https://github.com/irinery/pocketwiki/milestone/1)
+Draft 0.2.0 · 2026-11-01 · [Milestone New Harness.](https://github.com/irinery/pocketwiki/milestone/1)
 
 Proposta de transformar a aba IA em superfície de agentes e conhecimento: runtime durável no PocketKernel, memória/evidência no PocketWiki e autenticação no MiddlewareAuth. A referência é o [t3code na revisão 5732bbee](https://github.com/pingdotgg/t3code/tree/5732bbee397f0a2b0e61d0c2e432f01dca6df3dc), sem incorporar seu código neste pacote.
 
-O recorte reúne 15 itens aproveitáveis, cada um em uma RFC inteira e uma issue própria. São 30 fases de contrato, com 120 cenários obrigatórios, além dos cenários E2E cumulativos. `Estado de evolução: Draft` é maturidade; `Status: COMPLETO` é completude da especificação proposta conforme a regra. Nenhum dos dois significa implementação ou aprovação. O pacote atual é documentação, não mudança de comportamento do produto.
+O recorte reúne 15 itens aproveitáveis, cada um em uma RFC inteira e uma issue própria. São 30 fases de contrato, com 139 cenários obrigatórios, além dos cenários E2E cumulativos. `Estado de evolução: Draft` é maturidade; `Status: COMPLETO` é completude da especificação proposta conforme a regra. Nenhum dos dois significa implementação ou aprovação. O pacote atual é documentação, não mudança de comportamento do produto.
 
 ## Como ler e executar
 
@@ -27,8 +27,8 @@ O recorte reúne 15 itens aproveitáveis, cada um em uma RFC inteira e uma issue
 | [RFC-0008](0008-diff-checkpoint-rollback.md) | Diffs, checkpoints e restauração coordenada | PocketKernel | E3 / E5 |
 | [RFC-0009](0009-terminal-tasks.md) | Terminal do ambiente e tasks acompanháveis | PocketKernel | E3 / E5 |
 | [RFC-0010](0010-ambientes-remotos.md) | Ambientes remotos, pareamento e reconexão | PocketWiki + PocketKernel + MiddlewareAuth | E3 / E5 |
-| [RFC-0011](0011-mcp-agentes-externos.md) | MCP de orquestração e agentes externos | PocketKernel | E3 / E5 |
-| [RFC-0012](0012-fork-handoff-portavel.md) | Forks e handoff portável entre providers | PocketKernel | E3 / E5 |
+| [RFC-0011](0011-mcp-agentes-externos.md) | MCP de orquestração e agentes externos | PocketKernel | E4 / E5 |
+| [RFC-0012](0012-fork-handoff-portavel.md) | Forks e handoff portável entre providers | PocketKernel | E4 / E5 |
 | [RFC-0013](0013-memoria-evidencias.md) | Memória por escopo, proveniência e evidência da wiki | PocketWiki | E2 / E4 |
 | [RFC-0014](0014-git-pr-review.md) | Git, pull requests, revisão e settlement | PocketKernel | E4 / E5 |
 | [RFC-0015](0015-navegacao-inbox.md) | Navegação por threads, inbox e notificações | PocketKernel + PocketWiki | E4 / E5 |
@@ -68,6 +68,10 @@ A memória atual tem [documentação própria](../../ai-memory-model-agnostic.md
 
 ## Evolução dos drafts
 
-Depois da revisão, incorporar decisões no mesmo arquivo, subir versão para 0.2.0 e gerar contratos por fase. Antes de Accepted, não tratar o wire como compatibilidade pública estável. E0 congela a versão revisada para as lanes; qualquer mudança posterior precisa de schema/fixture e revisão de gate. Não fechar feature issue sem as duas fases e o gate correspondente.
+Depois da revisão, incorporar decisões no mesmo arquivo, subir versão para 0.3.0 e gerar contratos por fase. A revisão 0.2.0 fecha os sete apontamentos descritos em revisao-0.2.0.md. Antes de Accepted, não tratar o wire como compatibilidade pública estável. E0 congela a versão revisada para as lanes; qualquer mudança posterior precisa de schema/fixture e revisão de gate. Não fechar feature issue sem as duas fases e o gate correspondente.
 
 O [índice de issues](issues.md) mantém os links separados de RFCs, habilitadores e gates. Os gates têm revisão e E2E sobre a união das worktrees, não só sobre cada PR isolado.
+
+## Correções 0.2.0
+
+Ver [contratos entre módulos](contratos-integracao-v0.2.md), [matriz verificável](matriz-verificacao.json) e [segunda revisão](revisao-0.2.0.md). O início de E0 e a aprovação do gate E0 são eventos distintos.

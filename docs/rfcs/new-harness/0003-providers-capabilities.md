@@ -4,12 +4,12 @@
 **Data:** 2026-11-01
 **Issue:** [#24](https://github.com/irinery/pocketwiki/issues/24)
 **Estado de evolução:** Draft
-**Versão da RFC:** 0.1.0
+**Versão da RFC:** 0.2.0
 **Status:** COMPLETO
 **Fases:** 2 arquivos a gerar
 **Gerado por:** Codex, sessão New Harness
 
-> COMPLETO significa especificação do draft preenchida; não significa aprovação, implementação ou estabilidade pública. Todos os endpoints harness.v1, módulos e limites abaixo são propostas. O endpoint atual POST /v1/kernel permanece compatível. Primitivos deste cabeçalho: uuid = UUID RFC 4122 canônico minúsculo; sha1 = 40 hex; sha256 = 64 hex; int = inteiro JSON seguro 0..9007199254740991 salvo exit_code, que aceita -255..255; string = UTF-8; `?` = opcional/ausente, nunca null implícito; array[T] = lista homogênea; enum[...] = lista fechada. Timestamps são int em ms UTC. Campos desconhecidos de comando são rejeitados; campos opcionais novos em resposta exigem minor negociado. Fase pode ser implementada com este cabeçalho + seu bloco: tipos são repetidos deliberadamente.
+> COMPLETO significa especificação do draft preenchida; não significa aprovação, implementação ou estabilidade pública. Todos os endpoints harness.v1, módulos e limites abaixo são propostas. O endpoint atual POST /v1/kernel permanece compatível. Primitivos deste cabeçalho: uuid = UUID RFC 4122 canônico minúsculo; sha1 = 40 hex; sha256 = 64 hex; int = inteiro JSON seguro 0..9007199254740991 salvo exit_code, que aceita -255..255; string = UTF-8; `?` = opcional/ausente, nunca null implícito; array[T] = lista homogênea; enum[...] = lista fechada. Timestamps são int em ms UTC. Campos desconhecidos de comando são rejeitados; campos opcionais novos em resposta exigem minor negociado. Tipos são repetidos por fase. Regras de transporte, paginação, sessão e canonicalização são normativas em contratos-integracao-v0.2.md, que integra o cabeçalho desta RFC.
 
 > Tipo transversal `HarnessError = {code:string (enum da interface), message:string (0..1024 bytes redigidos), correlation_id:uuid, retryable:bool}`. Em wire, bool = boolean JSON. Identidade e scopes são obtidos do transporte autenticado, nunca de um campo user_id escolhido pelo cliente.
 
@@ -45,11 +45,11 @@ Arquivos de contrato serão gerados em `docs/technical-contract/new-harness/prov
 - PocketKernel + MiddlewareAuth é autoridade deste domínio; PocketWiki não lê store privado de integração externa.
 - Auth por principal/environment + scope a cada ação. IDs de request e hashes não são credenciais.
 - Erro de domínio serializa como `HarnessError {code:string, message:string, correlation_id:uuid, retryable:bool}`; message máximo 1024 bytes e redigida, code limitado à lista da fase.
-- APIs propostas ficam sob `/v1/harness` no Kernel e `/api/harness` na fachada PocketWiki; o identificador canônico abaixo é a operação de domínio. E0 materializa em schemas o mapa de transporte definido na arquitetura, sem alterar semântica.
+- APIs propostas ficam sob `/v1/harness` no Kernel e `/api/harness` na fachada PocketWiki; o identificador canônico abaixo é a operação de domínio. E0 materializa o mapa da arquitetura e contratos-integracao-v0.2.md, sem decisões implícitas.
 - Limites bytes são bytes UTF-8; limites em caracteres são Unicode scalars. Strings gerais 4096 bytes e arrays gerais 100 itens, salvo regra específica.
 
 ### Definition of Done global
-- [ ] testes 01-01..01-04 e 02-01..02-04 executados através de interfaces reais
+- [ ] todos os cenários numerados das fases 01 e 02 executados através de interfaces reais
 - [ ] JS e Swift aceitam/rejeitam o mesmo corpus de contratos
 - [ ] revisão humana/técnica e E2E cumulativo no SHA integrado da etapa
 - [ ] sem regressão em memória/sessões v1, wiki, MCP Evidence e modo externo
@@ -70,7 +70,7 @@ Separar providers de inferência e agents de execução com capabilities verific
 
 **Dependências repetidas:** RFC-0002/01/02.
 
-**Posse de arquivos:** PocketWiki: `src/harness/providers/`, `Sources/PocketWikiMac/Services/Harness/Providers/`, `Tests/Harness/providers/`. PocketKernel (outro repo): novo módulo lógico `harness/providers` e seus testes; adapter para store existente, sem substituir serviços privados de outro domínio.  Os paths são destinos propostos; arquivos atuais compartilhados só mudam pelo integrador E6. UI de teste usa registro por slot, sem tocar o shell de produção.
+**Posse de arquivos:** PocketWiki: `src/harness/providers/`, `Sources/PocketWikiMac/Services/Harness/Providers/`, `Tests/Harness/providers/`. PocketKernel (outro repo): novo módulo lógico `harness/providers` e seus testes; adapter para store existente, sem substituir serviços privados de outro domínio.  Os paths são destinos propostos; arquivos compartilhados de serviços só mudam pelo integrador da etapa; shell de produção pelo integrador E6. UI de teste usa registro por slot, sem tocar o shell de produção.
 
 ### Testes obrigatórios
 
@@ -79,7 +79,7 @@ Escrever os cenários antes da implementação. Fixtures substituem apenas front
 ```
 TESTE 01-01 [caminho feliz]
 dado: catálogo com inference e agent autenticados
-quando: selecionar modelo compatível e iniciar run
+quando: selecionar modelo compatível e executar chamada pelo driver real do adapter, sem threads
 então: binding e capabilities correspondem à conta selecionada
 
 TESTE 01-02 [falha]
@@ -88,14 +88,19 @@ quando: selecionar agent
 então: ERR_PROVIDER_UNAVAILABLE e chat inference continua operante
 
 TESTE 01-03 [edge case]
-dado: troca de conta durante execução
-quando: concluir run e enviar próximo prompt
-então: run antigo usa binding antigo; novo usa novo binding
+dado: troca de conta durante chamada direta do adapter
+quando: concluir chamada e enviar próximo prompt pelo driver do adapter
+então: chamada antiga usa binding antigo; nova usa novo binding
 
 TESTE 01-04 [segurança]
 dado: provider_id com shell metacharacters e account_ref estrangeiro
 quando: selecionar provider
 então: ERR_INVALID ou ERR_FORBIDDEN; zero subprocesso indevido
+
+TESTE 01-05 [integração]
+dado: projeção válida com mais entidades que page_size e cache cliente apagado
+quando: ler ao menos 2 páginas do mesmo snapshot enquanto ocorre mutação concorrente
+então: snapshot consistente na boundary e evento posterior aplicado 1 vez, sem duplicação
 
 ```
 
@@ -173,7 +178,7 @@ interface:
       observável: "estado de erro/pending explícito; nenhuma mudança silenciosa de provider, conta, root ou ambiente"
 ```
 
-O envelope de transporte de comando é `HarnessCommand {protocol_major:int=1, command_id:uuid, environment_id:uuid, expected_revision:int, operation:string, input:<entrada tipada acima>}`. `operation` é o nome canônico desta interface; input não aceita campos extras. Erro segue HarnessError do cabeçalho; resposta de sucesso contém exatamente os campos de saída declarados. Interface de view é local e não cria um endpoint HTTP novo.
+Para operações da classe mutation, o envelope de transporte é `HarnessCommand {protocol_major:int=1, command_id:uuid, environment_id:uuid, expected_revision:int, operation:string, input:<entrada tipada acima>}`. `operation` é o nome canônico desta interface; input não aceita campos extras. Erro segue HarnessError do cabeçalho; resposta de sucesso contém exatamente os campos de saída declarados. Leituras usam a rota query e operações bootstrap usam os endpoints diretos de R4, sem receipt; interface de view é local. O registry não encaminha bootstrap pelo ledger.
 
 **Interface complementar: providers.catalog**
 
@@ -240,57 +245,62 @@ campos:
     tipo: "int"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: stream_text
     tipo: "bool"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: steer
     tipo: "bool"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: interrupt
     tipo: "bool"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: rollback
     tipo: "bool"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: native_fork
     tipo: "bool"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: tools
     tipo: "bool"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: questions
     tipo: "bool"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: plans
     tipo: "bool"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: resume
     tipo: "bool"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: context_bytes
     tipo: "int?"
     obrigatório: false
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: capability_id
+    tipo: "uuid"
+    obrigatório: true
+    default: "ausente"
+    limite: "conforme contratos-integracao-v0.2.md"
 ```
 
 ```yaml
@@ -300,29 +310,71 @@ campos:
     tipo: "uuid"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: provider_id
     tipo: "string"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: account_ref
     tipo: "string"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: model_id
     tipo: "string"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: mode
     tipo: "enum[inference,agent]"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: catalog_revision
     tipo: "int"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: capability_id
+    tipo: "uuid"
+    obrigatório: true
+    default: "ausente"
+    limite: "conforme contratos-integracao-v0.2.md"
+```
+
+### Snapshot persistido desta fase
+
+```yaml
+tipo: FeatureSnapshot
+campos:
+  - nome: snapshot_id
+    tipo: "uuid"
+    obrigatório: true
+    default: nenhum
+    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+  - nome: revision
+    tipo: "int"
+    obrigatório: true
+    default: nenhum
+    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+  - nome: as_of_seq
+    tipo: "int"
+    obrigatório: true
+    default: nenhum
+    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+  - nome: next_cursor
+    tipo: "string?"
+    obrigatório: false
+    default: nenhum
+    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+  - nome: bindings
+    tipo: "array[ProviderBinding]"
+    obrigatório: true
+    default: nenhum
+    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+  - nome: capabilities
+    tipo: "array[ProviderCapabilities]"
     obrigatório: true
     default: nenhum
     limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
@@ -335,6 +387,7 @@ campos:
 3. Catálogo de modelos e contas é do environment e do MiddlewareAuth. Credential handle é opaco; agent autenticado no host usa o login nativo, sem exportar seu token.
 4. Adapter lança executável configurado como argv; handshake registra versão. Modelo/custom reasoning desconhecido é rejeitado antes de criar efeito.
 5. Protocolo de CLI é fixado por versão no lock de compatibilidade; E0 registra uma versão real obtida de --version e transcrição sanitizada. CLI sem versão validada fica unavailable.
+6. FeatureSnapshot é projeção persistida de leitura, nunca resultado de comando. Paginação usa snapshot_id/as_of_seq fixos, cursor opaco vinculado à identidade e TTL 600000 ms, 100 entidades por página no total e 4 MiB por página; ordenação por coleção e ID. Cursor novo ausente na última página. Cliente monta todas as páginas antes da troca atômica de estado e aplica somente eventos seq > as_of_seq; cursor expirado reinicia snapshot sem perder draft local. Entidade >4 MiB é rejeitada na escrita, sem truncamento silencioso. Arrays vazios e ausência de dados são estados iniciais válidos, sem IDs fictícios.
 
 | Autorização/versão | Estado confirmado | Resultado | Ação |
 | --- | --- | --- | --- |
@@ -364,7 +417,7 @@ campos:
 - id: DEP-0003-01-2
   tipo: componente_interno
   nome: "RFC-0002 fases 01 e 02"
-  versão: "0.1.0"
+  versão: "0.2.0"
   papel: "interface liberada em gate anterior"
   fallback: "ERR_UNAVAILABLE; não implementar cópia nesta worktree"
   obrigatória: true
@@ -381,7 +434,7 @@ campos:
 
 - [ ] módulo e interface providers.select exercitáveis sem integração com shell compartilhado
 - [ ] fixtures reais sanitizadas, falhas e relatório de execução com SHA base e final
-- [ ] todos os testes 01-01 a 01-04 passando
+- [ ] todos os testes 01-01 a 01-05 passando
 - [ ] nenhum arquivo fora da posse da lane alterado; mudanças compartilhadas entregues como instrução ao integrador
 
 ## 3.2 — Fase 02: Projeção e interface cliente
@@ -399,7 +452,7 @@ Superfície web e macOS do domínio, consumindo o contrato confirmado sem execut
 
 **Dependências repetidas:** RFC-0003/01 + NH-00 + NH-TEST.
 
-**Posse de arquivos:** `src/harness-ui/providers/`, `Sources/PocketWikiMac/Views/Harness/Providers/`, `Tests/HarnessUI/providers/`.  Os paths são destinos propostos; arquivos atuais compartilhados só mudam pelo integrador E6. UI de teste usa registro por slot, sem tocar o shell de produção.
+**Posse de arquivos:** `src/harness-ui/providers/`, `Sources/PocketWikiMac/Views/Harness/Providers/`, `Tests/HarnessUI/providers/`.  Os paths são destinos propostos; arquivos compartilhados de serviços só mudam pelo integrador da etapa; shell de produção pelo integrador E6. UI de teste usa registro por slot, sem tocar o shell de produção.
 
 ### Testes obrigatórios
 
@@ -443,7 +496,7 @@ interface:
     - campo: snapshot
       tipo: "FeatureSnapshot"
       obrigatório: true
-      validação: "resultado tipado da fase 01; mesmo environment/thread"
+      validação: "projeção persistida paginada; mesmo snapshot_id/environment/thread; nunca resposta de comando"
     - campo: client_action
       tipo: "enum[open,refresh,submit,dismiss]"
       obrigatório: true
@@ -492,7 +545,7 @@ interface:
       observável: "estado de erro/pending explícito; nenhuma mudança silenciosa de provider, conta, root ou ambiente"
 ```
 
-O envelope de transporte de comando é `HarnessCommand {protocol_major:int=1, command_id:uuid, environment_id:uuid, expected_revision:int, operation:string, input:<entrada tipada acima>}`. `operation` é o nome canônico desta interface; input não aceita campos extras. Erro segue HarnessError do cabeçalho; resposta de sucesso contém exatamente os campos de saída declarados. Interface de view é local e não cria um endpoint HTTP novo.
+Para operações da classe mutation, o envelope de transporte é `HarnessCommand {protocol_major:int=1, command_id:uuid, environment_id:uuid, expected_revision:int, operation:string, input:<entrada tipada acima>}`. `operation` é o nome canônico desta interface; input não aceita campos extras. Erro segue HarnessError do cabeçalho; resposta de sucesso contém exatamente os campos de saída declarados. Leituras usam a rota query e operações bootstrap usam os endpoints diretos de R4, sem receipt; interface de view é local. O registry não encaminha bootstrap pelo ledger.
 
 Interfaces complementares são operações do mesmo registro tipado, usam o envelope e a lista fechada de erros desta fase. Leitura não cria efeito. Mutação passa por policy, CAS e receipt; todas validam os mesmos limites antes de I/O.
 
@@ -505,57 +558,62 @@ campos:
     tipo: "int"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: stream_text
     tipo: "bool"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: steer
     tipo: "bool"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: interrupt
     tipo: "bool"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: rollback
     tipo: "bool"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: native_fork
     tipo: "bool"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: tools
     tipo: "bool"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: questions
     tipo: "bool"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: plans
     tipo: "bool"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: resume
     tipo: "bool"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: context_bytes
     tipo: "int?"
     obrigatório: false
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: capability_id
+    tipo: "uuid"
+    obrigatório: true
+    default: "ausente"
+    limite: "conforme contratos-integracao-v0.2.md"
 ```
 
 ```yaml
@@ -565,52 +623,72 @@ campos:
     tipo: "uuid"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: provider_id
     tipo: "string"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: account_ref
     tipo: "string"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: model_id
     tipo: "string"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: mode
     tipo: "enum[inference,agent]"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: catalog_revision
     tipo: "int"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: capability_id
+    tipo: "uuid"
+    obrigatório: true
+    default: "ausente"
+    limite: "conforme contratos-integracao-v0.2.md"
 ```
 
 ```yaml
 tipo: FeatureSnapshot
 campos:
-  - nome: binding_id
+  - nome: snapshot_id
     tipo: "uuid"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
-  - nome: capabilities
-    tipo: "ProviderCapabilities"
-    obrigatório: true
-    default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
-  - nome: catalog_revision
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: revision
     tipo: "int"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: as_of_seq
+    tipo: "int"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: next_cursor
+    tipo: "string?"
+    obrigatório: false
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: bindings
+    tipo: "array[ProviderBinding]"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: capabilities
+    tipo: "array[ProviderCapabilities]"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
 ```
 
 ```yaml
@@ -620,37 +698,37 @@ campos:
     tipo: "uuid"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: thread_id
     tipo: "uuid?"
     obrigatório: false
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: revision
     tipo: "int"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: status
     tipo: "enum[loading,ready,stale,error]"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: draft
     tipo: "string"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: data
     tipo: "FeatureSnapshot?"
     obrigatório: false
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: error
     tipo: "HarnessError?"
     obrigatório: false
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
 ```
 
 ### Regras de comportamento
@@ -660,6 +738,7 @@ campos:
 3. Catálogo de modelos e contas é do environment e do MiddlewareAuth. Credential handle é opaco; agent autenticado no host usa o login nativo, sem exportar seu token.
 4. Adapter lança executável configurado como argv; handshake registra versão. Modelo/custom reasoning desconhecido é rejeitado antes de criar efeito.
 5. Protocolo de CLI é fixado por versão no lock de compatibilidade; E0 registra uma versão real obtida de --version e transcrição sanitizada. CLI sem versão validada fica unavailable.
+6. FeatureSnapshot é projeção persistida de leitura, nunca resultado de comando. Paginação usa snapshot_id/as_of_seq fixos, cursor opaco vinculado à identidade e TTL 600000 ms, 100 entidades por página no total e 4 MiB por página; ordenação por coleção e ID. Cursor novo ausente na última página. Cliente monta todas as páginas antes da troca atômica de estado e aplica somente eventos seq > as_of_seq; cursor expirado reinicia snapshot sem perder draft local. Entidade >4 MiB é rejeitada na escrita, sem truncamento silencioso. Arrays vazios e ausência de dados são estados iniciais válidos, sem IDs fictícios.
 
 | Autorização/versão | Estado confirmado | Resultado | Ação |
 | --- | --- | --- | --- |
@@ -691,7 +770,7 @@ No cliente: renderizar 100 itens por página; draft 32768 bytes; erro 1024 bytes
 - id: DEP-0003-02-2
   tipo: componente_interno
   nome: "RFC-0003 fase 01"
-  versão: "0.1.0"
+  versão: "0.2.0"
   papel: "serviço e projeção tipados"
   fallback: "cache de leitura stale e ação desabilitada"
   obrigatória: true
@@ -750,4 +829,4 @@ Usar deadline numérico desta RFC com relógio injetável nos testes. Não infer
 - Executar efeito direto no cliente: descartada por quebrar autoridade do environment e idempotência.
 - Testar apenas reducers com eventos pré-normalizados: descartada porque não valida adapter, transporte e persistência reais.
 
-Evolução após revisão: atualizar este mesmo documento para 0.2.0 com changelog de decisão, gerar os 2 contratos na ordem do mapa, implementar lanes do plano e só então propor estado Accepted. Mudança incompatível de wire exige protocol major novo; status COMPLETO não permite pular gate.
+Evolução após revisão: atualizar este mesmo documento para 0.3.0 com changelog de decisão, gerar os 2 contratos na ordem do mapa, implementar lanes do plano e só então propor estado Accepted. Mudança incompatível de wire exige protocol major novo; status COMPLETO não permite pular gate.

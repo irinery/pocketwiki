@@ -4,12 +4,12 @@
 **Data:** 2026-11-01
 **Issue:** [#32](https://github.com/irinery/pocketwiki/issues/32)
 **Estado de evolução:** Draft
-**Versão da RFC:** 0.1.0
+**Versão da RFC:** 0.2.0
 **Status:** COMPLETO
 **Fases:** 2 arquivos a gerar
 **Gerado por:** Codex, sessão New Harness
 
-> COMPLETO significa especificação do draft preenchida; não significa aprovação, implementação ou estabilidade pública. Todos os endpoints harness.v1, módulos e limites abaixo são propostas. O endpoint atual POST /v1/kernel permanece compatível. Primitivos deste cabeçalho: uuid = UUID RFC 4122 canônico minúsculo; sha1 = 40 hex; sha256 = 64 hex; int = inteiro JSON seguro 0..9007199254740991 salvo exit_code, que aceita -255..255; string = UTF-8; `?` = opcional/ausente, nunca null implícito; array[T] = lista homogênea; enum[...] = lista fechada. Timestamps são int em ms UTC. Campos desconhecidos de comando são rejeitados; campos opcionais novos em resposta exigem minor negociado. Fase pode ser implementada com este cabeçalho + seu bloco: tipos são repetidos deliberadamente.
+> COMPLETO significa especificação do draft preenchida; não significa aprovação, implementação ou estabilidade pública. Todos os endpoints harness.v1, módulos e limites abaixo são propostas. O endpoint atual POST /v1/kernel permanece compatível. Primitivos deste cabeçalho: uuid = UUID RFC 4122 canônico minúsculo; sha1 = 40 hex; sha256 = 64 hex; int = inteiro JSON seguro 0..9007199254740991 salvo exit_code, que aceita -255..255; string = UTF-8; `?` = opcional/ausente, nunca null implícito; array[T] = lista homogênea; enum[...] = lista fechada. Timestamps são int em ms UTC. Campos desconhecidos de comando são rejeitados; campos opcionais novos em resposta exigem minor negociado. Tipos são repetidos por fase. Regras de transporte, paginação, sessão e canonicalização são normativas em contratos-integracao-v0.2.md, que integra o cabeçalho desta RFC.
 
 > Tipo transversal `HarnessError = {code:string (enum da interface), message:string (0..1024 bytes redigidos), correlation_id:uuid, retryable:bool}`. Em wire, bool = boolean JSON. Identidade e scopes são obtidos do transporte autenticado, nunca de um campo user_id escolhido pelo cliente.
 
@@ -36,7 +36,7 @@ Transformar wiki.search em shell; publicar MCP remoto aberto; instalar automatic
 
 | Fase | Arquivo | Nome do componente | Depende de | Paralelizável com |
 | --- | --- | --- | --- | --- |
-| 01 | 01_orchestrator_mcp_dominio.md | Contrato e serviço de domínio | RFC-0002/01/02, RFC-0006/01 | lanes backend da mesma etapa do plano, sem dependência entre elas |
+| 01 | 01_orchestrator_mcp_dominio.md | Contrato e serviço de domínio | RFC-0002/01/02, RFC-0004/01, RFC-0006/01, RFC-0010/01 | lanes backend da mesma etapa do plano, sem dependência entre elas |
 | 02 | 02_orchestrator_mcp_cliente.md | Transporte/projeção e superfície cliente | 01 | lanes cliente da mesma etapa do plano, com diretórios exclusivos |
 
 Arquivos de contrato serão gerados em `docs/technical-contract/new-harness/orchestrator-mcp/`; este draft entrega uma RFC inteira, não contratos parciais. A agenda global e os gates estão em `plano-worktrees.md`; cada fase só começa após dependências integradas no SHA base.
@@ -45,11 +45,11 @@ Arquivos de contrato serão gerados em `docs/technical-contract/new-harness/orch
 - PocketKernel é autoridade deste domínio; PocketWiki não lê store privado de integração externa.
 - Auth por principal/environment + scope a cada ação. IDs de request e hashes não são credenciais.
 - Erro de domínio serializa como `HarnessError {code:string, message:string, correlation_id:uuid, retryable:bool}`; message máximo 1024 bytes e redigida, code limitado à lista da fase.
-- APIs propostas ficam sob `/v1/harness` no Kernel e `/api/harness` na fachada PocketWiki; o identificador canônico abaixo é a operação de domínio. E0 materializa em schemas o mapa de transporte definido na arquitetura, sem alterar semântica.
+- APIs propostas ficam sob `/v1/harness` no Kernel e `/api/harness` na fachada PocketWiki; o identificador canônico abaixo é a operação de domínio. E0 materializa o mapa da arquitetura e contratos-integracao-v0.2.md, sem decisões implícitas.
 - Limites bytes são bytes UTF-8; limites em caracteres são Unicode scalars. Strings gerais 4096 bytes e arrays gerais 100 itens, salvo regra específica.
 
 ### Definition of Done global
-- [ ] testes 01-01..01-04 e 02-01..02-04 executados através de interfaces reais
+- [ ] todos os cenários numerados das fases 01 e 02 executados através de interfaces reais
 - [ ] JS e Swift aceitam/rejeitam o mesmo corpus de contratos
 - [ ] revisão humana/técnica e E2E cumulativo no SHA integrado da etapa
 - [ ] sem regressão em memória/sessões v1, wiki, MCP Evidence e modo externo
@@ -68,9 +68,9 @@ Expor controle de threads por MCP separado do MCP Evidence, com mesmas política
 - Transformar wiki.search em shell; publicar MCP remoto aberto; instalar automaticamente em Claude/Codex; bypass de policy por origem MCP.
 - Editar views existentes, rotas globais e scripts de CI nesta lane.
 
-**Dependências repetidas:** RFC-0002/01/02, RFC-0006/01.
+**Dependências repetidas:** RFC-0002/01/02, RFC-0004/01, RFC-0006/01, RFC-0010/01.
 
-**Posse de arquivos:** PocketWiki: `src/harness/orchestrator-mcp/`, `Sources/PocketWikiMac/Services/Harness/OrchestratorMcp/`, `Tests/Harness/orchestrator-mcp/`. PocketKernel (outro repo): novo módulo lógico `harness/orchestrator-mcp` e seus testes; adapter para store existente, sem substituir serviços privados de outro domínio.  Os paths são destinos propostos; arquivos atuais compartilhados só mudam pelo integrador E6. UI de teste usa registro por slot, sem tocar o shell de produção.
+**Posse de arquivos:** PocketWiki: `src/harness/orchestrator-mcp/`, `Sources/PocketWikiMac/Services/Harness/OrchestratorMcp/`, `Tests/Harness/orchestrator-mcp/`. PocketKernel (outro repo): novo módulo lógico `harness/orchestrator-mcp` e seus testes; adapter para store existente, sem substituir serviços privados de outro domínio.  Os paths são destinos propostos; arquivos compartilhados de serviços só mudam pelo integrador da etapa; shell de produção pelo integrador E6. UI de teste usa registro por slot, sem tocar o shell de produção.
 
 ### Testes obrigatórios
 
@@ -80,7 +80,7 @@ Escrever os cenários antes da implementação. Fixtures substituem apenas front
 TESTE 01-01 [caminho feliz]
 dado: cliente MCP com scope submit
 quando: start e retry com mesmo command_id
-então: mesmo thread/receipt; UI recebe evento correspondente
+então: mesmo thread/receipt; cliente de transporte recebe evento correspondente (UI em E5)
 
 TESTE 01-02 [falha]
 dado: cliente tem apenas read
@@ -88,14 +88,19 @@ quando: chamar thread.start
 então: ERR_FORBIDDEN e nenhum run
 
 TESTE 01-03 [edge case]
-dado: wait atinge deadline sem concluir
-quando: consultar cursor
-então: status pending e cursor estável; nenhuma duplicação
+dado: histórico paginado enquanto outra mensagem é acrescentada
+quando: consultar próxima página com mesmo cursor/boundary
+então: histórico da boundary completo e estável, sem incorporar mensagem posterior nem duplicar
 
 TESTE 01-04 [segurança]
 dado: JSON-RPC malformado, stdout contaminado ou token com audience errada
 quando: inicializar/chamar
 então: erro de protocolo/auth explícito; nenhuma execução
+
+TESTE 01-05 [integração]
+dado: projeção válida com mais entidades que page_size e cache cliente apagado
+quando: ler ao menos 2 páginas do mesmo snapshot enquanto ocorre mutação concorrente
+então: snapshot consistente na boundary e evento posterior aplicado 1 vez, sem duplicação
 
 ```
 
@@ -112,8 +117,8 @@ interface:
       obrigatório: true
       validação: "prefixo wire harness.; lista fechada"
     - campo: command_id
-      tipo: "uuid"
-      obrigatório: true
+      tipo: "uuid?"
+      obrigatório: false
       validação: "idempotência das tools de mutação"
     - campo: thread_id
       tipo: "uuid?"
@@ -124,13 +129,33 @@ interface:
       obrigatório: false
       validação: "obrigatório start em projeto; ausente cria scratch"
     - campo: text
-      tipo: "string"
-      obrigatório: true
+      tipo: "string?"
+      obrigatório: false
       validação: "0..32768 bytes; start/send exige conteúdo"
     - campo: after_seq
-      tipo: "int"
-      obrigatório: true
+      tipo: "int?"
+      obrigatório: false
       validação: ">= 0; cursor de leitura"
+    - campo: through_seq
+      tipo: "int?"
+      obrigatório: false
+      validação: "thread.read: omitir somente na primeira página para obter boundary atual"
+    - campo: cursor
+      tipo: "string?"
+      obrigatório: false
+      validação: "cursor de threads.history para thread.read"
+    - campo: binding_id
+      tipo: "uuid?"
+      obrigatório: false
+      validação: "obrigatório em start/send; binding integrado E2"
+    - campo: message_id
+      tipo: "uuid?"
+      obrigatório: false
+      validação: "obrigatório em start/send; intenção estável"
+    - campo: queue_revision
+      tipo: "int?"
+      obrigatório: false
+      validação: "obrigatório em send/interrupt; CAS do snapshot"
   saída:
     sucesso:
       tipo: Result
@@ -140,7 +165,9 @@ interface:
         - campo: thread_id
           tipo: "uuid?"
         - campo: snapshot
-          tipo: "MCPThreadPage"
+          tipo: "MCPThreadPage?"
+        - campo: history
+          tipo: "HistoryPage?"
     falha:
       valores_possíveis:
         - code: ERR_INVALID
@@ -173,7 +200,7 @@ interface:
       observável: "estado de erro/pending explícito; nenhuma mudança silenciosa de provider, conta, root ou ambiente"
 ```
 
-O envelope de transporte de comando é `HarnessCommand {protocol_major:int=1, command_id:uuid, environment_id:uuid, expected_revision:int, operation:string, input:<entrada tipada acima>}`. `operation` é o nome canônico desta interface; input não aceita campos extras. Erro segue HarnessError do cabeçalho; resposta de sucesso contém exatamente os campos de saída declarados. Interface de view é local e não cria um endpoint HTTP novo.
+Para operações da classe mutation, o envelope de transporte é `HarnessCommand {protocol_major:int=1, command_id:uuid, environment_id:uuid, expected_revision:int, operation:string, input:<entrada tipada acima>}`. `operation` é o nome canônico desta interface; input não aceita campos extras. Erro segue HarnessError do cabeçalho; resposta de sucesso contém exatamente os campos de saída declarados. Leituras usam a rota query e operações bootstrap usam os endpoints diretos de R4, sem receipt; interface de view é local. O registry não encaminha bootstrap pelo ledger.
 
 Interfaces complementares são operações do mesmo registro tipado, usam o envelope e a lista fechada de erros desta fase. Leitura não cria efeito. Mutação passa por policy, CAS e receipt; todas validam os mesmos limites antes de I/O.
 
@@ -182,16 +209,26 @@ Interfaces complementares são operações do mesmo registro tipado, usam o enve
 ```yaml
 tipo: MCPThreadPage
 campos:
+  - nome: snapshot_id
+    tipo: "uuid"
+    obrigatório: true
+    default: nenhum
+    limite: "snapshot imutável R1"
+  - nome: as_of_seq
+    tipo: "int"
+    obrigatório: true
+    default: nenhum
+    limite: "boundary de ambiente R1"
   - nome: items
     tipo: "array[MCPThreadSummary]"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
-  - nome: next_after_seq
-    tipo: "int?"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: next_cursor
+    tipo: "string?"
     obrigatório: false
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
 ```
 
 ```yaml
@@ -201,19 +238,126 @@ campos:
     tipo: "uuid"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: title
     tipo: "string"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: state
     tipo: "enum[idle,working,waiting,failed,settled]"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: last_seq
     tipo: "int"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+```
+
+```yaml
+tipo: ConversationMessage
+campos:
+  - nome: message_id
+    tipo: "uuid"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: run_id
+    tipo: "uuid?"
+    obrigatório: false
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: role
+    tipo: "enum[user,assistant]"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: content
+    tipo: "string"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: source_seq
+    tipo: "int"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: completed
+    tipo: "bool"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: prepared_id
+    tipo: "uuid?"
+    obrigatório: false
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: provider_binding_id
+    tipo: "uuid?"
+    obrigatório: false
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+```
+
+```yaml
+tipo: HistoryPage
+campos:
+  - nome: thread_id
+    tipo: "uuid"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: snapshot_id
+    tipo: "uuid"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: through_seq
+    tipo: "int"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: messages
+    tipo: "array[ConversationMessage]"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: next_cursor
+    tipo: "string?"
+    obrigatório: false
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+```
+
+### Snapshot persistido desta fase
+
+```yaml
+tipo: FeatureSnapshot
+campos:
+  - nome: snapshot_id
+    tipo: "uuid"
+    obrigatório: true
+    default: nenhum
+    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+  - nome: revision
+    tipo: "int"
+    obrigatório: true
+    default: nenhum
+    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+  - nome: as_of_seq
+    tipo: "int"
+    obrigatório: true
+    default: nenhum
+    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+  - nome: next_cursor
+    tipo: "string?"
+    obrigatório: false
+    default: nenhum
+    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+  - nome: threads
+    tipo: "array[MCPThreadSummary]"
     obrigatório: true
     default: nenhum
     limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
@@ -226,6 +370,8 @@ campos:
 3. Send em thread busy enfileira; interrupt exige scope específico e permanece solicitado até confirmação. Nenhuma tool aceita argv arbitrário.
 4. Read é paginado e redigido; texto da tool é dado, não instrução de system. Wait máximo 30000 ms termina com pending+cursor, não sucesso inventado.
 5. MCP Evidence atual permanece separado e compatível; registry anuncia kernel.orchestrate somente após release do Kernel validada.
+6. thread.read retorna HistoryPage de threads.history (mensagens completas) e thread.list retorna MCPThreadPage. Resultado é união exclusiva por tool; páginas de resumo não substituem mensagens. through_seq/cursor ficam fixos por leitura. As tools de mutação devolvem receipt; leituras respondem dados somente do serviço threads integrado em E3.
+7. FeatureSnapshot é projeção persistida de leitura, nunca resultado de comando. Paginação usa snapshot_id/as_of_seq fixos, cursor opaco vinculado à identidade e TTL 600000 ms, 100 entidades por página no total e 4 MiB por página; ordenação por coleção e ID. Cursor novo ausente na última página. Cliente monta todas as páginas antes da troca atômica de estado e aplica somente eventos seq > as_of_seq; cursor expirado reinicia snapshot sem perder draft local. Entidade >4 MiB é rejeitada na escrita, sem truncamento silencioso. Arrays vazios e ausência de dados são estados iniciais válidos, sem IDs fictícios.
 
 | Autorização/versão | Estado confirmado | Resultado | Ação |
 | --- | --- | --- | --- |
@@ -238,9 +384,10 @@ campos:
 
 **Como realizar:**
 
-1. Criar servidor MCP de orquestração no Kernel, separado de src/mcp/pocketwiki-mcp-server.mjs. Reutilizar dispatch/policy reais.
-2. Descrever tools e erros em schemas de E0; testar cliente stdio real e HTTP real em portas efêmeras. Não simular normalizador em teste de adapter.
-3. Módulo UI próprio mostra clientes/scopes e origem de comandos. Conectar registry de integrações no E6.
+1. Executar em E4 após gate E3: consumir threads.history/read-side real; não implementar store de mensagens nem usar recall como substituto de histórico.
+2. Criar servidor MCP de orquestração no Kernel, separado de src/mcp/pocketwiki-mcp-server.mjs. Reutilizar dispatch/policy reais.
+3. Descrever tools e erros em schemas de E0; testar cliente stdio real e HTTP real em portas efêmeras. Não simular normalizador em teste de adapter.
+4. Módulo UI próprio mostra clientes/scopes e origem de comandos. Conectar registry de integrações no E6.
 
 ### Dependências desta fase
 
@@ -255,18 +402,32 @@ campos:
 - id: DEP-0011-01-2
   tipo: componente_interno
   nome: "RFC-0002 fases 01 e 02"
-  versão: "0.1.0"
+  versão: "0.2.0"
   papel: "interface liberada em gate anterior"
   fallback: "ERR_UNAVAILABLE; não implementar cópia nesta worktree"
   obrigatória: true
 - id: DEP-0011-01-3
   tipo: componente_interno
-  nome: "RFC-0006 fase 01"
-  versão: "0.1.0"
+  nome: "RFC-0004 fase 01"
+  versão: "0.2.0"
   papel: "interface liberada em gate anterior"
   fallback: "ERR_UNAVAILABLE; não implementar cópia nesta worktree"
   obrigatória: true
 - id: DEP-0011-01-4
+  tipo: componente_interno
+  nome: "RFC-0006 fase 01"
+  versão: "0.2.0"
+  papel: "interface liberada em gate anterior"
+  fallback: "ERR_UNAVAILABLE; não implementar cópia nesta worktree"
+  obrigatória: true
+- id: DEP-0011-01-5
+  tipo: componente_interno
+  nome: "RFC-0010 fase 01"
+  versão: "0.2.0"
+  papel: "interface liberada em gate anterior"
+  fallback: "ERR_UNAVAILABLE; não implementar cópia nesta worktree"
+  obrigatória: true
+- id: DEP-0011-01-6
   tipo: componente_interno
   nome: "PocketKernel"
   versão: "harness.v1 proposto"
@@ -279,7 +440,7 @@ campos:
 
 - [ ] módulo e interface mcp.thread.call exercitáveis sem integração com shell compartilhado
 - [ ] fixtures reais sanitizadas, falhas e relatório de execução com SHA base e final
-- [ ] todos os testes 01-01 a 01-04 passando
+- [ ] todos os testes 01-01 a 01-05 passando
 - [ ] nenhum arquivo fora da posse da lane alterado; mudanças compartilhadas entregues como instrução ao integrador
 
 ## 3.2 — Fase 02: Projeção e interface cliente
@@ -297,7 +458,7 @@ Superfície web e macOS do domínio, consumindo o contrato confirmado sem execut
 
 **Dependências repetidas:** RFC-0011/01 + NH-00 + NH-TEST.
 
-**Posse de arquivos:** `src/harness-ui/orchestrator-mcp/`, `Sources/PocketWikiMac/Views/Harness/OrchestratorMcp/`, `Tests/HarnessUI/orchestrator-mcp/`.  Os paths são destinos propostos; arquivos atuais compartilhados só mudam pelo integrador E6. UI de teste usa registro por slot, sem tocar o shell de produção.
+**Posse de arquivos:** `src/harness-ui/orchestrator-mcp/`, `Sources/PocketWikiMac/Views/Harness/OrchestratorMcp/`, `Tests/HarnessUI/orchestrator-mcp/`.  Os paths são destinos propostos; arquivos compartilhados de serviços só mudam pelo integrador da etapa; shell de produção pelo integrador E6. UI de teste usa registro por slot, sem tocar o shell de produção.
 
 ### Testes obrigatórios
 
@@ -341,7 +502,7 @@ interface:
     - campo: snapshot
       tipo: "FeatureSnapshot"
       obrigatório: true
-      validação: "resultado tipado da fase 01; mesmo environment/thread"
+      validação: "projeção persistida paginada; mesmo snapshot_id/environment/thread; nunca resposta de comando"
     - campo: client_action
       tipo: "enum[open,refresh,submit,dismiss]"
       obrigatório: true
@@ -390,7 +551,7 @@ interface:
       observável: "estado de erro/pending explícito; nenhuma mudança silenciosa de provider, conta, root ou ambiente"
 ```
 
-O envelope de transporte de comando é `HarnessCommand {protocol_major:int=1, command_id:uuid, environment_id:uuid, expected_revision:int, operation:string, input:<entrada tipada acima>}`. `operation` é o nome canônico desta interface; input não aceita campos extras. Erro segue HarnessError do cabeçalho; resposta de sucesso contém exatamente os campos de saída declarados. Interface de view é local e não cria um endpoint HTTP novo.
+Para operações da classe mutation, o envelope de transporte é `HarnessCommand {protocol_major:int=1, command_id:uuid, environment_id:uuid, expected_revision:int, operation:string, input:<entrada tipada acima>}`. `operation` é o nome canônico desta interface; input não aceita campos extras. Erro segue HarnessError do cabeçalho; resposta de sucesso contém exatamente os campos de saída declarados. Leituras usam a rota query e operações bootstrap usam os endpoints diretos de R4, sem receipt; interface de view é local. O registry não encaminha bootstrap pelo ledger.
 
 Interfaces complementares são operações do mesmo registro tipado, usam o envelope e a lista fechada de erros desta fase. Leitura não cria efeito. Mutação passa por policy, CAS e receipt; todas validam os mesmos limites antes de I/O.
 
@@ -399,16 +560,26 @@ Interfaces complementares são operações do mesmo registro tipado, usam o enve
 ```yaml
 tipo: MCPThreadPage
 campos:
+  - nome: snapshot_id
+    tipo: "uuid"
+    obrigatório: true
+    default: nenhum
+    limite: "snapshot imutável R1"
+  - nome: as_of_seq
+    tipo: "int"
+    obrigatório: true
+    default: nenhum
+    limite: "boundary de ambiente R1"
   - nome: items
     tipo: "array[MCPThreadSummary]"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
-  - nome: next_after_seq
-    tipo: "int?"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: next_cursor
+    tipo: "string?"
     obrigatório: false
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
 ```
 
 ```yaml
@@ -418,42 +589,127 @@ campos:
     tipo: "uuid"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: title
     tipo: "string"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: state
     tipo: "enum[idle,working,waiting,failed,settled]"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: last_seq
     tipo: "int"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+```
+
+```yaml
+tipo: ConversationMessage
+campos:
+  - nome: message_id
+    tipo: "uuid"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: run_id
+    tipo: "uuid?"
+    obrigatório: false
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: role
+    tipo: "enum[user,assistant]"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: content
+    tipo: "string"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: source_seq
+    tipo: "int"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: completed
+    tipo: "bool"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: prepared_id
+    tipo: "uuid?"
+    obrigatório: false
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: provider_binding_id
+    tipo: "uuid?"
+    obrigatório: false
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+```
+
+```yaml
+tipo: HistoryPage
+campos:
+  - nome: thread_id
+    tipo: "uuid"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: snapshot_id
+    tipo: "uuid"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: through_seq
+    tipo: "int"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: messages
+    tipo: "array[ConversationMessage]"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: next_cursor
+    tipo: "string?"
+    obrigatório: false
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
 ```
 
 ```yaml
 tipo: FeatureSnapshot
 campos:
-  - nome: receipt_id
-    tipo: "uuid?"
-    obrigatório: false
-    default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
-  - nome: thread_id
-    tipo: "uuid?"
-    obrigatório: false
-    default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
-  - nome: snapshot
-    tipo: "MCPThreadPage"
+  - nome: snapshot_id
+    tipo: "uuid"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: revision
+    tipo: "int"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: as_of_seq
+    tipo: "int"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: next_cursor
+    tipo: "string?"
+    obrigatório: false
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: threads
+    tipo: "array[MCPThreadSummary]"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
 ```
 
 ```yaml
@@ -463,37 +719,37 @@ campos:
     tipo: "uuid"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: thread_id
     tipo: "uuid?"
     obrigatório: false
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: revision
     tipo: "int"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: status
     tipo: "enum[loading,ready,stale,error]"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: draft
     tipo: "string"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: data
     tipo: "FeatureSnapshot?"
     obrigatório: false
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: error
     tipo: "HarnessError?"
     obrigatório: false
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
 ```
 
 ### Regras de comportamento
@@ -503,6 +759,8 @@ campos:
 3. Send em thread busy enfileira; interrupt exige scope específico e permanece solicitado até confirmação. Nenhuma tool aceita argv arbitrário.
 4. Read é paginado e redigido; texto da tool é dado, não instrução de system. Wait máximo 30000 ms termina com pending+cursor, não sucesso inventado.
 5. MCP Evidence atual permanece separado e compatível; registry anuncia kernel.orchestrate somente após release do Kernel validada.
+6. thread.read retorna HistoryPage de threads.history (mensagens completas) e thread.list retorna MCPThreadPage. Resultado é união exclusiva por tool; páginas de resumo não substituem mensagens. through_seq/cursor ficam fixos por leitura. As tools de mutação devolvem receipt; leituras respondem dados somente do serviço threads integrado em E3.
+7. FeatureSnapshot é projeção persistida de leitura, nunca resultado de comando. Paginação usa snapshot_id/as_of_seq fixos, cursor opaco vinculado à identidade e TTL 600000 ms, 100 entidades por página no total e 4 MiB por página; ordenação por coleção e ID. Cursor novo ausente na última página. Cliente monta todas as páginas antes da troca atômica de estado e aplica somente eventos seq > as_of_seq; cursor expirado reinicia snapshot sem perder draft local. Entidade >4 MiB é rejeitada na escrita, sem truncamento silencioso. Arrays vazios e ausência de dados são estados iniciais válidos, sem IDs fictícios.
 
 | Autorização/versão | Estado confirmado | Resultado | Ação |
 | --- | --- | --- | --- |
@@ -534,7 +792,7 @@ No cliente: renderizar 100 itens por página; draft 32768 bytes; erro 1024 bytes
 - id: DEP-0011-02-2
   tipo: componente_interno
   nome: "RFC-0011 fase 01"
-  versão: "0.1.0"
+  versão: "0.2.0"
   papel: "serviço e projeção tipados"
   fallback: "cache de leitura stale e ação desabilitada"
   obrigatória: true
@@ -593,4 +851,4 @@ Usar deadline numérico desta RFC com relógio injetável nos testes. Não infer
 - Executar efeito direto no cliente: descartada por quebrar autoridade do environment e idempotência.
 - Testar apenas reducers com eventos pré-normalizados: descartada porque não valida adapter, transporte e persistência reais.
 
-Evolução após revisão: atualizar este mesmo documento para 0.2.0 com changelog de decisão, gerar os 2 contratos na ordem do mapa, implementar lanes do plano e só então propor estado Accepted. Mudança incompatível de wire exige protocol major novo; status COMPLETO não permite pular gate.
+Evolução após revisão: atualizar este mesmo documento para 0.3.0 com changelog de decisão, gerar os 2 contratos na ordem do mapa, implementar lanes do plano e só então propor estado Accepted. Mudança incompatível de wire exige protocol major novo; status COMPLETO não permite pular gate.

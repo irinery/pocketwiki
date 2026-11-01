@@ -4,12 +4,12 @@
 **Data:** 2026-11-01
 **Issue:** [#31](https://github.com/irinery/pocketwiki/issues/31)
 **Estado de evolução:** Draft
-**Versão da RFC:** 0.1.0
+**Versão da RFC:** 0.2.0
 **Status:** COMPLETO
 **Fases:** 2 arquivos a gerar
 **Gerado por:** Codex, sessão New Harness
 
-> COMPLETO significa especificação do draft preenchida; não significa aprovação, implementação ou estabilidade pública. Todos os endpoints harness.v1, módulos e limites abaixo são propostas. O endpoint atual POST /v1/kernel permanece compatível. Primitivos deste cabeçalho: uuid = UUID RFC 4122 canônico minúsculo; sha1 = 40 hex; sha256 = 64 hex; int = inteiro JSON seguro 0..9007199254740991 salvo exit_code, que aceita -255..255; string = UTF-8; `?` = opcional/ausente, nunca null implícito; array[T] = lista homogênea; enum[...] = lista fechada. Timestamps são int em ms UTC. Campos desconhecidos de comando são rejeitados; campos opcionais novos em resposta exigem minor negociado. Fase pode ser implementada com este cabeçalho + seu bloco: tipos são repetidos deliberadamente.
+> COMPLETO significa especificação do draft preenchida; não significa aprovação, implementação ou estabilidade pública. Todos os endpoints harness.v1, módulos e limites abaixo são propostas. O endpoint atual POST /v1/kernel permanece compatível. Primitivos deste cabeçalho: uuid = UUID RFC 4122 canônico minúsculo; sha1 = 40 hex; sha256 = 64 hex; int = inteiro JSON seguro 0..9007199254740991 salvo exit_code, que aceita -255..255; string = UTF-8; `?` = opcional/ausente, nunca null implícito; array[T] = lista homogênea; enum[...] = lista fechada. Timestamps são int em ms UTC. Campos desconhecidos de comando são rejeitados; campos opcionais novos em resposta exigem minor negociado. Tipos são repetidos por fase. Regras de transporte, paginação, sessão e canonicalização são normativas em contratos-integracao-v0.2.md, que integra o cabeçalho desta RFC.
 
 > Tipo transversal `HarnessError = {code:string (enum da interface), message:string (0..1024 bytes redigidos), correlation_id:uuid, retryable:bool}`. Em wire, bool = boolean JSON. Identidade e scopes são obtidos do transporte autenticado, nunca de um campo user_id escolhido pelo cliente.
 
@@ -45,11 +45,11 @@ Arquivos de contrato serão gerados em `docs/technical-contract/new-harness/envi
 - PocketWiki + PocketKernel + MiddlewareAuth é autoridade deste domínio; PocketWiki não lê store privado de integração externa.
 - Auth por principal/environment + scope a cada ação. IDs de request e hashes não são credenciais.
 - Erro de domínio serializa como `HarnessError {code:string, message:string, correlation_id:uuid, retryable:bool}`; message máximo 1024 bytes e redigida, code limitado à lista da fase.
-- APIs propostas ficam sob `/v1/harness` no Kernel e `/api/harness` na fachada PocketWiki; o identificador canônico abaixo é a operação de domínio. E0 materializa em schemas o mapa de transporte definido na arquitetura, sem alterar semântica.
+- APIs propostas ficam sob `/v1/harness` no Kernel e `/api/harness` na fachada PocketWiki; o identificador canônico abaixo é a operação de domínio. E0 materializa o mapa da arquitetura e contratos-integracao-v0.2.md, sem decisões implícitas.
 - Limites bytes são bytes UTF-8; limites em caracteres são Unicode scalars. Strings gerais 4096 bytes e arrays gerais 100 itens, salvo regra específica.
 
 ### Definition of Done global
-- [ ] testes 01-01..01-04 e 02-01..02-04 executados através de interfaces reais
+- [ ] todos os cenários numerados das fases 01 e 02 executados através de interfaces reais
 - [ ] JS e Swift aceitam/rejeitam o mesmo corpus de contratos
 - [ ] revisão humana/técnica e E2E cumulativo no SHA integrado da etapa
 - [ ] sem regressão em memória/sessões v1, wiki, MCP Evidence e modo externo
@@ -70,7 +70,7 @@ Parear ambientes com identidade e scopes próprios e manter um supervisor de con
 
 **Dependências repetidas:** RFC-0002/01/02, RFC-0006/01.
 
-**Posse de arquivos:** PocketWiki: `src/harness/environments/`, `Sources/PocketWikiMac/Services/Harness/Environments/`, `Tests/Harness/environments/`. PocketKernel (outro repo): novo módulo lógico `harness/environments` e seus testes; adapter para store existente, sem substituir serviços privados de outro domínio.  Os paths são destinos propostos; arquivos atuais compartilhados só mudam pelo integrador E6. UI de teste usa registro por slot, sem tocar o shell de produção.
+**Posse de arquivos:** MiddlewareAuth: `internal/harness-sessions/` (exclusivo desta lane E3). PocketWiki: `src/harness/environments/`, `Sources/PocketWikiMac/Services/Harness/Environments/`, `Tests/Harness/environments/`. PocketKernel (outro repo): novo módulo lógico `harness/environments` e seus testes; adapter para store existente, sem substituir serviços privados de outro domínio.  Os paths são destinos propostos; arquivos compartilhados de serviços só mudam pelo integrador da etapa; shell de produção pelo integrador E6. UI de teste usa registro por slot, sem tocar o shell de produção.
 
 ### Testes obrigatórios
 
@@ -79,7 +79,7 @@ Escrever os cenários antes da implementação. Fixtures substituem apenas front
 ```
 TESTE 01-01 [caminho feliz]
 dado: challenge válido com fingerprint confirmado
-quando: parear e abrir thread remoto
+quando: parear e chamar runtime.dispatch no agregado remoto de teste já integrado E1
 então: environment e scopes persistidos; execução ocorre somente no servidor
 
 TESTE 01-02 [falha]
@@ -88,7 +88,7 @@ quando: submeter novo comando
 então: ERR_FORBIDDEN e stream fechado; sem fallback local
 
 TESTE 01-03 [edge case]
-dado: 2 views abrem mesmo environment e rede oscila
+dado: 2 assinantes do cliente base abrem mesmo environment e rede oscila
 quando: reconectar
 então: 1 supervisor/stream e projeção monotônica
 
@@ -96,6 +96,16 @@ TESTE 01-04 [segurança]
 dado: challenge reutilizado, Origin hostil ou endpoint com userinfo
 quando: parear
 então: ERR_PAIRING/ERR_INVALID e nenhuma credencial persistida
+
+TESTE 01-05 [integração]
+dado: projeção válida com mais entidades que page_size e cache cliente apagado
+quando: ler ao menos 2 páginas do mesmo snapshot enquanto ocorre mutação concorrente
+então: snapshot consistente na boundary e evento posterior aplicado 1 vez, sem duplicação
+
+TESTE 01-06 [integração]
+dado: cliente limpo e MiddlewareAuth real com identidade de teste
+quando: parear, chamar API, renovar e revogar conexão
+então: primeiro bearer funciona; refresh anterior e access token revogado são recusados; nenhum secret no ledger
 
 ```
 
@@ -124,7 +134,7 @@ interface:
       obrigatório: true
       validação: "confirmado na tela dos 2 dispositivos"
     - campo: requested_scopes
-      tipo: "array[enum[read,submit,approve,execute]]"
+      tipo: "array[enum[read,submit,approve,execute,context.read,memory.personal.read,memory.write,scm.write,scm.merge]]"
       obrigatório: true
       validação: "subset da concessão do host"
   saída:
@@ -136,7 +146,9 @@ interface:
         - campo: connection_id
           tipo: "uuid"
         - campo: granted_scopes
-          tipo: "array[enum[read,submit,approve,execute]]"
+          tipo: "array[enum[read,submit,approve,execute,context.read,memory.personal.read,memory.write,scm.write,scm.merge]]"
+        - campo: grant
+          tipo: "SessionGrant"
     falha:
       valores_possíveis:
         - code: ERR_INVALID
@@ -169,7 +181,7 @@ interface:
       observável: "estado de erro/pending explícito; nenhuma mudança silenciosa de provider, conta, root ou ambiente"
 ```
 
-O envelope de transporte de comando é `HarnessCommand {protocol_major:int=1, command_id:uuid, environment_id:uuid, expected_revision:int, operation:string, input:<entrada tipada acima>}`. `operation` é o nome canônico desta interface; input não aceita campos extras. Erro segue HarnessError do cabeçalho; resposta de sucesso contém exatamente os campos de saída declarados. Interface de view é local e não cria um endpoint HTTP novo.
+Para operações da classe mutation, o envelope de transporte é `HarnessCommand {protocol_major:int=1, command_id:uuid, environment_id:uuid, expected_revision:int, operation:string, input:<entrada tipada acima>}`. `operation` é o nome canônico desta interface; input não aceita campos extras. Erro segue HarnessError do cabeçalho; resposta de sucesso contém exatamente os campos de saída declarados. Leituras usam a rota query e operações bootstrap usam os endpoints diretos de R4, sem receipt; interface de view é local. O registry não encaminha bootstrap pelo ledger.
 
 **Interface complementar: environments.challenge**
 
@@ -180,9 +192,9 @@ interface:
   nome: "environments.challenge"
   entrada:
     - campo: requested_scopes
-      tipo: "array[enum[read,submit,approve,execute]]"
+      tipo: "array[enum[read,submit,approve,execute,context.read,memory.personal.read,memory.write,scm.write,scm.merge]]"
       obrigatório: true
-      validação: "1..4 únicos; host autenticado"
+      validação: "1..9 únicos; host autenticado"
   saída:
     sucesso:
       tipo: Result
@@ -277,6 +289,60 @@ interface:
       observável: "estado de erro/pending explícito; nenhuma mudança silenciosa de provider, conta, root ou ambiente"
 ```
 
+**Interface complementar: environments.refresh**
+
+```yaml
+interface:
+  id: IF-0010-01-4
+  tipo: function
+  nome: "environments.refresh"
+  entrada:
+    - campo: session_id
+      tipo: "uuid"
+      obrigatório: true
+      validação: "sessão emitida para este dispositivo"
+    - campo: refresh_token
+      tipo: "string"
+      obrigatório: true
+      validação: "32 bytes base64url; nunca em URL/log"
+  saída:
+    sucesso:
+      tipo: Result
+      campos:
+        - campo: grant
+          tipo: "SessionGrant"
+    falha:
+      valores_possíveis:
+        - code: ERR_INVALID
+          quando: "entrada malformada, enum fora da lista ou limite excedido"
+          ação: "400; rejeitar antes de I/O"
+        - code: ERR_FORBIDDEN
+          quando: "principal sem autorização para recurso/ação"
+          ação: "403; não consultar nem modificar recurso"
+        - code: ERR_TIMEOUT
+          quando: "deadline da operação excedido"
+          ação: "504; manter intenção/receipt e expor estado pending ou uncertain conforme efeito"
+        - code: ERR_UNAVAILABLE
+          quando: "dependência/store indisponível"
+          ação: "503; preservar estado confirmado e permitir retry idempotente"
+        - code: ERR_INCOMPATIBLE
+          quando: "versão major ou schema obrigatório incompatível"
+          ação: "426; não aplicar payload"
+        - code: ERR_PAIRING
+          quando: "challenge inválido/expirado/usado"
+          ação: "403; não emitir credencial"
+        - code: ERR_IDENTITY_CHANGED
+          quando: "fingerprint diverge"
+          ação: "409; limpar sessão de transporte e exigir novo vínculo"
+        - code: ERR_OFFLINE
+          quando: "ambiente desconectado"
+          ação: "503; preservar draft"
+  comportamento_em_falha:
+    - condição: "qualquer erro da lista fechada acima"
+      ação: "não assumir sucesso; preservar draft e última revisão confirmada; exibir code com correlation_id; mutação sem confirmação exige consulta do receipt antes de retry"
+      observável: "estado de erro/pending explícito; nenhuma mudança silenciosa de provider, conta, root ou ambiente"
+```
+
 Interfaces complementares são operações do mesmo registro tipado, usam o envelope e a lista fechada de erros desta fase. Leitura não cria efeito. Mutação passa por policy, CAS e receipt; todas validam os mesmos limites antes de I/O.
 
 ### Estruturas de dados
@@ -288,27 +354,37 @@ campos:
     tipo: "uuid"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: endpoint
     tipo: "string"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: server_fingerprint
     tipo: "sha256"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: state
     tipo: "enum[offline,connecting,ready,stale,auth_required,incompatible]"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: last_seq
     tipo: "int"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: connection_id
+    tipo: "uuid"
+    obrigatório: true
+    default: "ausente"
+    limite: "conforme contratos-integracao-v0.2.md"
+  - nome: granted_scopes
+    tipo: "array[enum[read,submit,approve,execute,context.read,memory.personal.read,memory.write,scm.write,scm.merge]]"
+    obrigatório: true
+    default: "ausente"
+    limite: "conforme contratos-integracao-v0.2.md"
 ```
 
 ```yaml
@@ -318,19 +394,101 @@ campos:
     tipo: "uuid"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: secret_sha256
     tipo: "sha256"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: expires_at_ms
     tipo: "int"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: consumed
     tipo: "bool"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+```
+
+```yaml
+tipo: SessionGrant
+campos:
+  - nome: session_id
+    tipo: "uuid"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: principal_id
+    tipo: "uuid"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: access_token
+    tipo: "string"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: refresh_token
+    tipo: "string"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: token_type
+    tipo: "enum[Bearer]"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: expires_at_ms
+    tipo: "int"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: refresh_expires_at_ms
+    tipo: "int"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: audience
+    tipo: "string"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: scopes
+    tipo: "array[enum[read,submit,approve,execute,context.read,memory.personal.read,memory.write,scm.write,scm.merge]]"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+```
+
+### Snapshot persistido desta fase
+
+```yaml
+tipo: FeatureSnapshot
+campos:
+  - nome: snapshot_id
+    tipo: "uuid"
+    obrigatório: true
+    default: nenhum
+    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+  - nome: revision
+    tipo: "int"
+    obrigatório: true
+    default: nenhum
+    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+  - nome: as_of_seq
+    tipo: "int"
+    obrigatório: true
+    default: nenhum
+    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+  - nome: next_cursor
+    tipo: "string?"
+    obrigatório: false
+    default: nenhum
+    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+  - nome: connections
+    tipo: "array[EnvironmentConnection]"
     obrigatório: true
     default: nenhum
     limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
@@ -343,6 +501,9 @@ campos:
 3. Transporte conectado não significa projeção atualizada. Ready exige capabilities + snapshot; snapshot antigo não sobrescreve seq maior.
 4. Pareamento TTL 300000 ms, uso único, no máximo 5 falhas por challenge. Revogação fecha stream e impede novos comandos. Challenge não aparece em logs/URL.
 5. Offline conserva leitura com indicador stale. Mutação offline fica draft local; reenviar usa command_id original só após usuário confirmar e reconciliar receipt.
+6. pair e refresh são endpoints de bootstrap diretos, fora do dispatcher autenticado genérico. pair autentica challenge_secret de uso único e fingerprint confirmado; refresh autentica o refresh token. Respostas sensíveis TLS/no-store entregam SessionGrant somente ao dispositivo solicitante; grant jamais entra em receipt, snapshot, evento ou export. connection_id sozinho não autoriza chamadas.
+7. MiddlewareAuth real emite bearer opaco de 32 bytes aleatórios, TTL 900000 ms e refresh rotativo de 32 bytes, TTL absoluto 2592000000 ms. Validar por introspecção autenticada server-to-server (sem cache positivo) em cada mutação; stream revalida a cada 1000 ms e em eventos de revogação. Refresh consumido não pode repetir; se perder resposta, novo pareamento. Revogação por connection_id invalida família inteira antes de responder. Contrato detalhado de emissão/introspecção consta em contratos-integracao-v0.2.md.
+8. FeatureSnapshot é projeção persistida de leitura, nunca resultado de comando. Paginação usa snapshot_id/as_of_seq fixos, cursor opaco vinculado à identidade e TTL 600000 ms, 100 entidades por página no total e 4 MiB por página; ordenação por coleção e ID. Cursor novo ausente na última página. Cliente monta todas as páginas antes da troca atômica de estado e aplica somente eventos seq > as_of_seq; cursor expirado reinicia snapshot sem perder draft local. Entidade >4 MiB é rejeitada na escrita, sem truncamento silencioso. Arrays vazios e ausência de dados são estados iniciais válidos, sem IDs fictícios.
 
 | Autorização/versão | Estado confirmado | Resultado | Ação |
 | --- | --- | --- | --- |
@@ -372,14 +533,14 @@ campos:
 - id: DEP-0010-01-2
   tipo: componente_interno
   nome: "RFC-0002 fases 01 e 02"
-  versão: "0.1.0"
+  versão: "0.2.0"
   papel: "interface liberada em gate anterior"
   fallback: "ERR_UNAVAILABLE; não implementar cópia nesta worktree"
   obrigatória: true
 - id: DEP-0010-01-3
   tipo: componente_interno
   nome: "RFC-0006 fase 01"
-  versão: "0.1.0"
+  versão: "0.2.0"
   papel: "interface liberada em gate anterior"
   fallback: "ERR_UNAVAILABLE; não implementar cópia nesta worktree"
   obrigatória: true
@@ -396,7 +557,7 @@ campos:
 
 - [ ] módulo e interface environments.pair exercitáveis sem integração com shell compartilhado
 - [ ] fixtures reais sanitizadas, falhas e relatório de execução com SHA base e final
-- [ ] todos os testes 01-01 a 01-04 passando
+- [ ] todos os testes 01-01 a 01-06 passando
 - [ ] nenhum arquivo fora da posse da lane alterado; mudanças compartilhadas entregues como instrução ao integrador
 
 ## 3.2 — Fase 02: Projeção e interface cliente
@@ -414,7 +575,7 @@ Superfície web e macOS do domínio, consumindo o contrato confirmado sem execut
 
 **Dependências repetidas:** RFC-0010/01 + NH-00 + NH-TEST.
 
-**Posse de arquivos:** `src/harness-ui/environments/`, `Sources/PocketWikiMac/Views/Harness/Environments/`, `Tests/HarnessUI/environments/`.  Os paths são destinos propostos; arquivos atuais compartilhados só mudam pelo integrador E6. UI de teste usa registro por slot, sem tocar o shell de produção.
+**Posse de arquivos:** `src/harness-ui/environments/`, `Sources/PocketWikiMac/Views/Harness/Environments/`, `Tests/HarnessUI/environments/`.  Os paths são destinos propostos; arquivos compartilhados de serviços só mudam pelo integrador da etapa; shell de produção pelo integrador E6. UI de teste usa registro por slot, sem tocar o shell de produção.
 
 ### Testes obrigatórios
 
@@ -458,7 +619,7 @@ interface:
     - campo: snapshot
       tipo: "FeatureSnapshot"
       obrigatório: true
-      validação: "resultado tipado da fase 01; mesmo environment/thread"
+      validação: "projeção persistida paginada; mesmo snapshot_id/environment/thread; nunca resposta de comando"
     - campo: client_action
       tipo: "enum[open,refresh,submit,dismiss]"
       obrigatório: true
@@ -507,7 +668,7 @@ interface:
       observável: "estado de erro/pending explícito; nenhuma mudança silenciosa de provider, conta, root ou ambiente"
 ```
 
-O envelope de transporte de comando é `HarnessCommand {protocol_major:int=1, command_id:uuid, environment_id:uuid, expected_revision:int, operation:string, input:<entrada tipada acima>}`. `operation` é o nome canônico desta interface; input não aceita campos extras. Erro segue HarnessError do cabeçalho; resposta de sucesso contém exatamente os campos de saída declarados. Interface de view é local e não cria um endpoint HTTP novo.
+Para operações da classe mutation, o envelope de transporte é `HarnessCommand {protocol_major:int=1, command_id:uuid, environment_id:uuid, expected_revision:int, operation:string, input:<entrada tipada acima>}`. `operation` é o nome canônico desta interface; input não aceita campos extras. Erro segue HarnessError do cabeçalho; resposta de sucesso contém exatamente os campos de saída declarados. Leituras usam a rota query e operações bootstrap usam os endpoints diretos de R4, sem receipt; interface de view é local. O registry não encaminha bootstrap pelo ledger.
 
 Interfaces complementares são operações do mesmo registro tipado, usam o envelope e a lista fechada de erros desta fase. Leitura não cria efeito. Mutação passa por policy, CAS e receipt; todas validam os mesmos limites antes de I/O.
 
@@ -520,27 +681,37 @@ campos:
     tipo: "uuid"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: endpoint
     tipo: "string"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: server_fingerprint
     tipo: "sha256"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: state
     tipo: "enum[offline,connecting,ready,stale,auth_required,incompatible]"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: last_seq
     tipo: "int"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: connection_id
+    tipo: "uuid"
+    obrigatório: true
+    default: "ausente"
+    limite: "conforme contratos-integracao-v0.2.md"
+  - nome: granted_scopes
+    tipo: "array[enum[read,submit,approve,execute,context.read,memory.personal.read,memory.write,scm.write,scm.merge]]"
+    obrigatório: true
+    default: "ausente"
+    limite: "conforme contratos-integracao-v0.2.md"
 ```
 
 ```yaml
@@ -550,42 +721,102 @@ campos:
     tipo: "uuid"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: secret_sha256
     tipo: "sha256"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: expires_at_ms
     tipo: "int"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: consumed
     tipo: "bool"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+```
+
+```yaml
+tipo: SessionGrant
+campos:
+  - nome: session_id
+    tipo: "uuid"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: principal_id
+    tipo: "uuid"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: access_token
+    tipo: "string"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: refresh_token
+    tipo: "string"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: token_type
+    tipo: "enum[Bearer]"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: expires_at_ms
+    tipo: "int"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: refresh_expires_at_ms
+    tipo: "int"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: audience
+    tipo: "string"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: scopes
+    tipo: "array[enum[read,submit,approve,execute,context.read,memory.personal.read,memory.write,scm.write,scm.merge]]"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
 ```
 
 ```yaml
 tipo: FeatureSnapshot
 campos:
-  - nome: environment_id
+  - nome: snapshot_id
     tipo: "uuid"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
-  - nome: connection_id
-    tipo: "uuid"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: revision
+    tipo: "int"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
-  - nome: granted_scopes
-    tipo: "array[enum[read,submit,approve,execute]]"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: as_of_seq
+    tipo: "int"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: next_cursor
+    tipo: "string?"
+    obrigatório: false
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: connections
+    tipo: "array[EnvironmentConnection]"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
 ```
 
 ```yaml
@@ -595,37 +826,37 @@ campos:
     tipo: "uuid"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: thread_id
     tipo: "uuid?"
     obrigatório: false
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: revision
     tipo: "int"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: status
     tipo: "enum[loading,ready,stale,error]"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: draft
     tipo: "string"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: data
     tipo: "FeatureSnapshot?"
     obrigatório: false
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: error
     tipo: "HarnessError?"
     obrigatório: false
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
 ```
 
 ### Regras de comportamento
@@ -635,6 +866,9 @@ campos:
 3. Transporte conectado não significa projeção atualizada. Ready exige capabilities + snapshot; snapshot antigo não sobrescreve seq maior.
 4. Pareamento TTL 300000 ms, uso único, no máximo 5 falhas por challenge. Revogação fecha stream e impede novos comandos. Challenge não aparece em logs/URL.
 5. Offline conserva leitura com indicador stale. Mutação offline fica draft local; reenviar usa command_id original só após usuário confirmar e reconciliar receipt.
+6. pair e refresh são endpoints de bootstrap diretos, fora do dispatcher autenticado genérico. pair autentica challenge_secret de uso único e fingerprint confirmado; refresh autentica o refresh token. Respostas sensíveis TLS/no-store entregam SessionGrant somente ao dispositivo solicitante; grant jamais entra em receipt, snapshot, evento ou export. connection_id sozinho não autoriza chamadas.
+7. MiddlewareAuth real emite bearer opaco de 32 bytes aleatórios, TTL 900000 ms e refresh rotativo de 32 bytes, TTL absoluto 2592000000 ms. Validar por introspecção autenticada server-to-server (sem cache positivo) em cada mutação; stream revalida a cada 1000 ms e em eventos de revogação. Refresh consumido não pode repetir; se perder resposta, novo pareamento. Revogação por connection_id invalida família inteira antes de responder. Contrato detalhado de emissão/introspecção consta em contratos-integracao-v0.2.md.
+8. FeatureSnapshot é projeção persistida de leitura, nunca resultado de comando. Paginação usa snapshot_id/as_of_seq fixos, cursor opaco vinculado à identidade e TTL 600000 ms, 100 entidades por página no total e 4 MiB por página; ordenação por coleção e ID. Cursor novo ausente na última página. Cliente monta todas as páginas antes da troca atômica de estado e aplica somente eventos seq > as_of_seq; cursor expirado reinicia snapshot sem perder draft local. Entidade >4 MiB é rejeitada na escrita, sem truncamento silencioso. Arrays vazios e ausência de dados são estados iniciais válidos, sem IDs fictícios.
 
 | Autorização/versão | Estado confirmado | Resultado | Ação |
 | --- | --- | --- | --- |
@@ -666,7 +900,7 @@ No cliente: renderizar 100 itens por página; draft 32768 bytes; erro 1024 bytes
 - id: DEP-0010-02-2
   tipo: componente_interno
   nome: "RFC-0010 fase 01"
-  versão: "0.1.0"
+  versão: "0.2.0"
   papel: "serviço e projeção tipados"
   fallback: "cache de leitura stale e ação desabilitada"
   obrigatória: true
@@ -725,4 +959,4 @@ Usar deadline numérico desta RFC com relógio injetável nos testes. Não infer
 - Executar efeito direto no cliente: descartada por quebrar autoridade do environment e idempotência.
 - Testar apenas reducers com eventos pré-normalizados: descartada porque não valida adapter, transporte e persistência reais.
 
-Evolução após revisão: atualizar este mesmo documento para 0.2.0 com changelog de decisão, gerar os 2 contratos na ordem do mapa, implementar lanes do plano e só então propor estado Accepted. Mudança incompatível de wire exige protocol major novo; status COMPLETO não permite pular gate.
+Evolução após revisão: atualizar este mesmo documento para 0.3.0 com changelog de decisão, gerar os 2 contratos na ordem do mapa, implementar lanes do plano e só então propor estado Accepted. Mudança incompatível de wire exige protocol major novo; status COMPLETO não permite pular gate.

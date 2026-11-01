@@ -1,6 +1,6 @@
 # New Harness — arquitetura e implementação proposta
 
-Estado: Draft · versão 0.1.0 · 2026-11-01. Este documento explica como implementar as RFCs 0002–0016; nenhum endpoint novo descrito aqui já está implementado.
+Estado: Draft · versão 0.2.0 · 2026-11-01. Este documento explica como implementar as RFCs 0002–0016; nenhum endpoint novo descrito aqui já está implementado.
 
 ## Produto e fronteiras
 
@@ -40,80 +40,19 @@ Leitura local feita na revisão `9762bed79b51791e5115366470d8ee472d8e6d8e`, bran
 
 `isStreaming` no cliente atual não implica transporte incremental: `query()` usa `URLSession.data(for:)` e parseia a resposta inteira. `cancel()` cancela a Task local e não confirma interrupção no servidor. Esses dois pontos não devem ser mascarados por uma UI nova.
 
-## Contrato transversal v1 proposto
+## Contratos transversais 0.2.0
 
-Todos os tipos são fechados e geram JSON Schema, tipos Swift e fixtures JS em E0. A serialização de wire usa `snake_case`. `uuid`, `sha1`, `sha256`, enums e limites obedecem aos cabeçalhos das RFCs. Nenhum campo `any` é permitido. IDs e hashes não são secrets.
+Os [contratos de integração](contratos-integracao-v0.2.md) são parte normativa dos cabeçalhos das RFCs. Definem snapshots persistidos paginados, contexto preparado/retido/resolvido, ações revisáveis e aprovação, bootstrap local, pareamento/renovação/revogação e leitura de histórico. Cada RFC define os tipos e operações próprios; E0 gera schemas dessas definições, sem completar lacunas por adivinhação.
 
-```typescript
-type HarnessError = {
-  code: string; // enum fechado por operação na RFC correspondente
-  message: string; // <=1024 bytes, redigida
-  correlation_id: UUID;
-  retryable: boolean;
-};
-type CommandReceipt = {
-  command_id: UUID;
-  receipt_id: UUID;
-  environment_id: UUID;
-  revision: number; // inteiro seguro >=0
-  state: "accepted" | "duplicate" | "pending" | "succeeded" | "failed" | "uncertain";
-  result_ref?: UUID;
-};
-type StreamEnvelope = {
-  protocol_major: 1;
-  event_id: UUID;
-  environment_id: UUID;
-  thread_id: UUID;
-  seq: number; // monotônico por thread
-  committed_at_ms: number;
-  operation: string; // enum das operações registradas, não operação arbitrária
-  payload_ref: UUID; // evento persistido, validado pelo schema da operação
-  payload: HarnessEventPayload; // união fechada descrita no registro abaixo
-};
-```
+Envelope de comando autenticado: `{protocol_major:int=1,command_id:uuid,environment_id:uuid,expected_revision:int,operation:OperationID,input:OperationInput}`. OperationID é enum das operações declaradas em cada bloco de interface de domínio (exclui view.reduce local); OperationInput é união discriminada por esse ID. Campos desconhecidos são rejeitados. ID e hash não são credenciais. canonicalização para idempotência usa RFC 8785 JCS do envelope, excluindo command_id; mesmo ID/hash retorna receipt existente e payload diferente retorna ERR_CONFLICT.
 
-O stream entrega `payload` inline como união discriminada pelo `operation` e schema de evento; `payload_ref` permite recuperar o mesmo evento persistido após truncamento. Não existe campo livre para objetos arbitrários. Cada módulo registra o schema de payload e a projeção no registro de E0; registro é por manifestos de módulos, sem editar uma switch global em cada lane.
+`CommandReceipt` = `{command_id:uuid,receipt_id:uuid,environment_id:uuid,revision:int,state:enum[accepted,pending,succeeded,failed,uncertain],duplicate:bool,result_ref:uuid?}`. `POST /v1/harness/commands` retorna 202 para intenção nova e 200 para duplicata. `GET /v1/harness/receipts/{command_id}` retorna esse tipo; `GET /v1/harness/results/{result_ref}` retorna a saída tipada da operação. Erros HTTP fechados desta fronteira: 400 ERR_INVALID, 403 ERR_FORBIDDEN, 404 ERR_NOT_FOUND, 409 ERR_CONFLICT/ERR_PENDING, 413 ERR_PAYLOAD_LIMIT, 426 ERR_INCOMPATIBLE, 429 ERR_RATE_LIMIT, 503 ERR_UNAVAILABLE, 504 ERR_TIMEOUT. Erros de domínio da RFC vêm no resultado failed. Nunca confundir receipt com projeção restaurável da tela.
 
-| Fronteira | Entrada | Saída | Falha observável |
-| --- | --- | --- | --- |
-| `GET /v1/harness/capabilities` | sessão autenticada | `{protocol_major:1, protocol_minor:0, schema_sha256:sha256, environment_id:uuid, operations:array[string]}`; operations enum derivado dos manifestos; <=100 | 401/403/426/503, nunca iniciar login como efeito do probe |
-| `POST /v1/harness/commands` | envelope tipado da RFC; command_id obrigatório | HTTP 202 com CommandReceipt; HTTP 200 se receipt já existe | 400/403/409/413/422/426/429/503/504; sem repetir intenção incerta |
-| `GET /v1/harness/receipts/{command_id}` | UUID + identidade original | receipt atual com `result_ref` quando houver | 404 sem vazar intenção de outro principal; 503 preserva comando |
-| `GET /v1/harness/results/{result_ref}` | UUID autorizado | união fechada dos resultados de RFCs; objeto de saída exato da operação | 404/403/426; resultado não disponível: 409 pending |
-| `GET /v1/harness/threads/{id}/snapshot` | thread UUID autorizada | `{thread_id:uuid, revision:int, last_seq:int, modules:array[ModuleSnapshot]}` | 403/404/426/503; não buscar outra thread por fallback |
-| `GET /v1/harness/threads/{id}/events?after_seq=N` | inteiro >=0, bearer e Last-Event-ID opcionais coerentes | SSE com ID seq, envelope e payload tipado, após commit | 409 cursor expirado, 401/403 revogado, 426 major incompatível |
-| `GET /v1/harness/events/{payload_ref}` | evento UUID autorizado | envelope e payload originais | 403/404/410 se retenção expirou, pedir snapshot |
+`GET /v1/harness/capabilities` retorna `{protocol_major:1,protocol_minor:0,schema_sha256:sha256,environment_id:uuid,operations:OperationID[]}` (máximo 100; somente operações entregues/habilitadas). Snapshot e eventos seguem R1; operações somente de leitura usam `POST /v1/harness/query/{operation}` autenticado/no-store com entrada específica da RFC, sem exigir revisão ou criar receipt. O registry E0 classifica cada operação como read/mutation/bootstrap/local; queries e commands recusam operações da classe errada com ERR_INVALID.
 
-`ModuleSnapshot` é união discriminada `{module:<ID fechado>, data:<tipo de resultado da RFC>, revision:int}`. Somente módulos habilitados e autorizados aparecem. Subtipos são os `FeatureSnapshot` de cada RFC, não um mapa sem schema. Payload de evento usa o registro tipado: runtime→RuntimeEvent, providers→ProviderBinding, threads→TimelineItem, composer→ComposerDraft, permissions→PermissionRequest, workspaces→WorkspaceLease, checkpoints→Checkpoint, terminal→TerminalFrame, environments→EnvironmentConnection, orchestrator-mcp→MCPThreadSummary, handoffs→ThreadLineage, memory→MemoryHit, source-control→PullRequestLink, navigation→NavigationEntry, diagnostics→ComponentHealth. Mudanças adicionais exigem versão minor, schema e fixture novos antes de uso.
+`StreamEnvelope` = `{protocol_major:1,event_id:uuid,environment_id:uuid,thread_id:uuid?,seq:int,committed_at_ms:int,module:ModuleID,delivery:enum[inline,reference],payload_ref:uuid?,payload:ModuleEvent?}`. entity_key é chave canônica definida em R1, com até 1024 bytes. seq é monotônico por agregado stream (environment ou thread), sem comparar números de agregados diferentes. Inline exige payload e proíbe payload_ref; reference proíbe payload e exige recuperar referência autenticada. Evento emitido somente após commit. Heartbeat 15000 ms, frame 256 KiB, corpo referenciado 4 MiB. `ModuleEvent` é união fechada dos registros de estado definidos na RFC do módulo, com wrapper `{entity_type:TypeID,entity_key:string,change:enum[upsert,delete],value:EntityRecord?}`; upsert exige registro integral e delete proíbe value. Threads incluem ConversationMessage, RunRecord, QueueEntry, ThreadState e TimelineItem; não apenas texto do assistant. Em fila usar position/message_id; texto incremental usa offset_bytes/complete definidos em TimelineItem. Tipos admissíveis por módulo são os registros das coleções/singletons de seu FeatureSnapshot. Exceções de execução (RuntimeEvent, TerminalFrame) têm discriminador explícito no schema do módulo e não substituem projeção persistida.
 
-Streams são HTTP SSE com header Authorization, lidos por fetch/URLSession; não transportar bearer por query string. Heartbeat de 15000 ms serve a liveness, não altera lifecycle. Servidor retém conexão sem pedir histórico de todas as threads. Frame máximo 256 KiB; snapshot 4 MiB; leitura paginada no limite da RFC. Em caso de gap, pedir snapshot e depois aplicar apenas seq maior.
-
-As fachadas do PocketWiki espelham os caminhos em `/api/harness` com as mesmas regras e payloads. Elas verificam identidade e encaminham ao environment explícito. Nunca usam bearer privilegiado comum para transformar qualquer usuário web em administrador. Memória/composer locais usam o mesmo envelope, recibos e escopo da identidade, mas não passam a pertencer ao store do Kernel. O registro mantém `owner` e rota por operação. Rotas antigas `/api/memory/*` e `/v1/kernel` continuam disponíveis com seu contrato atual.
-
-## Ações complementares e estado consultável
-
-O método principal de cada RFC descreve a ação crítica e seus testes. O restante da superfície é implementado pelo mesmo dispatcher, com entradas/saídas abaixo, limites/erros da respectiva RFC e nenhum novo privilégio implícito. São contratos propostos, não escolhas deixadas ao implementador. Todos recebem `command_id`, `environment_id` e `expected_revision` no envelope quando alteram estado. Leituras usam `GET /v1/harness/query/{operation}` com parâmetros tipados e resultado correspondente; question/text com dado sensível usa POST autenticado e `Cache-Control: no-store`.
-
-| RFC | Operação complementar | Entrada específica tipada | Saída específica tipada |
-| --- | --- | --- | --- |
-| 0003 | `providers.catalog` | `{project_id:uuid?}` | `{revision:int, bindings:ProviderBinding[], capabilities:ProviderCapabilities[]}` |
-| 0004 | `threads.create` / `threads.list` | create `{project_id:uuid?,title:string<=200}`; list `{after_id:uuid?,limit:int1..100}` | create `ThreadState`; list `{threads:ThreadState[],next_id:uuid?}` |
-| 0005 | `composer.stage` / `composer.draft.save` | stage `{thread_id:uuid,filename:string<=255,mime:enum[text/plain,text/markdown,image/png,image/jpeg],content_base64:string<=5592408}`; save `ComposerDraft` | stage `ContextReference`; save `{draft_id:uuid,revision:int}` |
-| 0006 | `permissions.pending` / `permissions.mode` | pending `{thread_id:uuid}`; mode `{thread_id:uuid,mode:enum[supervised,edits,full]}` | pending `PermissionRequest[]`; mode `{effective_mode:enum[supervised,edits,full],revision:int}` |
-| 0007 | `workspaces.release` / `workspaces.settings` | release `{lease_id:uuid,remove:bool}`; settings `{project_id:uuid?,patch:WorkspaceSettings,reset:bool}` | release `{state:enum[idle,retained,removed]}`; settings `WorkspaceSettings` |
-| 0008 | `checkpoints.capture` / `checkpoints.preview` / `checkpoints.diff` | capture `{run_id:uuid,boundary:enum[before,after]}`; preview `{checkpoint_id:uuid}`; diff `{thread_id:uuid,scope:enum[turn,branch],run_id:uuid?,base_sha:sha1?}` | capture `Checkpoint`; preview `{checkpoint_id:uuid,preview_sha256:sha256,files:FileDelta[],workspace_revision:int}`; diff `{files:FileDelta[],patch:string<=2097152,truncated:bool}` |
-| 0009 | `terminal.input` / `terminal.resize` / `terminal.close` / `terminal.read` | input `{terminal_id:uuid,data_base64:string<=87384}`; resize `{terminal_id:uuid,cols:int20..400,rows:int5..200}`; close `{terminal_id:uuid}`; read `{terminal_id:uuid,after_seq:int>=0}` | input/resize/close `TerminalState`; read `{state:TerminalState,frames:TerminalFrame[],next_seq:int}` |
-| 0010 | `environments.challenge` / `environments.revoke` | challenge `{requested_scopes:enum[read,submit,approve,execute][]}`; revoke `{connection_id:uuid}` | challenge `{challenge_id:uuid,challenge_secret:string,server_fingerprint:sha256,expires_at_ms:int}` só para host autenticado; revoke `{revoked:bool}` |
-| 0011 | tools `harness.thread.*` | entrada do MCPThreadCall da RFC, validada por tool | resultado da RFC; mutation retorna receipt sem esperar conclusão |
-| 0012 | `handoffs.export` / `handoffs.import` | export `{handoff_id:uuid}`; import `{schema_version:1,source_environment_id:uuid,messages:HandoffMessage[],lineage:ThreadLineage,target_project_id:uuid?,package_sha256:sha256}` | export pacote dos mesmos campos; import `{handoff_id:uuid,thread_id:uuid,duplicate:bool}` |
-| 0013 | `memory.capture_scoped` / `memory.note.get` / `memory.note.put` / `memory.map_legacy` | capture `{namespace:MemoryNamespace,events:LegacyCaptureEvent[]}`; get `{namespace:MemoryNamespace}`; put `{namespace:MemoryNamespace,content:string<=16384 bytes,expected_revision:int}`; map `{legacy_session_id:uuid,namespace:MemoryNamespace}` | capture `{accepted_keys:string[]}`; get/put `{content:string,revision:int}`; map `{mapped:bool,session_id:uuid}` |
-| 0014 | `source_control.execute` / `source_control.links` | execute `{preview_id:uuid,action_sha256:sha256,head_sha:sha1,approval_id:uuid}`; links `{thread_id:uuid}` | execute `{action_id:uuid,state:enum[pending,succeeded,failed,uncertain]}`; links `PullRequestLink[]` |
-| 0015 | `navigation.list` | `{project_id:uuid?,section:enum[active,pinned,archived],after_position:int?,after_id:uuid?,revision:int?,limit:int1..100}` | `{entries:NavigationEntry[],notifications:InboxNotification[],revision:int,next_position:int?,next_id:uuid?}` |
-| 0016 | `diagnostics.export` | `{report_id:uuid,approval_preview_sha256:sha256}` | `{filename:string,sha256:sha256,size_bytes:int}`; arquivo só no diretório escolhido, download por referência autenticada |
-
-`LegacyCaptureEvent` repete o formato existente: `{event:enum[session-start,user-prompt-submit,assistant-response,stop,session-end],session_id:uuid,ingest_key:string regex[A-Za-z0-9_-]{1,64},prompt:string?<=8000 caracteres,message:string?<=8000 caracteres,provider_id:string?<=120,model_id:string?<=120}`. Prompt e message são obrigatórios respectivamente para user-prompt-submit e assistant-response; outros eventos não carregam texto. Capture scoped aceita 1..32 eventos.
-
-Segredos de challenge têm resposta excepcional de uso único, não entram em snapshot/export e não são persistidos em claro pelo servidor. Resultados normais nunca transportam tokens. Limites específicos de arrays de cada RFC prevalecem; os demais têm máximo 100 itens. Respostas que excedem orçamento paginam ou indicam truncamento explícito. Base64 é validado e o limite decodificado prevalece.
+As fachadas PocketWiki espelham caminhos `/v1/harness` em `/api/harness`. `owner` do registry define roteamento sem copiar store: memória/composer pertencem ao PocketWiki; runtime/execução ao Kernel. Sessão delegada é limitada por audience/principal/environment, nunca bearer administrativo compartilhado. Os endpoints públicos de pairing/refresh e internos do MiddlewareAuth são exceções sensíveis fora do dispatcher, definidos em R4. MiddlewareAuth real deve participar do gate E3 de sessão e do E6 completo.
 
 ## Implementação por repositório
 
@@ -123,7 +62,7 @@ Não decidir dependências de Go dentro de várias worktrees: E0 fixa essas vers
 
 As mudanças do Kernel ficam no próprio repo. As issues deste milestone coordenam a entrega, mas não autorizam copiar seu store para PocketWiki. Cada lane do Kernel entrega um commit/PR no repo correto e um módulo cliente no PocketWiki quando necessário. Quando a etapa passa, registrar o SHA integrado de ambos. Atualizar o pin no builder do PocketWiki somente no E6, depois de validar o binário real, nunca apontando para branch ou ref inexistente.
 
-No PocketWiki, criar fachadas JS e Swift pequenas, validando o mesmo corpus JSON. Não compartilhar domínio por cópia entre as linguagens. Tipos de wire podem ser gerados dos schemas; renderer e transporte continuam nativos. Módulos novos têm registro declarativo por ID com schemas, owner, actions, reducer e UI slot. E0 fixa a interface desse registro; E6 liga os módulos aos arquivos globais existentes.
+No PocketWiki, criar fachadas JS e Swift pequenas, validando o mesmo corpus JSON. Não compartilhar domínio por cópia entre as linguagens. Tipos de wire podem ser gerados dos schemas; renderer e transporte continuam nativos. Módulos novos têm registro declarativo por ID com schemas, owner, actions, reducer e UI slot. E0 fixa a interface desse registro; Cada integrador de etapa registra serviços já entregues nos routers; E6 liga o shell de produção. Nenhuma lane de domínio altera arquivos globais.
 
 Arquivos globais de integração: `server.mjs`, `wiki-cockpit.html`, `src/mcp/pocketwiki-mcp-server.mjs`, `Sources/PocketWikiMac/Views/LocalAIView.swift`, `LocalAIChatPanel.swift`, `LocalAISidePanels.swift`, `LocalAIWorkspaceShell.swift`, `Stores/LocalAIChatSession.swift`, `WikiAppStore.swift`, `Services/PocketWikiHTTPServer.swift`, `PocketKernelClient.swift`, `Package.swift`, `package.json`, `package-lock.json`, scripts de build/teste e workflow. Somente a lane de integração da etapa altera arquivos globais. Se uma dependência nova precisar de lockfile, pedir mudança ao integrador antes de abrir implementação paralela, sem cada lane editar o lock.
 

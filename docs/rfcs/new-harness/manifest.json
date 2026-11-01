@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "state": "draft",
   "date": "2026-11-01",
   "milestone": "New Harness.",
@@ -39,7 +39,10 @@
       "owner": "PocketKernel",
       "depends_on": [
         2,
-        3
+        3,
+        5,
+        6,
+        7
       ],
       "phase_01_stage": 3,
       "phase_02_stage": 5,
@@ -92,6 +95,7 @@
       "owner": "PocketKernel",
       "depends_on": [
         2,
+        3,
         6,
         7
       ],
@@ -136,9 +140,11 @@
       "owner": "PocketKernel",
       "depends_on": [
         2,
-        6
+        4,
+        6,
+        10
       ],
-      "phase_01_stage": 3,
+      "phase_01_stage": 4,
       "phase_02_stage": 5,
       "issue": 32,
       "issue_url": "https://github.com/irinery/pocketwiki/issues/32"
@@ -151,9 +157,10 @@
       "depends_on": [
         2,
         3,
+        4,
         13
       ],
-      "phase_01_stage": 3,
+      "phase_01_stage": 4,
       "phase_02_stage": 5,
       "issue": 33,
       "issue_url": "https://github.com/irinery/pocketwiki/issues/33"
@@ -178,6 +185,8 @@
       "owner": "PocketKernel",
       "depends_on": [
         2,
+        4,
+        6,
         7,
         8
       ],
@@ -271,5 +280,7 @@
       "url": "https://github.com/irinery/pocketwiki/issues/44",
       "title": "[New Harness][Gate E6] Revisão e E2E determinístico da etapa integrada"
     }
-  ]
+  ],
+  "documentation_readiness": "ready_to_start_e0",
+  "gate_e0_passed": false
 }

@@ -4,12 +4,12 @@
 **Data:** 2026-11-01
 **Issue:** [#29](https://github.com/irinery/pocketwiki/issues/29)
 **Estado de evolução:** Draft
-**Versão da RFC:** 0.1.0
+**Versão da RFC:** 0.2.0
 **Status:** COMPLETO
 **Fases:** 2 arquivos a gerar
 **Gerado por:** Codex, sessão New Harness
 
-> COMPLETO significa especificação do draft preenchida; não significa aprovação, implementação ou estabilidade pública. Todos os endpoints harness.v1, módulos e limites abaixo são propostas. O endpoint atual POST /v1/kernel permanece compatível. Primitivos deste cabeçalho: uuid = UUID RFC 4122 canônico minúsculo; sha1 = 40 hex; sha256 = 64 hex; int = inteiro JSON seguro 0..9007199254740991 salvo exit_code, que aceita -255..255; string = UTF-8; `?` = opcional/ausente, nunca null implícito; array[T] = lista homogênea; enum[...] = lista fechada. Timestamps são int em ms UTC. Campos desconhecidos de comando são rejeitados; campos opcionais novos em resposta exigem minor negociado. Fase pode ser implementada com este cabeçalho + seu bloco: tipos são repetidos deliberadamente.
+> COMPLETO significa especificação do draft preenchida; não significa aprovação, implementação ou estabilidade pública. Todos os endpoints harness.v1, módulos e limites abaixo são propostas. O endpoint atual POST /v1/kernel permanece compatível. Primitivos deste cabeçalho: uuid = UUID RFC 4122 canônico minúsculo; sha1 = 40 hex; sha256 = 64 hex; int = inteiro JSON seguro 0..9007199254740991 salvo exit_code, que aceita -255..255; string = UTF-8; `?` = opcional/ausente, nunca null implícito; array[T] = lista homogênea; enum[...] = lista fechada. Timestamps são int em ms UTC. Campos desconhecidos de comando são rejeitados; campos opcionais novos em resposta exigem minor negociado. Tipos são repetidos por fase. Regras de transporte, paginação, sessão e canonicalização são normativas em contratos-integracao-v0.2.md, que integra o cabeçalho desta RFC.
 
 > Tipo transversal `HarnessError = {code:string (enum da interface), message:string (0..1024 bytes redigidos), correlation_id:uuid, retryable:bool}`. Em wire, bool = boolean JSON. Identidade e scopes são obtidos do transporte autenticado, nunca de um campo user_id escolhido pelo cliente.
 
@@ -36,7 +36,7 @@ Reverter efeitos externos, produção ou banco; restaurar project root compartil
 
 | Fase | Arquivo | Nome do componente | Depende de | Paralelizável com |
 | --- | --- | --- | --- | --- |
-| 01 | 01_checkpoints_dominio.md | Contrato e serviço de domínio | RFC-0002/01/02, RFC-0006/01, RFC-0007/01 | lanes backend da mesma etapa do plano, sem dependência entre elas |
+| 01 | 01_checkpoints_dominio.md | Contrato e serviço de domínio | RFC-0002/01/02, RFC-0003/01, RFC-0006/01, RFC-0007/01 | lanes backend da mesma etapa do plano, sem dependência entre elas |
 | 02 | 02_checkpoints_cliente.md | Transporte/projeção e superfície cliente | 01 | lanes cliente da mesma etapa do plano, com diretórios exclusivos |
 
 Arquivos de contrato serão gerados em `docs/technical-contract/new-harness/checkpoints/`; este draft entrega uma RFC inteira, não contratos parciais. A agenda global e os gates estão em `plano-worktrees.md`; cada fase só começa após dependências integradas no SHA base.
@@ -45,11 +45,11 @@ Arquivos de contrato serão gerados em `docs/technical-contract/new-harness/chec
 - PocketKernel é autoridade deste domínio; PocketWiki não lê store privado de integração externa.
 - Auth por principal/environment + scope a cada ação. IDs de request e hashes não são credenciais.
 - Erro de domínio serializa como `HarnessError {code:string, message:string, correlation_id:uuid, retryable:bool}`; message máximo 1024 bytes e redigida, code limitado à lista da fase.
-- APIs propostas ficam sob `/v1/harness` no Kernel e `/api/harness` na fachada PocketWiki; o identificador canônico abaixo é a operação de domínio. E0 materializa em schemas o mapa de transporte definido na arquitetura, sem alterar semântica.
+- APIs propostas ficam sob `/v1/harness` no Kernel e `/api/harness` na fachada PocketWiki; o identificador canônico abaixo é a operação de domínio. E0 materializa o mapa da arquitetura e contratos-integracao-v0.2.md, sem decisões implícitas.
 - Limites bytes são bytes UTF-8; limites em caracteres são Unicode scalars. Strings gerais 4096 bytes e arrays gerais 100 itens, salvo regra específica.
 
 ### Definition of Done global
-- [ ] testes 01-01..01-04 e 02-01..02-04 executados através de interfaces reais
+- [ ] todos os cenários numerados das fases 01 e 02 executados através de interfaces reais
 - [ ] JS e Swift aceitam/rejeitam o mesmo corpus de contratos
 - [ ] revisão humana/técnica e E2E cumulativo no SHA integrado da etapa
 - [ ] sem regressão em memória/sessões v1, wiki, MCP Evidence e modo externo
@@ -68,9 +68,9 @@ Salvar checkpoints em refs privadas e restaurar somente após validar snapshot, 
 - Reverter efeitos externos, produção ou banco; restaurar project root compartilhado; forçar provider que não suporta rollback; remover arquivos ignorados arbitrariamente.
 - Editar views existentes, rotas globais e scripts de CI nesta lane.
 
-**Dependências repetidas:** RFC-0002/01/02, RFC-0006/01, RFC-0007/01.
+**Dependências repetidas:** RFC-0002/01/02, RFC-0003/01, RFC-0006/01, RFC-0007/01.
 
-**Posse de arquivos:** PocketWiki: `src/harness/checkpoints/`, `Sources/PocketWikiMac/Services/Harness/Checkpoints/`, `Tests/Harness/checkpoints/`. PocketKernel (outro repo): novo módulo lógico `harness/checkpoints` e seus testes; adapter para store existente, sem substituir serviços privados de outro domínio.  Os paths são destinos propostos; arquivos atuais compartilhados só mudam pelo integrador E6. UI de teste usa registro por slot, sem tocar o shell de produção.
+**Posse de arquivos:** PocketWiki: `src/harness/checkpoints/`, `Sources/PocketWikiMac/Services/Harness/Checkpoints/`, `Tests/Harness/checkpoints/`. PocketKernel (outro repo): novo módulo lógico `harness/checkpoints` e seus testes; adapter para store existente, sem substituir serviços privados de outro domínio.  Os paths são destinos propostos; arquivos compartilhados de serviços só mudam pelo integrador da etapa; shell de produção pelo integrador E6. UI de teste usa registro por slot, sem tocar o shell de produção.
 
 ### Testes obrigatórios
 
@@ -96,6 +96,11 @@ TESTE 01-04 [segurança]
 dado: path malicioso ou outro thread usa subdiretório
 quando: restaurar
 então: ERR_FORBIDDEN/ERR_WORKSPACE_BUSY e nenhum arquivo alterado
+
+TESTE 01-05 [integração]
+dado: projeção válida com mais entidades que page_size e cache cliente apagado
+quando: ler ao menos 2 páginas do mesmo snapshot enquanto ocorre mutação concorrente
+então: snapshot consistente na boundary e evento posterior aplicado 1 vez, sem duplicação
 
 ```
 
@@ -172,7 +177,7 @@ interface:
       observável: "estado de erro/pending explícito; nenhuma mudança silenciosa de provider, conta, root ou ambiente"
 ```
 
-O envelope de transporte de comando é `HarnessCommand {protocol_major:int=1, command_id:uuid, environment_id:uuid, expected_revision:int, operation:string, input:<entrada tipada acima>}`. `operation` é o nome canônico desta interface; input não aceita campos extras. Erro segue HarnessError do cabeçalho; resposta de sucesso contém exatamente os campos de saída declarados. Interface de view é local e não cria um endpoint HTTP novo.
+Para operações da classe mutation, o envelope de transporte é `HarnessCommand {protocol_major:int=1, command_id:uuid, environment_id:uuid, expected_revision:int, operation:string, input:<entrada tipada acima>}`. `operation` é o nome canônico desta interface; input não aceita campos extras. Erro segue HarnessError do cabeçalho; resposta de sucesso contém exatamente os campos de saída declarados. Leituras usam a rota query e operações bootstrap usam os endpoints diretos de R4, sem receipt; interface de view é local. O registry não encaminha bootstrap pelo ledger.
 
 **Interface complementar: checkpoints.capture**
 
@@ -370,32 +375,32 @@ campos:
     tipo: "uuid"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: run_id
     tipo: "uuid"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: workspace_id
     tipo: "uuid"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: git_ref
     tipo: "string"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: conversation_cursor
     tipo: "string"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: files
     tipo: "array[FileDelta]"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
 ```
 
 ```yaml
@@ -405,20 +410,52 @@ campos:
     tipo: "string"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: status
     tipo: "enum[added,modified,deleted,binary]"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: before_sha256
     tipo: "sha256?"
     obrigatório: false
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: after_sha256
     tipo: "sha256?"
     obrigatório: false
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+```
+
+### Snapshot persistido desta fase
+
+```yaml
+tipo: FeatureSnapshot
+campos:
+  - nome: snapshot_id
+    tipo: "uuid"
+    obrigatório: true
+    default: nenhum
+    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+  - nome: revision
+    tipo: "int"
+    obrigatório: true
+    default: nenhum
+    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+  - nome: as_of_seq
+    tipo: "int"
+    obrigatório: true
+    default: nenhum
+    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+  - nome: next_cursor
+    tipo: "string?"
+    obrigatório: false
+    default: nenhum
+    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+  - nome: checkpoints
+    tipo: "array[Checkpoint]"
+    obrigatório: true
     default: nenhum
     limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
 ```
@@ -430,6 +467,7 @@ campos:
 3. Escrever journal restore-prepared e snapshot de segurança; rollback do provider precede alteração de arquivos. Se provider recusa, nenhum arquivo muda.
 4. Falha após rollback do provider retém journal e workspace bloqueado recovery_required; reconciliar explicitamente, sem declarar restauração atômica entre Git e provider.
 5. Diff de turno separa edição do agente de arquivos trazidos por pull/merge/rebase; branch diff mostra comparação completa. Binário mostra metadados, não patch textual.
+6. FeatureSnapshot é projeção persistida de leitura, nunca resultado de comando. Paginação usa snapshot_id/as_of_seq fixos, cursor opaco vinculado à identidade e TTL 600000 ms, 100 entidades por página no total e 4 MiB por página; ordenação por coleção e ID. Cursor novo ausente na última página. Cliente monta todas as páginas antes da troca atômica de estado e aplica somente eventos seq > as_of_seq; cursor expirado reinicia snapshot sem perder draft local. Entidade >4 MiB é rejeitada na escrita, sem truncamento silencioso. Arrays vazios e ausência de dados são estados iniciais válidos, sem IDs fictícios.
 
 | Autorização/versão | Estado confirmado | Resultado | Ação |
 | --- | --- | --- | --- |
@@ -459,25 +497,32 @@ campos:
 - id: DEP-0008-01-2
   tipo: componente_interno
   nome: "RFC-0002 fases 01 e 02"
-  versão: "0.1.0"
+  versão: "0.2.0"
   papel: "interface liberada em gate anterior"
   fallback: "ERR_UNAVAILABLE; não implementar cópia nesta worktree"
   obrigatória: true
 - id: DEP-0008-01-3
   tipo: componente_interno
-  nome: "RFC-0006 fase 01"
-  versão: "0.1.0"
+  nome: "RFC-0003 fase 01"
+  versão: "0.2.0"
   papel: "interface liberada em gate anterior"
   fallback: "ERR_UNAVAILABLE; não implementar cópia nesta worktree"
   obrigatória: true
 - id: DEP-0008-01-4
   tipo: componente_interno
-  nome: "RFC-0007 fase 01"
-  versão: "0.1.0"
+  nome: "RFC-0006 fase 01"
+  versão: "0.2.0"
   papel: "interface liberada em gate anterior"
   fallback: "ERR_UNAVAILABLE; não implementar cópia nesta worktree"
   obrigatória: true
 - id: DEP-0008-01-5
+  tipo: componente_interno
+  nome: "RFC-0007 fase 01"
+  versão: "0.2.0"
+  papel: "interface liberada em gate anterior"
+  fallback: "ERR_UNAVAILABLE; não implementar cópia nesta worktree"
+  obrigatória: true
+- id: DEP-0008-01-6
   tipo: componente_interno
   nome: "PocketKernel"
   versão: "harness.v1 proposto"
@@ -490,7 +535,7 @@ campos:
 
 - [ ] módulo e interface checkpoints.restore exercitáveis sem integração com shell compartilhado
 - [ ] fixtures reais sanitizadas, falhas e relatório de execução com SHA base e final
-- [ ] todos os testes 01-01 a 01-04 passando
+- [ ] todos os testes 01-01 a 01-05 passando
 - [ ] nenhum arquivo fora da posse da lane alterado; mudanças compartilhadas entregues como instrução ao integrador
 
 ## 3.2 — Fase 02: Projeção e interface cliente
@@ -508,7 +553,7 @@ Superfície web e macOS do domínio, consumindo o contrato confirmado sem execut
 
 **Dependências repetidas:** RFC-0008/01 + NH-00 + NH-TEST.
 
-**Posse de arquivos:** `src/harness-ui/checkpoints/`, `Sources/PocketWikiMac/Views/Harness/Checkpoints/`, `Tests/HarnessUI/checkpoints/`.  Os paths são destinos propostos; arquivos atuais compartilhados só mudam pelo integrador E6. UI de teste usa registro por slot, sem tocar o shell de produção.
+**Posse de arquivos:** `src/harness-ui/checkpoints/`, `Sources/PocketWikiMac/Views/Harness/Checkpoints/`, `Tests/HarnessUI/checkpoints/`.  Os paths são destinos propostos; arquivos compartilhados de serviços só mudam pelo integrador da etapa; shell de produção pelo integrador E6. UI de teste usa registro por slot, sem tocar o shell de produção.
 
 ### Testes obrigatórios
 
@@ -552,7 +597,7 @@ interface:
     - campo: snapshot
       tipo: "FeatureSnapshot"
       obrigatório: true
-      validação: "resultado tipado da fase 01; mesmo environment/thread"
+      validação: "projeção persistida paginada; mesmo snapshot_id/environment/thread; nunca resposta de comando"
     - campo: client_action
       tipo: "enum[open,refresh,submit,dismiss]"
       obrigatório: true
@@ -604,7 +649,7 @@ interface:
       observável: "estado de erro/pending explícito; nenhuma mudança silenciosa de provider, conta, root ou ambiente"
 ```
 
-O envelope de transporte de comando é `HarnessCommand {protocol_major:int=1, command_id:uuid, environment_id:uuid, expected_revision:int, operation:string, input:<entrada tipada acima>}`. `operation` é o nome canônico desta interface; input não aceita campos extras. Erro segue HarnessError do cabeçalho; resposta de sucesso contém exatamente os campos de saída declarados. Interface de view é local e não cria um endpoint HTTP novo.
+Para operações da classe mutation, o envelope de transporte é `HarnessCommand {protocol_major:int=1, command_id:uuid, environment_id:uuid, expected_revision:int, operation:string, input:<entrada tipada acima>}`. `operation` é o nome canônico desta interface; input não aceita campos extras. Erro segue HarnessError do cabeçalho; resposta de sucesso contém exatamente os campos de saída declarados. Leituras usam a rota query e operações bootstrap usam os endpoints diretos de R4, sem receipt; interface de view é local. O registry não encaminha bootstrap pelo ledger.
 
 Interfaces complementares são operações do mesmo registro tipado, usam o envelope e a lista fechada de erros desta fase. Leitura não cria efeito. Mutação passa por policy, CAS e receipt; todas validam os mesmos limites antes de I/O.
 
@@ -617,32 +662,32 @@ campos:
     tipo: "uuid"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: run_id
     tipo: "uuid"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: workspace_id
     tipo: "uuid"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: git_ref
     tipo: "string"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: conversation_cursor
     tipo: "string"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: files
     tipo: "array[FileDelta]"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
 ```
 
 ```yaml
@@ -652,42 +697,52 @@ campos:
     tipo: "string"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: status
     tipo: "enum[added,modified,deleted,binary]"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: before_sha256
     tipo: "sha256?"
     obrigatório: false
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: after_sha256
     tipo: "sha256?"
     obrigatório: false
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
 ```
 
 ```yaml
 tipo: FeatureSnapshot
 campos:
-  - nome: restore_id
+  - nome: snapshot_id
     tipo: "uuid"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
-  - nome: status
-    tipo: "enum[restored,recovery_required]"
-    obrigatório: true
-    default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
-  - nome: workspace_revision
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: revision
     tipo: "int"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: as_of_seq
+    tipo: "int"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: next_cursor
+    tipo: "string?"
+    obrigatório: false
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
+  - nome: checkpoints
+    tipo: "array[Checkpoint]"
+    obrigatório: true
+    default: nenhum
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
 ```
 
 ```yaml
@@ -697,37 +752,37 @@ campos:
     tipo: "uuid"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: thread_id
     tipo: "uuid?"
     obrigatório: false
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: revision
     tipo: "int"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: status
     tipo: "enum[loading,ready,stale,error]"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: draft
     tipo: "string"
     obrigatório: true
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: data
     tipo: "FeatureSnapshot?"
     obrigatório: false
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: error
     tipo: "HarnessError?"
     obrigatório: false
     default: nenhum
-    limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
+    limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
 ```
 
 ### Regras de comportamento
@@ -737,6 +792,7 @@ campos:
 3. Escrever journal restore-prepared e snapshot de segurança; rollback do provider precede alteração de arquivos. Se provider recusa, nenhum arquivo muda.
 4. Falha após rollback do provider retém journal e workspace bloqueado recovery_required; reconciliar explicitamente, sem declarar restauração atômica entre Git e provider.
 5. Diff de turno separa edição do agente de arquivos trazidos por pull/merge/rebase; branch diff mostra comparação completa. Binário mostra metadados, não patch textual.
+6. FeatureSnapshot é projeção persistida de leitura, nunca resultado de comando. Paginação usa snapshot_id/as_of_seq fixos, cursor opaco vinculado à identidade e TTL 600000 ms, 100 entidades por página no total e 4 MiB por página; ordenação por coleção e ID. Cursor novo ausente na última página. Cliente monta todas as páginas antes da troca atômica de estado e aplica somente eventos seq > as_of_seq; cursor expirado reinicia snapshot sem perder draft local. Entidade >4 MiB é rejeitada na escrita, sem truncamento silencioso. Arrays vazios e ausência de dados são estados iniciais válidos, sem IDs fictícios.
 
 | Autorização/versão | Estado confirmado | Resultado | Ação |
 | --- | --- | --- | --- |
@@ -768,7 +824,7 @@ No cliente: renderizar 100 itens por página; draft 32768 bytes; erro 1024 bytes
 - id: DEP-0008-02-2
   tipo: componente_interno
   nome: "RFC-0008 fase 01"
-  versão: "0.1.0"
+  versão: "0.2.0"
   papel: "serviço e projeção tipados"
   fallback: "cache de leitura stale e ação desabilitada"
   obrigatória: true
@@ -827,4 +883,4 @@ Usar deadline numérico desta RFC com relógio injetável nos testes. Não infer
 - Executar efeito direto no cliente: descartada por quebrar autoridade do environment e idempotência.
 - Testar apenas reducers com eventos pré-normalizados: descartada porque não valida adapter, transporte e persistência reais.
 
-Evolução após revisão: atualizar este mesmo documento para 0.2.0 com changelog de decisão, gerar os 2 contratos na ordem do mapa, implementar lanes do plano e só então propor estado Accepted. Mudança incompatível de wire exige protocol major novo; status COMPLETO não permite pular gate.
+Evolução após revisão: atualizar este mesmo documento para 0.3.0 com changelog de decisão, gerar os 2 contratos na ordem do mapa, implementar lanes do plano e só então propor estado Accepted. Mudança incompatível de wire exige protocol major novo; status COMPLETO não permite pular gate.

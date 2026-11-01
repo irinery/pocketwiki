@@ -1,6 +1,6 @@
 # New Harness — issues do milestone
 
-Draft 0.1.0 · 2026-11-01 · [Milestone New Harness.](https://github.com/irinery/pocketwiki/milestone/1)
+Draft 0.2.0 · 2026-11-01 · [Milestone New Harness.](https://github.com/irinery/pocketwiki/milestone/1)
 
 24 issues abertas: 15 RFCs, 2 habilitadores seriais e 7 gates de revisão/E2E. Todas estão no milestone; nenhuma entrega foi marcada concluída.
 

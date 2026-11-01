@@ -5,7 +5,7 @@ Este diretório contém propostas de interoperabilidade e evolução dos produto
 | RFC | Título | Estado |
 | --- | --- | --- |
 | [RFC-0001](0001-pocket-interop-contract.md) | Pocket Interop Contract | Draft |
-| [RFC-0002 a RFC-0016](new-harness/README.md) | New Harness — evolução da aba IA, 15 RFCs e plano GPT-6-Luna | Draft 0.1.0 |
+| [RFC-0002 a RFC-0016](new-harness/README.md) | New Harness — evolução da aba IA, 15 RFCs e plano GPT-6-Luna | Draft 0.2.0 |
 
 Os artefatos normativos da RFC-0001 ficam em:
 
