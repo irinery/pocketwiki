@@ -206,6 +206,15 @@ final class WikiAppStore {
             evidence: evidence,
             providerRoute: route
         )
+        if pocketKernelAddon.status == .managed,
+           let activeBaseURL = pocketKernelAddon.activeBaseURL {
+            let effectiveBaseURL = activeBaseURL.absoluteString
+            serverConfiguration.pocketKernelBaseURL = effectiveBaseURL
+            localServer?.updatePocketKernelBaseURL(effectiveBaseURL)
+            if UserDefaults.standard.string(forKey: "PocketWikiMac.localAI.kernelBaseURL") != effectiveBaseURL {
+                UserDefaults.standard.set(effectiveBaseURL, forKey: "PocketWikiMac.localAI.kernelBaseURL")
+            }
+        }
         reportAddonStatus(
             service: .pocketKernel,
             title: pocketKernelAddon.status.title,

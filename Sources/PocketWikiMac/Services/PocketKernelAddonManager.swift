@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import Darwin
 
 enum PocketKernelAddonStatus: Equatable, Sendable {
     case idle
@@ -61,7 +62,7 @@ final class PocketKernelAddonManager {
 
     private var process: Process?
     private var processLogHandle: FileHandle?
-    private var activeBaseURL: URL?
+    private(set) var activeBaseURL: URL?
     private var providerBridge = PocketKernelProviderBridge()
     private let applicationSupportOverride: URL?
     private var eventHandler: (@MainActor (PocketAddonRuntimeEvent) -> Void)?
@@ -92,11 +93,12 @@ final class PocketKernelAddonManager {
     }
 
     func start(
-        configuration: PocketWikiServerConfiguration,
+        configuration initialConfiguration: PocketWikiServerConfiguration,
         baseURL rawBaseURL: String,
         evidence: PocketWikiMCPEvidenceStatus,
         providerRoute: PocketKernelProviderRoute
     ) async {
+        var configuration = initialConfiguration
         operationGeneration &+= 1
         let operation = operationGeneration
 
@@ -108,8 +110,8 @@ final class PocketKernelAddonManager {
             return
         }
 
-        guard let baseURL = normalizedBaseURL(rawBaseURL),
-              let kernelURL = try? PocketKernelEndpointPolicy.kernelURL(baseURL.absoluteString) else {
+        guard var baseURL = normalizedBaseURL(rawBaseURL),
+              var kernelURL = try? PocketKernelEndpointPolicy.kernelURL(baseURL.absoluteString) else {
             status = .failed("URL do PocketKernel inválida ou fora da política local")
             return
         }
@@ -129,7 +131,7 @@ final class PocketKernelAddonManager {
                 status = .managed
                 restartContext = RestartContext(
                     configuration: configuration,
-                    baseURL: rawBaseURL,
+                    baseURL: baseURL.absoluteString,
                     evidence: evidence,
                     providerRoute: providerRoute
                 )
@@ -140,16 +142,39 @@ final class PocketKernelAddonManager {
         status = .checking
         let externalHealthy = await isHealthy(kernelURL)
         guard operation == operationGeneration else { return }
+        var localFallbackNotice = ""
         if externalHealthy {
-            stopCurrentProcess()
-            activeBaseURL = baseURL
-            activeEndpoint = kernelURL
-            healthAvailable = true
-            providerAvailable = false
-            integrityStatus = .externalUntracked
-            status = .external
-            detail = "Serviço HTTP validado. O processo e o MCP continuam sob responsabilidade da instância externa."
-            return
+            let requiresManagedMCP = configuration.pocketKernelAddonMode == .managed
+                || (configuration.pocketKernelAddonMode == .automatic
+                    && evidence.status == "args_require_wrapper"
+                    && isManagedLoopbackURL(baseURL))
+            if requiresManagedMCP {
+                guard isManagedLoopbackURL(baseURL) else {
+                    status = .unavailable("o modo gerenciado aceita somente HTTP em loopback")
+                    return
+                }
+                let occupiedPort = baseURL.port ?? 8080
+                guard let alternateBaseURL = Self.availableLoopbackBaseURL(avoiding: occupiedPort),
+                      let alternateKernelURL = try? PocketKernelEndpointPolicy.kernelURL(alternateBaseURL.absoluteString) else {
+                    status = .failed("a porta \(occupiedPort) está ocupada e o PocketWiki não conseguiu selecionar outra porta local")
+                    return
+                }
+                stopCurrentProcess()
+                baseURL = alternateBaseURL
+                kernelURL = alternateKernelURL
+                configuration.pocketKernelBaseURL = alternateBaseURL.absoluteString
+                localFallbackNotice = "A porta \(occupiedPort) já estava ocupada; PocketWiki iniciou o helper local na porta \(alternateBaseURL.port ?? 0), sem encerrar a instância existente."
+            } else {
+                stopCurrentProcess()
+                activeBaseURL = baseURL
+                activeEndpoint = kernelURL
+                healthAvailable = true
+                providerAvailable = false
+                integrityStatus = .externalUntracked
+                status = .external
+                detail = "Serviço HTTP validado. O processo e o MCP continuam sob responsabilidade da instância externa."
+                return
+            }
         }
 
         guard configuration.pocketKernelAddonMode != .external else {
@@ -224,9 +249,10 @@ final class PocketKernelAddonManager {
             configuredEvidence = mcp.evidence
             mcpAvailable = mcp.evidence.available
             providerAvailable = true
-            detail = mcp.evidence.available
+            let mcpDetail = mcp.evidence.available
                 ? "HTTP e MCP Evidence iniciados juntos; o MCP permanece stdio e restrito ao mesmo host."
                 : "Kernel iniciado sem MCP funcional: \(mcp.evidence.status)."
+            detail = [localFallbackNotice, mcpDetail].filter { !$0.isEmpty }.joined(separator: " ")
             status = .starting
 
             let readinessDeadline = Date().addingTimeInterval(Self.startupTimeout)
@@ -239,7 +265,7 @@ final class PocketKernelAddonManager {
                     status = .managed
                     restartContext = RestartContext(
                         configuration: configuration,
-                        baseURL: rawBaseURL,
+                        baseURL: baseURL.absoluteString,
                         evidence: evidence,
                         providerRoute: providerRoute
                     )
@@ -580,6 +606,42 @@ final class PocketKernelAddonManager {
         let host = baseURL.host ?? "127.0.0.1"
         let printableHost = host.contains(":") ? "[\(host)]" : host
         return "\(printableHost):\(baseURL.port ?? 8080)"
+    }
+
+    private static func availableLoopbackBaseURL(avoiding port: Int) -> URL? {
+        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        guard fd >= 0 else { return nil }
+        defer { Darwin.close(fd) }
+
+        var address = sockaddr_in(
+            sin_len: UInt8(MemoryLayout<sockaddr_in>.size),
+            sin_family: sa_family_t(AF_INET),
+            sin_port: 0,
+            sin_addr: in_addr(s_addr: inet_addr("127.0.0.1")),
+            sin_zero: (0, 0, 0, 0, 0, 0, 0, 0)
+        )
+        let bindResult = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                Darwin.bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+        }
+        guard bindResult == 0 else { return nil }
+
+        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+        let nameResult = withUnsafeMutablePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                getsockname(fd, $0, &length)
+            }
+        }
+        guard nameResult == 0 else { return nil }
+        let selectedPort = Int(UInt16(bigEndian: address.sin_port))
+        guard selectedPort > 0, selectedPort != port else { return nil }
+
+        var components = URLComponents()
+        components.scheme = "http"
+        components.host = "127.0.0.1"
+        components.port = selectedPort
+        return components.url
     }
 
     private func isHealthy(_ kernelURL: URL) async -> Bool {
