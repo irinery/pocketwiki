@@ -811,6 +811,51 @@ struct IntegrationTestRunner {
             )
             try expect(!runtimeEvents.contains(where: \.presentsAlert), "successful PocketKernel recovery should not request a modal")
 
+            let occupiedKernelPort = try availablePort()
+            let externalKernel = Process()
+            externalKernel.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+            externalKernel.arguments = ["-c", #"""
+            from http.server import BaseHTTPRequestHandler, HTTPServer
+            import sys
+
+            class Handler(BaseHTTPRequestHandler):
+                def do_GET(self):
+                    self.send_response(405)
+                    self.end_headers()
+                def log_message(self, format, *args):
+                    pass
+
+            HTTPServer(("127.0.0.1", int(sys.argv[1])), Handler).serve_forever()
+            """#, String(occupiedKernelPort)]
+            externalKernel.standardOutput = FileHandle.nullDevice
+            externalKernel.standardError = FileHandle.nullDevice
+            try externalKernel.run()
+            defer {
+                if externalKernel.isRunning {
+                    externalKernel.terminate()
+                    externalKernel.waitUntilExit()
+                }
+            }
+            try await Task.sleep(for: .milliseconds(250))
+
+            var automaticConfiguration = configuration
+            automaticConfiguration.pocketKernelAddonMode = .automatic
+            automaticConfiguration.pocketKernelBaseURL = "http://127.0.0.1:\(occupiedKernelPort)"
+            let collisionManager = PocketKernelAddonManager(
+                applicationSupportURL: root.appendingPathComponent("collision-support")
+            )
+            defer { collisionManager.stop() }
+            await collisionManager.start(
+                configuration: automaticConfiguration,
+                baseURL: automaticConfiguration.pocketKernelBaseURL,
+                evidence: evidence,
+                providerRoute: providerRoute
+            )
+            try expect(collisionManager.status == .managed, "automatic mode did not launch its local helper after the occupied port")
+            try expect(collisionManager.activeBaseURL?.port != occupiedKernelPort, "local helper reused the external PocketKernel port")
+            try expect(collisionManager.mcpAvailable, "local MCP wrapper was not enabled after port fallback")
+            try expect(collisionManager.detail.contains("já estava ocupada"), "automatic port fallback was not explained in the status")
+
             runtimeEvents.removeAll()
             try FileManager.default.removeItem(at: executable)
             _ = kill(recoveredPID, SIGTERM)

@@ -55,7 +55,7 @@ enum PocketKernelAddonMode: String, CaseIterable, Identifiable, Sendable {
 
     var detail: String {
         switch self {
-        case .automatic: "Usa um PocketKernel saudável ou inicia a base local empacotada."
+        case .automatic: "Usa um PocketKernel saudável ou inicia a base local; se a porta local estiver ocupada e o MCP exigir wrapper, escolhe outra porta."
         case .managed: "PocketWiki inicia o Kernel local e conecta o MCP Evidence."
         case .external: "Conecta em um PocketKernel iniciado e administrado separadamente."
         case .disabled: "Não consulta nem inicia o PocketKernel."

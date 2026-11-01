@@ -894,7 +894,9 @@ struct ServerView: View {
         if store.pocketKernelAddon.healthAvailable,
            store.pocketKernelAddon.mcpAvailable,
            store.pocketKernelAddon.providerAvailable {
-            pocketKernelOperationMessage = "PocketKernel funcional: HTTP, MCP Evidence e ponte interna do provider confirmados. A autenticação é validada na área IA."
+            pocketKernelOperationMessage = store.pocketKernelAddon.detail.pocketIfEmpty(
+                "PocketKernel funcional: HTTP, MCP Evidence e ponte interna do provider confirmados. A autenticação é validada na área IA."
+            )
         } else if store.pocketKernelAddon.healthAvailable {
             pocketKernelOperationMessage = store.pocketKernelAddon.detail.pocketIfEmpty(
                 "PocketKernel HTTP online; o MCP é responsabilidade da instância externa."
