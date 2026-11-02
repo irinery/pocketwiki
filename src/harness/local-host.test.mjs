@@ -52,3 +52,17 @@ test('local bootstrap refuses scopes the host did not grant', async () => {
   });
   await assert.rejects(host.bootstrap(['read', 'scm.merge']), { code: 'ERR_FORBIDDEN' });
 });
+
+test('local credentials bind an aggregate and persist revocation after process delivery failure', async () => {
+  let bearer;
+  let persisted;
+  const host = new LocalCredentialHost({
+    principalId, environmentId, audience: 'pocketkernel.harness', grantedScopes: ['read'],
+    persistVerifier: async (verifier) => { persisted = verifier; },
+    deliverBearer: async ({ bearer: value }) => { bearer = value; throw new Error('private delivery failed'); }
+  });
+  await assert.rejects(host.bootstrap(['read'], { aggregateId: threadId }));
+  assert.equal(persisted.revoked, true);
+  assert.equal(persisted.aggregate_id, threadId);
+  assert.throws(() => host.authenticate(bearer, { audience: 'pocketkernel.harness', aggregateId: threadId }), { code: 'ERR_FORBIDDEN' });
+});

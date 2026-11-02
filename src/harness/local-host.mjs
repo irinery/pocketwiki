@@ -25,11 +25,12 @@ export class LocalCredentialHost {
     this.#now = now;
   }
 
-  async bootstrap(requestedScopes, { threadId } = {}) {
+  async bootstrap(requestedScopes, { threadId, aggregateId } = {}) {
     const requested = normalizeScopes(requestedScopes);
     const scopes = requested.filter((scope) => this.#grantedScopes.has(scope));
     if (scopes.length !== requested.length) throw authError('ERR_FORBIDDEN', 'Requested scopes exceed local host grant');
     if (threadId !== undefined && !isUUID(threadId)) throw authError('ERR_INVALID', 'thread_id must be a UUID');
+    if (aggregateId !== undefined && !isUUID(aggregateId)) throw authError('ERR_INVALID', 'aggregate_id must be a UUID');
 
     const bearer = randomBytes(32).toString('base64url');
     const tokenHash = sha256(bearer);
@@ -38,6 +39,7 @@ export class LocalCredentialHost {
       principal_id: this.#identity.principal_id,
       environment_id: this.#identity.environment_id,
       ...(threadId ? { thread_id: threadId } : {}),
+      ...(aggregateId ? { aggregate_id: aggregateId } : {}),
       scopes: Object.freeze(scopes),
       audience: this.#identity.audience,
       expires_at_ms: expiresAtMS
@@ -56,7 +58,7 @@ export class LocalCredentialHost {
     return metadata;
   }
 
-  authenticate(bearer, { audience, scope, principalId, environmentId, threadId } = {}) {
+  authenticate(bearer, { audience, scope, principalId, environmentId, threadId, aggregateId } = {}) {
     if (typeof bearer !== 'string' || !bearer) throw authError('ERR_FORBIDDEN', 'Missing local credential');
     const candidate = Buffer.from(sha256(bearer), 'hex');
     const verifier = [...this.#verifiers.entries()].find(([storedHash]) => {
@@ -69,11 +71,13 @@ export class LocalCredentialHost {
     if (principalId !== undefined && principalId !== verifier.principal_id) throw authError('ERR_FORBIDDEN', 'Credential principal mismatch');
     if (environmentId !== undefined && environmentId !== verifier.environment_id) throw authError('ERR_FORBIDDEN', 'Credential environment mismatch');
     if (verifier.thread_id && threadId !== verifier.thread_id) throw authError('ERR_FORBIDDEN', 'Credential thread mismatch');
+    if (verifier.aggregate_id && aggregateId !== verifier.aggregate_id) throw authError('ERR_FORBIDDEN', 'Credential aggregate mismatch');
     if (scope && !verifier.scopes.includes(scope)) throw authError('ERR_FORBIDDEN', 'Credential scope mismatch');
     return Object.freeze({
       principal_id: verifier.principal_id,
       environment_id: verifier.environment_id,
       ...(verifier.thread_id ? { thread_id: verifier.thread_id } : {}),
+      ...(verifier.aggregate_id ? { aggregate_id: verifier.aggregate_id } : {}),
       scopes: verifier.scopes,
       audience: verifier.audience,
       expires_at_ms: verifier.expires_at_ms
