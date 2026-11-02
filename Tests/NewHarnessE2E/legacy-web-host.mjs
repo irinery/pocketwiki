@@ -388,6 +388,7 @@ async function redactTraceArchive(archivePath, tempRoot, secrets) {
       else if (/\.(trace|network|json|txt)$/.test(entry.name)) {
         let content = await readFile(file, 'utf8');
         for (const secret of secrets) if (secret) content = content.split(secret).join('[REDACTED]');
+        content = content.replace(/nh-test-memory-token-[A-Za-z0-9-]*/g, '[REDACTED]');
         await writeFile(file, content);
       }
     }
@@ -403,7 +404,7 @@ function redactSecrets(value) {
   return String(value)
     .replace(/dev-middleware-token-for-tests-only/g, '[REDACTED]')
     .replace(/nh-test-provider-key/g, '[REDACTED]')
-    .replace(/nh-test-memory-token-x{32}/g, '[REDACTED]');
+    .replace(/nh-test-memory-token-[A-Za-z0-9-]*/g, '[REDACTED]');
 }
 function gitSHA(cwd) {
   const result = spawnSync('git', ['-C', cwd, 'rev-parse', 'HEAD'], { encoding: 'utf8' });

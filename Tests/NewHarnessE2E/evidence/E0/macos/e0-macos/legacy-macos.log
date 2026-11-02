@@ -1,0 +1,7 @@
+$ node Tests/NewHarnessE2E/MacOSHost/run.mjs --result-bundle-path <report-dir>/legacy-macos.xcresult
+exit=2
+--- stdout ---
+
+--- stderr ---
+NH-TEST macOS configuration failure: Xcode completo com XCTest não está disponível. Instale Xcode ou defina POCKETWIKI_XCODE_DEVELOPER_DIR; a seleção global não foi alterada.
+
