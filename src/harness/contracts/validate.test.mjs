@@ -34,6 +34,8 @@ test('future operations and unknown protocol versions remain unavailable', () =>
   for (const name of ['threads.history', 'mcp.thread.call', 'source_control.execute']) {
     assert.throws(() => requireOperation(name, operationRegistry.find((entry) => entry.name === name).class), { code: 'ERR_UNSUPPORTED' });
   }
+  assert.throws(() => requireOperation('runtime.dispatch', 'read'), { code: 'ERR_INVALID' });
+  assert.throws(() => requireOperation('runtime.receipt', 'mutation'), { code: 'ERR_INVALID' });
   const command = corpus.slots.find(({ id }) => id === 'NH00-ENV-001').value;
   assert.equal(validateAgainst('command', { ...command, protocol_major: 2 }).valid, false);
   assert.ok(operationRegistry.every(({ input_schema }) => Boolean(schema.$defs[input_schema])), 'future operation schemas remain defined');
