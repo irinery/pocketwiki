@@ -3179,15 +3179,8 @@
           "maxItems": 100
         },
         "next_cursor": {
-          "anyOf": [
-            {
-              "type": "string",
-              "x-maxUtf8Bytes": 4096
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "type": "string",
+          "x-maxUtf8Bytes": 4096
         }
       }
     },
@@ -4402,15 +4395,8 @@
           "maxItems": 100
         },
         "next_cursor": {
-          "anyOf": [
-            {
-              "type": "string",
-              "x-maxUtf8Bytes": 4096
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "type": "string",
+          "x-maxUtf8Bytes": 4096
         }
       }
     },
@@ -4999,15 +4985,8 @@
           "type": "integer"
         },
         "next_cursor": {
-          "anyOf": [
-            {
-              "type": "string",
-              "x-maxUtf8Bytes": 4096
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "type": "string",
+          "x-maxUtf8Bytes": 4096
         },
         "receipts": {
           "type": "array",
@@ -5046,15 +5025,8 @@
           "type": "integer"
         },
         "next_cursor": {
-          "anyOf": [
-            {
-              "type": "string",
-              "x-maxUtf8Bytes": 4096
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "type": "string",
+          "x-maxUtf8Bytes": 4096
         },
         "bindings": {
           "type": "array",
@@ -5096,15 +5068,8 @@
           "type": "integer"
         },
         "next_cursor": {
-          "anyOf": [
-            {
-              "type": "string",
-              "x-maxUtf8Bytes": 4096
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "type": "string",
+          "x-maxUtf8Bytes": 4096
         },
         "thread": {
           "$ref": "#/$defs/ThreadState"
@@ -5159,15 +5124,8 @@
           "type": "integer"
         },
         "next_cursor": {
-          "anyOf": [
-            {
-              "type": "string",
-              "x-maxUtf8Bytes": 4096
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "type": "string",
+          "x-maxUtf8Bytes": 4096
         },
         "drafts": {
           "type": "array",
@@ -5327,15 +5285,8 @@
           "type": "integer"
         },
         "next_cursor": {
-          "anyOf": [
-            {
-              "type": "string",
-              "x-maxUtf8Bytes": 4096
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "type": "string",
+          "x-maxUtf8Bytes": 4096
         },
         "terminals": {
           "type": "array",
@@ -5655,15 +5606,8 @@
           "type": "integer"
         },
         "next_cursor": {
-          "anyOf": [
-            {
-              "type": "string",
-              "x-maxUtf8Bytes": 4096
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "type": "string",
+          "x-maxUtf8Bytes": 4096
         },
         "requests": {
           "type": "array",
@@ -5696,15 +5640,8 @@
           "type": "integer"
         },
         "next_cursor": {
-          "anyOf": [
-            {
-              "type": "string",
-              "x-maxUtf8Bytes": 4096
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "type": "string",
+          "x-maxUtf8Bytes": 4096
         },
         "projects": {
           "type": "array",
@@ -5745,15 +5682,8 @@
           "type": "integer"
         },
         "next_cursor": {
-          "anyOf": [
-            {
-              "type": "string",
-              "x-maxUtf8Bytes": 4096
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "type": "string",
+          "x-maxUtf8Bytes": 4096
         },
         "checkpoints": {
           "type": "array",
@@ -5784,15 +5714,8 @@
           "type": "integer"
         },
         "next_cursor": {
-          "anyOf": [
-            {
-              "type": "string",
-              "x-maxUtf8Bytes": 4096
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "type": "string",
+          "x-maxUtf8Bytes": 4096
         },
         "connections": {
           "type": "array",
@@ -5823,15 +5746,8 @@
           "type": "integer"
         },
         "next_cursor": {
-          "anyOf": [
-            {
-              "type": "string",
-              "x-maxUtf8Bytes": 4096
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "type": "string",
+          "x-maxUtf8Bytes": 4096
         },
         "threads": {
           "type": "array",
@@ -5862,15 +5778,8 @@
           "type": "integer"
         },
         "next_cursor": {
-          "anyOf": [
-            {
-              "type": "string",
-              "x-maxUtf8Bytes": 4096
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "type": "string",
+          "x-maxUtf8Bytes": 4096
         },
         "lineage": {
           "type": "array",
@@ -5901,15 +5810,8 @@
           "type": "integer"
         },
         "next_cursor": {
-          "anyOf": [
-            {
-              "type": "string",
-              "x-maxUtf8Bytes": 4096
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "type": "string",
+          "x-maxUtf8Bytes": 4096
         },
         "notes": {
           "type": "array",
@@ -5941,15 +5843,8 @@
           "type": "integer"
         },
         "next_cursor": {
-          "anyOf": [
-            {
-              "type": "string",
-              "x-maxUtf8Bytes": 4096
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "type": "string",
+          "x-maxUtf8Bytes": 4096
         },
         "links": {
           "type": "array",
@@ -5988,15 +5883,8 @@
           "type": "integer"
         },
         "next_cursor": {
-          "anyOf": [
-            {
-              "type": "string",
-              "x-maxUtf8Bytes": 4096
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "type": "string",
+          "x-maxUtf8Bytes": 4096
         },
         "entries": {
           "type": "array",
@@ -6034,15 +5922,8 @@
           "type": "integer"
         },
         "next_cursor": {
-          "anyOf": [
-            {
-              "type": "string",
-              "x-maxUtf8Bytes": 4096
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "type": "string",
+          "x-maxUtf8Bytes": 4096
         },
         "components": {
           "type": "array",

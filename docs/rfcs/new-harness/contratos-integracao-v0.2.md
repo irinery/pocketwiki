@@ -8,6 +8,7 @@ Este arquivo integra o cabeçalho normativo das RFCs 0002–0016. Define as inte
 
 - Campos comuns de `HarnessCommand` prevalecem como valores canônicos. Como RFC-0002 também mantém `command_id` e `expected_revision` dentro de `runtime.dispatch.input`, ambos devem ser iguais aos campos do envelope; divergência é `ERR_INVALID` antes de qualquer efeito. Os campos repetidos permanecem no wire para compatibilidade e `runtime.dispatch` é um comando fechado, não bloqueado.
 - `obrigatório: false` permite omitir a propriedade. O sufixo `?` no tipo permite também o valor JSON `null` quando a propriedade aparece. Sem `?`, `null` é inválido mesmo para propriedades opcionais.
+- `next_cursor` é opcional e não nullable em todos os snapshots e páginas: omitido encerra a paginação; `null` é `ERR_INVALID`. Nos blocos YAML, usar `tipo: "string"` com `obrigatório: false`.
 - Em `navigation.update`, `read_through_seq` permanece obrigatório em todas as ações, conforme a lista de campos da interface; o valor só é aplicado quando `action=mark_read`. `before_thread_id` só é aceito em `reorder`.
 
 `CommandReceipt` confirma intenção. `Result` contém o resultado tipado da operação. `FeatureSnapshot` contém a projeção durável do módulo e tem definição própria em cada RFC; resultado de `threads.message` nunca substitui histórico/fila. O snapshot inicial usa listas vazias e campos opcionais ausentes; não fabrica message_id/receipt_id.

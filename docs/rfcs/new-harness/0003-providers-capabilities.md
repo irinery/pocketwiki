@@ -364,7 +364,7 @@ campos:
     default: nenhum
     limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
   - nome: next_cursor
-    tipo: "string?"
+    tipo: "string"
     obrigatório: false
     default: nenhum
     limite: "conforme regras desta fase; strings gerais 4096 bytes e arrays gerais 100 itens, salvo limite específico"
@@ -675,7 +675,7 @@ campos:
     default: nenhum
     limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
   - nome: next_cursor
-    tipo: "string?"
+    tipo: "string"
     obrigatório: false
     default: nenhum
     limite: "primitivos conforme cabeçalho; strings gerais 4096 bytes, arrays 100 itens; limites de campos e paginação prevalecem"
