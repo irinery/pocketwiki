@@ -235,7 +235,7 @@ enum HarnessV1 {
                 if rule["x-format"] as? String == "hostname" && !isHostname(string) { return false }
                 if rule["x-format"] as? String == "git-branch" && !isHarnessBranch(string) { return false }
             case "integer":
-                guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(), number.doubleValue.rounded(.towardZero) == number.doubleValue else { return false }
+                guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(), number.doubleValue.rounded(.towardZero) == number.doubleValue, abs(number.doubleValue) <= 9_007_199_254_740_991 else { return false }
                 if let minimum = rule["minimum"] as? NSNumber, number.doubleValue < minimum.doubleValue { return false }
                 if let maximum = rule["maximum"] as? NSNumber, number.doubleValue > maximum.doubleValue { return false }
             case "boolean":
@@ -306,7 +306,7 @@ enum HarnessV1 {
     }
 
     private static func isHarnessBranch(_ value: String) -> Bool {
-        guard value.hasPrefix("codex/"), value.utf8.count <= 120,
+        guard value.hasPrefix("codex/"),
               value.rangeOfCharacter(from: CharacterSet(charactersIn: " ~^:?*[\\\\]").union(.controlCharacters)) == nil,
               !value.contains(".."), !value.contains("@{"), !value.contains("//"), !value.hasSuffix("/"), !value.hasSuffix(".") else { return false }
         return value.split(separator: "/", omittingEmptySubsequences: false).allSatisfy { !$0.isEmpty && !$0.hasPrefix(".") && !$0.hasSuffix(".lock") }

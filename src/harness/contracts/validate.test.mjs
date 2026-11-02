@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import corpus from './corpus-v1.json' with { type: 'json' };
+import schema from './harness-v1.schema.json' with { type: 'json' };
 import { operationRegistry, listCapabilities } from '../registry.mjs';
 import { validateAgainst, validateCommandEnvelope, validateOperationInput } from './validate.mjs';
 
@@ -33,10 +34,50 @@ test('shared operation corpus covers every registered operation and its validato
     const slots = corpus.slots.filter(({ id }) => id.startsWith(`${operation.test_slot}-`));
     assert.ok(slots.some(({ accept }) => accept), `${operation.name} has no valid corpus case`);
     assert.ok(slots.some(({ accept }) => !accept), `${operation.name} has no invalid corpus case`);
+    assert.ok(slots.some(({ id }) => id.endsWith('-CLOSED')), `${operation.name} has no closed-object case`);
+    assert.ok(slots.some(({ id }) => id.includes('-TYPE-')), `${operation.name} has no invalid-type case`);
+    const inputSchema = schema.$defs[operation.input_schema];
+    const primary = inputSchema.oneOf?.[0] ?? inputSchema;
+    for (const required of primary.required ?? []) {
+      assert.ok(slots.some(({ id }) => id.endsWith(`-REQUIRED-${required}`)), `${operation.name}.${required} has no missing-required case`);
+    }
     assert.ok(operation.input_fields.every(({ validation }) => typeof validation === 'string' && validation.length > 0), `${operation.name} has an undocumented input condition`);
     const valid = slots.find(({ id }) => id.endsWith('-VALID'));
     assert.equal(validateOperationInput(operation.name, valid.value).valid, true, `${valid.id}`);
   }
+});
+
+test('all 15 snapshots, referenced entities, and module event variants have valid and nested closed cases', () => {
+  const snapshots = schema.$defs.snapshotEnvelope.oneOf;
+  assert.equal(snapshots.length, 15);
+  for (const variant of snapshots) {
+    const module = variant.properties.module.const;
+    const snapshot = schema.$defs[variant.properties.data.$ref.slice('#/$defs/'.length)];
+    const entities = Object.entries(snapshot.properties ?? {}).flatMap(([field, rule]) => {
+      const ref = rule.type === 'array' ? rule.items?.$ref : rule.$ref;
+      const name = ref?.slice('#/$defs/'.length);
+      return name && schema.$defs[name]?.type === 'object' ? [[field, name]] : [];
+    });
+    for (const [, entity] of entities) {
+      const prefix = `NH00-STRUCT-SNAPSHOT-${module}-${entity}-`;
+      assert.ok(corpus.slots.some(({ id, accept }) => id === `${prefix}VALID` && accept), `${module}.${entity} has no nested valid case`);
+      assert.ok(corpus.slots.some(({ id, accept }) => id === `${prefix}NESTED-EXTRA` && !accept), `${module}.${entity} has no nested closed case`);
+    }
+  }
+  const inlineEvents = schema.$defs.streamEnvelope.oneOf.filter(({ properties }) => properties.delivery?.const === 'inline');
+  let variantCount = 0;
+  for (const event of inlineEvents) {
+    const module = event.properties.module.const;
+    const eventSchema = schema.$defs[event.properties.payload.$ref.slice('#/$defs/'.length)];
+    for (const variant of eventSchema.oneOf ?? []) {
+      variantCount++;
+      const entity = variant.properties.entity_type.const;
+      const prefix = `NH00-STRUCT-EVENT-${module}-${entity}-`;
+      assert.ok(corpus.slots.some(({ id, accept }) => id === `${prefix}VALID` && accept), `${module}.${entity} event has no valid case`);
+      assert.ok(corpus.slots.some(({ id, accept }) => id === `${prefix}CLOSED` && !accept), `${module}.${entity} event has no closed case`);
+    }
+  }
+  assert.ok(variantCount > 40);
 });
 
 test('optional and nullable are independent', () => {

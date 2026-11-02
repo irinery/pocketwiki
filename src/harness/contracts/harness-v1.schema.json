@@ -3648,7 +3648,7 @@
             "host": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 253,
+              "x-maxUtf8Bytes": 253,
               "x-format": "hostname"
             },
             "repository": {
@@ -3691,7 +3691,7 @@
             "host": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 253,
+              "x-maxUtf8Bytes": 253,
               "x-format": "hostname"
             },
             "repository": {
@@ -3744,7 +3744,7 @@
             "host": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 253,
+              "x-maxUtf8Bytes": 253,
               "x-format": "hostname"
             },
             "repository": {
@@ -3787,7 +3787,7 @@
             "host": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 253,
+              "x-maxUtf8Bytes": 253,
               "x-format": "hostname"
             },
             "repository": {
@@ -3832,7 +3832,7 @@
             "host": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 253,
+              "x-maxUtf8Bytes": 253,
               "x-format": "hostname"
             },
             "repository": {
@@ -3881,7 +3881,7 @@
             "host": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 253,
+              "x-maxUtf8Bytes": 253,
               "x-format": "hostname"
             },
             "repository": {
@@ -10288,111 +10288,301 @@
       }
     },
     "operationInput_source_control_preview": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "thread_id",
-        "operation",
-        "repository",
-        "head_sha",
-        "body",
-        "host"
-      ],
-      "properties": {
-        "thread_id": {
-          "$ref": "#/$defs/uuid"
-        },
-        "operation": {
-          "type": "string",
-          "enum": [
-            "link",
-            "create_draft",
-            "comment",
-            "review",
-            "merge"
-          ]
-        },
-        "repository": {
-          "type": "string",
-          "x-maxUtf8Bytes": 4096,
-          "minLength": 3,
-          "pattern": "^[^/\\s]+/[^/\\s]+$"
-        },
-        "pr_number": {
-          "anyOf": [
-            {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "host",
+            "repository",
+            "operation",
+            "head_sha",
+            "body",
+            "pr_number",
+            "thread_id"
+          ],
+          "properties": {
+            "host": {
+              "type": "string",
+              "minLength": 1,
+              "x-maxUtf8Bytes": 253,
+              "x-format": "hostname"
+            },
+            "repository": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 512,
+              "pattern": "^[^/\\s]+/[^/\\s]+$"
+            },
+            "head_sha": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{40}$"
+            },
+            "body": {
+              "type": "string",
+              "x-maxUtf8Bytes": 16384
+            },
+            "operation": {
+              "const": "link"
+            },
+            "pr_number": {
               "type": "integer",
               "minimum": 1
             },
-            {
-              "type": "null"
+            "thread_id": {
+              "$ref": "#/$defs/uuid"
             }
-          ]
+          }
         },
-        "head_sha": {
-          "type": "string",
-          "pattern": "^[a-f0-9]{40}$"
-        },
-        "body": {
-          "type": "string",
-          "x-maxUtf8Bytes": 16384,
-          "x-minUtf8Bytes": 0
-        },
-        "host": {
-          "type": "string",
-          "x-maxUtf8Bytes": 4096
-        },
-        "title": {
-          "anyOf": [
-            {
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "host",
+            "repository",
+            "operation",
+            "head_sha",
+            "body",
+            "title",
+            "base_branch",
+            "head_branch",
+            "thread_id"
+          ],
+          "properties": {
+            "host": {
               "type": "string",
-              "x-maxUtf8Bytes": 4096
+              "minLength": 1,
+              "x-maxUtf8Bytes": 253,
+              "x-format": "hostname"
             },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "base_branch": {
-          "anyOf": [
-            {
+            "repository": {
               "type": "string",
-              "x-maxUtf8Bytes": 4096
+              "minLength": 3,
+              "maxLength": 512,
+              "pattern": "^[^/\\s]+/[^/\\s]+$"
             },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "head_branch": {
-          "anyOf": [
-            {
+            "head_sha": {
               "type": "string",
-              "x-maxUtf8Bytes": 4096
+              "pattern": "^[a-f0-9]{40}$"
             },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "review_event": {
-          "anyOf": [
-            {
+            "body": {
               "type": "string",
+              "minLength": 1,
+              "x-maxUtf8Bytes": 16384
+            },
+            "operation": {
+              "const": "create_draft"
+            },
+            "title": {
+              "type": "string",
+              "x-minUtf8Bytes": 1,
+              "x-maxUtf8Bytes": 256
+            },
+            "base_branch": {
+              "type": "string",
+              "x-minUtf8Bytes": 1,
+              "x-maxUtf8Bytes": 120
+            },
+            "head_branch": {
+              "type": "string",
+              "x-minUtf8Bytes": 1,
+              "x-maxUtf8Bytes": 120
+            },
+            "thread_id": {
+              "$ref": "#/$defs/uuid"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "host",
+            "repository",
+            "operation",
+            "head_sha",
+            "body",
+            "pr_number",
+            "thread_id"
+          ],
+          "properties": {
+            "host": {
+              "type": "string",
+              "minLength": 1,
+              "x-maxUtf8Bytes": 253,
+              "x-format": "hostname"
+            },
+            "repository": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 512,
+              "pattern": "^[^/\\s]+/[^/\\s]+$"
+            },
+            "head_sha": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{40}$"
+            },
+            "body": {
+              "type": "string",
+              "minLength": 1,
+              "x-maxUtf8Bytes": 16384
+            },
+            "operation": {
+              "const": "comment"
+            },
+            "pr_number": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "thread_id": {
+              "$ref": "#/$defs/uuid"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "host",
+            "repository",
+            "operation",
+            "head_sha",
+            "body",
+            "pr_number",
+            "review_event",
+            "thread_id"
+          ],
+          "properties": {
+            "host": {
+              "type": "string",
+              "minLength": 1,
+              "x-maxUtf8Bytes": 253,
+              "x-format": "hostname"
+            },
+            "repository": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 512,
+              "pattern": "^[^/\\s]+/[^/\\s]+$"
+            },
+            "head_sha": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{40}$"
+            },
+            "body": {
+              "type": "string",
+              "x-maxUtf8Bytes": 16384
+            },
+            "operation": {
+              "const": "review"
+            },
+            "pr_number": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "review_event": {
+              "const": "approve"
+            },
+            "thread_id": {
+              "$ref": "#/$defs/uuid"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "host",
+            "repository",
+            "operation",
+            "head_sha",
+            "body",
+            "pr_number",
+            "review_event",
+            "thread_id"
+          ],
+          "properties": {
+            "host": {
+              "type": "string",
+              "minLength": 1,
+              "x-maxUtf8Bytes": 253,
+              "x-format": "hostname"
+            },
+            "repository": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 512,
+              "pattern": "^[^/\\s]+/[^/\\s]+$"
+            },
+            "head_sha": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{40}$"
+            },
+            "body": {
+              "type": "string",
+              "minLength": 1,
+              "x-maxUtf8Bytes": 16384
+            },
+            "operation": {
+              "const": "review"
+            },
+            "pr_number": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "review_event": {
               "enum": [
                 "comment",
-                "approve",
                 "request_changes"
               ]
             },
-            {
-              "type": "null"
+            "thread_id": {
+              "$ref": "#/$defs/uuid"
             }
-          ]
+          }
         },
-        "merge_method": {
-          "anyOf": [
-            {
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "host",
+            "repository",
+            "operation",
+            "head_sha",
+            "body",
+            "pr_number",
+            "merge_method",
+            "thread_id"
+          ],
+          "properties": {
+            "host": {
+              "type": "string",
+              "minLength": 1,
+              "x-maxUtf8Bytes": 253,
+              "x-format": "hostname"
+            },
+            "repository": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 512,
+              "pattern": "^[^/\\s]+/[^/\\s]+$"
+            },
+            "head_sha": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{40}$"
+            },
+            "body": {
+              "type": "string",
+              "x-maxUtf8Bytes": 16384
+            },
+            "operation": {
+              "const": "merge"
+            },
+            "pr_number": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "merge_method": {
               "type": "string",
               "enum": [
                 "merge",
@@ -10400,11 +10590,14 @@
                 "rebase"
               ]
             },
-            {
-              "type": "null"
+            "thread_id": {
+              "$ref": "#/$defs/uuid"
             }
-          ]
+          }
         }
+      ],
+      "discriminator": {
+        "propertyName": "operation"
       }
     },
     "operationInput_source_control_execute": {

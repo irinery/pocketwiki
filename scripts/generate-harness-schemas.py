@@ -118,6 +118,7 @@ def apply_validation(field_schema, raw_type, validation):
         field_schema["uniqueItems"] = True
     if "hostname" in text.lower():
         field_schema["x-format"] = "hostname"
+        field_schema["x-maxUtf8Bytes"] = 253
     if "sha-256" in text.lower() or "SHA-256" in text:
         field_schema["x-format"] = "sha256"
     if schema_type == "string":
@@ -201,7 +202,7 @@ def permission_action_schema():
 
 def forge_preview_schema():
     base = {
-        "host": {"type": "string", "minLength": 1, "maxLength": 253, "x-format": "hostname"},
+        "host": {"type": "string", "minLength": 1, "x-maxUtf8Bytes": 253, "x-format": "hostname"},
         "repository": {"type": "string", "minLength": 3, "maxLength": 512, "pattern": r"^[^/\s]+/[^/\s]+$"},
         "head_sha": {"type": "string", "pattern": r"^[a-f0-9]{40}$"},
         "body": {"type": "string", "x-maxUtf8Bytes": 16384},
@@ -262,7 +263,14 @@ def operation_inputs():
                     if validation:
                         field_schema = apply_validation(field_schema, field_type, validation.group(1))
                     fields.append((field_name, field_schema, bool(required_match and required_match.group(1) == "true")))
-            result[name] = object_schema(fields)
+            if name == "source_control.preview":
+                preview = forge_preview_schema()
+                for variant in preview["oneOf"]:
+                    variant["properties"]["thread_id"] = {"$ref": "#/$defs/uuid"}
+                    variant["required"].append("thread_id")
+                result[name] = preview
+            else:
+                result[name] = object_schema(fields)
     return registry, result
 
 

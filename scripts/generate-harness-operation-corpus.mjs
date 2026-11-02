@@ -5,21 +5,67 @@ import corpus from '../src/harness/contracts/corpus-v1.json' with { type: 'json'
 
 const uuid = '11111111-1111-4111-8111-111111111111';
 const schemaFor = (operation) => schema.$defs[operation.input_schema];
+const resolve = (rule) => {
+  if (rule?.$ref) return schema.$defs[rule.$ref.slice('#/$defs/'.length)];
+  if (rule?.anyOf) return resolve(rule.anyOf.find((candidate) => candidate.type !== 'null') ?? rule.anyOf[0]);
+  return rule;
+};
 const previous = corpus.slots.filter(({ id }) => !id.startsWith('NH00-OP-'));
 const generated = [];
 
 for (const operation of registry.operations) {
-  const value = validInput(operation.name, sample(schemaFor(operation)));
+  const inputSchema = schemaFor(operation);
+  const value = validInput(operation.name, sample(inputSchema));
   const baseID = operation.test_slot;
   generated.push(slot(`${baseID}-VALID`, operation, true, structuredClone(value)));
   generated.push(slot(`${baseID}-CLOSED`, operation, false, { ...structuredClone(value), unexpected: true }));
+  const primaryVariant = inputSchema.oneOf?.[0];
+  for (const field of inputSchema.required ?? primaryVariant?.required ?? []) {
+    const missing = structuredClone(value);
+    delete missing[field];
+    generated.push(slot(`${baseID}-REQUIRED-${field}`, operation, false, missing));
+  }
+  const typeCandidates = inputSchema.required?.length ? inputSchema.required
+    : primaryVariant?.required?.length ? primaryVariant.required
+      : Object.keys(inputSchema.properties ?? primaryVariant?.properties ?? {});
+  const typeField = typeCandidates.find((field) => {
+    const rule = resolve(inputSchema.properties?.[field] ?? primaryVariant?.properties?.[field]);
+    return ['array', 'boolean', 'integer', 'object', 'string'].includes(rule?.type);
+  });
+  if (typeField) {
+    const typeRule = resolve(inputSchema.properties?.[typeField] ?? primaryVariant.properties[typeField]);
+    const invalid = typeRule.type === 'string' ? 0
+      : typeRule.type === 'integer' || typeRule.type === 'boolean' ? 'wrong-type'
+        : typeRule.type === 'array' ? {}
+          : [];
+    const changed = structuredClone(value);
+    changed[typeField] = invalid;
+    generated.push(slot(`${baseID}-TYPE-${typeField}`, operation, false, changed));
+    if (typeRule.type === 'integer') {
+      const booleanValue = structuredClone(value);
+      booleanValue[typeField] = true;
+      generated.push(slot(`${baseID}-TYPE-BOOLEAN-${typeField}`, operation, false, booleanValue));
+    }
+  }
   for (const field of operation.input_fields) {
-    const rule = schemaFor(operation).properties?.[field.name];
+    const branch = inputSchema.oneOf?.find((candidate) => Object.hasOwn(candidate.properties ?? {}, field.name));
+    const rule = inputSchema.properties?.[field.name] ?? branch?.properties?.[field.name];
     if (!rule) continue;
-    for (const [suffix, invalid] of boundaryCases(rule, value[field.name])) {
-      const changed = structuredClone(value);
-      changed[field.name] = invalid;
-      generated.push(slot(`${baseID}-${field.name}-${suffix}`, operation, false, changed));
+    const fieldBase = branch && operation.name === 'source_control.preview' ? structuredClone(sample(branch)) : value;
+    const boundaryInput = inputWithConditions(operation.name, fieldBase, field.name);
+    for (const [suffix, accept, replacement] of boundaryCases(rule, boundaryInput[field.name])) {
+      const changed = structuredClone(boundaryInput);
+      changed[field.name] = replacement;
+      generated.push(slot(`${baseID}-${field.name}-${suffix}`, operation, accept, changed));
+    }
+    const resolvedRule = resolve(rule);
+    if (resolvedRule['x-maxBase64DecodedBytes'] !== undefined) {
+      const maxDecoded = resolvedRule['x-maxBase64DecodedBytes'];
+      for (const [suffix, accept, decodedBytes] of [['EDGE-DECODED-MAX', true, maxDecoded], ['ABOVE-DECODED-MAX', false, maxDecoded + 1]]) {
+        const changed = structuredClone(boundaryInput);
+        changed[field.name] = Buffer.alloc(decodedBytes).toString('base64');
+        generated.push(slot(`${baseID}-${field.name}-${suffix}`, operation, accept, changed));
+      }
     }
   }
   const condition = invalidCondition(operation.name, value);
@@ -27,6 +73,27 @@ for (const operation of registry.operations) {
   for (const [suffix, accept, input] of additionalCases(operation.name, value)) {
     generated.push(slot(`${baseID}-${suffix}`, operation, accept, input));
   }
+}
+
+function inputWithConditions(name, value, field) {
+  const input = structuredClone(value);
+  if (name === 'permissions.respond') {
+    input.answer = 'answer';
+    input.option_id = 'yes';
+    input.text ||= 'yes';
+  }
+  if (name === 'navigation.list' && ['after_position', 'after_id', 'revision'].includes(field)) {
+    input.after_position ??= 0;
+    input.after_id ??= uuid;
+    input.revision ??= 0;
+  }
+  if (name === 'mcp.thread.call') {
+    const readOnly = ['after_seq', 'through_seq', 'cursor'].includes(field);
+    const send = ['text', 'binding_id', 'message_id', 'queue_revision'].includes(field);
+    if (readOnly) Object.assign(input, { tool: 'thread.read', thread_id: uuid, through_seq: 0 });
+    else if (send) Object.assign(input, { tool: field === 'queue_revision' ? 'thread.send' : 'thread.start', command_id: uuid, text: 'x', binding_id: uuid, message_id: uuid, ...(field === 'queue_revision' ? { thread_id: uuid, queue_revision: 0 } : {}) });
+  }
+  return input;
 }
 
 corpus.slots = [...previous, ...generated];
@@ -52,7 +119,7 @@ function sample(rule) {
   if (rule.enum) return rule.enum[0];
   switch (rule.type) {
     case 'object': return Object.fromEntries((rule.required ?? []).map((key) => [key, sample(rule.properties[key])]));
-    case 'array': return Array.from({ length: rule.minItems ?? 0 }, (_, i) => distinct(sample(rule.items), i));
+    case 'array': return arraySample(rule, rule.minItems ?? 0);
     case 'string': return stringSample(rule);
     case 'integer': return rule.minimum ?? 0;
     case 'boolean': return false;
@@ -80,6 +147,14 @@ function distinct(value, index) {
   return value;
 }
 
+function arraySample(rule, length) {
+  const itemRule = resolve(rule.items);
+  if (itemRule?.enum) return rule.uniqueItems
+    ? itemRule.enum.slice(0, length)
+    : Array.from({ length }, (_, i) => itemRule.enum[i % itemRule.enum.length]);
+  return Array.from({ length }, (_, i) => distinct(sample(rule.items), i));
+}
+
 function validInput(name, value) {
   const input = value;
   switch (name) {
@@ -99,22 +174,81 @@ function validInput(name, value) {
 
 function boundaryCases(rule, value) {
   const cases = [];
-  const typeRule = rule.anyOf?.find((candidate) => candidate.type !== 'null') ?? rule;
+  const typeRule = resolve(rule);
   if (typeRule.type === 'integer') {
-    if (typeRule.minimum !== undefined) cases.push(['MIN', typeRule.minimum - 1]);
-    if (typeRule.maximum !== undefined) cases.push(['MAX', typeRule.maximum + 1]);
+    if (typeRule.minimum !== undefined) cases.push(['EDGE-MIN', true, typeRule.minimum], ['BELOW-MIN', false, typeRule.minimum - 1]);
+    if (typeRule.maximum !== undefined) cases.push(['EDGE-MAX', true, typeRule.maximum], ['ABOVE-MAX', false, typeRule.maximum + 1]);
   }
   if (typeRule.type === 'string') {
-    if (typeRule['x-minUtf8Bytes'] > 0) cases.push(['MIN', 'x'.repeat(typeRule['x-minUtf8Bytes'] - 1)]);
-    if (typeRule['x-maxUtf8Bytes'] !== undefined) cases.push(['MAX', 'x'.repeat(typeRule['x-maxUtf8Bytes'] + 1)]);
-    if (typeRule.minLength > 0) cases.push(['MIN', 'x'.repeat(typeRule.minLength - 1)]);
-    if (typeRule.maxLength !== undefined) cases.push(['MAX', 'x'.repeat(typeRule.maxLength + 1)]);
+    if (typeRule['x-minUtf8Bytes'] > 0) cases.push(['EDGE-MIN-BYTES', true, 'x'.repeat(typeRule['x-minUtf8Bytes'])], ['BELOW-MIN-BYTES', false, 'x'.repeat(typeRule['x-minUtf8Bytes'] - 1)]);
+    if (typeRule['x-maxUtf8Bytes'] !== undefined && typeRule['x-maxBase64DecodedBytes'] === undefined && !typeRule.pattern && typeRule['x-maxUtf8Bytes'] <= (typeRule.maxLength ?? typeRule['x-maxUtf8Bytes']) * 4) {
+      const at = stringAtBytes(typeRule, typeRule['x-maxUtf8Bytes']);
+      const beyond = stringAtBytes(typeRule, typeRule['x-maxUtf8Bytes'] + 1);
+      if (at && beyond && at.length <= (typeRule.maxLength ?? Infinity) && beyond.length <= (typeRule.maxLength ?? Infinity)) {
+        cases.push(['EDGE-MAX-BYTES', true, at], ['ABOVE-MAX-BYTES', false, beyond]);
+      }
+    }
+    if (typeRule.minLength > 0) cases.push(['EDGE-MIN-LENGTH', true, stringAtLength(typeRule, typeRule.minLength)], ['BELOW-MIN-LENGTH', false, 'x'.repeat(typeRule.minLength - 1)]);
+    if (typeRule.maxLength !== undefined && !typeRule.pattern) {
+      const at = stringAtLength(typeRule, typeRule.maxLength);
+      const beyond = stringAtLength(typeRule, typeRule.maxLength + 1);
+      if (Buffer.byteLength(at, 'utf8') <= (typeRule['x-maxUtf8Bytes'] ?? Infinity)) cases.push(['EDGE-MAX-LENGTH', true, at]);
+      if (Buffer.byteLength(beyond, 'utf8') > (typeRule['x-maxUtf8Bytes'] ?? Infinity)) {
+        cases.push(['ABOVE-MAX-LENGTH', false, 'x'.repeat(typeRule.maxLength + 1)]);
+      } else cases.push(['ABOVE-MAX-LENGTH', false, beyond]);
+    }
   }
   if (typeRule.type === 'array') {
-    if (typeRule.minItems > 0) cases.push(['MIN', []]);
-    if (typeRule.maxItems !== undefined) cases.push(['MAX', Array.from({ length: typeRule.maxItems + 1 }, (_, i) => distinct(sample(typeRule.items), i))]);
+    if (typeRule.minItems > 0) cases.push(['EDGE-MIN-ITEMS', true, arraySample(typeRule, typeRule.minItems)], ['BELOW-MIN-ITEMS', false, arraySample(typeRule, typeRule.minItems - 1)]);
+    if (typeRule.maxItems !== undefined) {
+      const itemRule = resolve(typeRule.items);
+      const effectiveMax = typeRule.uniqueItems && itemRule?.enum ? Math.min(typeRule.maxItems, itemRule.enum.length) : typeRule.maxItems;
+      const enumLimited = typeRule.uniqueItems && itemRule?.enum && itemRule.enum.length <= typeRule.maxItems;
+      const edge = arraySample(typeRule, effectiveMax);
+      const beyond = enumLimited
+        ? [...edge, '__outside_closed_enum__']
+        : arraySample(typeRule, typeRule.maxItems + 1);
+      cases.push([enumLimited ? 'EDGE-EFFECTIVE-MAX-ITEMS' : 'EDGE-MAX-ITEMS', true, edge]);
+      cases.push([enumLimited ? 'ABOVE-EFFECTIVE-MAX-ITEMS' : 'ABOVE-MAX-ITEMS', false, beyond]);
+    }
   }
-  return cases.filter(([suffix, invalid]) => JSON.stringify(invalid) !== JSON.stringify(value) && `${suffix}`);
+  return cases.filter(([suffix, accept, replacement]) => JSON.stringify(replacement) !== JSON.stringify(value) && `${suffix}`);
+}
+
+function stringAtBytes(rule, bytes) {
+  if (rule['x-format'] === 'git-branch') return bytes > 6 ? `codex/${'x'.repeat(bytes - 6)}` : null;
+  if (rule['x-format'] === 'basename' || rule['x-format'] === 'relative-path') {
+    if (rule['x-format'] === 'basename') return 'x'.repeat(bytes);
+    return bytes > 2 ? `x/${'x'.repeat(bytes - 2)}` : null;
+  }
+  if (rule['x-format'] === 'pairing-endpoint') {
+    const prefix = 'https://example.test/';
+    return bytes > Buffer.byteLength(prefix) ? `${prefix}${'x'.repeat(bytes - Buffer.byteLength(prefix))}` : null;
+  }
+  if (rule['x-format'] === 'sha256' && bytes === 64) return 'a'.repeat(64);
+  if (rule['x-format'] === 'base64url32') return bytes === 43 ? Buffer.alloc(32).toString('base64url') : null;
+  if (rule['x-format'] === 'hostname') {
+    let remaining = bytes;
+    const labels = [];
+    while (remaining > 63) { labels.push('a'.repeat(63)); remaining -= 64; }
+    if (remaining < 1) return null;
+    labels.push('a'.repeat(remaining));
+    return labels.join('.');
+  }
+  if (rule['x-format'] === 'base64') {
+    const decodedSize = Math.floor(bytes / 4) * 3;
+    const value = Buffer.alloc(decodedSize).toString('base64');
+    return Buffer.byteLength(value, 'utf8') === bytes ? value : null;
+  }
+  const emojiCount = Math.floor(bytes / 4);
+  const remainder = bytes % 4;
+  return '😀'.repeat(emojiCount) + 'x'.repeat(remainder);
+}
+
+function stringAtLength(rule, length) {
+  if (rule['x-format'] === 'hostname') return stringAtBytes(rule, length);
+  if (rule.pattern?.includes('/[^/')) return length < 3 ? 'x'.repeat(length) : `a/${'x'.repeat(length - 2)}`;
+  return 'x'.repeat(length);
 }
 
 function invalidCondition(name, value) {

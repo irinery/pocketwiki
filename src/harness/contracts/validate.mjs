@@ -16,7 +16,7 @@ export function validateAgainst(schemaName, value, operationName) {
     errors.push(...inputValidation.errors.map((error) => `$.input${error.slice(1)}`));
   }
   validateSemantics(value, '$', errors);
-  if (operationName) checkOperationInput(operationName, value, errors);
+  if (operationName && errors.length === 0) checkOperationInput(operationName, value, errors);
   return { valid: errors.length === 0, errors };
 }
 
@@ -260,7 +260,7 @@ function isHostname(value) {
 }
 
 function isHarnessBranch(value) {
-  if (typeof value !== 'string' || !value.startsWith('codex/') || value.length > 120) return false;
+  if (typeof value !== 'string' || !value.startsWith('codex/')) return false;
   if (/[\x00-\x20\x7f~^:?*\[\\]/.test(value) || value.includes('..') || value.includes('@{') || value.includes('//') || value.endsWith('/') || value.endsWith('.')) return false;
   return value.split('/').every((part) => part && !part.startsWith('.') && !part.endsWith('.lock'));
 }
