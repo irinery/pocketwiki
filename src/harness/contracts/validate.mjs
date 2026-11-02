@@ -70,16 +70,19 @@ function checkOperationInput(operation, value, errors) {
   switch (operation) {
     case 'threads.message':
       fail(Object.hasOwn(value, 'prepared_id') === Object.hasOwn(value, 'manifest_sha256'));
+      fail(!['enqueue', 'edit', 'steer'].includes(value.action) || value.text.length > 0);
       break;
     case 'runtime.dispatch':
       fail(value.operation === 'submit' ? !Object.hasOwn(value, 'run_id') && value.text.length > 0 : Object.hasOwn(value, 'run_id'));
       break;
     case 'permissions.respond':
       fail(value.answer !== 'answer' || Boolean(value.text) || Boolean(value.option_id));
+      fail(value.answer === 'answer' || !Object.hasOwn(value, 'option_id'));
       break;
     case 'workspaces.prepare':
       fail(value.mode === 'scratch' ? !Object.hasOwn(value, 'project_id') : Object.hasOwn(value, 'project_id'));
       fail(value.mode !== 'worktree' || (Object.hasOwn(value, 'base_sha') && Object.hasOwn(value, 'branch')));
+      fail(value.mode !== 'worktree' || isHarnessBranch(value.branch));
       break;
     case 'checkpoints.diff':
       fail(value.scope === 'turn' ? Object.hasOwn(value, 'run_id') && !Object.hasOwn(value, 'base_sha') : Object.hasOwn(value, 'base_sha') && !Object.hasOwn(value, 'run_id'));
@@ -89,8 +92,8 @@ function checkOperationInput(operation, value, errors) {
       break;
     case 'mcp.thread.call': {
       const rules = {
-        'thread.list': ['project_id','text','after_seq','through_seq','cursor','binding_id','message_id','queue_revision'],
-        'thread.read': ['project_id','text','binding_id','message_id','queue_revision'],
+        'thread.list': ['command_id','thread_id','text','after_seq','through_seq','binding_id','message_id','queue_revision'],
+        'thread.read': ['command_id','project_id','text','binding_id','message_id','queue_revision'],
         'thread.start': ['thread_id','after_seq','through_seq','cursor','queue_revision'],
         'thread.send': ['project_id','after_seq','through_seq','cursor'],
         'thread.interrupt': ['project_id','text','after_seq','through_seq','cursor','binding_id','message_id']
@@ -98,13 +101,15 @@ function checkOperationInput(operation, value, errors) {
       const forbidden = rules[value.tool] ?? [];
       fail(forbidden.every((field) => !Object.hasOwn(value, field)));
       const required = {
-        'thread.start': ['command_id','project_id','text','binding_id','message_id'],
+        'thread.start': ['command_id','text','binding_id','message_id'],
         'thread.send': ['command_id','thread_id','text','binding_id','message_id','queue_revision'],
         'thread.interrupt': ['command_id','thread_id','queue_revision'],
         'thread.read': ['thread_id'],
         'thread.list': []
       }[value.tool] ?? [];
       fail(required.every((field) => Object.hasOwn(value, field)));
+      if (['thread.start', 'thread.send'].includes(value.tool)) fail(typeof value.text === 'string' && value.text.length > 0);
+      if (value.tool === 'thread.read') fail(!Object.hasOwn(value, 'cursor') || Object.hasOwn(value, 'through_seq'));
       break;
     }
     case 'source_control.preview': {
@@ -181,6 +186,13 @@ function visit(rule, value, path, errors) {
     if (rule['x-minUtf8Bytes'] !== undefined && Buffer.byteLength(value, 'utf8') < rule['x-minUtf8Bytes']) errors.push(`${path} is shorter than ${rule['x-minUtf8Bytes']} UTF-8 bytes`);
     if (rule['x-maxUtf8Bytes'] !== undefined && Buffer.byteLength(value, 'utf8') > rule['x-maxUtf8Bytes']) errors.push(`${path} exceeds ${rule['x-maxUtf8Bytes']} UTF-8 bytes`);
     if (rule['x-format'] === 'base64' && !isBase64(value)) errors.push(`${path} must be base64`);
+    if (rule['x-format'] === 'base64' && rule['x-maxBase64DecodedBytes'] !== undefined && isBase64(value) && Buffer.from(value, 'base64').length > rule['x-maxBase64DecodedBytes']) errors.push(`${path} decoded base64 exceeds ${rule['x-maxBase64DecodedBytes']} bytes`);
+    if (rule['x-format'] === 'base64url32' && !isBase64URL32(value)) errors.push(`${path} must be a 32-byte base64url token`);
+    if (rule['x-format'] === 'basename' && (!value || value === '.' || value === '..' || /[\\/\u0000-\u001f]/.test(value))) errors.push(`${path} must be a basename without a path`);
+    if (rule['x-format'] === 'relative-path' && !isSafeRelativePath(value)) errors.push(`${path} must be a canonical root-relative path`);
+    if (rule['x-format'] === 'pairing-endpoint' && !isPairingEndpoint(value)) errors.push(`${path} must be HTTPS or loopback HTTP without credentials or query`);
+    if (rule['x-format'] === 'hostname' && !isHostname(value)) errors.push(`${path} must be a hostname`);
+    if (rule['x-format'] === 'git-branch' && !isHarnessBranch(value)) errors.push(`${path} must be a valid codex/ branch`);
     if (rule['x-format'] === 'jcs' && !isCanonicalEntityKey(value)) errors.push(`${path} must be canonical JSON`);
   } else if (rule.type === 'integer') {
     if (!Number.isSafeInteger(value)) return errors.push(`${path} must be an integer`);
@@ -211,6 +223,46 @@ function isCanonicalEntityKey(value) {
 function isBase64(value) {
   if (value.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(value)) return false;
   return Buffer.from(value, 'base64').toString('base64') === value;
+}
+
+function isBase64URL32(value) {
+  if (!/^[A-Za-z0-9_-]{43}$/.test(value)) return false;
+  const decoded = Buffer.from(value, 'base64url');
+  return decoded.length === 32 && decoded.toString('base64url') === value;
+}
+
+function isSafeRelativePath(value) {
+  if (!value || value.includes('\\') || value.startsWith('/')) return false;
+  const segments = value.split('/');
+  return (value === '.' || segments.every((segment) => segment && segment !== '.' && segment !== '..'));
+}
+
+function isPairingEndpoint(value) {
+  try {
+    const url = new URL(value);
+    const pathAndAuthority = value.split('#', 1)[0];
+    if (url.username || url.password || pathAndAuthority.includes('?') || value.includes('#') || !url.hostname) return false;
+    if (url.protocol === 'https:') return true;
+    return url.protocol === 'http:' && isLoopbackHost(url.hostname);
+  } catch { return false; }
+}
+
+function isLoopbackHost(host) {
+  const value = host.toLowerCase();
+  if (value === 'localhost' || value === '[::1]' || value === '::1') return true;
+  const parts = value.split('.');
+  return parts.length === 4 && Number(parts[0]) === 127 && parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255);
+}
+
+function isHostname(value) {
+  if (value.length > 253) return false;
+  return value.split('.').every((label) => label.length > 0 && label.length <= 63 && /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/.test(label));
+}
+
+function isHarnessBranch(value) {
+  if (typeof value !== 'string' || !value.startsWith('codex/') || value.length > 120) return false;
+  if (/[\x00-\x20\x7f~^:?*\[\\]/.test(value) || value.includes('..') || value.includes('@{') || value.includes('//') || value.endsWith('/') || value.endsWith('.')) return false;
+  return value.split('/').every((part) => part && !part.startsWith('.') && !part.endsWith('.lock'));
 }
 
 function canonicalJSON(value) {

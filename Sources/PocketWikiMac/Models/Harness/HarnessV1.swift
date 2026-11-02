@@ -138,6 +138,8 @@ enum HarnessV1 {
         switch operation {
         case "threads.message":
             require(has("prepared_id") == has("manifest_sha256"))
+            let action = object["action"] as? String ?? ""
+            require(!["enqueue", "edit", "steer"].contains(action) || !(object["text"] as? String ?? "").isEmpty)
         case "runtime.dispatch":
             let action = object["operation"] as? String
             let text = object["text"] as? String ?? ""
@@ -145,10 +147,12 @@ enum HarnessV1 {
         case "permissions.respond":
             let answer = object["answer"] as? String
             require(answer != "answer" || !(object["text"] as? String ?? "").isEmpty || !(object["option_id"] as? String ?? "").isEmpty)
+            require(answer == "answer" || !has("option_id"))
         case "workspaces.prepare":
             let mode = object["mode"] as? String
             require(mode == "scratch" ? !has("project_id") : has("project_id"))
             require(mode != "worktree" || (has("base_sha") && has("branch")))
+            require(mode != "worktree" || isHarnessBranch(object["branch"] as? String ?? ""))
         case "checkpoints.diff":
             let scope = object["scope"] as? String
             require(scope == "turn" ? (has("run_id") && !has("base_sha")) : (has("base_sha") && !has("run_id")))
@@ -157,20 +161,22 @@ enum HarnessV1 {
         case "mcp.thread.call":
             let tool = object["tool"] as? String ?? ""
             let forbidden: [String: [String]] = [
-                "thread.list": ["text", "after_seq", "through_seq", "cursor", "binding_id", "message_id", "queue_revision"],
-                "thread.read": ["project_id", "text", "binding_id", "message_id", "queue_revision"],
+                "thread.list": ["command_id", "thread_id", "text", "after_seq", "through_seq", "binding_id", "message_id", "queue_revision"],
+                "thread.read": ["command_id", "project_id", "text", "binding_id", "message_id", "queue_revision"],
                 "thread.start": ["thread_id", "after_seq", "through_seq", "cursor", "queue_revision"],
                 "thread.send": ["project_id", "after_seq", "through_seq", "cursor"],
                 "thread.interrupt": ["project_id", "text", "after_seq", "through_seq", "cursor", "binding_id", "message_id"]
             ]
             require((forbidden[tool] ?? []).allSatisfy { !has($0) })
             let required: [String: [String]] = [
-                "thread.start": ["command_id", "project_id", "text", "binding_id", "message_id"],
+                "thread.start": ["command_id", "text", "binding_id", "message_id"],
                 "thread.send": ["command_id", "thread_id", "text", "binding_id", "message_id", "queue_revision"],
                 "thread.interrupt": ["command_id", "thread_id", "queue_revision"],
                 "thread.read": ["thread_id"], "thread.list": []
             ]
             require((required[tool] ?? []).allSatisfy(has))
+            if tool == "thread.start" || tool == "thread.send" { require(!(object["text"] as? String ?? "").isEmpty) }
+            if tool == "thread.read" { require(!has("cursor") || has("through_seq")) }
         case "source_control.preview":
             let keys = ["host", "repository", "operation", "pr_number", "head_sha", "body", "title", "base_branch", "head_branch", "review_event", "merge_method"]
             let preview = object.filter { keys.contains($0.key) }
@@ -218,7 +224,16 @@ enum HarnessV1 {
                 if let pattern = rule["pattern"] as? String, string.range(of: pattern, options: .regularExpression) == nil { return false }
                 if rule["format"] as? String == "uuid" && !uuid(string) { return false }
                 if rule["x-format"] as? String == "jcs" && !isCanonicalJSON(string) { return false }
-                if rule["x-format"] as? String == "base64" && !isBase64(string) { return false }
+                if rule["x-format"] as? String == "base64" {
+                    guard let decoded = decodeBase64(string) else { return false }
+                    if let maxDecoded = rule["x-maxBase64DecodedBytes"] as? Int, decoded.count > maxDecoded { return false }
+                }
+                if rule["x-format"] as? String == "base64url32" && !isBase64URL32(string) { return false }
+                if rule["x-format"] as? String == "basename" && !isBasename(string) { return false }
+                if rule["x-format"] as? String == "relative-path" && !isSafeRelativePath(string) { return false }
+                if rule["x-format"] as? String == "pairing-endpoint" && !isPairingEndpoint(string) { return false }
+                if rule["x-format"] as? String == "hostname" && !isHostname(string) { return false }
+                if rule["x-format"] as? String == "git-branch" && !isHarnessBranch(string) { return false }
             case "integer":
                 guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(), number.doubleValue.rounded(.towardZero) == number.doubleValue else { return false }
                 if let minimum = rule["minimum"] as? NSNumber, number.doubleValue < minimum.doubleValue { return false }
@@ -244,9 +259,57 @@ enum HarnessV1 {
         return String(decoding: data, as: UTF8.self)
     }
 
-    private static func isBase64(_ value: String) -> Bool {
-        guard let data = Data(base64Encoded: value, options: []), data.base64EncodedString() == value else { return false }
-        return true
+    private static func decodeBase64(_ value: String) -> Data? {
+        guard let data = Data(base64Encoded: value, options: []), data.base64EncodedString() == value else { return nil }
+        return data
+    }
+
+    private static func isBase64URL32(_ value: String) -> Bool {
+        guard value.utf8.count == 43 else { return false }
+        let base64 = value.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/") + "="
+        guard let data = Data(base64Encoded: base64, options: []) else { return false }
+        let canonical = data.base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
+        return data.count == 32 && canonical == value
+    }
+
+    private static func isBasename(_ value: String) -> Bool {
+        !value.isEmpty && value != "." && value != ".." && !value.contains("/") && !value.contains("\\") && value.rangeOfCharacter(from: .controlCharacters) == nil
+    }
+
+    private static func isSafeRelativePath(_ value: String) -> Bool {
+        guard !value.isEmpty, !value.hasPrefix("/"), !value.contains("\\") else { return false }
+        if value == "." { return true }
+        return value.split(separator: "/", omittingEmptySubsequences: false).allSatisfy { !$0.isEmpty && $0 != "." && $0 != ".." }
+    }
+
+    private static func isPairingEndpoint(_ value: String) -> Bool {
+        guard let components = URLComponents(string: value), let scheme = components.scheme?.lowercased(),
+              let host = components.host?.lowercased(), !host.isEmpty,
+              components.user == nil, components.password == nil, components.query == nil, components.fragment == nil else { return false }
+        if scheme == "https" { return true }
+        return scheme == "http" && isLoopbackHost(host)
+    }
+
+    private static func isLoopbackHost(_ host: String) -> Bool {
+        if ["localhost", "::1", "[::1]"].contains(host) { return true }
+        let octets = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard octets.count == 4, let first = UInt8(octets[0]), first == 127 else { return false }
+        return octets.dropFirst().allSatisfy { UInt8($0) != nil }
+    }
+
+    private static func isHostname(_ value: String) -> Bool {
+        guard value.utf8.count <= 253 else { return false }
+        return value.split(separator: ".", omittingEmptySubsequences: false).allSatisfy { label in
+            guard !label.isEmpty, label.utf8.count <= 63 else { return false }
+            return label.range(of: "^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$", options: .regularExpression) != nil
+        }
+    }
+
+    private static func isHarnessBranch(_ value: String) -> Bool {
+        guard value.hasPrefix("codex/"), value.utf8.count <= 120,
+              value.rangeOfCharacter(from: CharacterSet(charactersIn: " ~^:?*[\\\\]").union(.controlCharacters)) == nil,
+              !value.contains(".."), !value.contains("@{"), !value.contains("//"), !value.hasSuffix("/"), !value.hasSuffix(".") else { return false }
+        return value.split(separator: "/", omittingEmptySubsequences: false).allSatisfy { !$0.isEmpty && !$0.hasPrefix(".") && !$0.hasSuffix(".lock") }
     }
 
     private static let errorCodes: Set<String> = [

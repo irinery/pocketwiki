@@ -3656,7 +3656,7 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 253,
-              "pattern": "^[A-Za-z0-9.-]+$"
+              "x-format": "hostname"
             },
             "repository": {
               "type": "string",
@@ -3699,7 +3699,7 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 253,
-              "pattern": "^[A-Za-z0-9.-]+$"
+              "x-format": "hostname"
             },
             "repository": {
               "type": "string",
@@ -3752,7 +3752,7 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 253,
-              "pattern": "^[A-Za-z0-9.-]+$"
+              "x-format": "hostname"
             },
             "repository": {
               "type": "string",
@@ -3795,7 +3795,7 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 253,
-              "pattern": "^[A-Za-z0-9.-]+$"
+              "x-format": "hostname"
             },
             "repository": {
               "type": "string",
@@ -3840,7 +3840,7 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 253,
-              "pattern": "^[A-Za-z0-9.-]+$"
+              "x-format": "hostname"
             },
             "repository": {
               "type": "string",
@@ -3889,7 +3889,7 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 253,
-              "pattern": "^[A-Za-z0-9.-]+$"
+              "x-format": "hostname"
             },
             "repository": {
               "type": "string",
@@ -9480,7 +9480,8 @@
         "filename": {
           "type": "string",
           "x-maxUtf8Bytes": 255,
-          "x-minUtf8Bytes": 1
+          "x-minUtf8Bytes": 1,
+          "x-format": "basename"
         },
         "mime": {
           "type": "string",
@@ -9658,7 +9659,8 @@
           "anyOf": [
             {
               "type": "string",
-              "x-maxUtf8Bytes": 4096
+              "x-maxUtf8Bytes": 4096,
+              "x-format": "git-branch"
             },
             {
               "type": "null"
@@ -9736,7 +9738,8 @@
       "properties": {
         "root_relative": {
           "type": "string",
-          "x-maxUtf8Bytes": 4096
+          "x-maxUtf8Bytes": 4096,
+          "x-format": "relative-path"
         },
         "title": {
           "type": "string",
@@ -9908,7 +9911,8 @@
         "data_base64": {
           "type": "string",
           "x-maxUtf8Bytes": 87384,
-          "x-format": "base64"
+          "x-format": "base64",
+          "x-maxBase64DecodedBytes": 65536
         }
       }
     },
@@ -9978,7 +9982,8 @@
       "properties": {
         "endpoint": {
           "type": "string",
-          "x-maxUtf8Bytes": 4096
+          "x-maxUtf8Bytes": 4096,
+          "x-format": "pairing-endpoint"
         },
         "challenge_id": {
           "$ref": "#/$defs/uuid"
@@ -9986,7 +9991,7 @@
         "challenge_secret": {
           "type": "string",
           "x-maxUtf8Bytes": 4096,
-          "pattern": "^[A-Za-z0-9_-]+$"
+          "x-format": "base64url32"
         },
         "server_fingerprint": {
           "$ref": "#/$defs/sha256"
@@ -10066,7 +10071,7 @@
         "refresh_token": {
           "type": "string",
           "x-maxUtf8Bytes": 4096,
-          "pattern": "^[A-Za-z0-9_-]+$"
+          "x-format": "base64url32"
         }
       }
     },

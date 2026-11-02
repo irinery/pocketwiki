@@ -33,16 +33,19 @@ test('shared operation corpus covers every registered operation and its validato
     const slots = corpus.slots.filter(({ id }) => id.startsWith(`${operation.test_slot}-`));
     assert.ok(slots.some(({ accept }) => accept), `${operation.name} has no valid corpus case`);
     assert.ok(slots.some(({ accept }) => !accept), `${operation.name} has no invalid corpus case`);
+    assert.ok(operation.input_fields.every(({ validation }) => typeof validation === 'string' && validation.length > 0), `${operation.name} has an undocumented input condition`);
     const valid = slots.find(({ id }) => id.endsWith('-VALID'));
     assert.equal(validateOperationInput(operation.name, valid.value).valid, true, `${valid.id}`);
   }
 });
 
-test('optional and nullable are independent: absent optional UUID passes, explicit null fails', () => {
+test('optional and nullable are independent', () => {
   const optionalButNotNullable = corpus.slots.find(({ id }) => id === 'NH00-AUTH-001');
   const explicitNull = corpus.slots.find(({ id }) => id === 'NH00-AUTH-003');
+  const nullable = corpus.slots.find(({ id }) => id === 'NH00-ENV-011');
   assert.equal(validateAgainst(optionalButNotNullable.schema, optionalButNotNullable.value).valid, true);
   assert.equal(validateAgainst(explicitNull.schema, explicitNull.value).valid, false);
+  assert.equal(validateAgainst(nullable.schema, nullable.value).valid, true);
 });
 
 test('permission action discriminators reject fields from other variants and mismatched request metadata', () => {

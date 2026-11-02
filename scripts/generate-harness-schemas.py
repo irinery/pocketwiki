@@ -86,7 +86,10 @@ def apply_validation(field_schema, raw_type, validation):
         if byte_max:
             field_schema["x-maxUtf8Bytes"] = int(byte_max.group(1))
         if "base64url" in text.lower():
-            field_schema["pattern"] = "^[A-Za-z0-9_-]+$"
+            if "32 bytes" in text.lower():
+                field_schema["x-format"] = "base64url32"
+            else:
+                field_schema["pattern"] = "^[A-Za-z0-9_-]+$"
         elif "base64" in text.lower():
             field_schema["x-format"] = "base64"
         if "40 hex" in text:
@@ -94,6 +97,17 @@ def apply_validation(field_schema, raw_type, validation):
         if "owner/repo" in text.lower():
             field_schema["minLength"] = 3
             field_schema["pattern"] = r"^[^/\s]+/[^/\s]+$"
+        if "basename sem path" in text.lower():
+            field_schema["x-format"] = "basename"
+        if "root-relative" in text.lower() or "sem escape" in text.lower():
+            field_schema["x-format"] = "relative-path"
+        if "url https" in text.lower():
+            field_schema["x-format"] = "pairing-endpoint"
+        if "git check-ref-format" in text.lower() and "prefixo codex/" in text.lower():
+            field_schema["x-format"] = "git-branch"
+        decoded_limit = re.search(r"decodificad[oa]s?\s*(?:<=|até)\s*(\d+)\s*KiB", text, re.IGNORECASE)
+        if decoded_limit:
+            field_schema["x-maxBase64DecodedBytes"] = int(decoded_limit.group(1)) * 1024
     elif schema_type == "array":
         maximum = re.search(r"(?:<=|até)\s*(\d+)", text, re.IGNORECASE)
         if maximum:
@@ -106,6 +120,22 @@ def apply_validation(field_schema, raw_type, validation):
         field_schema["x-format"] = "hostname"
     if "sha-256" in text.lower() or "SHA-256" in text:
         field_schema["x-format"] = "sha256"
+    if schema_type == "string":
+        if "base64url" in text.lower() and "32 bytes" in text.lower():
+            field_schema["x-format"] = "base64url32"
+        elif "base64" in text.lower():
+            field_schema["x-format"] = "base64"
+        if "basename sem path" in text.lower():
+            field_schema["x-format"] = "basename"
+        if "root-relative" in text.lower() or "sem escape" in text.lower():
+            field_schema["x-format"] = "relative-path"
+        if "url https" in text.lower():
+            field_schema["x-format"] = "pairing-endpoint"
+        if "git check-ref-format" in text.lower() and "prefixo codex/" in text.lower():
+            field_schema["x-format"] = "git-branch"
+        decoded_limit = re.search(r"decodificad[oa]s?\s*(?:<=|até)\s*(\d+)\s*KiB", text, re.IGNORECASE)
+        if decoded_limit:
+            field_schema["x-maxBase64DecodedBytes"] = int(decoded_limit.group(1)) * 1024
     return field_schema
 
 
@@ -171,7 +201,7 @@ def permission_action_schema():
 
 def forge_preview_schema():
     base = {
-        "host": {"type": "string", "minLength": 1, "maxLength": 253, "pattern": r"^[A-Za-z0-9.-]+$"},
+        "host": {"type": "string", "minLength": 1, "maxLength": 253, "x-format": "hostname"},
         "repository": {"type": "string", "minLength": 3, "maxLength": 512, "pattern": r"^[^/\s]+/[^/\s]+$"},
         "head_sha": {"type": "string", "pattern": r"^[a-f0-9]{40}$"},
         "body": {"type": "string", "x-maxUtf8Bytes": 16384},

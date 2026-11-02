@@ -24,6 +24,9 @@ for (const operation of registry.operations) {
   }
   const condition = invalidCondition(operation.name, value);
   if (condition) generated.push(slot(`${baseID}-CONDITION`, operation, false, condition));
+  for (const [suffix, accept, input] of additionalCases(operation.name, value)) {
+    generated.push(slot(`${baseID}-${suffix}`, operation, accept, input));
+  }
 }
 
 corpus.slots = [...previous, ...generated];
@@ -65,6 +68,9 @@ function stringSample(rule) {
   if (rule.pattern?.includes('^\\[A-Za-z0-9+/')) return 'AA==';
   if (rule.pattern?.includes('^[') && rule.pattern.includes('/')) return 'owner/repo';
   if (rule['x-format'] === 'base64') return 'AA==';
+  if (rule['x-format'] === 'base64url32') return Buffer.alloc(32).toString('base64url');
+  if (rule['x-format'] === 'pairing-endpoint') return 'https://example.test/v1/harness';
+  if (rule['x-format'] === 'relative-path') return 'project/root';
   return 'x'.repeat(Math.max(1, rule.minLength ?? 0, rule['x-minUtf8Bytes'] ?? 0));
 }
 
@@ -122,8 +128,81 @@ function invalidCondition(name, value) {
     case 'terminal.open': bad.kind = 'task'; delete bad.approval_id; return bad;
     case 'mcp.thread.call': bad.tool = 'thread.send'; return bad;
     case 'source_control.preview': bad.operation = 'create_draft'; delete bad.title; return bad;
+    case 'composer.stage': bad.filename = '../escape.txt'; return bad;
+    case 'workspaces.register_project': bad.root_relative = '../outside'; return bad;
     case 'navigation.update': bad.action = 'reorder'; delete bad.before_thread_id; return bad;
     case 'navigation.list': bad.after_id = uuid; return bad;
     default: return null;
   }
+}
+
+function additionalCases(name, value) {
+  const valid = (suffix, input) => [suffix, true, input];
+  const invalid = (suffix, input) => [suffix, false, input];
+  const cases = [];
+  const id2 = '22222222-2222-4222-8222-222222222222';
+  const sha = 'a'.repeat(40);
+  switch (name) {
+    case 'workspaces.prepare': {
+      const worktree = { ...structuredClone(value), mode: 'worktree', project_id: uuid, base_sha: sha, branch: 'codex/feature' };
+      cases.push(valid('WORKTREE', worktree));
+      cases.push(invalid('WORKTREE-BRANCH', { ...worktree, branch: '../outside' }));
+      break;
+    }
+    case 'checkpoints.diff': {
+      const branch = { ...structuredClone(value), scope: 'branch', base_sha: sha };
+      delete branch.run_id;
+      cases.push(valid('BRANCH', branch));
+      cases.push(invalid('BRANCH-BASE', { ...branch, base_sha: undefined }));
+      break;
+    }
+    case 'mcp.thread.call': {
+      cases.push(valid('TOOL-READ', { tool: 'thread.read', thread_id: uuid }));
+      cases.push(valid('TOOL-READ-BOUNDARY', { tool: 'thread.read', thread_id: uuid, through_seq: 10 }));
+      cases.push(invalid('TOOL-READ-CURSOR', { tool: 'thread.read', thread_id: uuid, cursor: 'next' }));
+      cases.push(valid('TOOL-START', { tool: 'thread.start', command_id: uuid, text: 'start', binding_id: uuid, message_id: id2 }));
+      cases.push(invalid('TOOL-START-TEXT', { tool: 'thread.start', command_id: uuid, text: '', binding_id: uuid, message_id: id2 }));
+      cases.push(valid('TOOL-SEND', { tool: 'thread.send', command_id: uuid, thread_id: uuid, text: 'send', binding_id: uuid, message_id: id2, queue_revision: 0 }));
+      cases.push(invalid('TOOL-SEND-CAS', { tool: 'thread.send', command_id: uuid, thread_id: uuid, text: 'send', binding_id: uuid, message_id: id2 }));
+      cases.push(valid('TOOL-INTERRUPT', { tool: 'thread.interrupt', command_id: uuid, thread_id: uuid, queue_revision: 0 }));
+      cases.push(invalid('TOOL-LIST-MUTATION', { tool: 'thread.list', command_id: uuid }));
+      break;
+    }
+    case 'permissions.respond': {
+      cases.push(valid('ANSWER-TEXT', { ...structuredClone(value), answer: 'answer', text: 'yes' }));
+      cases.push(valid('ANSWER-OPTION', { ...structuredClone(value), answer: 'answer', option_id: 'yes' }));
+      cases.push(invalid('ANSWER-EMPTY', { ...structuredClone(value), answer: 'answer', text: '', option_id: undefined }));
+      break;
+    }
+    case 'source_control.preview': {
+      const common = { thread_id: uuid, host: 'github.com', repository: 'owner/repo', head_sha: sha };
+      cases.push(valid('VARIANT-CREATE', { ...common, operation: 'create_draft', body: 'draft', title: 'Title', base_branch: 'main', head_branch: 'feature' }));
+      cases.push(valid('VARIANT-COMMENT', { ...common, operation: 'comment', body: 'comment', pr_number: 1 }));
+      cases.push(valid('VARIANT-REVIEW', { ...common, operation: 'review', body: '', pr_number: 1, review_event: 'approve' }));
+      cases.push(valid('VARIANT-MERGE', { ...common, operation: 'merge', body: '', pr_number: 1, merge_method: 'squash' }));
+      cases.push(invalid('VARIANT-MERGE-METHOD', { ...common, operation: 'merge', body: '', pr_number: 1, merge_method: 'fast-forward' }));
+      break;
+    }
+    case 'navigation.update': {
+      cases.push(valid('REORDER', { ...structuredClone(value), action: 'reorder', before_thread_id: id2 }));
+      cases.push(valid('MARK-READ', { ...structuredClone(value), action: 'mark_read', read_through_seq: 4 }));
+      break;
+    }
+    case 'environments.pair':
+      cases.push(valid('ENDPOINT-LOOPBACK', { ...structuredClone(value), endpoint: 'http://127.0.0.2/pair' }));
+      cases.push(invalid('ENDPOINT-CREDENTIALS', { ...structuredClone(value), endpoint: 'https://user:secret@example.test/pair' }));
+      cases.push(invalid('ENDPOINT-HTTP-REMOTE', { ...structuredClone(value), endpoint: 'http://example.test/pair' }));
+      cases.push(invalid('ENDPOINT-EMPTY-QUERY', { ...structuredClone(value), endpoint: 'https://example.test/pair?' }));
+      break;
+    case 'terminal.input':
+      cases.push(invalid('DECODED-MAX', { ...structuredClone(value), data_base64: Buffer.alloc(65_537).toString('base64') }));
+      break;
+    case 'environments.challenge': {
+      const scopes = ['read','submit','approve','execute','context.read','memory.personal.read','memory.write','scm.write','scm.merge'];
+      cases.push(valid('SCOPE-MAX', { ...structuredClone(value), requested_scopes: scopes }));
+      cases.push(invalid('SCOPE-DUPLICATE', { ...structuredClone(value), requested_scopes: ['read','read'] }));
+      break;
+    }
+  }
+  return cases;
 }
