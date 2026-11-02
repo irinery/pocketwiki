@@ -31,6 +31,8 @@ jobs:
           repository: irinery/pocketkernel
           ref: 03f8f30eb781b4d16a9dca76f7548f9781bbef02
           path: .build/dependencies/pocketkernel
+          ssh-key: ${{ secrets.POCKETKERNEL_DEPLOY_KEY }}
+          persist-credentials: false
 
       - name: Checkout pinned MiddlewareAuth
         uses: actions/checkout@v4
