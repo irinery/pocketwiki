@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0",
+  "surface": "web",
+  "wiki_file": "index.md",
+  "mcp_tools": [
+    "wiki.search",
+    "wiki.get_document"
+  ],
+  "mcp_search_match": true,
+  "middlewareauth_health": true,
+  "pocketkernel_ready": true,
+  "provider_fixture_requests": 1,
+  "provider_fixture_received_wiki_marker": true,
+  "pocketwiki_process_restarted": true,
+  "pocketwiki_pid_before_restart": 13202,
+  "pocketwiki_pid_after_restart": 13214,
+  "wiki_store_restored_after_process_restart": true,
+  "answer_restored_after_reload": true,
+  "external_browser_requests": 0
+}

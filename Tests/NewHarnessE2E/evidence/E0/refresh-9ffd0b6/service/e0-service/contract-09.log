@@ -1,0 +1,7 @@
+$ sh script/build_nh00_matrix.sh
+exit=0
+--- stdout ---
+Built Linux arm64 and amd64 binaries without CGO in /var/folders/29/3hlkj0cs5bs5hl539889dt8m0000gn/T/nh-test-runtime-7KNd5E/kernel-builds
+
+--- stderr ---
+go: downloading gopkg.in/yaml.v3 v3.0.1

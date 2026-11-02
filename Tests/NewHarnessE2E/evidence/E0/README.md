@@ -20,3 +20,5 @@ Os relatórios, JUnit, logs, screenshot, trace Playwright e evidência sanitizad
 - Matriz E0: `d0a1404c0dfae0bd330a21a0e95941dc76614aa6837dda01713a9635c368c95f`
 
 Os relatórios apontam para o SHA do código executado. A alteração final deste commit adiciona apenas estas evidências e este README.
+
+Reexecução após revisar o restart do servidor web e preparar a lane macOS/CI: [refresh-9ffd0b6](refresh-9ffd0b6/README.md). Ela registra o SHA corrente testado, o restart real de processo web e a rejeição do agregador enquanto o shard XCTest não puder rodar.
