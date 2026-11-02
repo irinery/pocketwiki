@@ -11,7 +11,9 @@
     "build:excalidraw": "npm run clean:generated-duplicates && npm run build:excalidraw-renderer && npm run test:excalidraw-desktop && npm run build:excalidraw-desktop && npm run clean:generated-duplicates",
     "build:graph-view": "mkdir -p Sources/PocketWikiMac/Resources/GraphView && cp src/graph-view/index.html Sources/PocketWikiMac/Resources/GraphView/index.html && esbuild src/graph-view/graph-core.ts --bundle --format=esm --target=es2020 --outfile=Sources/PocketWikiMac/Resources/GraphView/graph-core.js && esbuild src/graph-view/layout-worker.ts --bundle --format=esm --target=es2020 --outfile=Sources/PocketWikiMac/Resources/GraphView/layout-worker.js && esbuild src/graph-view/main.ts --bundle --format=iife --target=es2020 --outfile=Sources/PocketWikiMac/Resources/GraphView/graph.js",
     "test:harness-contracts": "node --test src/harness/contracts/validate.test.mjs src/harness/local-host.test.mjs && sh scripts/test-harness-contracts-swift.sh",
-    "generate:harness-contracts": "node scripts/generate-harness-registry.mjs && python3 scripts/generate-harness-schemas.py && node scripts/generate-nh00-structural-corpus.mjs && node scripts/generate-harness-operation-corpus.mjs",
+    "test:nh00-bootstrap": "sh scripts/test-nh00-bootstrap-integration.sh",
+    "test:nh00-chromium": "sh scripts/test-nh00-chromium.sh",
+    "generate:harness-contracts": "node scripts/generate-harness-registry.mjs && python3 scripts/generate-harness-schemas.py && node scripts/generate-nh00-structural-corpus.mjs && node scripts/generate-harness-operation-corpus.mjs && node scripts/generate-nh00-coverage-matrix.mjs",
     "test": "npm run test:solutions && npm run test:mcp && npm run test:graph-view && npm run test:excalidraw-desktop && npm run test:memory",
     "test:memory": "node --test src/memory/*.test.mjs",
     "test:memory:swift": "sh scripts/test-pocket-memory-swift.sh",
@@ -20,7 +22,8 @@
     "test:mcp": "node --test src/mcp/*.test.mjs",
     "mcp:evidence": "node src/mcp/pocketwiki-mcp-server.mjs",
     "start": "node server.mjs",
-    "start:lan80": "POCKETWIKI_PORT=80 node server.mjs"
+    "start:lan80": "POCKETWIKI_PORT=80 node server.mjs",
+    "generate:nh00-matrix": "node scripts/generate-nh00-coverage-matrix.mjs"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.1",
