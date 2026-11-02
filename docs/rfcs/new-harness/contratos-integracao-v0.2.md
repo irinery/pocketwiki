@@ -4,6 +4,12 @@ Este arquivo integra o cabeçalho normativo das RFCs 0002–0016. Define as inte
 
 ## R1 — Estado, resultado e recuperação
 
+### Esclarecimentos normativos NH-00
+
+- Campos comuns de `HarnessCommand` prevalecem como valores canônicos. Como RFC-0002 também mantém `command_id` e `expected_revision` dentro de `runtime.dispatch.input`, ambos devem ser iguais aos campos do envelope; divergência é `ERR_INVALID` antes de qualquer efeito. Os campos repetidos permanecem no wire para compatibilidade e `runtime.dispatch` é um comando fechado, não bloqueado.
+- `obrigatório: false` permite omitir a propriedade. O sufixo `?` no tipo permite também o valor JSON `null` quando a propriedade aparece. Sem `?`, `null` é inválido mesmo para propriedades opcionais.
+- Em `navigation.update`, `read_through_seq` permanece obrigatório em todas as ações, conforme a lista de campos da interface; o valor só é aplicado quando `action=mark_read`. `before_thread_id` só é aceito em `reorder`.
+
 `CommandReceipt` confirma intenção. `Result` contém o resultado tipado da operação. `FeatureSnapshot` contém a projeção durável do módulo e tem definição própria em cada RFC; resultado de `threads.message` nunca substitui histórico/fila. O snapshot inicial usa listas vazias e campos opcionais ausentes; não fabrica message_id/receipt_id.
 
 `GET /v1/harness/threads/{thread_id}/snapshot?module=<module>&page_size=<1..100; default 100>&cursor=<cursor opcional>` devolve `{module:ModuleID,data:FeatureSnapshot}`. ModuleID é enum fechado dos 15 IDs de manifest.json. Para módulos de ambiente/projeto, usar `GET /v1/harness/environments/{environment_id}/snapshot?module=...&project_id=<uuid opcional>&cursor=...`; não inventar thread para listar ambientes/projetos. O servidor valida pertencimento e scopes antes de ler dados. page_size também vale para o endpoint de ambiente. IDs e parâmetros nunca substituem autorização.
@@ -47,7 +53,7 @@ ForgePreview fecha a aprovação de ações Git/PR: host é hostname da conexão
 
 ## R4 — Pareamento e autenticação completos
 
-Bootstrap local E0: host gera bearer efêmero aleatório de 32 bytes para processo Kernel em loopback, associa a principal local e lista de scopes concedidos e entrega por canal seguro de processo; só hash persiste no verificador. Ambiente de teste usa store isolado; produção não aceita identidade arbitrária enviada pelo cliente. Esse mecanismo local permite testar E1/E2 sem antecipar pareamento remoto.
+Bootstrap local E0: host gera bearer efêmero aleatório de 32 bytes para processo Kernel em loopback, associa a principal local e lista de scopes concedidos e entrega por canal seguro de processo; só hash persiste no verificador. A credencial local expira em 900000 ms (`expires_at_ms` é incluído nos metadados entregues); autenticação no instante de expiração ou posterior retorna `ERR_EXPIRED`. Encerrar/reiniciar o host invalida todas as credenciais locais e não restaura verificadores ativos. Ambiente de teste usa store isolado; produção não aceita identidade arbitrária enviada pelo cliente. Esse mecanismo local permite testar E1/E2 sem antecipar pareamento remoto.
 
 E3: módulo environments entrega os endpoints PocketWiki/Kernel e módulo exclusivo `internal/harness-sessions/` no repositório MiddlewareAuth. Provider adapters de E2 não editam esse módulo. API pública:
 
