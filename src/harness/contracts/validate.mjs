@@ -134,16 +134,16 @@ function jsonEqual(left, right) {
   try { return canonicalJSON(left) === canonicalJSON(right); } catch { return false; }
 }
 
-function visit(rule, value, path, errors) {
+function visit(rule, value, path, errors, parentValue = undefined) {
   if (rule.$ref) {
     const target = rule.$ref.replace('#/$defs/', '');
-    visit(schema.$defs[target], value, path, errors);
+    visit(schema.$defs[target], value, path, errors, parentValue);
     return;
   }
   if (rule.oneOf) {
     const matches = rule.oneOf.filter((candidate) => {
       const candidateErrors = [];
-      visit(candidate, value, path, candidateErrors);
+      visit(candidate, value, path, candidateErrors, parentValue);
       return candidateErrors.length === 0;
     }).length;
     if (matches !== 1) errors.push(`${path} must match exactly one allowed variant`);
@@ -151,14 +151,14 @@ function visit(rule, value, path, errors) {
   if (rule.anyOf) {
     const matches = rule.anyOf.some((candidate) => {
       const candidateErrors = [];
-      visit(candidate, value, path, candidateErrors);
+      visit(candidate, value, path, candidateErrors, parentValue);
       return candidateErrors.length === 0;
     });
     if (!matches) errors.push(`${path} must match an allowed value`);
   }
   if (rule.not) {
     const candidateErrors = [];
-    visit(rule.not, value, path, candidateErrors);
+    visit(rule.not, value, path, candidateErrors, parentValue);
     if (candidateErrors.length === 0) errors.push(`${path} matches a forbidden shape`);
   }
 
@@ -169,14 +169,14 @@ function visit(rule, value, path, errors) {
       for (const key of Object.keys(value)) if (!Object.hasOwn(rule.properties ?? {}, key)) errors.push(`${path}.${key} is not allowed`);
     }
     for (const [key, propertyRule] of Object.entries(rule.properties ?? {})) {
-      if (Object.hasOwn(value, key)) visit(propertyRule, value[key], `${path}.${key}`, errors);
+      if (Object.hasOwn(value, key)) visit(propertyRule, value[key], `${path}.${key}`, errors, value);
     }
   } else if (rule.type === 'array') {
     if (!Array.isArray(value)) return errors.push(`${path} must be an array`);
     if (rule.minItems !== undefined && value.length < rule.minItems) errors.push(`${path} has fewer than ${rule.minItems} items`);
     if (rule.maxItems !== undefined && value.length > rule.maxItems) errors.push(`${path} exceeds ${rule.maxItems} items`);
     if (rule.uniqueItems && new Set(value.map((item) => JSON.stringify(item))).size !== value.length) errors.push(`${path} items must be unique`);
-    if (rule.items) value.forEach((item, index) => visit(rule.items, item, `${path}[${index}]`, errors));
+    if (rule.items) value.forEach((item, index) => visit(rule.items, item, `${path}[${index}]`, errors, value));
   } else if (rule.type === 'string') {
     if (typeof value !== 'string') return errors.push(`${path} must be a string`);
     if (rule.format === 'uuid' && !uuidPattern.test(value)) errors.push(`${path} must be a UUID`);
@@ -185,6 +185,10 @@ function visit(rule, value, path, errors) {
     if (rule.maxLength !== undefined && Array.from(value).length > rule.maxLength) errors.push(`${path} exceeds ${rule.maxLength} characters`);
     if (rule['x-minUtf8Bytes'] !== undefined && Buffer.byteLength(value, 'utf8') < rule['x-minUtf8Bytes']) errors.push(`${path} is shorter than ${rule['x-minUtf8Bytes']} UTF-8 bytes`);
     if (rule['x-maxUtf8Bytes'] !== undefined && Buffer.byteLength(value, 'utf8') > rule['x-maxUtf8Bytes']) errors.push(`${path} exceeds ${rule['x-maxUtf8Bytes']} UTF-8 bytes`);
+    for (const [parentField, variants] of Object.entries(rule['x-maxUtf8BytesBy'] ?? {})) {
+      const limit = variants?.[parentValue?.[parentField]];
+      if (limit !== undefined && Buffer.byteLength(value, 'utf8') > limit) errors.push(`${path} exceeds ${limit} UTF-8 bytes for ${parentField}=${parentValue[parentField]}`);
+    }
     if (rule['x-format'] === 'base64' && !isBase64(value)) errors.push(`${path} must be base64`);
     if (rule['x-format'] === 'base64' && rule['x-maxBase64DecodedBytes'] !== undefined && isBase64(value) && Buffer.from(value, 'base64').length > rule['x-maxBase64DecodedBytes']) errors.push(`${path} decoded base64 exceeds ${rule['x-maxBase64DecodedBytes']} bytes`);
     if (rule['x-format'] === 'base64url32' && !isBase64URL32(value)) errors.push(`${path} must be a 32-byte base64url token`);

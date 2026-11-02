@@ -2942,7 +2942,7 @@
         },
         "text": {
           "type": "string",
-          "x-maxUtf8Bytes": 4096
+          "x-maxUtf8Bytes": 1048576
         },
         "status": {
           "type": "string",
@@ -3007,7 +3007,13 @@
         },
         "content": {
           "type": "string",
-          "x-maxUtf8Bytes": 4096
+          "x-maxUtf8Bytes": 1048576,
+          "x-maxUtf8BytesBy": {
+            "role": {
+              "user": 32768,
+              "assistant": 1048576
+            }
+          }
         },
         "source_seq": {
           "type": "integer"
@@ -3053,7 +3059,7 @@
         },
         "text": {
           "type": "string",
-          "x-maxUtf8Bytes": 4096
+          "x-maxUtf8Bytes": 32768
         },
         "prepared_id": {
           "anyOf": [
@@ -3263,7 +3269,7 @@
         },
         "text": {
           "type": "string",
-          "x-maxUtf8Bytes": 4096
+          "x-maxUtf8Bytes": 32768
         },
         "references": {
           "type": "array",
@@ -3314,7 +3320,9 @@
         },
         "content_base64": {
           "type": "string",
-          "x-maxUtf8Bytes": 4096
+          "x-maxUtf8Bytes": 5592408,
+          "x-format": "base64",
+          "x-maxBase64DecodedBytes": 4194304
         },
         "sha256": {
           "$ref": "#/$defs/sha256"
@@ -4626,7 +4634,7 @@
         },
         "content": {
           "type": "string",
-          "x-maxUtf8Bytes": 4096
+          "x-maxUtf8Bytes": 16384
         },
         "revision": {
           "type": "integer"
@@ -10794,5 +10802,53 @@
       }
     }
   },
-  "$comment": "Entity, snapshot and operation input schemas generated from NH RFC-0002–0016 phase-01 YAML. runtime.dispatch input command_id and expected_revision must equal the envelope fields, per R1."
+  "$comment": "Entity, snapshot and operation input schemas generated from NH RFC-0002–0016 phase-01 YAML. runtime.dispatch input command_id and expected_revision must equal the envelope fields, per R1.",
+  "x-entityTypes": [
+    "ActionArgument",
+    "Checkpoint",
+    "ComponentHealth",
+    "ComposerDraft",
+    "ContextReference",
+    "ContextSegment",
+    "ConversationMessage",
+    "DiagnosticReport",
+    "EditPreview",
+    "EffectRecord",
+    "EnvironmentConnection",
+    "FileDelta",
+    "ForgeAction",
+    "ForgePreview",
+    "HandoffMessage",
+    "HistoryPage",
+    "InboxNotification",
+    "LegacyCaptureEvent",
+    "MCPThreadPage",
+    "MCPThreadSummary",
+    "MemoryHit",
+    "MemoryNamespace",
+    "MemoryNote",
+    "NavigationEntry",
+    "PairingChallenge",
+    "PermissionAction",
+    "PermissionRequest",
+    "PreparedContext",
+    "ProjectRecord",
+    "ProviderBinding",
+    "ProviderCapabilities",
+    "PullRequestLink",
+    "QuestionOption",
+    "QueueEntry",
+    "RunRecord",
+    "RuntimeEvent",
+    "RuntimeReceipt",
+    "SessionGrant",
+    "TerminalFrame",
+    "TerminalState",
+    "ThreadLineage",
+    "ThreadState",
+    "TimelineItem",
+    "ViewState",
+    "WorkspaceLease",
+    "WorkspaceSettings"
+  ]
 }

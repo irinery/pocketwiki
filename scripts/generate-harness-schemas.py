@@ -310,6 +310,24 @@ def main():
 
     definitions.update(seen)
     definitions.update(feature_snapshots)
+    schema["x-entityTypes"] = sorted(seen)
+    for type_name, field_name, byte_limit in [
+        ("QueueEntry", "text", 32768),
+        ("ComposerDraft", "text", 32768),
+        ("TimelineItem", "text", 1048576),
+        ("MemoryNote", "content", 16384),
+    ]:
+        if type_name in definitions and field_name in definitions[type_name].get("properties", {}):
+            definitions[type_name]["properties"][field_name]["x-maxUtf8Bytes"] = byte_limit
+    if "ConversationMessage" in definitions:
+        content = definitions["ConversationMessage"]["properties"]["content"]
+        content["x-maxUtf8Bytes"] = 1048576
+        content["x-maxUtf8BytesBy"] = {"role": {"user": 32768, "assistant": 1048576}}
+    if "ContextSegment" in definitions:
+        content = definitions["ContextSegment"]["properties"]["content_base64"]
+        content["x-maxUtf8Bytes"] = 5592408
+        content["x-format"] = "base64"
+        content["x-maxBase64DecodedBytes"] = 4194304
     definitions["PermissionAction"] = permission_action_schema()
     definitions["ForgePreview"] = forge_preview_schema()
     definitions["localCredentialMetadata"] = {

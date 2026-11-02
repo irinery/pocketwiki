@@ -190,14 +190,14 @@ enum HarnessV1 {
         }
     }
 
-    private static func validate(_ value: Any, against rule: [String: Any], definitions: [String: Any]) -> Bool {
+    private static func validate(_ value: Any, against rule: [String: Any], definitions: [String: Any], parentValue: Any? = nil) -> Bool {
         if let ref = rule["$ref"] as? String, ref.hasPrefix("#/$defs/"),
            let target = definitions[String(ref.dropFirst("#/$defs/".count))] as? [String: Any] {
-            return validate(value, against: target, definitions: definitions)
+            return validate(value, against: target, definitions: definitions, parentValue: parentValue)
         }
-        if let oneOf = rule["oneOf"] as? [[String: Any]], oneOf.filter({ validate(value, against: $0, definitions: definitions) }).count != 1 { return false }
-        if let anyOf = rule["anyOf"] as? [[String: Any]], !anyOf.contains(where: { validate(value, against: $0, definitions: definitions) }) { return false }
-        if let forbidden = rule["not"] as? [String: Any], validate(value, against: forbidden, definitions: definitions) { return false }
+        if let oneOf = rule["oneOf"] as? [[String: Any]], oneOf.filter({ validate(value, against: $0, definitions: definitions, parentValue: parentValue) }).count != 1 { return false }
+        if let anyOf = rule["anyOf"] as? [[String: Any]], !anyOf.contains(where: { validate(value, against: $0, definitions: definitions, parentValue: parentValue) }) { return false }
+        if let forbidden = rule["not"] as? [String: Any], validate(value, against: forbidden, definitions: definitions, parentValue: parentValue) { return false }
         if let type = rule["type"] as? String {
             switch type {
             case "object":
@@ -207,20 +207,29 @@ enum HarnessV1 {
                 guard required.allSatisfy({ object.keys.contains($0) }) else { return false }
                 if rule["additionalProperties"] as? Bool == false && !Set(object.keys).isSubset(of: Set(properties.keys)) { return false }
                 for (key, child) in properties where object.keys.contains(key) {
-                    guard let childRule = child as? [String: Any], let childValue = object[key], validate(childValue, against: childRule, definitions: definitions) else { return false }
+                    guard let childRule = child as? [String: Any], let childValue = object[key], validate(childValue, against: childRule, definitions: definitions, parentValue: object) else { return false }
                 }
             case "array":
                 guard let array = value as? [Any] else { return false }
                 if let min = rule["minItems"] as? Int, array.count < min { return false }
                 if let max = rule["maxItems"] as? Int, array.count > max { return false }
                 if rule["uniqueItems"] as? Bool == true && Set(array.map(jsonFingerprint)).count != array.count { return false }
-                if let child = rule["items"] as? [String: Any], !array.allSatisfy({ validate($0, against: child, definitions: definitions) }) { return false }
+                if let child = rule["items"] as? [String: Any], !array.allSatisfy({ validate($0, against: child, definitions: definitions, parentValue: array) }) { return false }
             case "string":
                 guard let string = value as? String else { return false }
                 if let min = rule["minLength"] as? Int, string.unicodeScalars.count < min { return false }
                 if let max = rule["maxLength"] as? Int, string.unicodeScalars.count > max { return false }
                 if let min = rule["x-minUtf8Bytes"] as? Int, string.utf8.count < min { return false }
-                if let max = rule["x-maxUtf8Bytes"] as? Int, string.utf8.count > max { return false }
+                var maxBytes = rule["x-maxUtf8Bytes"] as? Int
+                if let conditional = rule["x-maxUtf8BytesBy"] as? [String: Any], let parent = parentValue as? [String: Any] {
+                    for (parentField, variantsValue) in conditional {
+                        guard let discriminator = parent[parentField] as? String,
+                              let variants = variantsValue as? [String: Any],
+                              let limit = variants[discriminator] as? Int else { continue }
+                        maxBytes = min(maxBytes ?? limit, limit)
+                    }
+                }
+                if let maxBytes, string.utf8.count > maxBytes { return false }
                 if let pattern = rule["pattern"] as? String, string.range(of: pattern, options: .regularExpression) == nil { return false }
                 if rule["format"] as? String == "uuid" && !uuid(string) { return false }
                 if rule["x-format"] as? String == "jcs" && !isCanonicalJSON(string) { return false }

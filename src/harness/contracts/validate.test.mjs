@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import corpus from './corpus-v1.json' with { type: 'json' };
 import schema from './harness-v1.schema.json' with { type: 'json' };
-import { operationRegistry, listCapabilities } from '../registry.mjs';
+import { operationRegistry, listCapabilities, requireOperation } from '../registry.mjs';
 import { validateAgainst, validateCommandEnvelope, validateOperationInput } from './validate.mjs';
 
 test('shared NH-00 corpus matches expected acceptance in JavaScript', () => {
@@ -29,6 +29,16 @@ test('capabilities expose only implemented operations', () => {
   assert.equal(operationRegistry.find(({ name }) => name === 'diagnostics.export').class, 'mutation');
 });
 
+test('future operations and unknown protocol versions remain unavailable', () => {
+  assert.ok(operationRegistry.every(({ implemented }) => implemented === false));
+  for (const name of ['threads.history', 'mcp.thread.call', 'source_control.execute']) {
+    assert.throws(() => requireOperation(name, operationRegistry.find((entry) => entry.name === name).class), { code: 'ERR_UNSUPPORTED' });
+  }
+  const command = corpus.slots.find(({ id }) => id === 'NH00-ENV-001').value;
+  assert.equal(validateAgainst('command', { ...command, protocol_major: 2 }).valid, false);
+  assert.ok(operationRegistry.every(({ input_schema }) => Boolean(schema.$defs[input_schema])), 'future operation schemas remain defined');
+});
+
 test('shared operation corpus covers every registered operation and its validator path', () => {
   for (const operation of operationRegistry) {
     const slots = corpus.slots.filter(({ id }) => id.startsWith(`${operation.test_slot}-`));
@@ -53,6 +63,8 @@ test('all 15 snapshots, referenced entities, and module event variants have vali
   for (const variant of snapshots) {
     const module = variant.properties.module.const;
     const snapshot = schema.$defs[variant.properties.data.$ref.slice('#/$defs/'.length)];
+    assert.ok(corpus.slots.some(({ id, accept }) => id === `NH00-STRUCT-SNAPSHOT-${module}-CURSOR-ABSENT` && accept), `${module} permits an absent next_cursor`);
+    assert.ok(corpus.slots.some(({ id, accept }) => id === `NH00-STRUCT-SNAPSHOT-${module}-CURSOR-NULL` && !accept), `${module} rejects next_cursor null`);
     const entities = Object.entries(snapshot.properties ?? {}).flatMap(([field, rule]) => {
       const ref = rule.type === 'array' ? rule.items?.$ref : rule.$ref;
       const name = ref?.slice('#/$defs/'.length);
@@ -72,7 +84,8 @@ test('all 15 snapshots, referenced entities, and module event variants have vali
     for (const variant of eventSchema.oneOf ?? []) {
       variantCount++;
       const entity = variant.properties.entity_type.const;
-      const prefix = `NH00-STRUCT-EVENT-${module}-${entity}-`;
+      const change = variant.properties.change.const;
+      const prefix = `NH00-STRUCT-EVENT-${module}-${entity}-${change}-`;
       assert.ok(corpus.slots.some(({ id, accept }) => id === `${prefix}VALID` && accept), `${module}.${entity} event has no valid case`);
       assert.ok(corpus.slots.some(({ id, accept }) => id === `${prefix}CLOSED` && !accept), `${module}.${entity} event has no closed case`);
     }
