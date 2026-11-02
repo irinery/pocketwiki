@@ -10,7 +10,7 @@ A base documental da lane é PocketWiki `5311a8aae2876c572f25b79540f38ee0acac712
 
 | AC | Evidência executada na árvore final | Resultado técnico |
 |---|---|---|
-| AC-01 | `npm run test:harness-contracts`; `sh scripts/test-nh00-acceptance.sh`; os 908 slots comuns e 13 regressões independentes (921 IDs únicos) passam nos dois runtimes | Atendido; zero skips/divergências |
+| AC-01 | `npm run test:harness-contracts`; `sh scripts/test-nh00-acceptance.sh`; os 910 slots comuns e 13 regressões independentes (923 IDs únicos) passam nos dois runtimes | Atendido; zero skips/divergências |
 | AC-02 | `docs/rfcs/new-harness/nh00-matriz-cobertura.md`; gerador `scripts/generate-nh00-coverage-matrix.mjs` | Atendido; 50 operações, 46 entidades, 15 snapshots e 54 variants de evento relacionados a IDs e resultados JS/Swift; R1–R5 e omissões explícitos |
 | AC-03 | Corpus comum + regressões; bordas e imediatamente além, UTF-8 multibyte, base64 decodificado, JSON safe integer, bool/int, optional/null, PermissionAction e MCP por `tool` | Atendido |
 | AC-04 | `contratos-integracao-v0.2.md`, schemas e IDs `AC-runtime-dispatch-*`; `local-host.test.mjs` valida `expiry-1` e `expiry`, restart/revoke também na integração AC-05 | Atendido; igualdade de campos duplicados obrigatória; divergência `ERR_INVALID` pré-efeito; TTL inclusivo de 900000 ms |
@@ -24,7 +24,7 @@ A base documental da lane é PocketWiki `5311a8aae2876c572f25b79540f38ee0acac712
 ## Contratos e escopo
 
 - Schemas fechados para envelopes, 46 entidades, 15 snapshots, eventos de módulos, PermissionAction/ForgePreview e inputs de operação. JS e Swift validam recursivamente o mesmo schema/corpus.
-- Corpus: 908 slots compartilhados — 48 casos preexistentes preservados, 394 estruturais (snapshots, entidades e eventos) e 466 de operação — mais 13 regressões independentes em `Tests/Harness/nh00-acceptance-regressions.json`.
+- Corpus: 910 slots compartilhados — 48 casos preexistentes preservados, 396 estruturais (snapshots, entidades e eventos) e 466 de operação — mais 13 regressões independentes em `Tests/Harness/nh00-acceptance-regressions.json`.
 - Limite condicional: `ConversationMessage.content` respeita bytes por `role`; `ContextSegment.content_base64` limita bytes codificados e decodificados; campos de texto de R1 têm os limites normativos. Arrays e inteiros têm bordas revisadas. `PermissionRequest.options` tem `maxItems: 100`, mas coincide com `PermissionAction.question.options`, limitado a 10; limite semântico efetivo é 10, coberto em 10/11.
 - `runtime.dispatch` preserva o wire repetido. `input.command_id` e `input.expected_revision` devem ser iguais ao envelope; mismatch é inválido antes de qualquer efeito. A decisão está no contrato normativo e nos testes independentes.
 - Bootstrap local usa bearer aleatório de 32 bytes, canal host→Kernel privado, principal/environment/audience/scopes/agregado vinculados, TTL de 900000 ms e `expires_at_ms` em metadata privado. Só hash e metadados autorizados persistem. Falha de entrega revoga; reiniciar Kernel não restaura credenciais. MiddlewareAuth remoto não é modificado nesta etapa.
@@ -37,11 +37,12 @@ PocketWiki, branch `codex/nh-e0-nh00`, mantém os commits anteriores intactos. C
 
 - `f01219f` — critérios e regressões independentes antes da correção.
 - `7547d7c` — cursor opcional ausente aceito; null recusado.
-- `cd767b1` — cobertura estrutural e por operação ampliada.
+- `cd767b1` — cobertura estrutural e por operação ampliada;
 - `9511b7d` — limites recursivos e corpus de entidade alinhados entre JS/Swift.
 - `83e1e11` — bootstrap scoped integrado a processo Kernel.
 - `945d01d` — matriz de cobertura e smoke isolado do Chromium.
 - `89f0845` — despacho por classe incompatível testado.
+- `e240155` — ausência de singletons obrigatórios em snapshots coberta.
 
 PocketKernel mantém histórico separado, branch `codex/nh00-locks`: `b17f3b5` verifier/ACL scoped e `03f8f30` encerramento limpo do probe de teste. MiddlewareAuth não recebeu alterações.
 
@@ -50,8 +51,8 @@ PocketKernel mantém histórico separado, branch `codex/nh00-locks`: `b17f3b5` v
 | Comando | Resultado |
 |---|---|
 | `npm run generate:harness-contracts` ×2 | exit 0 em ambos; mesmos hashes de schema/corpus/matriz antes e depois |
-| `npm run test:harness-contracts` | exit 0; 12 testes JS passaram, 908 slots Swift passaram, 0 skips |
-| `sh scripts/test-nh00-acceptance.sh` | exit 0; 921 IDs únicos; resultados JS comparados individualmente com `accept`, runner Swift aprovou 921 slots |
+| `npm run test:harness-contracts` | exit 0; 12 testes JS passaram, 910 slots Swift passaram, 0 skips |
+| `sh scripts/test-nh00-acceptance.sh` | exit 0; 923 IDs únicos; resultados JS comparados individualmente com `accept`, runner Swift aprovou 923 slots |
 | `npm test` | exit 0; suites legadas Solutions, MCP, Graph, Excalidraw Desktop e Memory passaram, sem skips |
 | `swift build -c debug` | exit 0 |
 | `npm run test:nh00-bootstrap` | exit 0; integração real entre processos aprovada |
@@ -63,14 +64,14 @@ O runner de aceitação mescla o corpus compartilhado e os fixtures independente
 
 ## SHAs, hashes e arquivos preexistentes
 
-- PocketWiki snapshot de implementação validado antes do commit deste relatório: `89f0845914790113ca0b0e028ab4bee5715ca2d0`; branch `codex/nh-e0-nh00`. O commit posterior deste relatório é identificado no resumo da revisão.
+- PocketWiki snapshot de implementação validado antes do commit deste relatório: `e2401553f01a2e24e20175a392fc8680f61353c1`; branch `codex/nh-e0-nh00`. O commit posterior deste relatório é identificado no resumo da revisão.
 - Base documental PocketWiki: `5311a8aae2876c572f25b79540f38ee0acac7121` (não integrada).
 - Base integrada de código / ancestral comum: `7703ac708120d93f54c7d29c5ad34dde9591a1bf`.
 - PocketKernel final: `03f8f30eb781b4d16a9dca76f7548f9781bbef02`, branch `codex/nh00-locks`.
 - MiddlewareAuth observado: `04f44f62126c785f7b28718d2eff837c28cb65df`, branch `main`, sem alterações.
 - SHA-256 schema `harness-v1.schema.json`: `306915400385fa9bd7c22096fb18228d4d2c02e0f272376f8c2c5ebd7bebae70`.
-- SHA-256 corpus `corpus-v1.json`: `5f88311d9485544ce4c868186f230f6bd70416216096134243c29a1606e9d830`.
-- SHA-256 matriz cobertura: `67f9635b9f367116caa3d30a5c989eb6723a2482dcca349a1caaaf31c769d1be`.
+- SHA-256 corpus `corpus-v1.json`: `9aef5fbe89e3d129ebcf54a8dab048780ba1bb65519c0e8d1eb607846b107ef9`.
+- SHA-256 matriz cobertura: `e714613c631b68f0a62837693c6387988483481b1045250a6eb956b9daebd871`.
 - SHA-256 `package-lock.json`: `2d950a0e6ac2a855d215c723abc8173e58ffcd8c39a1732699632d956d0ed01c`.
 - SHA-256 Kernel `go.mod`: `73d61aeb664dfb8b1df7dd6aba79bf85f1121a11a39062147d1816181b617f50`.
 - SHA-256 Kernel `go.sum`: `1692bb6aa37ae13a36b6629bf65d910085c99c221f5bd7569b001ddee5b6e2d2`.
