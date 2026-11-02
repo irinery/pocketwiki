@@ -116,23 +116,30 @@ function selectedPairs(stageNumber, requestedSurface, matrix) {
 }
 
 async function runContract(artifactDir, tempHome, shas, deadline) {
+  ensureCleanTree(root, 'PocketWiki');
+  const pocketwikiSHA = gitSHA(root);
+  const pocketwikiSource = await cloneGitSnapshot(root, pocketwikiSHA, path.join(tempHome, 'sources/pocketwiki'));
   const kernelRoot = process.env.POCKETKERNEL_NH00_ROOT || path.resolve(root, '../pocketkernel-nh00');
   const middlewareRoot = process.env.MIDDLEWAREAUTH_NHTEST_ROOT || path.resolve(root, '../middlewareAuth');
   if (gitSHA(kernelRoot) !== shas.pocketkernel || gitSHA(middlewareRoot) !== shas.middlewareauth) {
     throw configError('SHA de dependência diferente do pin registrado antes da lane');
   }
-  const env = isolatedEnvironment(tempHome);
   const kernelSourceRoot = await exportGitSnapshot(kernelRoot, shas.pocketkernel, path.join(tempHome, 'sources/pocketkernel'));
   const middlewareSourceRoot = await exportGitSnapshot(middlewareRoot, shas.middlewareauth, path.join(tempHome, 'sources/middlewareauth'));
+  const env = {
+    ...isolatedEnvironment(tempHome),
+    POCKETKERNEL_NH00_ROOT: kernelSourceRoot,
+    MIDDLEWAREAUTH_NHTEST_ROOT: middlewareSourceRoot
+  };
   const commands = [
-    ['npm', ['ci', '--include=dev', '--userconfig=/dev/null', '--cache', path.join(tempHome, 'npm-cache')], root],
-    ['npm', ['run', 'test:harness-contracts'], root],
-    ['sh', ['scripts/test-nh00-acceptance.sh'], root],
-    ['npm', ['run', 'test:nh00-bootstrap'], root],
-    ['npm', ['run', 'test:nh00-chromium'], root],
-    ['sh', ['script/validate_pocket_interop_contract.sh'], root],
-    ['npm', ['run', 'test:new-harness-rig'], root],
-    ['sh', ['script/ci.sh'], root],
+    ['npm', ['ci', '--include=dev', '--userconfig=/dev/null', '--cache', path.join(tempHome, 'npm-cache')], pocketwikiSource],
+    ['npm', ['run', 'test:harness-contracts'], pocketwikiSource],
+    ['sh', ['scripts/test-nh00-acceptance.sh'], pocketwikiSource],
+    ['npm', ['run', 'test:nh00-bootstrap'], pocketwikiSource],
+    ['npm', ['run', 'test:nh00-chromium'], pocketwikiSource],
+    ['sh', ['script/validate_pocket_interop_contract.sh'], pocketwikiSource],
+    ['npm', ['run', 'test:new-harness-rig'], pocketwikiSource],
+    ['sh', ['script/ci.sh'], pocketwikiSource],
     ['sh', ['script/build_nh00_matrix.sh'], kernelSourceRoot, {}],
   ];
   const artifacts = [];
@@ -154,7 +161,7 @@ async function runContract(artifactDir, tempHome, shas, deadline) {
     console.log(status + ' CONTRACT-00 ' + binary + ' ' + commandArgs.join(' ') + ' exit=' + String(result.status));
     if (result.status !== 0) passed = false;
     if (binary === 'npm' && commandArgs[0] === 'ci') {
-      const restore = spawnSync('git', ['restore', '--', 'node_modules/.package-lock.json'], { cwd: root, encoding: 'utf8' });
+      const restore = spawnSync('git', ['restore', '--', 'node_modules/.package-lock.json'], { cwd: pocketwikiSource, encoding: 'utf8' });
       if (restore.status !== 0) passed = false;
     }
   }
@@ -282,6 +289,14 @@ async function exportGitSnapshot(repository, sha, destination) {
     if ([...untracked].some((entry) => relative === entry || relative.startsWith(entry + path.sep))) return false;
     return true;
   } });
+  return destination;
+}
+async function cloneGitSnapshot(repository, sha, destination) {
+  await mkdir(path.dirname(destination), { recursive: true });
+  const clone = spawnSync('git', ['clone', '--shared', '--no-checkout', repository, destination], { encoding: 'utf8', timeout: 30_000 });
+  if (clone.status !== 0) throw configError('não foi possível criar checkout isolado do PocketWiki: ' + (clone.stderr || clone.error?.message || 'git clone falhou'));
+  const checkout = spawnSync('git', ['-C', destination, 'checkout', '--detach', sha], { encoding: 'utf8', timeout: 30_000 });
+  if (checkout.status !== 0 || gitSHA(destination) !== sha) throw configError('checkout isolado do PocketWiki divergiu do SHA executado');
   return destination;
 }
 function ensureCleanTree(cwd, label) {
