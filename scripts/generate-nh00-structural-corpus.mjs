@@ -19,6 +19,11 @@ for (const snapshotVariant of schema.$defs.snapshotEnvelope.oneOf) {
     if (!target?.startsWith('#/$defs/')) continue;
     const entity = target.slice('#/$defs/'.length);
     if (schema.$defs[entity]?.type !== 'object') continue;
+    if (!collection && snapshotSchema.required?.includes(field)) {
+      const missingSingleton = sample(snapshotSchema);
+      delete missingSingleton[field];
+      slots.push(slot(`${prefix}SNAPSHOT-${module}-${field}-SINGLETON-MISSING`, 'snapshotEnvelope', false, { module, data: missingSingleton }));
+    }
     const sampleSnapshot = sample(snapshotSchema);
     const validEntity = sample(schema.$defs[entity]);
     sampleSnapshot[field] = collection ? [validEntity] : validEntity;

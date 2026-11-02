@@ -70,8 +70,13 @@ test('all 15 snapshots, referenced entities, and module event variants have vali
     const entities = Object.entries(snapshot.properties ?? {}).flatMap(([field, rule]) => {
       const ref = rule.type === 'array' ? rule.items?.$ref : rule.$ref;
       const name = ref?.slice('#/$defs/'.length);
-      return name && schema.$defs[name]?.type === 'object' ? [[field, name]] : [];
+      return name && schema.$defs[name]?.type === 'object' ? [[field, name, rule.type === 'array']] : [];
     });
+    for (const [field, , isCollection] of entities) {
+      if (isCollection) continue;
+      if (!snapshot.required?.includes(field)) continue;
+      assert.ok(corpus.slots.some(({ id, accept }) => id === `NH00-STRUCT-SNAPSHOT-${module}-${field}-SINGLETON-MISSING` && !accept), `${module}.${field} required singleton has no missing case`);
+    }
     for (const [, entity] of entities) {
       const prefix = `NH00-STRUCT-SNAPSHOT-${module}-${entity}-`;
       assert.ok(corpus.slots.some(({ id, accept }) => id === `${prefix}VALID` && accept), `${module}.${entity} has no nested valid case`);
