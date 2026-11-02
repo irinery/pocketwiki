@@ -22,3 +22,5 @@ Os relatórios, JUnit, logs, screenshot, trace Playwright e evidência sanitizad
 Os relatórios apontam para o SHA do código executado. A alteração final deste commit adiciona apenas estas evidências e este README.
 
 Reexecução após revisar o restart do servidor web e preparar a lane macOS/CI: [refresh-9ffd0b6](refresh-9ffd0b6/README.md). Ela registra o SHA corrente testado, o restart real de processo web e a rejeição do agregador enquanto o shard XCTest não puder rodar.
+
+Reexecução final com regressão service em clone temporário, sem tocar nos untracked da worktree: [refresh-2ce2efe](refresh-2ce2efe/README.md). Service e web passaram no mesmo SHA; XCTest permanece pendente do runner macOS com Xcode.

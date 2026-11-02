@@ -1,0 +1,41 @@
+--- MiddlewareAuth ---
+2026/11/02 20:14:53 INFO middleware iniciado addr=127.0.0.1:50837
+2026/11/02 20:14:53 INFO http_request method=GET path=/healthz status=200 duration_ms=0 remote=127.0.0.1:50838
+2026/11/02 20:14:53 INFO http_request method=POST path=/v1/projects/pocketwiki-nh-test/auth/lmstudio/api-key status=200 duration_ms=13 remote=127.0.0.1:50839
+2026/11/02 20:14:55 INFO http_request method=GET path=/v1/projects/pocketwiki-nh-test/auth/lmstudio/status status=200 duration_ms=0 remote=127.0.0.1:50849
+2026/11/02 20:14:56 INFO http_request method=POST path=/v1/projects/pocketwiki-nh-test/auth/lmstudio/api-key status=200 duration_ms=9 remote=127.0.0.1:50849
+2026/11/02 20:14:56 INFO http_request method=POST path=/v1/projects/pocketwiki-nh-test/auth/lmstudio/api-key status=200 duration_ms=12 remote=127.0.0.1:50849
+2026/11/02 20:14:56 INFO http_request method=POST path=/v1/projects/pocketwiki-nh-test/llm/responses status=200 duration_ms=0 remote=127.0.0.1:50853
+2026/11/02 20:14:56 INFO http_request method=GET path=/v1/projects/pocketwiki-nh-test/auth/lmstudio/status status=200 duration_ms=0 remote=127.0.0.1:50858
+--- PocketKernel ---
+PocketKernel HTTP ouvindo em http://127.0.0.1:50841/v1/kernel
+ModelGateway: MiddlewareAuth http://127.0.0.1:50837 project_id=pocketwiki-nh-test
+ContextGateway: PocketWiki MCP stdio
+Observability: POCKETKERNEL_TRACE=1
+ts=2026-11-02T23:14:56.281664Z trace="25a86058e9976179afc07ba698e56288" component="http" event="request_received" method="POST" path="/v1/kernel" remote_addr="127.0.0.1:50852" content_length="259" app_id="pocketwiki" channel="web"
+ts=2026-11-02T23:14:56.281689Z trace="25a86058e9976179afc07ba698e56288" component="kernel" event="handle_start" app_id="pocketwiki" channel="web" desired_profile="wiki" request_model="true" output_contract="false" text_len="80"
+ts=2026-11-02T23:14:56.281714Z trace="25a86058e9976179afc07ba698e56288" component="kernel" event="round_start" round="1"
+ts=2026-11-02T23:14:56.281904Z trace="25a86058e9976179afc07ba698e56288" component="kernel" event="input_policy_ready" round="1" policy_id="platform.v1" policy_version="1.0.0" normalized_len="80"
+ts=2026-11-02T23:14:56.281955Z trace="25a86058e9976179afc07ba698e56288" component="kernel" event="risk_evaluated" round="1" intent="read" answer_risk="R1" action_risk="A0" needs_context="true" profile_min="wiki" reasons="status_keyword,operational_status_requires_context"
+ts=2026-11-02T23:14:56.281993Z trace="25a86058e9976179afc07ba698e56288" component="context" event="retrieve_start" profile="wiki" limit="8" adapters="1" query_len="80"
+ts=2026-11-02T23:14:56.281997Z trace="25a86058e9976179afc07ba698e56288" component="context" event="source_fetch_start" source="wiki" limit="8"
+ts=2026-11-02T23:14:56.282Z trace="25a86058e9976179afc07ba698e56288" component="mcp" event="session_start" command="/opt/homebrew/Cellar/node/26.13.0_1/bin/node" args_count="3" timeout_ms="5000" max_results="8"
+ts=2026-11-02T23:14:56.332433Z trace="25a86058e9976179afc07ba698e56288" component="mcp" event="initialize_ok"
+ts=2026-11-02T23:14:56.332563Z trace="25a86058e9976179afc07ba698e56288" component="mcp" event="tools_list_ok" tools="2"
+ts=2026-11-02T23:14:56.332568Z trace="25a86058e9976179afc07ba698e56288" component="mcp" event="tool_call_start" tool="wiki.search" limit="8" query_len="80"
+ts=2026-11-02T23:14:56.335606Z trace="25a86058e9976179afc07ba698e56288" component="mcp" event="tool_call_ok" tool="wiki.search" results="1" response_trace="25a86058e9976179afc07ba698e56288"
+ts=2026-11-02T23:14:56.335614Z trace="25a86058e9976179afc07ba698e56288" component="mcp" event="tool_call_start" tool="wiki.get_document" document_id="index" search_status="validated" search_trust="high" score="0.2574"
+ts=2026-11-02T23:14:56.336111Z trace="25a86058e9976179afc07ba698e56288" component="mcp" event="tool_call_ok" tool="wiki.get_document" ref="wiki://document/index" status="validated" trust="high" content_len="128" response_trace="25a86058e9976179afc07ba698e56288"
+ts=2026-11-02T23:14:56.336119Z trace="25a86058e9976179afc07ba698e56288" component="mcp" event="fetch_done" items="1"
+ts=2026-11-02T23:14:56.338023Z trace="25a86058e9976179afc07ba698e56288" component="context" event="source_fetch_ok" source="wiki" items="1"
+ts=2026-11-02T23:14:56.338034Z trace="25a86058e9976179afc07ba698e56288" component="context" event="retrieve_done" items="1" warnings="0" conflicts="0"
+ts=2026-11-02T23:14:56.338037Z trace="25a86058e9976179afc07ba698e56288" component="kernel" event="context_ready" round="1" items="1" warnings="0" conflicts="0"
+ts=2026-11-02T23:14:56.338054Z trace="25a86058e9976179afc07ba698e56288" component="kernel" event="prompt_compiled" round="1" profile="wiki" sections="4" schema="default.v1" max_tokens="2200" request_provider="true" request_provider_profile="true" request_model="true" external_contract="false" truncation="false"
+ts=2026-11-02T23:14:56.338061Z trace="25a86058e9976179afc07ba698e56288" component="kernel" event="model_start" round="1" profile="wiki"
+ts=2026-11-02T23:14:56.339401Z trace="25a86058e9976179afc07ba698e56288" component="kernel" event="model_done" round="1" model_id="nh-test-fixture-model" finish_reason="stop" content_len="45" prompt_tokens="0" output_tokens="0"
+ts=2026-11-02T23:14:56.33942Z trace="25a86058e9976179afc07ba698e56288" component="kernel" event="output_validated" round="1" mode="answer" summary_len="45" facts="0" missing_evidence="0"
+ts=2026-11-02T23:14:56.339424Z trace="25a86058e9976179afc07ba698e56288" component="kernel" event="evidence_applied" round="1" missing_evidence="0"
+ts=2026-11-02T23:14:56.339428Z trace="25a86058e9976179afc07ba698e56288" component="kernel" event="tools_routed" round="1" executed="0" pending_approval="0" blocked="0"
+ts=2026-11-02T23:14:56.339449Z trace="25a86058e9976179afc07ba698e56288" component="kernel" event="response_ready" round="1" mode="answer" profile="wiki" missing_evidence="0"
+ts=2026-11-02T23:14:56.339453Z trace="25a86058e9976179afc07ba698e56288" component="kernel" event="handle_done" rounds_used="1" mode="answer" profile="wiki" missing_evidence="0"
+ts=2026-11-02T23:14:56.339456Z trace="25a86058e9976179afc07ba698e56288" component="http" event="response_ok" status="200" mode="answer" profile="wiki" rounds="1" missing_evidence="0"
