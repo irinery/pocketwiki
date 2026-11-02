@@ -1,61 +1,84 @@
-# NH-00 — registro de implementação
+# NH-00 — registro de implementação e evidências de aceite
 
-## Estado
+## Estado da entrega
 
-- Entrega parcial para revisão NH-00; não iniciar NH-TEST até esta revisão ser aceita.
-- PocketWiki base documental: `5311a8aae2876c572f25b79540f38ee0acac7121` (`codex/new-harness-rfcs`).
-- PocketWiki base integrada com `main` (ancestral comum da base documental): `7703ac708120d93f54c7d29c5ad34dde9591a1bf`.
-- PR documental #45 ainda aberto; o SHA `5311a8a` não foi mesclado em `main`.
-- PocketWiki implementação: branch `codex/nh-e0-nh00`; o HEAD da lane é separado dessas duas bases.
-- PocketKernel base: `02fe052516a3bd53f4fab4d94cd566540bce276c`.
-- PocketKernel implementação: branch `codex/nh00-locks`; commit `ff32bbc9f386ef4f4be55da281c481d79a4a5299`.
-- MiddlewareAuth não alterado: `04f44f62126c785f7b28718d2eff837c28cb65df` (`main`).
+NH-00 segue **parcial e entregue para revisão de aceite**. Não envio esta base para NH-TEST antes da revisão. A evidência abaixo demonstra os AC-01…AC-08 na árvore atual; a aprovação formal ainda depende da revisão solicitada. Não fecha o gate E0 e não afirma E2E de produto.
 
-PocketWiki e PocketKernel são históricos separados. Não copiar commits entre repositórios.
+A base documental da lane é PocketWiki `5311a8aae2876c572f25b79540f38ee0acac7121`, branch `codex/new-harness-rfcs`; esse commit ainda não foi integrado a `main` (PR #45 aberto). A base integrada de código, ancestral comum com `main`, é `7703ac708120d93f54c7d29c5ad34dde9591a1bf`. A implementação continua empilhada sobre a base documental, conforme autorizado. Não chamar `5311a8a` de integrada.
 
-## Entrega nesta revisão
+## Revisão de aceite
 
-- Schemas fechados dos envelopes Harness v1, dos 46 tipos de entidade, dos 15 snapshots modulares, das unions discriminadas `PermissionAction`/`ForgePreview` e dos inputs de operação.
-- Validadores recursivos JS/Swift consomem o mesmo schema e os mesmos slots. O corpus compartilhado tem 280 casos: contraexemplos aninhados, variantes cruzadas, optional/null e 232 slots de operação (casos válidos, schema fechado, limites de schema e condições cruzadas verificáveis em E0).
-- Registry das 50 operações mantém owner, classe, input schema, texto normativo `validation` por campo e slot NH00-OP. Pré-condições que exigem estado/autorização estão declaradas no registry, sem fingir handlers dos domínios futuros.
-- Todos os módulos e operações futuras continuam desabilitados em capabilities até existir handler real.
-- Bootstrap local scoped: bearer aleatório de 32 bytes, entregue pelo canal de processo injetado; só o hash é persistido. TTL de 900000 ms, metadados incluem `expires_at_ms`, autenticação expira no limite inclusivo e reiniciar o host invalida credenciais.
-- Playwright fixado em 1.64.1 e Chromium Playwright revision 1248 (Chrome for Testing 156.0.8078.4).
-- Kernel fixa Go 1.26.0, modernc.org/sqlite 1.61.1 e creack/pty 1.1.24. `script/build_nh00_matrix.sh` produz binários Linux arm64/amd64 com CGO desligado.
-- APIs `/v1/kernel`, `/api/memory/*` e MCP Evidence não foram alteradas.
+| AC | Evidência executada na árvore final | Resultado técnico |
+|---|---|---|
+| AC-01 | `npm run test:harness-contracts`; `sh scripts/test-nh00-acceptance.sh`; os 908 slots comuns e 13 regressões independentes (921 IDs únicos) passam nos dois runtimes | Atendido; zero skips/divergências |
+| AC-02 | `docs/rfcs/new-harness/nh00-matriz-cobertura.md`; gerador `scripts/generate-nh00-coverage-matrix.mjs` | Atendido; 50 operações, 46 entidades, 15 snapshots e 54 variants de evento relacionados a IDs e resultados JS/Swift; R1–R5 e omissões explícitos |
+| AC-03 | Corpus comum + regressões; bordas e imediatamente além, UTF-8 multibyte, base64 decodificado, JSON safe integer, bool/int, optional/null, PermissionAction e MCP por `tool` | Atendido |
+| AC-04 | `contratos-integracao-v0.2.md`, schemas e IDs `AC-runtime-dispatch-*`; `local-host.test.mjs` valida `expiry-1` e `expiry`, restart/revoke também na integração AC-05 | Atendido; igualdade de campos duplicados obrigatória; divergência `ERR_INVALID` pré-efeito; TTL inclusivo de 900000 ms |
+| AC-05 | `npm run test:nh00-bootstrap` — processos separados PocketWiki host e probe Go Kernel, socket Unix privado mode 0600 e store temporário | Atendido; allow scoped passa; principal/environment/audience/scope/agregado incorretos, ausente, expirado, revogado, falha de entrega e restart negados antes de efeito; persistência hash-only |
+| AC-06 | `validate.test.mjs`: mismatch de classe retorna `ERR_INVALID`; capacidades vazias; schemas futuros presentes; operação futura e protocolo major desconhecido recusados | Atendido; nenhuma capability anuncia handler não implementado/habilitado/validado |
+| AC-07 | `CGO_ENABLED=0 go test ./...`; `sh script/build_nh00_matrix.sh`; `npm run test:nh00-chromium` | Atendido; builds Linux arm64/amd64 sem CGO; Playwright 1.64.1, Chromium revision 1248 / Chrome 156.0.8078.4, headless `file://`, marker local, sem sleeps/rede externa |
+| AC-08 | `npm run generate:harness-contracts` duas vezes, comparação de hashes de saída; `npm test`; `swift build -c debug`; demais comandos acima | Atendido; geração determinística, suites sem skip e builds passaram. SHA e hashes abaixo identificam esta árvore |
 
-## Esclarecimentos fechados nesta revisão; aguardam aceite
+**Veredito:** critérios técnicos atendidos e evidenciados; **aprovação formal ainda pendente**. Esta entrega não está concluída como NH-00 até a revisão aceitar a base. Depois do aceite, entregar o SHA imutável para NH-TEST.
 
-- `runtime.dispatch`: os campos repetidos `command_id` e `expected_revision` têm de ser iguais aos do envelope; divergência retorna `ERR_INVALID` antes de efeito. Mantém-se o wire da RFC, e a operação deixa de estar marcada como bloqueada.
-- Credencial local: TTL definido em 900000 ms; `expires_at_ms` faz parte dos metadados privados de bootstrap; expiração retorna `ERR_EXPIRED`; credenciais ativas não sobrevivem ao reinício do host.
-- Opcionalidade é independente de nulabilidade: ausência depende de `obrigatório: false`; JSON `null` só é aceito no tipo com sufixo `?`.
-- `navigation.update.read_through_seq` fica obrigatório em todas as ações conforme a lista de campos, mas só é consumido por `mark_read`; `before_thread_id` só vale para `reorder`.
-- `SessionGrant` já estava definido nos contratos 0.2.0 e seu schema continua gerado.
+## Contratos e escopo
 
-O gate E0 continua pendente: o rig NH-TEST (#22) e a revisão integrada GATE-E0 (#38) ainda são necessários antes de E1. Nenhum domínio das RFCs futuras foi implementado.
+- Schemas fechados para envelopes, 46 entidades, 15 snapshots, eventos de módulos, PermissionAction/ForgePreview e inputs de operação. JS e Swift validam recursivamente o mesmo schema/corpus.
+- Corpus: 908 slots compartilhados — 48 casos preexistentes preservados, 394 estruturais (snapshots, entidades e eventos) e 466 de operação — mais 13 regressões independentes em `Tests/Harness/nh00-acceptance-regressions.json`.
+- Limite condicional: `ConversationMessage.content` respeita bytes por `role`; `ContextSegment.content_base64` limita bytes codificados e decodificados; campos de texto de R1 têm os limites normativos. Arrays e inteiros têm bordas revisadas. `PermissionRequest.options` tem `maxItems: 100`, mas coincide com `PermissionAction.question.options`, limitado a 10; limite semântico efetivo é 10, coberto em 10/11.
+- `runtime.dispatch` preserva o wire repetido. `input.command_id` e `input.expected_revision` devem ser iguais ao envelope; mismatch é inválido antes de qualquer efeito. A decisão está no contrato normativo e nos testes independentes.
+- Bootstrap local usa bearer aleatório de 32 bytes, canal host→Kernel privado, principal/environment/audience/scopes/agregado vinculados, TTL de 900000 ms e `expires_at_ms` em metadata privado. Só hash e metadados autorizados persistem. Falha de entrega revoga; reiniciar Kernel não restaura credenciais. MiddlewareAuth remoto não é modificado nesta etapa.
+- Registry tem 50 operações com owner/classe/schema/slot. Não há handlers E0 anunciáveis; `listCapabilities()` fica vazio. Schemas de operações futuras continuam presentes, sem implementar domínios futuros. Adapter Codex continua indisponível: não há adapter nem transcrição sanitizada validada; o teste de capabilities impede anunciar `agent`.
+- APIs legadas `/v1/kernel`, `/api/memory/*` e MCP Evidence foram preservadas.
 
-## Commits preservados e correções de revisão
+## Commits da revisão
 
-Os seis commits prévios da lane permanecem intactos. Correções nesta retomada:
+PocketWiki, branch `codex/nh-e0-nh00`, mantém os commits anteriores intactos. Correções e entregas desta retomada:
 
-- `efc2804` — validação recursiva JS/Swift, unions discriminadas e corpus comum, incluindo cobertura por operação.
-- `6562379` — decisão explícita para `runtime.dispatch`, TTL local de 900000 ms e validação da expiração inclusiva.
-- `6a5ae11` — distinção entre base documental, ancestral integrado e estado parcial para revisão.
-- `495abf0` — limites e condições específicas das operações, incluindo campos de caminho, URLs, branches, dados base64 decodificados e variantes MCP.
+- `f01219f` — critérios e regressões independentes antes da correção.
+- `7547d7c` — cursor opcional ausente aceito; null recusado.
+- `cd767b1` — cobertura estrutural e por operação ampliada.
+- `9511b7d` — limites recursivos e corpus de entidade alinhados entre JS/Swift.
+- `83e1e11` — bootstrap scoped integrado a processo Kernel.
+- `945d01d` — matriz de cobertura e smoke isolado do Chromium.
+- `89f0845` — despacho por classe incompatível testado.
 
-Arquivos desta retomada: `src/harness/contracts/{validate.mjs,validate.test.mjs,harness-v1.schema.json,corpus-v1.json,operation-registry.json}`, `src/harness/local-host.{mjs,test.mjs}`, `Sources/PocketWikiMac/Models/Harness/{HarnessV1.swift,HarnessOperationRegistry.swift}`, `Tests/Harness/HarnessV1CorpusRunner.swift`, `scripts/generate-harness-{registry.mjs,schemas.py,operation-corpus.mjs}`, `scripts/test-harness-contracts-swift.sh`, `package.json` e os documentos NH-00 listados acima. PocketKernel e MiddlewareAuth não receberam alterações nesta retomada.
+PocketKernel mantém histórico separado, branch `codex/nh00-locks`: `b17f3b5` verifier/ACL scoped e `03f8f30` encerramento limpo do probe de teste. MiddlewareAuth não recebeu alterações.
 
-## Evidência desta revisão
+## Comandos e resultados
 
-- Antes da correção, o validador JS aceitava `NH00-PERM-002` e `NH00-FORGE-002` embora esperassem rejeição.
-- Antes da correção, o runner Swift aceitava `NH00-SNAP-004`, `NH00-SNAP-005` e `NH00-STREAM-004` com conteúdo inválido aninhado.
-- Antes da correção por operação, JS e Swift aceitavam seis casos inválidos de path, branch, limite decodificado, endpoint HTTP remoto e campos de mutação em MCP list.
-- Depois: `npm run generate:harness-contracts` gera 232 slots para as 50 operações; `npm run test:harness-contracts` passa com 9 testes JS e 280 slots comuns Swift; `npm test` passa; `swift build -c debug` passa.
-- Kernel, sem mudanças nesta retomada: `CGO_ENABLED=0 go test ./...` passa e `sh script/build_nh00_matrix.sh` compila Linux arm64/amd64 sem CGO.
+| Comando | Resultado |
+|---|---|
+| `npm run generate:harness-contracts` ×2 | exit 0 em ambos; mesmos hashes de schema/corpus/matriz antes e depois |
+| `npm run test:harness-contracts` | exit 0; 12 testes JS passaram, 908 slots Swift passaram, 0 skips |
+| `sh scripts/test-nh00-acceptance.sh` | exit 0; 921 IDs únicos; resultados JS comparados individualmente com `accept`, runner Swift aprovou 921 slots |
+| `npm test` | exit 0; suites legadas Solutions, MCP, Graph, Excalidraw Desktop e Memory passaram, sem skips |
+| `swift build -c debug` | exit 0 |
+| `npm run test:nh00-bootstrap` | exit 0; integração real entre processos aprovada |
+| `CGO_ENABLED=0 go test ./...` | exit 0 |
+| `sh script/build_nh00_matrix.sh` | exit 0; Linux arm64 e amd64 sem CGO |
+| `npm run test:nh00-chromium` | exit 0; revision 1248 isolada, página local/marker aprovados |
 
-## Integração
+O runner de aceitação mescla o corpus compartilhado e os fixtures independentes, rejeita IDs duplicados e aplica os mesmos slots a JS e Swift. Uma execução AC-05 anterior imprimiu aprovação mas ficou pendurada por cleanup incorreto; foi descartada. Após corrigir o cleanup e o encerramento do probe, a execução acima terminou com exit 0.
 
-1. Em PocketWiki, aguarde a integração do PR documental #45 (`5311a8aae2876c572f25b79540f38ee0acac7121`), baseado no ancestral `main` `7703ac708120d93f54c7d29c5ad34dde9591a1bf`; depois integre a lane `codex/nh-e0-nh00` posterior à base documental.
-2. Em PocketKernel, crie a branch de integração a partir de `02fe052516a3bd53f4fab4d94cd566540bce276c` e aplique `ff32bbc9f386ef4f4be55da281c481d79a4a5299`.
-3. Registre os dois SHAs de integração e o SHA MiddlewareAuth acima na issue #21; mantenha MiddlewareAuth sem alterações nesta etapa.
-4. Rode `npm run generate:harness-contracts`, `npm run test:harness-contracts`, `npm test`, `swift build -c debug`, `CGO_ENABLED=0 go test ./...` e `sh script/build_nh00_matrix.sh`. Esta entrega ainda aguarda revisão; NH-TEST só recebe a base depois do aceite, e E1 depende do rig e do GATE-E0 aprovados.
+## SHAs, hashes e arquivos preexistentes
+
+- PocketWiki snapshot de implementação validado antes do commit deste relatório: `89f0845914790113ca0b0e028ab4bee5715ca2d0`; branch `codex/nh-e0-nh00`. O commit posterior deste relatório é identificado no resumo da revisão.
+- Base documental PocketWiki: `5311a8aae2876c572f25b79540f38ee0acac7121` (não integrada).
+- Base integrada de código / ancestral comum: `7703ac708120d93f54c7d29c5ad34dde9591a1bf`.
+- PocketKernel final: `03f8f30eb781b4d16a9dca76f7548f9781bbef02`, branch `codex/nh00-locks`.
+- MiddlewareAuth observado: `04f44f62126c785f7b28718d2eff837c28cb65df`, branch `main`, sem alterações.
+- SHA-256 schema `harness-v1.schema.json`: `306915400385fa9bd7c22096fb18228d4d2c02e0f272376f8c2c5ebd7bebae70`.
+- SHA-256 corpus `corpus-v1.json`: `5f88311d9485544ce4c868186f230f6bd70416216096134243c29a1606e9d830`.
+- SHA-256 matriz cobertura: `67f9635b9f367116caa3d30a5c989eb6723a2482dcca349a1caaaf31c769d1be`.
+- SHA-256 `package-lock.json`: `2d950a0e6ac2a855d215c723abc8173e58ffcd8c39a1732699632d956d0ed01c`.
+- SHA-256 Kernel `go.mod`: `73d61aeb664dfb8b1df7dd6aba79bf85f1121a11a39062147d1816181b617f50`.
+- SHA-256 Kernel `go.sum`: `1692bb6aa37ae13a36b6629bf65d910085c99c221f5bd7569b001ddee5b6e2d2`.
+- SHA-256 registry de operações `operation-registry.json`: `7e2bf3e98a8fc147ec1237f4896c0bc5f803143a5770d152ff270e0d9d795159`.
+- SHA-256 regressões independentes: `3633ded68d693060fc10468785630435b5ae27d423d95196b5f533f78da3429f`.
+- Arquivo não rastreado preexistente preservado no PocketWiki: `src/harness/registry 2.mjs`; não foi incluído nem alterado.
+- Arquivos não rastreados preexistentes preservados em MiddlewareAuth: `docs/CLIENT_TOKEN_ROTATION 2.md`, `docs/DECISION_PROVIDER_CONTRACT 2.md`, `internal/auth/client_token 2.go`, `internal/auth/client_token_test 2.go`; não foram incluídos nem alterados.
+
+## Integração posterior
+
+A lane PocketWiki continua empilhada sobre o SHA documental `5311a8a`; primeiro integre/reconcilie PR #45 e depois aplique a lane sem alterar a base reportada. Integre separadamente o branch/commit PocketKernel no repositório correto. MiddlewareAuth não tem commit nesta etapa. Só após aceite desta revisão entregue o SHA PocketWiki imutável a NH-TEST. LEGACY-00 permanece NH-TEST/gate E0; não é declarado executado aqui.
