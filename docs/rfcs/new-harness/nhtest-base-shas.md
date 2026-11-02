@@ -6,3 +6,7 @@
 - Contratos documentais: PocketWiki `5311a8aae2876c572f25b79540f38ee0acac7121`; ancestral integrado `7703ac708120d93f54c7d29c5ad34dde9591a1bf`. PR documental #45 ainda não integrado.
 
 Worktree nova PocketWiki: branch `codex/nh-e0-nh-test`, criada de `5d516e59c6fcdf41a551f8725d1ca19d770d41c1`. Registro gravado como primeiro commit, antes dos arquivos de implementação.
+
+## Liberação de continuidade
+
+O handoff acima está autorizado em [e0-handoff.md](e0-handoff.md). A branch atual é `codex/nh-e0-nhtest` (renomeada após a criação); o SHA-base é preservado. Merge em main, fechamento de #21 e aprovação de E0 não são pré-condições desta lane.
