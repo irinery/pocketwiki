@@ -3,6 +3,11 @@ name: New Harness E0
 on:
   workflow_dispatch:
   pull_request:
+  push:
+    branches:
+      - codex/nh-e0-nhtest
+    paths-ignore:
+      - Tests/NewHarnessE2E/evidence/**
 
 permissions:
   contents: read
