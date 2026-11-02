@@ -38,7 +38,7 @@ try {
 
   const cases = [];
   for (const pair of selected) {
-    const scenarioTimeout = pair.surface === 'macos' ? 15 * 60_000 : 180_000;
+    const scenarioTimeout = pair.surface === 'web' ? 180_000 : 15 * 60_000;
     const deadline = Date.now() + scenarioTimeout;
     const id = pair.scenario.id;
     const result = id === 'CONTRACT-00'
