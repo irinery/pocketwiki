@@ -1,0 +1,121 @@
+{
+  "protocol": "harness.v1",
+  "slots": [
+    {
+      "id": "AC-permission-command-valid",
+      "schema": "PermissionAction",
+      "accept": true,
+      "value": {
+        "kind": "command",
+        "workspace_id": "11111111-1111-4111-8111-111111111111",
+        "cwd_relative": ".",
+        "argv": [
+          "echo",
+          "ok"
+        ]
+      }
+    },
+    {
+      "id": "AC-permission-command-missing-details",
+      "schema": "PermissionAction",
+      "accept": false,
+      "value": {
+        "kind": "command"
+      }
+    },
+    {
+      "id": "AC-permission-wrong-nested-type",
+      "schema": "PermissionAction",
+      "accept": false,
+      "value": {
+        "kind": "command",
+        "workspace_id": {},
+        "cwd_relative": ".",
+        "argv": [
+          "echo"
+        ]
+      }
+    },
+    {
+      "id": "AC-permission-cross-variant",
+      "schema": "PermissionAction",
+      "accept": false,
+      "value": {
+        "kind": "command",
+        "workspace_id": "11111111-1111-4111-8111-111111111111",
+        "cwd_relative": ".",
+        "argv": [
+          "echo"
+        ],
+        "question": "approve?"
+      }
+    },
+    {
+      "id": "AC-runtime-empty-snapshot",
+      "schema": "snapshotEnvelope",
+      "accept": true,
+      "value": {
+        "module": "runtime",
+        "data": {
+          "snapshot_id": "11111111-1111-4111-8111-111111111111",
+          "revision": 0,
+          "as_of_seq": 0,
+          "receipts": [],
+          "effects": []
+        }
+      }
+    },
+    {
+      "id": "AC-runtime-malformed-receipt",
+      "schema": "snapshotEnvelope",
+      "accept": false,
+      "value": {
+        "module": "runtime",
+        "data": {
+          "snapshot_id": "11111111-1111-4111-8111-111111111111",
+          "revision": 0,
+          "as_of_seq": 0,
+          "receipts": [
+            {
+              "invalid": true
+            }
+          ],
+          "effects": []
+        }
+      }
+    },
+    {
+      "id": "AC-threads-missing-singleton",
+      "schema": "snapshotEnvelope",
+      "accept": false,
+      "value": {
+        "module": "threads",
+        "data": {
+          "snapshot_id": "11111111-1111-4111-8111-111111111111",
+          "revision": 0,
+          "as_of_seq": 0,
+          "messages": [],
+          "runs": [],
+          "queue": [],
+          "timeline": []
+        }
+      }
+    },
+    {
+      "id": "AC-snapshot-null-cursor",
+      "schema": "snapshotEnvelope",
+      "accept": false,
+      "value": {
+        "module": "runtime",
+        "data": {
+          "snapshot_id": "11111111-1111-4111-8111-111111111111",
+          "revision": 0,
+          "as_of_seq": 0,
+          "receipts": [],
+          "effects": [],
+          "next_cursor": null
+        }
+      }
+    }
+  ]
+}
