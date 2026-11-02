@@ -43,6 +43,7 @@ PocketWiki, branch `codex/nh-e0-nh00`, mantém os commits anteriores intactos. C
 - `945d01d` — matriz de cobertura e smoke isolado do Chromium.
 - `89f0845` — despacho por classe incompatível testado.
 - `e240155` — ausência de singletons obrigatórios em snapshots coberta.
+- `97b3db7` — integração comprova que bearer não aparece em URL nem nos logs dos processos.
 
 PocketKernel mantém histórico separado, branch `codex/nh00-locks`: `b17f3b5` verifier/ACL scoped e `03f8f30` encerramento limpo do probe de teste. MiddlewareAuth não recebeu alterações.
 
@@ -64,7 +65,7 @@ O runner de aceitação mescla o corpus compartilhado e os fixtures independente
 
 ## SHAs, hashes e arquivos preexistentes
 
-- PocketWiki snapshot de implementação validado antes do commit deste relatório: `e2401553f01a2e24e20175a392fc8680f61353c1`; branch `codex/nh-e0-nh00`. O commit posterior deste relatório é identificado no resumo da revisão.
+- PocketWiki snapshot de implementação validado antes do commit deste relatório: `97b3db728f216e1ab29d1b5d3327637ffa521208`; branch `codex/nh-e0-nh00`. O commit posterior deste relatório é identificado no resumo da revisão.
 - Base documental PocketWiki: `5311a8aae2876c572f25b79540f38ee0acac7121` (não integrada).
 - Base integrada de código / ancestral comum: `7703ac708120d93f54c7d29c5ad34dde9591a1bf`.
 - PocketKernel final: `03f8f30eb781b4d16a9dca76f7548f9781bbef02`, branch `codex/nh00-locks`.
