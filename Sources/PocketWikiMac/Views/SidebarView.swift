@@ -68,6 +68,7 @@ struct SidebarView: View {
                     .frame(height: 36)
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("legacy.openWiki")
             .foregroundStyle(PocketWikiTheme.text)
             .pocketWikiGlass(cornerRadius: 14, tint: PocketWikiTheme.accent.opacity(0.24), interactive: true)
 
@@ -147,6 +148,7 @@ struct SidebarView: View {
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("legacy.sidebar.item.\(item.title)")
         .listRowInsets(EdgeInsets(top: 1, leading: 8, bottom: 1, trailing: 8))
         .listRowBackground(Color.clear)
     }

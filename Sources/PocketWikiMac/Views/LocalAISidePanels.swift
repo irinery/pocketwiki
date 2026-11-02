@@ -159,6 +159,7 @@ struct LocalAISidePanelContent: View {
                     .foregroundStyle(PocketWikiTheme.text)
                     .pocketWikiSurface(cornerRadius: 13, tint: PocketWikiTheme.accent)
                     .disabled(isStreaming || method == nil)
+                    .accessibilityIdentifier("legacy.ai.provider.configure")
                     .frame(minWidth: 0, maxWidth: .infinity)
 
                     Button {
@@ -179,6 +180,7 @@ struct LocalAISidePanelContent: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(PocketWikiTheme.dim)
+                    .accessibilityIdentifier("legacy.ai.settings.open")
                     .pocketWikiSurface(cornerRadius: 13)
                     .help("Configurações avançadas")
                 }
@@ -432,6 +434,7 @@ struct LocalAIAdvancedSettingsSheet: View {
                 }
                 .textFieldStyle(.plain)
                 .font(.caption.monospaced())
+                .accessibilityIdentifier("legacy.ai.auth.\(field.id)")
                 .localAIInputChrome()
             }
 
