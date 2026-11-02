@@ -24,6 +24,7 @@ const ids = {
 };
 const audience = 'pocketkernel.harness';
 const children = [];
+const kernelLogBuffers = [];
 let hostWorker;
 
 try {
@@ -61,8 +62,10 @@ try {
   await assert.equal(await effectCount(kernel.http), 1, 'all denials occur before the test effect');
 
   const disk = await readFile(storePath, 'utf8');
+  const logs = `${hostWorker.logs.join('')}\n${kernelLogBuffers.flat().join('')}`;
   for (const token of [validBearer, otherPrincipal.bearer, otherEnvironment.bearer, otherAudience.bearer, expired.bearer, failedDelivery.bearer, restartBearer]) {
     assert.ok(!disk.includes(token), 'bearer must not persist');
+    assert.ok(!logs.includes(token), 'bearer must not appear in process logs');
   }
   assert.ok(disk.includes('token_sha256'));
 
@@ -93,7 +96,10 @@ async function issue(config) {
 }
 
 async function startHostWorker() {
-  const worker = fork(fileURLToPath(new URL('./nh00-local-host-worker.mjs', import.meta.url)), [], { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
+  const worker = fork(fileURLToPath(new URL('./nh00-local-host-worker.mjs', import.meta.url)), [], { stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
+  const logs = [];
+  worker.stdout.on('data', (chunk) => logs.push(chunk.toString()));
+  worker.stderr.on('data', (chunk) => logs.push(chunk.toString()));
   const pending = new Map();
   worker.on('message', (message) => {
     if (message.type === 'ready') return;
@@ -111,6 +117,7 @@ async function startHostWorker() {
   });
   return {
     child: worker,
+    logs,
     call(message) {
       const id = message.id ?? `command-${Math.random()}`;
       return new Promise((resolve, reject) => {
@@ -124,7 +131,11 @@ async function startHostWorker() {
 async function startKernel() {
   const child = spawn(binary, ['-listen', '127.0.0.1:0', '-bootstrap-socket', socketPath, '-store', storePath], { stdio: ['ignore', 'pipe', 'pipe'] });
   children.push(child);
+  const logs = [];
+  kernelLogBuffers.push(logs);
   const lines = createInterface({ input: child.stdout });
+  lines.on('line', (line) => logs.push(`${line}\n`));
+  child.stderr.on('data', (chunk) => logs.push(chunk.toString()));
   const ready = await new Promise((resolve, reject) => {
     const onExit = (code) => reject(new Error(`Kernel probe exited before ready (${code})`));
     child.once('exit', onExit);
@@ -135,7 +146,7 @@ async function startKernel() {
     });
     child.once('error', reject);
   });
-  return { child, lines, http: ready.http };
+  return { child, lines, logs, http: ready.http };
 }
 
 async function stopKernel(kernel) {
@@ -145,7 +156,9 @@ async function stopKernel(kernel) {
 }
 
 async function assertRequest(base, bearer, aggregate, scope, status) {
-  const response = await fetch(`${base}/test/probe/${aggregate}/${scope}`, {
+  const url = `${base}/test/probe/${aggregate}/${scope}`;
+  if (bearer) assert.ok(!url.includes(bearer), 'bearer must not be placed in a URL');
+  const response = await fetch(url, {
     method: 'POST',
     headers: bearer ? { authorization: `Bearer ${bearer}` } : {},
     body: ''
