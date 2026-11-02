@@ -213,7 +213,7 @@
 		31311C6D60CC564ABFDE6C6C = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (51036FDA177352AEAA4BE223, ); runOnlyForDeploymentPostprocessing = 0; };
 		C5D575AF74C35E73A7F29DA0 = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		2D965CA1C8C95B8A9232DD8A = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-		34F337505F685838B153D88F = { isa = XCRemoteSwiftPackageReference; repositoryURL = "https://github.com/gonzalezreal/swift-markdown-ui"; requirement = { kind = upToNextMajorVersion; minimumVersion = 2.0.2; }; };
+		34F337505F685838B153D88F = { isa = XCRemoteSwiftPackageReference; repositoryURL = "https://github.com/gonzalezreal/swift-markdown-ui"; requirement = { kind = exactVersion; version = 2.4.1; }; };
 		8E01DFA8448457FEB13B328B = { isa = XCSwiftPackageProductDependency; package = 8ABB0FB1233454CDB02B4083; productName = MarkdownUI; };
 		0CBE0EDE07DD52C58E99001D = { isa = PBXContainerItemProxy; containerPortal = 4DD99CFB45375BD9A4571D08; proxyType = 1; remoteGlobalIDString = 5C5161095ECC5D1E933AB6F5; remoteInfo = PocketWikiResourceBundle; };
 		707F5DE9E4A9531785E5B4BB = { isa = PBXContainerItemProxy; containerPortal = 4DD99CFB45375BD9A4571D08; proxyType = 1; remoteGlobalIDString = DB9F0D2A365A5764AFA37894; remoteInfo = PocketWikiMacNHTestHost; };

@@ -105,6 +105,8 @@ try {
     'test', '-project', project,
     '-scheme', 'PocketWikiMacNHTestHost',
     '-destination', 'platform=macOS',
+    '-disableAutomaticPackageResolution',
+    '-clonedSourcePackagesDirPath', path.join(tempHome, 'swift-packages'),
     '-resultBundlePath', resultBundle
   ];
   const run = await runAndCapture(xcodebuild, args, root, env);
@@ -115,11 +117,28 @@ try {
     output += '\nFAIL: XCTest terminou sem requisição fixture autenticada contendo evidência da wiki.\n';
   }
   output += '\nProvider fixture requests: ' + JSON.stringify(providerRequests) + '\n';
+  if (existsSync(resultBundle)) {
+    const xcrun = path.join(developerDir, 'usr', 'bin', 'xcrun');
+    const summary = spawnSync(xcrun, ['xcresulttool', 'get', 'test-results', 'summary', '--path', resultBundle, '--format', 'json'], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
+    try {
+      if (summary.status !== 0) throw new Error(summary.stderr || summary.error?.message || 'xcresulttool falhou');
+      const safeSummary = redactSummary(summary.stdout);
+      JSON.parse(safeSummary);
+      await writeFile(resultBundle + '.summary.json', safeSummary + '\n', { mode: 0o600 });
+    } catch (error) {
+      status = status === 0 ? 1 : status;
+      output += '\nFAIL: não foi possível extrair o resumo sanitizado do xcresult. ' + error.message + '\n';
+    } finally {
+      await makeWritable(resultBundle);
+      await rm(resultBundle, { recursive: true, force: true });
+    }
+  }
 } catch (error) {
   output += '\nHost failure: ' + error.message + '\n';
   status = error.message.startsWith('não foi possível compilar') ? 2 : 1;
 } finally {
   if (provider.listening) await new Promise((resolve) => provider.close(resolve));
+  output = redactSummary(output);
   await writeFile(logPath, output, 'utf8');
   process.stdout.write(output);
   await makeWritable(tempHome);
@@ -194,6 +213,13 @@ async function availableLoopbackURL() {
 function sendJSON(response, statusCode, value) {
   response.writeHead(statusCode, { 'content-type': 'application/json', 'connection': 'close' });
   response.end(JSON.stringify(value));
+}
+function redactSummary(value) {
+  return String(value)
+    .replace(/nh-test-provider-key/g, '[REDACTED]')
+    .replace(/dev-middleware-token-for-tests-only/g, '[REDACTED]')
+    .replace(/nh-test-memory-token-[A-Za-z0-9-]*/g, '[REDACTED]')
+    .replace(/(authorization\s*:\s*bearer\s+)[^\s"']+/gi, '$1[REDACTED]');
 }
 function safeJSON(value) { try { return JSON.parse(value); } catch { return null; } }
 function parseFlag(args, flag) {

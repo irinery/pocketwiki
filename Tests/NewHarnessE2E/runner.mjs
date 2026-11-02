@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { chmod, cp, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
@@ -37,7 +38,8 @@ try {
 
   const cases = [];
   for (const pair of selected) {
-    const deadline = Date.now() + 180_000;
+    const scenarioTimeout = pair.surface === 'macos' ? 15 * 60_000 : 180_000;
+    const deadline = Date.now() + scenarioTimeout;
     const id = pair.scenario.id;
     const result = id === 'CONTRACT-00'
       ? await runContract(artifactDir, tempHome, baseSHAs, deadline)
@@ -143,7 +145,7 @@ async function runContract(artifactDir, tempHome, shas, deadline) {
       env: { ...env, ...overrides, NH_BUILD_DIR: path.join(tempHome, 'kernel-builds') },
       encoding: 'utf8',
       maxBuffer: 32 * 1024 * 1024
-    }, deadline);
+    }, deadline, 15 * 60_000);
     const status = result.status === 0 ? 'PASS' : 'FAIL';
     const body = '$ ' + binary + ' ' + commandArgs.join(' ') + '\nexit=' + String(result.status) +
       '\n--- stdout ---\n' + (result.stdout || '') + '\n--- stderr ---\n' + (result.stderr || result.error?.message || '');
@@ -173,7 +175,7 @@ async function runLegacy(surface, artifactDir, tempHome, deadline) {
       },
       encoding: 'utf8',
       maxBuffer: 8 * 1024 * 1024
-    }, deadline);
+    }, deadline, 15 * 60_000);
     const body = '$ node Tests/NewHarnessE2E/MacOSHost/run.mjs --result-bundle-path <report-dir>/legacy-macos.xcresult\nexit=' + String(result.status) +
       '\n--- stdout ---\n' + redact(result.stdout || '') + '\n--- stderr ---\n' + redact(result.stderr || result.error?.message || '');
     const logName = 'legacy-macos.log';
@@ -183,7 +185,10 @@ async function runLegacy(surface, artifactDir, tempHome, deadline) {
       ok: result.status === 0,
       exitCode: result.status === 0 ? 0 : (result.status === 2 ? 2 : 1),
       configurationError: result.status === 2,
-      artifacts: [path.join(path.basename(artifactDir), logName)]
+      artifacts: [
+        path.join(path.basename(artifactDir), logName),
+        ...(existsSync(resultBundle + '.summary.json') ? [path.join(path.basename(artifactDir), path.basename(resultBundle) + '.summary.json')] : [])
+      ]
     };
   }
   const vendorBuild = runWithinDeadline('npm', ['run', 'build:legacy-web-assets'], {

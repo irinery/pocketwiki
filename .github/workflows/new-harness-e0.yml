@@ -1,0 +1,78 @@
+name: New Harness E0
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  e0:
+    name: CONTRACT-00 + LEGACY-00 (service, web, macOS)
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      POCKETKERNEL_NH00_ROOT: ${{ github.workspace }}/.build/dependencies/pocketkernel
+      MIDDLEWAREAUTH_NHTEST_ROOT: ${{ github.workspace }}/.build/dependencies/middlewareAuth
+
+    steps:
+      - name: Checkout PocketWiki
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned PocketKernel
+        uses: actions/checkout@v4
+        with:
+          repository: irinery/pocketkernel
+          ref: 03f8f30eb781b4d16a9dca76f7548f9781bbef02
+          path: .build/dependencies/pocketkernel
+
+      - name: Checkout pinned MiddlewareAuth
+        uses: actions/checkout@v4
+        with:
+          repository: irinery/middlewareAuth
+          ref: 04f44f62126c785f7b28718d2eff837c28cb65df
+          path: .build/dependencies/middlewareAuth
+
+      - name: Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+          cache: npm
+
+      - name: Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.26.0
+          cache: false
+
+      - name: Select pinned Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+          node --version
+          npm --version
+          go version
+          swift --version
+          xcodebuild -version
+          git rev-parse HEAD
+          test "$(git -C "$POCKETKERNEL_NH00_ROOT" rev-parse HEAD)" = 03f8f30eb781b4d16a9dca76f7548f9781bbef02
+          test "$(git -C "$MIDDLEWAREAUTH_NHTEST_ROOT" rev-parse HEAD)" = 04f44f62126c785f7b28718d2eff837c28cb65df
+
+      - name: Run all E0 shards
+        run: node Tests/NewHarnessE2E/runner.mjs --stage E0 --surface all --report-dir "$RUNNER_TEMP/nh-test-e0"
+
+      - name: Aggregate the complete E0 matrix
+        if: success()
+        run: >-
+          node Tests/NewHarnessE2E/gate-aggregator.mjs --stage E0
+          --reports "$RUNNER_TEMP/nh-test-e0/e0-all.json"
+          > "$RUNNER_TEMP/nh-test-e0/gate.json"
+
+      - name: Upload redacted E0 reports and artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nh-test-e0-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/nh-test-e0/
+          if-no-files-found: warn
+          retention-days: 14

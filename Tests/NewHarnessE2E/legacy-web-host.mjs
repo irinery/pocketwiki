@@ -61,7 +61,7 @@ try {
   ].join('\n');
   await writeFile(envFile, envLines);
 
-  host = await startHost({
+  const hostEnvironment = {
     PATH: process.env.PATH,
     HOME: temp,
     TMPDIR: temp,
@@ -70,7 +70,8 @@ try {
     POCKETWIKI_BIND_HOST: '127.0.0.1',
     POCKETWIKI_MDNS: 'false',
     NH_TEST_READY_FILE: readyFile
-  });
+  };
+  host = await startHost(hostEnvironment);
   const response = await fetch(host.baseURL);
   assert(response.ok, 'legacy web root returned HTTP ' + response.status);
   const html = await response.text();
@@ -149,6 +150,18 @@ try {
   assert(bridges.transcript.requests[0].hasWikiMarker, 'PocketKernel did not include MCP Evidence from the temporary wiki');
   assert(uiKernelRequest?.model_id === 'nh-test-fixture-model', 'legacy UI did not send the selected provider fixture model to PocketKernel');
 
+  const firstHostPID = host.child.pid;
+  const firstHostProcess = host.child;
+  const wikiPort = new URL(host.baseURL).port;
+  await terminate(firstHostProcess);
+  assert(firstHostProcess.exitCode !== null || firstHostProcess.signalCode !== null, 'PocketWiki process did not exit before restart');
+  host = await startHost({ ...hostEnvironment, POCKETWIKI_PORT: wikiPort });
+  assert(host.child !== firstHostProcess, 'PocketWiki restart did not create a new process handle');
+  const restartedWikiResponse = await fetch(new URL('/api/wiki/files', host.baseURL));
+  assert(restartedWikiResponse.ok, 'PocketWiki did not serve the wiki store after process restart');
+  const restartedFiles = await restartedWikiResponse.json();
+  assert(restartedFiles.files.some((file) => file.path === 'index.md'), 'wiki store contents were lost after PocketWiki process restart');
+
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.locator('.tab[data-panel="ai"]').click();
   await page.locator('.ai-msg.assistant .ai-msg-content').filter({ hasText: 'nh-test fixture response' }).waitFor({ state: 'visible' });
@@ -163,6 +176,10 @@ try {
     pocketkernel_ready: true,
     provider_fixture_requests: bridges.transcript.requests.length,
     provider_fixture_received_wiki_marker: bridges.transcript.requests.some((item) => item.hasWikiMarker),
+    pocketwiki_process_restarted: true,
+    pocketwiki_pid_before_restart: firstHostPID,
+    pocketwiki_pid_after_restart: host.child.pid,
+    wiki_store_restored_after_process_restart: restartedFiles.files.some((file) => file.path === 'index.md'),
     answer_restored_after_reload: true,
     external_browser_requests: externalRequests.length
   }, null, 2) + '\n');
@@ -303,6 +320,7 @@ async function startRealBridges(tempRoot, wikiRoot) {
 async function startHost(env) {
   const readyDirectory = path.dirname(env.NH_TEST_READY_FILE);
   const readyName = path.basename(env.NH_TEST_READY_FILE);
+  await rm(env.NH_TEST_READY_FILE, { force: true });
   const readyWatcher = watch(readyDirectory);
   const child = spawn(process.execPath, ['server.mjs'], { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] });
   const lines = createInterface({ input: child.stdout });
@@ -366,7 +384,7 @@ async function terminate(child) {
   child.kill('SIGTERM');
   if (await Promise.race([exited, delay(1000).then(() => false)])) return;
   child.kill('SIGKILL');
-  await Promise.race([exited, delay(1000)]);
+  await exited;
 }
 function delay(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 async function makeWritable(target) {
