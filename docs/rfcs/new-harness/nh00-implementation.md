@@ -2,7 +2,7 @@
 
 ## Estado da entrega
 
-NH-00 segue **parcial e entregue para revisão de aceite**. Não envio esta base para NH-TEST antes da revisão. A evidência abaixo demonstra os AC-01…AC-08 na árvore atual; a aprovação formal ainda depende da revisão solicitada. Não fecha o gate E0 e não afirma E2E de produto.
+A revisão de aceite desta rodada concluiu: **APROVADA pelos AC-01…AC-08**, com evidências na árvore final abaixo. A base imutável pode seguir para NH-TEST. Isso aprova somente NH-00: não fecha o gate E0 e não afirma E2E de produto.
 
 A base documental da lane é PocketWiki `5311a8aae2876c572f25b79540f38ee0acac7121`, branch `codex/new-harness-rfcs`; esse commit ainda não foi integrado a `main` (PR #45 aberto). A base integrada de código, ancestral comum com `main`, é `7703ac708120d93f54c7d29c5ad34dde9591a1bf`. A implementação continua empilhada sobre a base documental, conforme autorizado. Não chamar `5311a8a` de integrada.
 
@@ -19,7 +19,7 @@ A base documental da lane é PocketWiki `5311a8aae2876c572f25b79540f38ee0acac712
 | AC-07 | `CGO_ENABLED=0 go test ./...`; `sh script/build_nh00_matrix.sh`; `npm run test:nh00-chromium` | Atendido; builds Linux arm64/amd64 sem CGO; Playwright 1.64.1, Chromium revision 1248 / Chrome 156.0.8078.4, headless `file://`, marker local, sem sleeps/rede externa |
 | AC-08 | `npm run generate:harness-contracts` duas vezes, comparação de hashes de saída; `npm test`; `swift build -c debug`; demais comandos acima | Atendido; geração determinística, suites sem skip e builds passaram. SHA e hashes abaixo identificam esta árvore |
 
-**Veredito:** critérios técnicos atendidos e evidenciados; **aprovação formal ainda pendente**. Esta entrega não está concluída como NH-00 até a revisão aceitar a base. Depois do aceite, entregar o SHA imutável para NH-TEST.
+**Veredito da revisão:** APROVADA para encaminhar o snapshot PocketWiki identificado abaixo a NH-TEST. A aprovação não integra branches, não fecha gate E0 e não inclui LEGACY-00 como executado por NH-00.
 
 ## Contratos e escopo
 
