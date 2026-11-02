@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 
 enum HarnessV1 {
     static let protocolMajor = 1
@@ -93,69 +94,159 @@ enum HarnessV1 {
 
     enum ValidationError: Swift.Error { case invalidStreamEnvelope, invalidDeliveryUnion }
 
-    static func validateCorpusValue(_ value: Any, schemaName: String) -> Bool {
-        guard let object = value as? [String: Any] else { return false }
-        switch schemaName {
-        case "command":
-            guard hasOnly(object, ["protocol_major", "command_id", "environment_id", "expected_revision", "operation", "input"]),
-                  object["protocol_major"] as? Int == protocolMajor,
-                  uuid(object["command_id"]), uuid(object["environment_id"]),
-                  let revision = object["expected_revision"] as? Int, revision >= 0,
-                  let operation = object["operation"] as? String,
-                  let entry = HarnessOperationRegistry.entries[operation],
-                  entry.operationClass == "mutation", entry.contractStatus == "closed", !entry.implemented,
-                  let input = object["input"] as? [String: Any] else { return false }
-            let inputFieldNames = Set(entry.inputFields.keys)
-            guard Set(input.keys).isSubset(of: inputFieldNames), entry.requiredFields.isSubset(of: Set(input.keys)) else { return false }
-            return input.allSatisfy { name, fieldValue in
-                guard let fieldType = entry.inputFields[name] else { return false }
-                return valid(value: fieldValue, as: fieldType)
+    static func validateCorpusValue(_ value: Any, schemaName: String, document: [String: Any], operationName: String? = nil) -> Bool {
+        guard let definitions = document["$defs"] as? [String: Any],
+              let definition = definitions[schemaName] as? [String: Any],
+              validate(value, against: definition, definitions: definitions) else { return false }
+        var errors: [String] = []
+        validateSemantics(value, errors: &errors)
+        if let operationName { checkOperationInput(operationName, value: value, definitions: definitions, errors: &errors) }
+        guard schemaName == "command", let command = value as? [String: Any] else { return errors.isEmpty }
+        guard let operation = command["operation"] as? String,
+              let entry = HarnessOperationRegistry.entries[operation],
+              entry.operationClass == "mutation", entry.contractStatus == "closed", !entry.implemented else { return false }
+        if let input = command["input"] {
+            checkOperationInput(operation, value: input, definitions: definitions, errors: &errors)
+            if operation == "runtime.dispatch", let inputObject = input as? [String: Any] {
+                guard inputObject["command_id"] as? String == command["command_id"] as? String,
+                      inputObject["expected_revision"] as? Int == command["expected_revision"] as? Int else { return false }
             }
-        case "harnessError":
-            guard hasOnly(object, ["code", "message", "correlation_id", "retryable"]),
-                  let code = object["code"] as? String, errorCodes.contains(code),
-                  let message = object["message"] as? String, message.utf8.count <= 1024,
-                  uuid(object["correlation_id"]), object["retryable"] as? Bool != nil else { return false }
-            return true
-        case "snapshotEnvelope":
-            guard hasOnly(object, ["module", "data"]),
-                  let module = object["module"] as? String, ModuleID(rawValue: module) != nil,
-                  let data = object["data"] as? [String: Any],
-                  let collections = snapshotCollections[module],
-                  hasOnly(data, Set(["snapshot_id", "revision", "as_of_seq", "next_cursor"] + collections)),
-                  uuid(data["snapshot_id"]),
-                  let revision = data["revision"] as? Int, revision >= 0,
-                  let sequence = data["as_of_seq"] as? Int, sequence >= 0 else { return false }
-            let requiredCollections = collections.filter { $0 != "thread" && $0 != "settings" }
-            guard requiredCollections.allSatisfy({ data[$0] as? [Any] != nil }) else { return false }
-            if let cursor = data["next_cursor"], ((cursor as? String)?.utf8.count ?? 513) > 512 { return false }
-            return true
-        case "streamEnvelope":
-            guard hasOnly(object, ["protocol_major", "event_id", "environment_id", "thread_id", "seq", "committed_at_ms", "module", "delivery", "payload_ref", "payload"]),
-                  object["protocol_major"] as? Int == protocolMajor,
-                  uuid(object["event_id"]), uuid(object["environment_id"]),
-                  object["thread_id"] == nil || uuid(object["thread_id"]),
-                  let seq = object["seq"] as? Int, seq >= 0,
-                  let committed = object["committed_at_ms"] as? Int64, committed >= 0,
-                  let module = object["module"] as? String, ModuleID(rawValue: module) != nil,
-                  let delivery = object["delivery"] as? String else { return false }
-            if delivery == "inline" {
-                guard let payload = object["payload"] as? [String: Any], object["payload_ref"] == nil else { return false }
-                return validModuleEvent(payload, module: module)
-            }
-            if delivery == "reference" { return uuid(object["payload_ref"]) && object["payload"] == nil }
-            return false
-        case "localCredentialMetadata":
-            guard hasOnly(object, ["principal_id", "environment_id", "thread_id", "scopes", "audience", "expires_at_ms"]),
-                  uuid(object["principal_id"]), uuid(object["environment_id"]),
-                  object["thread_id"] == nil || uuid(object["thread_id"]),
-                  let scopes = object["scopes"] as? [String], Set(scopes).count == scopes.count,
-                  scopes.allSatisfy({ Scope(rawValue: $0) != nil }),
-                  object["audience"] as? String != nil else { return false }
-            return true
-        default:
-            return false
         }
+        return errors.isEmpty
+    }
+
+    private static func validateSemantics(_ value: Any, errors: inout [String]) {
+        if let object = value as? [String: Any] {
+            if let requestID = object["request_id"], requestID is String,
+               let action = object["action"] as? [String: Any],
+               let kind = object["kind"] as? String,
+               let options = object["options"] {
+                guard kind == action["kind"] as? String else { errors.append("PermissionRequest.kind mismatch"); return }
+                let expected: Any = kind == "question" ? (action["options"] ?? []) : []
+                guard jsonEqual(options, expected) else { errors.append("PermissionRequest.options mismatch"); return }
+            }
+            for child in object.values { validateSemantics(child, errors: &errors) }
+        } else if let array = value as? [Any] {
+            for child in array { validateSemantics(child, errors: &errors) }
+        }
+    }
+
+    private static func checkOperationInput(_ operation: String, value: Any, definitions: [String: Any], errors: inout [String]) {
+        guard let object = value as? [String: Any] else { errors.append("operation input must be object"); return }
+        func has(_ key: String) -> Bool { object.keys.contains(key) }
+        func require(_ condition: Bool) { if !condition { errors.append("\(operation) input condition failed") } }
+        switch operation {
+        case "threads.message":
+            require(has("prepared_id") == has("manifest_sha256"))
+        case "runtime.dispatch":
+            let action = object["operation"] as? String
+            let text = object["text"] as? String ?? ""
+            require(action == "submit" ? (!has("run_id") && !text.isEmpty) : has("run_id"))
+        case "permissions.respond":
+            let answer = object["answer"] as? String
+            require(answer != "answer" || !(object["text"] as? String ?? "").isEmpty || !(object["option_id"] as? String ?? "").isEmpty)
+        case "workspaces.prepare":
+            let mode = object["mode"] as? String
+            require(mode == "scratch" ? !has("project_id") : has("project_id"))
+            require(mode != "worktree" || (has("base_sha") && has("branch")))
+        case "checkpoints.diff":
+            let scope = object["scope"] as? String
+            require(scope == "turn" ? (has("run_id") && !has("base_sha")) : (has("base_sha") && !has("run_id")))
+        case "terminal.open":
+            require((object["kind"] as? String) != "task" || has("approval_id"))
+        case "mcp.thread.call":
+            let tool = object["tool"] as? String ?? ""
+            let forbidden: [String: [String]] = [
+                "thread.list": ["text", "after_seq", "through_seq", "cursor", "binding_id", "message_id", "queue_revision"],
+                "thread.read": ["project_id", "text", "binding_id", "message_id", "queue_revision"],
+                "thread.start": ["thread_id", "after_seq", "through_seq", "cursor", "queue_revision"],
+                "thread.send": ["project_id", "after_seq", "through_seq", "cursor"],
+                "thread.interrupt": ["project_id", "text", "after_seq", "through_seq", "cursor", "binding_id", "message_id"]
+            ]
+            require((forbidden[tool] ?? []).allSatisfy { !has($0) })
+            let required: [String: [String]] = [
+                "thread.start": ["command_id", "project_id", "text", "binding_id", "message_id"],
+                "thread.send": ["command_id", "thread_id", "text", "binding_id", "message_id", "queue_revision"],
+                "thread.interrupt": ["command_id", "thread_id", "queue_revision"],
+                "thread.read": ["thread_id"], "thread.list": []
+            ]
+            require((required[tool] ?? []).allSatisfy(has))
+        case "source_control.preview":
+            let keys = ["host", "repository", "operation", "pr_number", "head_sha", "body", "title", "base_branch", "head_branch", "review_event", "merge_method"]
+            let preview = object.filter { keys.contains($0.key) }
+            require(definitions["ForgePreview"].map { validate(preview, against: $0 as! [String: Any], definitions: definitions) } ?? false)
+        case "navigation.update":
+            require((object["action"] as? String == "reorder") == has("before_thread_id"))
+        case "navigation.list":
+            require(has("after_position") == has("after_id"))
+            require((has("after_id") || has("after_position")) == has("revision"))
+        default: break
+        }
+    }
+
+    private static func validate(_ value: Any, against rule: [String: Any], definitions: [String: Any]) -> Bool {
+        if let ref = rule["$ref"] as? String, ref.hasPrefix("#/$defs/"),
+           let target = definitions[String(ref.dropFirst("#/$defs/".count))] as? [String: Any] {
+            return validate(value, against: target, definitions: definitions)
+        }
+        if let oneOf = rule["oneOf"] as? [[String: Any]], oneOf.filter({ validate(value, against: $0, definitions: definitions) }).count != 1 { return false }
+        if let anyOf = rule["anyOf"] as? [[String: Any]], !anyOf.contains(where: { validate(value, against: $0, definitions: definitions) }) { return false }
+        if let forbidden = rule["not"] as? [String: Any], validate(value, against: forbidden, definitions: definitions) { return false }
+        if let type = rule["type"] as? String {
+            switch type {
+            case "object":
+                guard let object = value as? [String: Any] else { return false }
+                let properties = rule["properties"] as? [String: Any] ?? [:]
+                let required = rule["required"] as? [String] ?? []
+                guard required.allSatisfy({ object.keys.contains($0) }) else { return false }
+                if rule["additionalProperties"] as? Bool == false && !Set(object.keys).isSubset(of: Set(properties.keys)) { return false }
+                for (key, child) in properties where object.keys.contains(key) {
+                    guard let childRule = child as? [String: Any], let childValue = object[key], validate(childValue, against: childRule, definitions: definitions) else { return false }
+                }
+            case "array":
+                guard let array = value as? [Any] else { return false }
+                if let min = rule["minItems"] as? Int, array.count < min { return false }
+                if let max = rule["maxItems"] as? Int, array.count > max { return false }
+                if rule["uniqueItems"] as? Bool == true && Set(array.map(jsonFingerprint)).count != array.count { return false }
+                if let child = rule["items"] as? [String: Any], !array.allSatisfy({ validate($0, against: child, definitions: definitions) }) { return false }
+            case "string":
+                guard let string = value as? String else { return false }
+                if let min = rule["minLength"] as? Int, string.unicodeScalars.count < min { return false }
+                if let max = rule["maxLength"] as? Int, string.unicodeScalars.count > max { return false }
+                if let min = rule["x-minUtf8Bytes"] as? Int, string.utf8.count < min { return false }
+                if let max = rule["x-maxUtf8Bytes"] as? Int, string.utf8.count > max { return false }
+                if let pattern = rule["pattern"] as? String, string.range(of: pattern, options: .regularExpression) == nil { return false }
+                if rule["format"] as? String == "uuid" && !uuid(string) { return false }
+                if rule["x-format"] as? String == "jcs" && !isCanonicalJSON(string) { return false }
+                if rule["x-format"] as? String == "base64" && !isBase64(string) { return false }
+            case "integer":
+                guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(), number.doubleValue.rounded(.towardZero) == number.doubleValue else { return false }
+                if let minimum = rule["minimum"] as? NSNumber, number.doubleValue < minimum.doubleValue { return false }
+                if let maximum = rule["maximum"] as? NSNumber, number.doubleValue > maximum.doubleValue { return false }
+            case "boolean":
+                guard let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else { return false }
+            case "null":
+                guard value is NSNull else { return false }
+            default: return false
+            }
+        }
+        if let constant = rule["const"], !jsonEqual(value, constant) { return false }
+        if let enumeration = rule["enum"] as? [Any], !enumeration.contains(where: { jsonEqual(value, $0) }) { return false }
+        return true
+    }
+
+    private static func jsonEqual(_ lhs: Any, _ rhs: Any) -> Bool {
+        jsonFingerprint(lhs) == jsonFingerprint(rhs)
+    }
+
+    private static func jsonFingerprint(_ value: Any) -> String {
+        guard let data = try? JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed, .sortedKeys, .withoutEscapingSlashes]) else { return "<invalid>" }
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    private static func isBase64(_ value: String) -> Bool {
+        guard let data = Data(base64Encoded: value, options: []), data.base64EncodedString() == value else { return false }
+        return true
     }
 
     private static let errorCodes: Set<String> = [

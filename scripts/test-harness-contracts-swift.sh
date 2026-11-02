@@ -9,4 +9,4 @@ swiftc -parse-as-library \
   "$ROOT/Sources/PocketWikiMac/Models/Harness/HarnessOperationRegistry.swift" \
   "$ROOT/Tests/Harness/HarnessV1CorpusRunner.swift" \
   -o "$ROOT/.build/harness-corpus"
-"$ROOT/.build/harness-corpus" "$ROOT/src/harness/contracts/corpus-v1.json"
+"$ROOT/.build/harness-corpus" "$ROOT/src/harness/contracts/corpus-v1.json" "$ROOT/src/harness/contracts/harness-v1.schema.json"

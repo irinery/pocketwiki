@@ -187,6 +187,21 @@
           ],
           "properties": {
             "operation": {
+              "const": "runtime.dispatch"
+            },
+            "input": {
+              "$ref": "#/$defs/operationInput_runtime_dispatch"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "operation",
+            "input"
+          ],
+          "properties": {
+            "operation": {
               "const": "providers.select"
             },
             "input": {
@@ -570,9 +585,7 @@
           }
         }
       ],
-      "x-contractBlockedOperations": [
-        "runtime.dispatch"
-      ]
+      "x-contractBlockedOperations": []
     },
     "commandReceipt": {
       "type": "object",
@@ -2511,7 +2524,8 @@
         "principal_id",
         "environment_id",
         "scopes",
-        "audience"
+        "audience",
+        "expires_at_ms"
       ],
       "properties": {
         "principal_id": {
@@ -2533,6 +2547,10 @@
         "audience": {
           "type": "string",
           "minLength": 1
+        },
+        "expires_at_ms": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     },
@@ -3516,219 +3534,397 @@
       }
     },
     "PermissionAction": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "kind"
-      ],
-      "properties": {
-        "kind": {
-          "type": "string",
-          "enum": [
-            "command",
-            "edit",
-            "question",
-            "forge"
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "workspace_id",
+            "cwd_relative",
+            "argv"
           ],
-          "x-maxUtf8Bytes": 4096
-        },
-        "workspace_id": {
-          "anyOf": [
-            {
+          "properties": {
+            "kind": {
+              "const": "command"
+            },
+            "workspace_id": {
               "$ref": "#/$defs/uuid"
             },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "cwd_relative": {
-          "anyOf": [
-            {
+            "cwd_relative": {
               "type": "string",
               "x-maxUtf8Bytes": 4096
             },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "argv": {
-          "anyOf": [
-            {
+            "argv": {
               "type": "array",
               "items": {
                 "type": "string",
                 "x-maxUtf8Bytes": 4096
               },
-              "maxItems": 100
-            },
-            {
-              "type": "null"
+              "minItems": 1,
+              "maxItems": 64
             }
-          ]
+          }
         },
-        "edits": {
-          "anyOf": [
-            {
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "workspace_id",
+            "edits"
+          ],
+          "properties": {
+            "kind": {
+              "const": "edit"
+            },
+            "workspace_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "edits": {
               "type": "array",
               "items": {
                 "$ref": "#/$defs/EditPreview"
               },
+              "minItems": 1,
               "maxItems": 100
-            },
-            {
-              "type": "null"
             }
-          ]
+          }
         },
-        "question": {
-          "anyOf": [
-            {
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "question",
+            "options"
+          ],
+          "properties": {
+            "kind": {
+              "const": "question"
+            },
+            "question": {
               "type": "string",
               "x-maxUtf8Bytes": 4096
             },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "options": {
-          "anyOf": [
-            {
+            "options": {
               "type": "array",
               "items": {
                 "$ref": "#/$defs/QuestionOption"
               },
-              "maxItems": 100
-            },
-            {
-              "type": "null"
+              "minItems": 0,
+              "maxItems": 10
             }
-          ]
+          }
         },
-        "forge": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ForgePreview"
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "forge"
+          ],
+          "properties": {
+            "kind": {
+              "const": "forge"
             },
-            {
-              "type": "null"
+            "forge": {
+              "$ref": "#/$defs/ForgePreview"
             }
-          ]
+          }
         }
+      ],
+      "discriminator": {
+        "propertyName": "kind"
       }
     },
     "ForgePreview": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "host",
-        "repository",
-        "operation",
-        "head_sha",
-        "body"
-      ],
-      "properties": {
-        "host": {
-          "type": "string",
-          "x-maxUtf8Bytes": 4096
-        },
-        "repository": {
-          "type": "string",
-          "x-maxUtf8Bytes": 4096
-        },
-        "operation": {
-          "type": "string",
-          "enum": [
-            "link",
-            "create_draft",
-            "comment",
-            "review",
-            "merge"
-          ]
-        },
-        "pr_number": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "head_sha": {
-          "type": "string",
-          "pattern": "^[a-f0-9]{40}$"
-        },
-        "body": {
-          "type": "string",
-          "x-maxUtf8Bytes": 4096
-        },
-        "title": {
-          "anyOf": [
-            {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "host",
+            "repository",
+            "operation",
+            "head_sha",
+            "body",
+            "pr_number"
+          ],
+          "properties": {
+            "host": {
               "type": "string",
-              "x-maxUtf8Bytes": 4096
+              "minLength": 1,
+              "maxLength": 253,
+              "pattern": "^[A-Za-z0-9.-]+$"
             },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "base_branch": {
-          "anyOf": [
-            {
+            "repository": {
               "type": "string",
-              "x-maxUtf8Bytes": 4096
+              "minLength": 3,
+              "maxLength": 512,
+              "pattern": "^[^/\\s]+/[^/\\s]+$"
             },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "head_branch": {
-          "anyOf": [
-            {
+            "head_sha": {
               "type": "string",
-              "x-maxUtf8Bytes": 4096
+              "pattern": "^[a-f0-9]{40}$"
             },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "review_event": {
-          "anyOf": [
-            {
+            "body": {
               "type": "string",
+              "x-maxUtf8Bytes": 16384
+            },
+            "operation": {
+              "const": "link"
+            },
+            "pr_number": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "host",
+            "repository",
+            "operation",
+            "head_sha",
+            "body",
+            "title",
+            "base_branch",
+            "head_branch"
+          ],
+          "properties": {
+            "host": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253,
+              "pattern": "^[A-Za-z0-9.-]+$"
+            },
+            "repository": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 512,
+              "pattern": "^[^/\\s]+/[^/\\s]+$"
+            },
+            "head_sha": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{40}$"
+            },
+            "body": {
+              "type": "string",
+              "minLength": 1,
+              "x-maxUtf8Bytes": 16384
+            },
+            "operation": {
+              "const": "create_draft"
+            },
+            "title": {
+              "type": "string",
+              "x-minUtf8Bytes": 1,
+              "x-maxUtf8Bytes": 256
+            },
+            "base_branch": {
+              "type": "string",
+              "x-minUtf8Bytes": 1,
+              "x-maxUtf8Bytes": 120
+            },
+            "head_branch": {
+              "type": "string",
+              "x-minUtf8Bytes": 1,
+              "x-maxUtf8Bytes": 120
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "host",
+            "repository",
+            "operation",
+            "head_sha",
+            "body",
+            "pr_number"
+          ],
+          "properties": {
+            "host": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253,
+              "pattern": "^[A-Za-z0-9.-]+$"
+            },
+            "repository": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 512,
+              "pattern": "^[^/\\s]+/[^/\\s]+$"
+            },
+            "head_sha": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{40}$"
+            },
+            "body": {
+              "type": "string",
+              "minLength": 1,
+              "x-maxUtf8Bytes": 16384
+            },
+            "operation": {
+              "const": "comment"
+            },
+            "pr_number": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "host",
+            "repository",
+            "operation",
+            "head_sha",
+            "body",
+            "pr_number",
+            "review_event"
+          ],
+          "properties": {
+            "host": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253,
+              "pattern": "^[A-Za-z0-9.-]+$"
+            },
+            "repository": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 512,
+              "pattern": "^[^/\\s]+/[^/\\s]+$"
+            },
+            "head_sha": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{40}$"
+            },
+            "body": {
+              "type": "string",
+              "x-maxUtf8Bytes": 16384
+            },
+            "operation": {
+              "const": "review"
+            },
+            "pr_number": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "review_event": {
+              "const": "approve"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "host",
+            "repository",
+            "operation",
+            "head_sha",
+            "body",
+            "pr_number",
+            "review_event"
+          ],
+          "properties": {
+            "host": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253,
+              "pattern": "^[A-Za-z0-9.-]+$"
+            },
+            "repository": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 512,
+              "pattern": "^[^/\\s]+/[^/\\s]+$"
+            },
+            "head_sha": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{40}$"
+            },
+            "body": {
+              "type": "string",
+              "minLength": 1,
+              "x-maxUtf8Bytes": 16384
+            },
+            "operation": {
+              "const": "review"
+            },
+            "pr_number": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "review_event": {
               "enum": [
                 "comment",
-                "approve",
                 "request_changes"
               ]
-            },
-            {
-              "type": "null"
             }
-          ]
+          }
         },
-        "merge_method": {
-          "anyOf": [
-            {
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "host",
+            "repository",
+            "operation",
+            "head_sha",
+            "body",
+            "pr_number",
+            "merge_method"
+          ],
+          "properties": {
+            "host": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253,
+              "pattern": "^[A-Za-z0-9.-]+$"
+            },
+            "repository": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 512,
+              "pattern": "^[^/\\s]+/[^/\\s]+$"
+            },
+            "head_sha": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{40}$"
+            },
+            "body": {
+              "type": "string",
+              "x-maxUtf8Bytes": 16384
+            },
+            "operation": {
+              "const": "merge"
+            },
+            "pr_number": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "merge_method": {
               "type": "string",
               "enum": [
                 "merge",
                 "squash",
                 "rebase"
               ]
-            },
-            {
-              "type": "null"
             }
-          ]
+          }
         }
+      ],
+      "discriminator": {
+        "propertyName": "operation"
       }
     },
     "WorkspaceSettings": {
@@ -8956,7 +9152,8 @@
           "$ref": "#/$defs/uuid"
         },
         "expected_revision": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 0
         },
         "operation": {
           "type": "string",
@@ -8968,7 +9165,8 @@
         },
         "text": {
           "type": "string",
-          "x-maxUtf8Bytes": 32768
+          "x-maxUtf8Bytes": 32768,
+          "x-minUtf8Bytes": 0
         },
         "run_id": {
           "anyOf": [
@@ -9007,10 +9205,13 @@
           "$ref": "#/$defs/uuid"
         },
         "after_seq": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 0
         },
         "limit": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
         }
       }
     },
@@ -9027,15 +9228,18 @@
       "properties": {
         "provider_id": {
           "type": "string",
-          "x-maxUtf8Bytes": 120
+          "x-maxUtf8Bytes": 120,
+          "x-minUtf8Bytes": 1
         },
         "account_ref": {
           "type": "string",
-          "x-maxUtf8Bytes": 120
+          "x-maxUtf8Bytes": 120,
+          "x-minUtf8Bytes": 1
         },
         "model_id": {
           "type": "string",
-          "x-maxUtf8Bytes": 120
+          "x-maxUtf8Bytes": 120,
+          "x-minUtf8Bytes": 1
         },
         "reasoning": {
           "anyOf": [
@@ -9056,7 +9260,8 @@
           ]
         },
         "catalog_revision": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 1
         }
       }
     },
@@ -9108,10 +9313,12 @@
         },
         "text": {
           "type": "string",
-          "x-maxUtf8Bytes": 32768
+          "x-maxUtf8Bytes": 32768,
+          "x-minUtf8Bytes": 0
         },
         "queue_revision": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 0
         },
         "binding_id": {
           "$ref": "#/$defs/uuid"
@@ -9157,7 +9364,9 @@
         },
         "title": {
           "type": "string",
-          "x-maxUtf8Bytes": 4096
+          "x-maxUtf8Bytes": 4096,
+          "minLength": 1,
+          "maxLength": 200
         }
       }
     },
@@ -9179,7 +9388,9 @@
           ]
         },
         "limit": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
         }
       }
     },
@@ -9210,7 +9421,9 @@
           ]
         },
         "limit": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
         }
       }
     },
@@ -9233,17 +9446,21 @@
         },
         "text": {
           "type": "string",
-          "x-maxUtf8Bytes": 32768
+          "x-maxUtf8Bytes": 32768,
+          "x-minUtf8Bytes": 1
         },
         "references": {
           "type": "array",
           "items": {
             "$ref": "#/$defs/ContextReference"
           },
-          "maxItems": 100
+          "maxItems": 20,
+          "minItems": 0
         },
         "context_budget_bytes": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 65536
         }
       }
     },
@@ -9262,7 +9479,8 @@
         },
         "filename": {
           "type": "string",
-          "x-maxUtf8Bytes": 255
+          "x-maxUtf8Bytes": 255,
+          "x-minUtf8Bytes": 1
         },
         "mime": {
           "type": "string",
@@ -9275,7 +9493,8 @@
         },
         "content_base64": {
           "type": "string",
-          "x-maxUtf8Bytes": 5592408
+          "x-maxUtf8Bytes": 5592408,
+          "x-format": "base64"
         }
       }
     },
@@ -9342,7 +9561,8 @@
           "$ref": "#/$defs/uuid"
         },
         "request_revision": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 1
         },
         "answer": {
           "type": "string",
@@ -9354,7 +9574,8 @@
         },
         "text": {
           "type": "string",
-          "x-maxUtf8Bytes": 4096
+          "x-maxUtf8Bytes": 4096,
+          "x-minUtf8Bytes": 0
         },
         "option_id": {
           "anyOf": [
@@ -9448,7 +9669,8 @@
           "$ref": "#/$defs/uuid"
         },
         "settings_revision": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 0
         },
         "project_id": {
           "anyOf": [
@@ -9518,7 +9740,9 @@
         },
         "title": {
           "type": "string",
-          "x-maxUtf8Bytes": 4096
+          "x-maxUtf8Bytes": 4096,
+          "minLength": 1,
+          "maxLength": 200
         }
       }
     },
@@ -9543,7 +9767,8 @@
           "$ref": "#/$defs/sha256"
         },
         "workspace_revision": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 1
         },
         "approval_id": {
           "$ref": "#/$defs/uuid"
@@ -9651,13 +9876,18 @@
             "type": "string",
             "x-maxUtf8Bytes": 4096
           },
-          "maxItems": 100
+          "maxItems": 64,
+          "minItems": 1
         },
         "cols": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 20,
+          "maximum": 400
         },
         "rows": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 200
         },
         "approval_id": {
           "$ref": "#/$defs/uuid"
@@ -9677,7 +9907,8 @@
         },
         "data_base64": {
           "type": "string",
-          "x-maxUtf8Bytes": 87384
+          "x-maxUtf8Bytes": 87384,
+          "x-format": "base64"
         }
       }
     },
@@ -9694,10 +9925,14 @@
           "$ref": "#/$defs/uuid"
         },
         "cols": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 20,
+          "maximum": 400
         },
         "rows": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 200
         }
       }
     },
@@ -9725,7 +9960,8 @@
           "$ref": "#/$defs/uuid"
         },
         "after_seq": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 0
         }
       }
     },
@@ -9749,7 +9985,8 @@
         },
         "challenge_secret": {
           "type": "string",
-          "x-maxUtf8Bytes": 32
+          "x-maxUtf8Bytes": 4096,
+          "pattern": "^[A-Za-z0-9_-]+$"
         },
         "server_fingerprint": {
           "$ref": "#/$defs/sha256"
@@ -9797,7 +10034,9 @@
               "scm.merge"
             ]
           },
-          "maxItems": 100
+          "maxItems": 9,
+          "minItems": 1,
+          "uniqueItems": true
         }
       }
     },
@@ -9826,7 +10065,8 @@
         },
         "refresh_token": {
           "type": "string",
-          "x-maxUtf8Bytes": 32
+          "x-maxUtf8Bytes": 4096,
+          "pattern": "^[A-Za-z0-9_-]+$"
         }
       }
     },
@@ -9881,7 +10121,8 @@
           "anyOf": [
             {
               "type": "string",
-              "x-maxUtf8Bytes": 4096
+              "x-maxUtf8Bytes": 32768,
+              "x-minUtf8Bytes": 0
             },
             {
               "type": "null"
@@ -9891,7 +10132,8 @@
         "after_seq": {
           "anyOf": [
             {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 0
             },
             {
               "type": "null"
@@ -9967,7 +10209,8 @@
           "$ref": "#/$defs/uuid"
         },
         "through_seq": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 0
         },
         "target_binding_id": {
           "$ref": "#/$defs/uuid"
@@ -9981,11 +10224,14 @@
           ]
         },
         "history_budget_bytes": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 64000
         },
         "current_request": {
           "type": "string",
-          "x-maxUtf8Bytes": 32768
+          "x-maxUtf8Bytes": 32768,
+          "x-minUtf8Bytes": 1
         }
       }
     },
@@ -10013,7 +10259,8 @@
       ],
       "properties": {
         "schema_version": {
-          "type": "integer"
+          "type": "integer",
+          "const": 1
         },
         "source_environment_id": {
           "$ref": "#/$defs/uuid"
@@ -10023,7 +10270,8 @@
           "items": {
             "$ref": "#/$defs/HandoffMessage"
           },
-          "maxItems": 100
+          "maxItems": 1000,
+          "minItems": 0
         },
         "lineage": {
           "$ref": "#/$defs/ThreadLineage"
@@ -10039,7 +10287,8 @@
           ]
         },
         "package_sha256": {
-          "$ref": "#/$defs/sha256"
+          "$ref": "#/$defs/sha256",
+          "x-format": "sha256"
         }
       }
     },
@@ -10071,7 +10320,9 @@
         },
         "question": {
           "type": "string",
-          "x-maxUtf8Bytes": 4096
+          "x-maxUtf8Bytes": 4096,
+          "minLength": 1,
+          "maxLength": 2000
         },
         "include_personal_note": {
           "type": "boolean"
@@ -10094,7 +10345,8 @@
           "items": {
             "$ref": "#/$defs/LegacyCaptureEvent"
           },
-          "maxItems": 100
+          "maxItems": 32,
+          "minItems": 1
         }
       }
     },
@@ -10124,10 +10376,12 @@
         },
         "content": {
           "type": "string",
-          "x-maxUtf8Bytes": 16384
+          "x-maxUtf8Bytes": 16384,
+          "x-minUtf8Bytes": 0
         },
         "expected_revision": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 0
         }
       }
     },
@@ -10174,12 +10428,15 @@
         },
         "repository": {
           "type": "string",
-          "x-maxUtf8Bytes": 4096
+          "x-maxUtf8Bytes": 4096,
+          "minLength": 3,
+          "pattern": "^[^/\\s]+/[^/\\s]+$"
         },
         "pr_number": {
           "anyOf": [
             {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 1
             },
             {
               "type": "null"
@@ -10192,7 +10449,8 @@
         },
         "body": {
           "type": "string",
-          "x-maxUtf8Bytes": 16384
+          "x-maxUtf8Bytes": 16384,
+          "x-minUtf8Bytes": 0
         },
         "host": {
           "type": "string",
@@ -10335,10 +10593,12 @@
           ]
         },
         "navigation_revision": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 0
         },
         "read_through_seq": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 0
         }
       }
     },
@@ -10371,7 +10631,8 @@
         "after_position": {
           "anyOf": [
             {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 0
             },
             {
               "type": "null"
@@ -10399,7 +10660,9 @@
           ]
         },
         "limit": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
         }
       }
     },
@@ -10429,7 +10692,9 @@
           "type": "boolean"
         },
         "max_bytes": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 1048576
         }
       }
     },
@@ -10450,5 +10715,5 @@
       }
     }
   },
-  "$comment": "Entity, snapshot and operation input schemas generated from NH RFC-0002–0016 phase-01 YAML. RFC-0002 runtime.dispatch is excluded from HarnessCommand validation until its duplicated fields are resolved; see issue #21."
+  "$comment": "Entity, snapshot and operation input schemas generated from NH RFC-0002–0016 phase-01 YAML. runtime.dispatch input command_id and expected_revision must equal the envelope fields, per R1."
 }

@@ -39,7 +39,8 @@ for (const feature of manifest.features) {
     const inputFields = [...inputText.matchAll(/^    - campo: ([^\n]+)\n      tipo: ([^\n]+)(.*?)(?=\n    - campo: |(?![\s\S]))/gms)].map((match) => ({
       name: match[1].trim().replaceAll('`', '').replaceAll('"', ''),
       type: match[2].trim().replaceAll('"', ''),
-      required: /^      obrigatório: true$/m.test(match[3])
+      required: /^      obrigatório: true$/m.test(match[3]),
+      validation: match[3].match(/^      validação: "(.*?)"$/m)?.[1] ?? ''
     }));
     operations.push({
       name,
@@ -50,7 +51,7 @@ for (const feature of manifest.features) {
       class: operationClass,
       input_schema: `operationInput_${name.replaceAll('.', '_').replaceAll('-', '_')}`,
       input_fields: inputFields,
-      contract_status: name === 'runtime.dispatch' ? 'blocked' : 'closed',
+      contract_status: 'closed',
       implemented: false,
       test_slot: `NH00-OP-${name.replaceAll('.', '-').replaceAll('_', '-').toUpperCase()}`
     });

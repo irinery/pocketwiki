@@ -52,6 +52,63 @@ def parse_type(raw):
     raise ValueError(f"unsupported RFC field type: {raw}")
 
 
+def apply_validation(field_schema, raw_type, validation):
+    if "anyOf" in field_schema:
+        field_schema["anyOf"][0] = apply_validation(field_schema["anyOf"][0], raw_type.rstrip("?"), validation)
+        return field_schema
+    text = validation.strip()
+    schema_type = field_schema.get("type")
+    numbers = re.search(r"(\d+)\s*\.\.\s*(\d+)", text)
+    if numbers:
+        low, high = map(int, numbers.groups())
+        if schema_type == "string":
+            if "bytes" in text:
+                field_schema["x-minUtf8Bytes"] = low
+                field_schema["x-maxUtf8Bytes"] = high
+            elif "caracter" in text or "Unicode" in text:
+                field_schema["minLength"] = low
+                field_schema["maxLength"] = high
+        elif schema_type == "integer":
+            field_schema["minimum"] = low
+            field_schema["maximum"] = high
+        elif schema_type == "array":
+            field_schema["minItems"] = low
+            field_schema["maxItems"] = high
+    elif schema_type == "integer":
+        minimum = re.search(r">=\s*(\d+)", text)
+        if minimum:
+            field_schema["minimum"] = int(minimum.group(1))
+        exact = re.search(r"exatamente\s+(\d+)", text, re.IGNORECASE)
+        if exact:
+            field_schema["const"] = int(exact.group(1))
+    elif schema_type == "string":
+        byte_max = re.search(r"(?:<=|até|máximo)\s*(\d+)\s*bytes", text, re.IGNORECASE)
+        if byte_max:
+            field_schema["x-maxUtf8Bytes"] = int(byte_max.group(1))
+        if "base64url" in text.lower():
+            field_schema["pattern"] = "^[A-Za-z0-9_-]+$"
+        elif "base64" in text.lower():
+            field_schema["x-format"] = "base64"
+        if "40 hex" in text:
+            field_schema["pattern"] = "^[a-f0-9]{40}$"
+        if "owner/repo" in text.lower():
+            field_schema["minLength"] = 3
+            field_schema["pattern"] = r"^[^/\s]+/[^/\s]+$"
+    elif schema_type == "array":
+        maximum = re.search(r"(?:<=|até)\s*(\d+)", text, re.IGNORECASE)
+        if maximum:
+            field_schema["maxItems"] = int(maximum.group(1))
+        if "únic" in text.lower():
+            field_schema["uniqueItems"] = True
+    if schema_type == "array" and "únic" in text.lower():
+        field_schema["uniqueItems"] = True
+    if "hostname" in text.lower():
+        field_schema["x-format"] = "hostname"
+    if "sha-256" in text.lower() or "SHA-256" in text:
+        field_schema["x-format"] = "sha256"
+    return field_schema
+
+
 def field_blocks(markdown):
     for block in re.findall(r"```yaml\s*\n(.*?)\n```", markdown, re.S):
         name_match = re.match(r"tipo: ([^\n]+)\ncampos:\n", block)
@@ -88,6 +145,68 @@ def object_schema(fields):
     }
 
 
+def permission_action_schema():
+    uuid = {"$ref": "#/$defs/uuid"}
+    string = lambda limit: {"type": "string", "x-maxUtf8Bytes": limit}
+    array = lambda item, minimum=0, maximum=100: {"type": "array", "items": item, "minItems": minimum, "maxItems": maximum}
+    variants = [
+        object_schema([
+            ("kind", {"const": "command"}, True), ("workspace_id", uuid, True),
+            ("cwd_relative", string(4096), True), ("argv", array(string(4096), 1, 64), True),
+        ]),
+        object_schema([
+            ("kind", {"const": "edit"}, True), ("workspace_id", uuid, True),
+            ("edits", array({"$ref": "#/$defs/EditPreview"}, 1, 100), True),
+        ]),
+        object_schema([
+            ("kind", {"const": "question"}, True), ("question", string(4096), True),
+            ("options", array({"$ref": "#/$defs/QuestionOption"}, 0, 10), True),
+        ]),
+        object_schema([
+            ("kind", {"const": "forge"}, True), ("forge", {"$ref": "#/$defs/ForgePreview"}, True),
+        ]),
+    ]
+    return {"oneOf": variants, "discriminator": {"propertyName": "kind"}}
+
+
+def forge_preview_schema():
+    base = {
+        "host": {"type": "string", "minLength": 1, "maxLength": 253, "pattern": r"^[A-Za-z0-9.-]+$"},
+        "repository": {"type": "string", "minLength": 3, "maxLength": 512, "pattern": r"^[^/\s]+/[^/\s]+$"},
+        "head_sha": {"type": "string", "pattern": r"^[a-f0-9]{40}$"},
+        "body": {"type": "string", "x-maxUtf8Bytes": 16384},
+    }
+    def variant(operation, required, optional=None, body_rule=None):
+        properties = dict(base)
+        properties["operation"] = {"const": operation}
+        properties.update(optional or {})
+        if body_rule is not None:
+            properties["body"] = body_rule
+        return {"type": "object", "additionalProperties": False, "required": ["host", "repository", "operation", "head_sha", "body", *required], "properties": properties}
+    branch = {"type": "string", "x-minUtf8Bytes": 1, "x-maxUtf8Bytes": 120}
+    pr_number = {"type": "integer", "minimum": 1}
+    no_body = {"type": "string", "x-maxUtf8Bytes": 16384}
+    body = {"type": "string", "minLength": 1, "x-maxUtf8Bytes": 16384}
+    return {"oneOf": [
+        variant("link", ["pr_number"], {"pr_number": pr_number}, no_body),
+        variant("create_draft", ["title", "base_branch", "head_branch"], {
+            "title": {"type": "string", "x-minUtf8Bytes": 1, "x-maxUtf8Bytes": 256},
+            "base_branch": branch, "head_branch": branch,
+        }, body),
+        variant("comment", ["pr_number"], {"pr_number": pr_number}, body),
+        variant("review", ["pr_number", "review_event"], {
+            "pr_number": pr_number, "review_event": {"const": "approve"},
+        }, no_body),
+        variant("review", ["pr_number", "review_event"], {
+            "pr_number": pr_number, "review_event": {"enum": ["comment", "request_changes"]},
+        }, body),
+        variant("merge", ["pr_number", "merge_method"], {
+            "pr_number": pr_number,
+            "merge_method": {"type": "string", "enum": ["merge", "squash", "rebase"]},
+        }, no_body),
+    ], "discriminator": {"propertyName": "operation"}}
+
+
 def operation_inputs():
     registry_path = ROOT / "src/harness/contracts/operation-registry.json"
     registry = json.loads(registry_path.read_text())
@@ -110,10 +229,8 @@ def operation_inputs():
                     required_match = re.search(r"^      obrigatório: (true|false)$", rest, re.M)
                     field_schema = parse_type(field_type)
                     validation = re.search(r'^      validação: "(.*?)"$', rest, re.M)
-                    if validation and field_schema.get("type") == "string":
-                        byte_match = re.search(r"(?:0\.\.)?(\d+)\s*bytes", validation.group(1))
-                        if byte_match:
-                            field_schema["x-maxUtf8Bytes"] = int(byte_match.group(1))
+                    if validation:
+                        field_schema = apply_validation(field_schema, field_type, validation.group(1))
                     fields.append((field_name, field_schema, bool(required_match and required_match.group(1) == "true")))
             result[name] = object_schema(fields)
     return registry, result
@@ -155,6 +272,21 @@ def main():
 
     definitions.update(seen)
     definitions.update(feature_snapshots)
+    definitions["PermissionAction"] = permission_action_schema()
+    definitions["ForgePreview"] = forge_preview_schema()
+    definitions["localCredentialMetadata"] = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["principal_id", "environment_id", "scopes", "audience", "expires_at_ms"],
+        "properties": {
+            "principal_id": {"$ref": "#/$defs/uuid"},
+            "environment_id": {"$ref": "#/$defs/uuid"},
+            "thread_id": {"$ref": "#/$defs/uuid"},
+            "scopes": {"type": "array", "uniqueItems": True, "items": {"$ref": "#/$defs/scope"}},
+            "audience": {"type": "string", "minLength": 1},
+            "expires_at_ms": {"type": "integer", "minimum": 0},
+        },
+    }
     definitions.update({
         operation["input_schema"]: input_schemas[operation["name"]]
         for operation in registry["operations"]
@@ -262,7 +394,7 @@ def main():
 
     schema["$comment"] = (
         "Entity, snapshot and operation input schemas generated from NH RFC-0002–0016 phase-01 YAML. "
-        "RFC-0002 runtime.dispatch is excluded from HarnessCommand validation until its duplicated fields are resolved; see issue #21."
+        "runtime.dispatch input command_id and expected_revision must equal the envelope fields, per R1."
     )
     SCHEMA_PATH.write_text(json.dumps(schema, ensure_ascii=False, indent=2) + "\n")
     print(f"generated {len(seen)} entity schemas and {len(feature_snapshots)} snapshot schemas")

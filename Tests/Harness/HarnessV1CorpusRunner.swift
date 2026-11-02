@@ -4,7 +4,9 @@ import Foundation
 struct HarnessV1CorpusRunner {
     static func main() throws {
         let corpusURL = URL(fileURLWithPath: CommandLine.arguments[1])
+        let schemaURL = URL(fileURLWithPath: CommandLine.arguments[2])
         let corpus = try JSONSerialization.jsonObject(with: Data(contentsOf: corpusURL)) as! [String: Any]
+        let schemaDocument = try JSONSerialization.jsonObject(with: Data(contentsOf: schemaURL)) as! [String: Any]
         let slots = corpus["slots"] as! [[String: Any]]
         var failures = 0
 
@@ -13,7 +15,8 @@ struct HarnessV1CorpusRunner {
             let schema = slot["schema"] as! String
             let expected = slot["accept"] as! Bool
             let value = slot["value"]!
-            let actual = HarnessV1.validateCorpusValue(value, schemaName: schema)
+            let operation = slot["operation"] as? String
+            let actual = HarnessV1.validateCorpusValue(value, schemaName: schema, document: schemaDocument, operationName: operation)
             if actual != expected {
                 failures += 1
                 fputs("FAIL \(id): expected \(expected), got \(actual)\n", stderr)

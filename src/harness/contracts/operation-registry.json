@@ -14,35 +14,41 @@
         {
           "name": "command_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "UUID estável por intenção"
         },
         {
           "name": "thread_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "thread autorizado"
         },
         {
           "name": "expected_revision",
           "type": "int",
-          "required": true
+          "required": true,
+          "validation": ">= 0"
         },
         {
           "name": "operation",
           "type": "enum[submit,cancel,resume]",
-          "required": true
+          "required": true,
+          "validation": "lista fechada"
         },
         {
           "name": "text",
           "type": "string",
-          "required": true
+          "required": true,
+          "validation": "0..32768 bytes UTF-8; submit exige 1..32768"
         },
         {
           "name": "run_id",
           "type": "uuid?",
-          "required": false
+          "required": false,
+          "validation": "obrigatório em cancel/resume; ausente em submit"
         }
       ],
-      "contract_status": "blocked",
+      "contract_status": "closed",
       "implemented": false,
       "test_slot": "NH00-OP-RUNTIME-DISPATCH"
     },
@@ -58,7 +64,8 @@
         {
           "name": "command_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "intenção do mesmo principal"
         }
       ],
       "contract_status": "closed",
@@ -77,17 +84,20 @@
         {
           "name": "thread_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "thread legível"
         },
         {
           "name": "after_seq",
           "type": "int",
-          "required": true
+          "required": true,
+          "validation": ">=0"
         },
         {
           "name": "limit",
           "type": "int",
-          "required": true
+          "required": true,
+          "validation": "1..100"
         }
       ],
       "contract_status": "closed",
@@ -106,32 +116,38 @@
         {
           "name": "provider_id",
           "type": "string",
-          "required": true
+          "required": true,
+          "validation": "1..120 bytes; ID do catálogo"
         },
         {
           "name": "account_ref",
           "type": "string",
-          "required": true
+          "required": true,
+          "validation": "1..120 bytes; referência opaca, nunca secret"
         },
         {
           "name": "model_id",
           "type": "string",
-          "required": true
+          "required": true,
+          "validation": "1..120 bytes; catálogo atual"
         },
         {
           "name": "reasoning",
           "type": "string?",
-          "required": false
+          "required": false,
+          "validation": "ID publicado pelo modelo; ausente usa default"
         },
         {
           "name": "mode",
           "type": "enum[inference,agent]",
-          "required": true
+          "required": true,
+          "validation": "compatível com provider"
         },
         {
           "name": "catalog_revision",
           "type": "int",
-          "required": true
+          "required": true,
+          "validation": ">= 1; deve coincidir"
         }
       ],
       "contract_status": "closed",
@@ -150,7 +166,8 @@
         {
           "name": "project_id",
           "type": "uuid?",
-          "required": false
+          "required": false,
+          "validation": "projeto legível"
         }
       ],
       "contract_status": "closed",
@@ -169,42 +186,50 @@
         {
           "name": "thread_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "thread autorizado"
         },
         {
           "name": "message_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "ID estável"
         },
         {
           "name": "action",
           "type": "enum[enqueue,edit,remove,steer,resume,cancel]",
-          "required": true
+          "required": true,
+          "validation": "lista fechada"
         },
         {
           "name": "text",
           "type": "string",
-          "required": true
+          "required": true,
+          "validation": "0..32768 bytes; enqueue/edit/steer exige conteúdo"
         },
         {
           "name": "queue_revision",
           "type": "int",
-          "required": true
+          "required": true,
+          "validation": ">= 0"
         },
         {
           "name": "binding_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "binding do próximo run ou run ativo em steer"
         },
         {
           "name": "prepared_id",
           "type": "uuid?",
-          "required": false
+          "required": false,
+          "validation": "obrigatório com referências; contexto pertencente ao mesmo principal/thread/environment"
         },
         {
           "name": "manifest_sha256",
           "type": "sha256?",
-          "required": false
+          "required": false,
+          "validation": "obrigatório junto de prepared_id; igual ao manifesto preparado"
         }
       ],
       "contract_status": "closed",
@@ -223,12 +248,14 @@
         {
           "name": "project_id",
           "type": "uuid?",
-          "required": false
+          "required": false,
+          "validation": "projeto autorizado; ausente scratch"
         },
         {
           "name": "title",
           "type": "string",
-          "required": true
+          "required": true,
+          "validation": "1..200 caracteres"
         }
       ],
       "contract_status": "closed",
@@ -247,12 +274,14 @@
         {
           "name": "after_id",
           "type": "uuid?",
-          "required": false
+          "required": false,
+          "validation": "cursor da página anterior"
         },
         {
           "name": "limit",
           "type": "int",
-          "required": true
+          "required": true,
+          "validation": "1..100"
         }
       ],
       "contract_status": "closed",
@@ -271,22 +300,26 @@
         {
           "name": "thread_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "thread legível"
         },
         {
           "name": "through_seq",
           "type": "int",
-          "required": true
+          "required": true,
+          "validation": "boundary concluído; 0 representa histórico vazio"
         },
         {
           "name": "cursor",
           "type": "string?",
-          "required": false
+          "required": false,
+          "validation": "cursor opaco da mesma revisão"
         },
         {
           "name": "limit",
           "type": "int",
-          "required": true
+          "required": true,
+          "validation": "1..100"
         }
       ],
       "contract_status": "closed",
@@ -305,27 +338,32 @@
         {
           "name": "thread_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "thread autorizado"
         },
         {
           "name": "draft_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "ID local estável"
         },
         {
           "name": "text",
           "type": "string",
-          "required": true
+          "required": true,
+          "validation": "1..32768 bytes"
         },
         {
           "name": "references",
           "type": "array[ContextReference]",
-          "required": true
+          "required": true,
+          "validation": "0..20; máximo agregado 4 MiB"
         },
         {
           "name": "context_budget_bytes",
           "type": "int",
-          "required": true
+          "required": true,
+          "validation": "1024..65536; default 16384"
         }
       ],
       "contract_status": "closed",
@@ -344,22 +382,26 @@
         {
           "name": "thread_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "thread autorizada"
         },
         {
           "name": "filename",
           "type": "string",
-          "required": true
+          "required": true,
+          "validation": "1..255 bytes; basename sem path"
         },
         {
           "name": "mime",
           "type": "enum[text/plain,text/markdown,image/png,image/jpeg]",
-          "required": true
+          "required": true,
+          "validation": "lista fechada"
         },
         {
           "name": "content_base64",
           "type": "string",
-          "required": true
+          "required": true,
+          "validation": "base64 válido; <=5592408 bytes codificados; limite decodificado da fase prevalece"
         }
       ],
       "contract_status": "closed",
@@ -378,7 +420,8 @@
         {
           "name": "draft",
           "type": "ComposerDraft",
-          "required": true
+          "required": true,
+          "validation": "validar recursivamente; CAS por revision"
         }
       ],
       "contract_status": "closed",
@@ -397,12 +440,14 @@
         {
           "name": "prepared_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "principal/thread/environment associados à identidade delegada"
         },
         {
           "name": "manifest_sha256",
           "type": "sha256",
-          "required": true
+          "required": true,
+          "validation": "hash canônico esperado"
         }
       ],
       "contract_status": "closed",
@@ -421,17 +466,20 @@
         {
           "name": "prepared_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "mesmo principal"
         },
         {
           "name": "command_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "intenção estável que usará o contexto"
         },
         {
           "name": "retain",
           "type": "bool",
-          "required": true
+          "required": true,
+          "validation": "true cria referência idempotente; false libera"
         }
       ],
       "contract_status": "closed",
@@ -450,32 +498,38 @@
         {
           "name": "request_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "pendência pertencente ao principal"
         },
         {
           "name": "request_revision",
           "type": "int",
-          "required": true
+          "required": true,
+          "validation": ">= 1; CAS"
         },
         {
           "name": "answer",
           "type": "enum[approve_once,deny,answer]",
-          "required": true
+          "required": true,
+          "validation": "tipo da pendência"
         },
         {
           "name": "text",
           "type": "string",
-          "required": true
+          "required": true,
+          "validation": "0..4096 bytes; answer exige texto ou option_id"
         },
         {
           "name": "option_id",
           "type": "string?",
-          "required": false
+          "required": false,
+          "validation": "ID dentre opções publicadas"
         },
         {
           "name": "action_sha256",
           "type": "sha256",
-          "required": true
+          "required": true,
+          "validation": "igual à ação exibida"
         }
       ],
       "contract_status": "closed",
@@ -494,7 +548,8 @@
         {
           "name": "thread_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "thread autorizada"
         }
       ],
       "contract_status": "closed",
@@ -513,12 +568,14 @@
         {
           "name": "thread_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "thread autorizada"
         },
         {
           "name": "mode",
           "type": "enum[supervised,edits,full]",
-          "required": true
+          "required": true,
+          "validation": "lista fechada; scope próprio"
         }
       ],
       "contract_status": "closed",
@@ -537,32 +594,38 @@
         {
           "name": "mode",
           "type": "enum[project,worktree,scratch]",
-          "required": true
+          "required": true,
+          "validation": "lista fechada"
         },
         {
           "name": "base_sha",
           "type": "sha1?",
-          "required": false
+          "required": false,
+          "validation": "40 hex; obrigatório em worktree"
         },
         {
           "name": "branch",
           "type": "string?",
-          "required": false
+          "required": false,
+          "validation": "git check-ref-format --branch; prefixo codex/"
         },
         {
           "name": "thread_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "titular do lease"
         },
         {
           "name": "settings_revision",
           "type": "int",
-          "required": true
+          "required": true,
+          "validation": ">= 0"
         },
         {
           "name": "project_id",
           "type": "uuid?",
-          "required": false
+          "required": false,
+          "validation": "obrigatório em project/worktree; proibido em scratch"
         }
       ],
       "contract_status": "closed",
@@ -581,12 +644,14 @@
         {
           "name": "lease_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "lease pertencente ao principal"
         },
         {
           "name": "remove",
           "type": "bool",
-          "required": true
+          "required": true,
+          "validation": "true exige idle e clean"
         }
       ],
       "contract_status": "closed",
@@ -605,17 +670,20 @@
         {
           "name": "project_id",
           "type": "uuid?",
-          "required": false
+          "required": false,
+          "validation": "projeto autorizado ou defaults do environment"
         },
         {
           "name": "patch",
           "type": "WorkspaceSettings",
-          "required": true
+          "required": true,
+          "validation": "objeto fechado; não aceita credencial"
         },
         {
           "name": "reset",
           "type": "bool",
-          "required": true
+          "required": true,
+          "validation": "true remove override; patch desconsiderado"
         }
       ],
       "contract_status": "closed",
@@ -634,12 +702,14 @@
         {
           "name": "root_relative",
           "type": "string",
-          "required": true
+          "required": true,
+          "validation": "root já concedido pelo host; canonicalizar sem escape"
         },
         {
           "name": "title",
           "type": "string",
-          "required": true
+          "required": true,
+          "validation": "1..200 caracteres"
         }
       ],
       "contract_status": "closed",
@@ -658,27 +728,32 @@
         {
           "name": "thread_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "thread autorizada"
         },
         {
           "name": "checkpoint_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "checkpoint do mesmo workspace"
         },
         {
           "name": "preview_sha256",
           "type": "sha256",
-          "required": true
+          "required": true,
+          "validation": "hash do plano de restore"
         },
         {
           "name": "workspace_revision",
           "type": "int",
-          "required": true
+          "required": true,
+          "validation": ">= 1; deve coincidir"
         },
         {
           "name": "approval_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "aprovação específica válida"
         }
       ],
       "contract_status": "closed",
@@ -697,12 +772,14 @@
         {
           "name": "run_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "run autorizado"
         },
         {
           "name": "boundary",
           "type": "enum[before,after]",
-          "required": true
+          "required": true,
+          "validation": "lista fechada"
         }
       ],
       "contract_status": "closed",
@@ -721,7 +798,8 @@
         {
           "name": "checkpoint_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "mesmo workspace autorizado"
         }
       ],
       "contract_status": "closed",
@@ -740,22 +818,26 @@
         {
           "name": "thread_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "thread legível"
         },
         {
           "name": "scope",
           "type": "enum[turn,branch]",
-          "required": true
+          "required": true,
+          "validation": "lista fechada"
         },
         {
           "name": "run_id",
           "type": "uuid?",
-          "required": false
+          "required": false,
+          "validation": "obrigatório em turn"
         },
         {
           "name": "base_sha",
           "type": "sha1?",
-          "required": false
+          "required": false,
+          "validation": "obrigatório em branch"
         }
       ],
       "contract_status": "closed",
@@ -774,32 +856,38 @@
         {
           "name": "workspace_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "workspace com lease autorizado"
         },
         {
           "name": "kind",
           "type": "enum[pty,task]",
-          "required": true
+          "required": true,
+          "validation": "lista fechada"
         },
         {
           "name": "argv",
           "type": "array[string]",
-          "required": true
+          "required": true,
+          "validation": "1..64 argumentos, 4096 bytes cada; task obrigatório"
         },
         {
           "name": "cols",
           "type": "int",
-          "required": true
+          "required": true,
+          "validation": "20..400"
         },
         {
           "name": "rows",
           "type": "int",
-          "required": true
+          "required": true,
+          "validation": "5..200"
         },
         {
           "name": "approval_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "aprovação da policy para execução"
         }
       ],
       "contract_status": "closed",
@@ -818,12 +906,14 @@
         {
           "name": "terminal_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "terminal autorizado"
         },
         {
           "name": "data_base64",
           "type": "string",
-          "required": true
+          "required": true,
+          "validation": "base64 válido; <=87384 bytes; decodificado <=64 KiB"
         }
       ],
       "contract_status": "closed",
@@ -842,17 +932,20 @@
         {
           "name": "terminal_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "terminal autorizado"
         },
         {
           "name": "cols",
           "type": "int",
-          "required": true
+          "required": true,
+          "validation": "20..400"
         },
         {
           "name": "rows",
           "type": "int",
-          "required": true
+          "required": true,
+          "validation": "5..200"
         }
       ],
       "contract_status": "closed",
@@ -871,7 +964,8 @@
         {
           "name": "terminal_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "terminal autorizado"
         }
       ],
       "contract_status": "closed",
@@ -890,12 +984,14 @@
         {
           "name": "terminal_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "terminal legível"
         },
         {
           "name": "after_seq",
           "type": "int",
-          "required": true
+          "required": true,
+          "validation": ">=0"
         }
       ],
       "contract_status": "closed",
@@ -914,27 +1010,32 @@
         {
           "name": "endpoint",
           "type": "string",
-          "required": true
+          "required": true,
+          "validation": "URL HTTPS sem credenciais/query; HTTP só loopback"
         },
         {
           "name": "challenge_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "emitido pelo host autenticado"
         },
         {
           "name": "challenge_secret",
           "type": "string",
-          "required": true
+          "required": true,
+          "validation": "32 bytes aleatórios codificados base64url"
         },
         {
           "name": "server_fingerprint",
           "type": "sha256",
-          "required": true
+          "required": true,
+          "validation": "confirmado na tela dos 2 dispositivos"
         },
         {
           "name": "requested_scopes",
           "type": "array[enum[read,submit,approve,execute,context.read,memory.personal.read,memory.write,scm.write,scm.merge]]",
-          "required": true
+          "required": true,
+          "validation": "subset da concessão do host"
         }
       ],
       "contract_status": "closed",
@@ -953,7 +1054,8 @@
         {
           "name": "requested_scopes",
           "type": "array[enum[read,submit,approve,execute,context.read,memory.personal.read,memory.write,scm.write,scm.merge]]",
-          "required": true
+          "required": true,
+          "validation": "1..9 únicos; host autenticado"
         }
       ],
       "contract_status": "closed",
@@ -972,7 +1074,8 @@
         {
           "name": "connection_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "host/admin da conexão autorizada"
         }
       ],
       "contract_status": "closed",
@@ -991,12 +1094,14 @@
         {
           "name": "session_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "sessão emitida para este dispositivo"
         },
         {
           "name": "refresh_token",
           "type": "string",
-          "required": true
+          "required": true,
+          "validation": "32 bytes base64url; nunca em URL/log"
         }
       ],
       "contract_status": "closed",
@@ -1015,57 +1120,68 @@
         {
           "name": "tool",
           "type": "enum[thread.list,thread.read,thread.start,thread.send,thread.interrupt]",
-          "required": true
+          "required": true,
+          "validation": "prefixo wire harness.; lista fechada"
         },
         {
           "name": "command_id",
           "type": "uuid?",
-          "required": false
+          "required": false,
+          "validation": "idempotência das tools de mutação"
         },
         {
           "name": "thread_id",
           "type": "uuid?",
-          "required": false
+          "required": false,
+          "validation": "obrigatório read/send/interrupt"
         },
         {
           "name": "project_id",
           "type": "uuid?",
-          "required": false
+          "required": false,
+          "validation": "obrigatório start em projeto; ausente cria scratch"
         },
         {
           "name": "text",
           "type": "string?",
-          "required": false
+          "required": false,
+          "validation": "0..32768 bytes; start/send exige conteúdo"
         },
         {
           "name": "after_seq",
           "type": "int?",
-          "required": false
+          "required": false,
+          "validation": ">= 0; cursor de leitura"
         },
         {
           "name": "through_seq",
           "type": "int?",
-          "required": false
+          "required": false,
+          "validation": "thread.read: omitir somente na primeira página para obter boundary atual"
         },
         {
           "name": "cursor",
           "type": "string?",
-          "required": false
+          "required": false,
+          "validation": "cursor de threads.history para thread.read"
         },
         {
           "name": "binding_id",
           "type": "uuid?",
-          "required": false
+          "required": false,
+          "validation": "obrigatório em start/send; binding integrado E2"
         },
         {
           "name": "message_id",
           "type": "uuid?",
-          "required": false
+          "required": false,
+          "validation": "obrigatório em start/send; intenção estável"
         },
         {
           "name": "queue_revision",
           "type": "int?",
-          "required": false
+          "required": false,
+          "validation": "obrigatório em send/interrupt; CAS do snapshot"
         }
       ],
       "contract_status": "closed",
@@ -1084,32 +1200,38 @@
         {
           "name": "source_thread_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "thread legível"
         },
         {
           "name": "through_seq",
           "type": "int",
-          "required": true
+          "required": true,
+          "validation": ">= 0 e item concluído"
         },
         {
           "name": "target_binding_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "binding autorizado"
         },
         {
           "name": "mode",
           "type": "enum[switch,fork,merge_back]",
-          "required": true
+          "required": true,
+          "validation": "lista fechada"
         },
         {
           "name": "history_budget_bytes",
           "type": "int",
-          "required": true
+          "required": true,
+          "validation": "1024..64000; default 16000"
         },
         {
           "name": "current_request",
           "type": "string",
-          "required": true
+          "required": true,
+          "validation": "1..32768 bytes; nunca truncar"
         }
       ],
       "contract_status": "closed",
@@ -1128,7 +1250,8 @@
         {
           "name": "handoff_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "handoff legível"
         }
       ],
       "contract_status": "closed",
@@ -1147,32 +1270,38 @@
         {
           "name": "schema_version",
           "type": "int",
-          "required": true
+          "required": true,
+          "validation": "exatamente 1"
         },
         {
           "name": "source_environment_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "proveniência sem conceder confiança"
         },
         {
           "name": "messages",
           "type": "array[HandoffMessage]",
-          "required": true
+          "required": true,
+          "validation": "0..1000 mensagens; <=16 MiB total"
         },
         {
           "name": "lineage",
           "type": "ThreadLineage",
-          "required": true
+          "required": true,
+          "validation": "IDs válidos; origem tratada como dado"
         },
         {
           "name": "target_project_id",
           "type": "uuid?",
-          "required": false
+          "required": false,
+          "validation": "projeto autorizado"
         },
         {
           "name": "package_sha256",
           "type": "sha256",
-          "required": true
+          "required": true,
+          "validation": "SHA-256 do pacote canônico sem este campo"
         }
       ],
       "contract_status": "closed",
@@ -1191,27 +1320,32 @@
         {
           "name": "environment_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "ambiente autorizado"
         },
         {
           "name": "project_id",
           "type": "uuid?",
-          "required": false
+          "required": false,
+          "validation": "ausente restringe a thread; global exige scope próprio"
         },
         {
           "name": "thread_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "thread autorizada"
         },
         {
           "name": "question",
           "type": "string",
-          "required": true
+          "required": true,
+          "validation": "1..2000 caracteres Unicode"
         },
         {
           "name": "include_personal_note",
           "type": "bool",
-          "required": true
+          "required": true,
+          "validation": "default false; exige scope memory.personal.read"
         }
       ],
       "contract_status": "closed",
@@ -1230,12 +1364,14 @@
         {
           "name": "namespace",
           "type": "MemoryNamespace",
-          "required": true
+          "required": true,
+          "validation": "escopo autorizado"
         },
         {
           "name": "events",
           "type": "array[LegacyCaptureEvent]",
-          "required": true
+          "required": true,
+          "validation": "1..32 eventos validados"
         }
       ],
       "contract_status": "closed",
@@ -1254,7 +1390,8 @@
         {
           "name": "namespace",
           "type": "MemoryNamespace",
-          "required": true
+          "required": true,
+          "validation": "scope memory.personal.read para nota pessoal"
         }
       ],
       "contract_status": "closed",
@@ -1273,17 +1410,20 @@
         {
           "name": "namespace",
           "type": "MemoryNamespace",
-          "required": true
+          "required": true,
+          "validation": "scope de escrita próprio"
         },
         {
           "name": "content",
           "type": "string",
-          "required": true
+          "required": true,
+          "validation": "0..16384 bytes UTF-8"
         },
         {
           "name": "expected_revision",
           "type": "int",
-          "required": true
+          "required": true,
+          "validation": ">=0; CAS"
         }
       ],
       "contract_status": "closed",
@@ -1302,12 +1442,14 @@
         {
           "name": "legacy_session_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "sessão legível e ainda não mapeada ou mesma intenção"
         },
         {
           "name": "namespace",
           "type": "MemoryNamespace",
-          "required": true
+          "required": true,
+          "validation": "destino explicitamente autorizado"
         }
       ],
       "contract_status": "closed",
@@ -1326,62 +1468,74 @@
         {
           "name": "thread_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "thread autorizada"
         },
         {
           "name": "operation",
           "type": "enum[link,create_draft,comment,review,merge]",
-          "required": true
+          "required": true,
+          "validation": "lista fechada"
         },
         {
           "name": "repository",
           "type": "string",
-          "required": true
+          "required": true,
+          "validation": "owner/repo da conexão autorizada"
         },
         {
           "name": "pr_number",
           "type": "int?",
-          "required": false
+          "required": false,
+          "validation": ">=1; obrigatório exceto create_draft"
         },
         {
           "name": "head_sha",
           "type": "sha1",
-          "required": true
+          "required": true,
+          "validation": "40 hex; revisão exata"
         },
         {
           "name": "body",
           "type": "string",
-          "required": true
+          "required": true,
+          "validation": "0..16384 bytes; texto editável no preview"
         },
         {
           "name": "host",
           "type": "string",
-          "required": true
+          "required": true,
+          "validation": "campos por variante conforme R3; URL nunca fornece credencial"
         },
         {
           "name": "title",
           "type": "string?",
-          "required": false
+          "required": false,
+          "validation": "campos por variante conforme R3; URL nunca fornece credencial"
         },
         {
           "name": "base_branch",
           "type": "string?",
-          "required": false
+          "required": false,
+          "validation": "campos por variante conforme R3; URL nunca fornece credencial"
         },
         {
           "name": "head_branch",
           "type": "string?",
-          "required": false
+          "required": false,
+          "validation": "campos por variante conforme R3; URL nunca fornece credencial"
         },
         {
           "name": "review_event",
           "type": "enum[comment,approve,request_changes]?",
-          "required": false
+          "required": false,
+          "validation": "campos por variante conforme R3; URL nunca fornece credencial"
         },
         {
           "name": "merge_method",
           "type": "enum[merge,squash,rebase]?",
-          "required": false
+          "required": false,
+          "validation": "campos por variante conforme R3; URL nunca fornece credencial"
         }
       ],
       "contract_status": "closed",
@@ -1400,22 +1554,26 @@
         {
           "name": "preview_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "preview ainda válido"
         },
         {
           "name": "action_sha256",
           "type": "sha256",
-          "required": true
+          "required": true,
+          "validation": "hash exibido ao usuário"
         },
         {
           "name": "head_sha",
           "type": "sha1",
-          "required": true
+          "required": true,
+          "validation": "head ainda coincide"
         },
         {
           "name": "approval_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "aprovação de uso único vinculada ao preview"
         }
       ],
       "contract_status": "closed",
@@ -1434,7 +1592,8 @@
         {
           "name": "thread_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "thread legível"
         }
       ],
       "contract_status": "closed",
@@ -1453,27 +1612,32 @@
         {
           "name": "thread_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "thread autorizada"
         },
         {
           "name": "action",
           "type": "enum[pin,unpin,archive,unarchive,mark_read,reorder]",
-          "required": true
+          "required": true,
+          "validation": "lista fechada"
         },
         {
           "name": "before_thread_id",
           "type": "uuid?",
-          "required": false
+          "required": false,
+          "validation": "mesma seção/environment no reorder"
         },
         {
           "name": "navigation_revision",
           "type": "int",
-          "required": true
+          "required": true,
+          "validation": ">=0; CAS"
         },
         {
           "name": "read_through_seq",
           "type": "int",
-          "required": true
+          "required": true,
+          "validation": ">=0; só mark_read"
         }
       ],
       "contract_status": "closed",
@@ -1492,32 +1656,38 @@
         {
           "name": "project_id",
           "type": "uuid?",
-          "required": false
+          "required": false,
+          "validation": "projeto legível"
         },
         {
           "name": "section",
           "type": "enum[active,pinned,archived]",
-          "required": true
+          "required": true,
+          "validation": "lista fechada"
         },
         {
           "name": "after_position",
           "type": "int?",
-          "required": false
+          "required": false,
+          "validation": ">=0; junto de after_id"
         },
         {
           "name": "after_id",
           "type": "uuid?",
-          "required": false
+          "required": false,
+          "validation": "junto de after_position"
         },
         {
           "name": "revision",
           "type": "int?",
-          "required": false
+          "required": false,
+          "validation": "obrigatória com cursor"
         },
         {
           "name": "limit",
           "type": "int",
-          "required": true
+          "required": true,
+          "validation": "1..100"
         }
       ],
       "contract_status": "closed",
@@ -1536,22 +1706,26 @@
         {
           "name": "environment_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "ambiente autorizado"
         },
         {
           "name": "run_id",
           "type": "uuid?",
-          "required": false
+          "required": false,
+          "validation": "filtrar somente run legível"
         },
         {
           "name": "include_logs",
           "type": "bool",
-          "required": true
+          "required": true,
+          "validation": "default false; somente logs redigidos"
         },
         {
           "name": "max_bytes",
           "type": "int",
-          "required": true
+          "required": true,
+          "validation": "1024..1048576; default 262144"
         }
       ],
       "contract_status": "closed",
@@ -1570,12 +1744,14 @@
         {
           "name": "report_id",
           "type": "uuid",
-          "required": true
+          "required": true,
+          "validation": "relatório legível com preview atual"
         },
         {
           "name": "approval_preview_sha256",
           "type": "sha256",
-          "required": true
+          "required": true,
+          "validation": "hash do preview revisado pelo usuário"
         }
       ],
       "contract_status": "closed",
