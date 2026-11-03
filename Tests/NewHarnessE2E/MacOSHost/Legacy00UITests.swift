@@ -108,6 +108,8 @@ final class Legacy00UITests: XCTestCase {
 
         let fixtureRow = fixturePageButton(in: app)
         XCTAssertTrue(fixtureRow.waitForExistence(timeout: 20), "A wiki temporária não foi restaurada após restart")
+        fixtureRow.click()
+        assertReaderShowsFixtureTitle(in: app)
         let localAITab = app.buttons["legacy.tab.localAI"]
         let restoredPrompt = app.textViews["legacy.ai.prompt"]
         for _ in 0..<3 where !restoredPrompt.exists {
