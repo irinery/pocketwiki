@@ -108,7 +108,14 @@ final class Legacy00UITests: XCTestCase {
 
         let fixtureRow = fixturePageButton(in: app)
         XCTAssertTrue(fixtureRow.waitForExistence(timeout: 20), "A wiki temporária não foi restaurada após restart")
-        app.buttons["legacy.tab.localAI"].click()
+        let localAITab = app.buttons["legacy.tab.localAI"]
+        let restoredPrompt = app.textViews["legacy.ai.prompt"]
+        for _ in 0..<3 where !restoredPrompt.exists {
+            XCTAssertTrue(localAITab.waitForExistence(timeout: 10), "A aba IA sumiu depois do restart")
+            localAITab.click()
+            _ = restoredPrompt.waitForExistence(timeout: 5)
+        }
+        XCTAssertTrue(restoredPrompt.exists, "A aba IA não abriu depois do restart. Visíveis: \(app.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty })")
         let restoredAnswer = app.descendants(matching: .any).matching(identifier: "legacy.ai.message.assistant").firstMatch
         let restored = restoredAnswer.waitForExistence(timeout: 20)
         XCTAssertTrue(
