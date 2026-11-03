@@ -63,7 +63,7 @@ targets:
         MACOSX_DEPLOYMENT_TARGET: "14.0"
         PRODUCT_BUNDLE_IDENTIFIER: com.pocketwiki.NHTestHostUITests
         PRODUCT_NAME: PocketWikiMacNHTestHostUITests
-        SWIFT_VERSION: "6.0"
+        SWIFT_VERSION: "5.0"
         TEST_TARGET_NAME: PocketWikiMacNHTestHost
 schemes:
   PocketWikiMacNHTestHost:

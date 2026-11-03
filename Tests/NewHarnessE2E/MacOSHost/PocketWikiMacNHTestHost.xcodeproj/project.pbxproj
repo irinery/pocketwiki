@@ -841,7 +841,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.pocketwiki.NHTestHostUITests;
 				PRODUCT_NAME = PocketWikiMacNHTestHostUITests;
 				SDKROOT = macosx;
-				SWIFT_VERSION = 6.0;
+				SWIFT_VERSION = 5.0;
 				TEST_TARGET_NAME = PocketWikiMacNHTestHost;
 			};
 			name = Release;
@@ -862,7 +862,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.pocketwiki.NHTestHostUITests;
 				PRODUCT_NAME = PocketWikiMacNHTestHostUITests;
 				SDKROOT = macosx;
-				SWIFT_VERSION = 6.0;
+				SWIFT_VERSION = 5.0;
 				TEST_TARGET_NAME = PocketWikiMacNHTestHost;
 			};
 			name = Debug;
