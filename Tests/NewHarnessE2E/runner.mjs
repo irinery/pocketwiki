@@ -198,9 +198,25 @@ async function runLegacy(surface, artifactDir, tempHome, deadline) {
       ]
     };
   }
+  const pocketwikiSHA = gitSHA(root);
+  const webSource = await cloneGitSnapshot(root, pocketwikiSHA, path.join(tempHome, 'sources/pocketwiki-web'));
+  const env = isolatedEnvironment(tempHome);
+  const npmCache = path.join(tempHome, 'npm-cache-web');
+  const install = runWithinDeadline('npm', ['ci', '--include=dev', '--userconfig=/dev/null', '--cache', npmCache], {
+    cwd: webSource,
+    env,
+    encoding: 'utf8',
+    maxBuffer: 16 * 1024 * 1024
+  }, deadline, 180_000);
+  if (install.status !== 0) {
+    const logName = 'legacy-web.log';
+    await writeFile(path.join(artifactDir, logName), '$ npm ci --include=dev --userconfig=/dev/null --cache <isolated-cache>\nexit=' + String(install.status) +
+      '\n--- stdout ---\n' + redact(install.stdout || '') + '\n--- stderr ---\n' + redact(install.stderr || install.error?.message || '') + '\n');
+    return { ok: false, exitCode: 2, configurationError: true, artifacts: [path.join(path.basename(artifactDir), logName)] };
+  }
   const vendorBuild = runWithinDeadline('npm', ['run', 'build:legacy-web-assets'], {
-    cwd: root,
-    env: isolatedEnvironment(tempHome),
+    cwd: webSource,
+    env,
     encoding: 'utf8',
     maxBuffer: 4 * 1024 * 1024
   }, deadline, 30_000);
@@ -210,7 +226,7 @@ async function runLegacy(surface, artifactDir, tempHome, deadline) {
   }
   const browserPath = path.join(tempHome, 'playwright-browsers');
   const install = runWithinDeadline('npx', ['playwright', 'install', 'chromium'], {
-    cwd: root,
+    cwd: webSource,
     env: { ...isolatedEnvironment(tempHome), PLAYWRIGHT_BROWSERS_PATH: browserPath },
     encoding: 'utf8',
     maxBuffer: 8 * 1024 * 1024
@@ -220,9 +236,9 @@ async function runLegacy(surface, artifactDir, tempHome, deadline) {
     return { ok: false, exitCode: 2, configurationError: true, artifacts: [] };
   }
   const logName = 'legacy-web.log';
-  const result = runWithinDeadline(process.execPath, [path.join(root, 'Tests/NewHarnessE2E/legacy-web-host.mjs')], {
-    cwd: root,
-    env: { ...isolatedEnvironment(tempHome), PLAYWRIGHT_BROWSERS_PATH: browserPath, NH_TEST_ARTIFACT_DIR: artifactDir },
+  const result = runWithinDeadline(process.execPath, [path.join(webSource, 'Tests/NewHarnessE2E/legacy-web-host.mjs')], {
+    cwd: webSource,
+    env: { ...env, PLAYWRIGHT_BROWSERS_PATH: browserPath, NH_TEST_ARTIFACT_DIR: artifactDir },
     encoding: 'utf8',
     maxBuffer: 8 * 1024 * 1024
   }, deadline);
