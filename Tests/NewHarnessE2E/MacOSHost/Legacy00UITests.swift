@@ -126,12 +126,13 @@ final class Legacy00UITests: XCTestCase {
             format: "label CONTAINS[c] %@ OR label CONTAINS[c] %@ OR label CONTAINS[c] %@ OR label CONTAINS[c] %@",
             "Open", "Abrir", "Choose", "Escolher"
         )
-        let scopedOpenButton = panel.buttons.matching(openButtonPredicate).firstMatch
-        let openButton = scopedOpenButton.exists
-            ? scopedOpenButton
-            : app.buttons.matching(openButtonPredicate).firstMatch
-        XCTAssertTrue(openButton.waitForExistence(timeout: 5), "O painel não expôs o botão de confirmação:\n\(panel.debugDescription)")
+        let openButton = panel.buttons.matching(openButtonPredicate).firstMatch
+        XCTAssertTrue(
+            openButton.waitForExistence(timeout: 5),
+            "O painel não expôs o botão de confirmação. Botões: \(panel.buttons.allElementsBoundByIndex.map { "\($0.identifier)=\($0.label)" }); painel: \(panel.debugDescription)"
+        )
         openButton.click()
+        XCTAssertFalse(panel.waitForExistence(timeout: 3), "O painel permaneceu aberto depois de confirmar a pasta")
     }
 
     private func openFixturePage(in app: XCUIApplication) {
