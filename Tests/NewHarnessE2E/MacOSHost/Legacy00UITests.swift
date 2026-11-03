@@ -103,7 +103,6 @@ final class Legacy00UITests: XCTestCase {
 
         let fixtureRow = fixturePageButton(in: app)
         XCTAssertTrue(fixtureRow.waitForExistence(timeout: 20), "A wiki temporária não foi restaurada após restart")
-        fixtureRow.click()
         let restoredTitle = app.staticTexts["legacy.reader.title"]
         XCTAssertTrue(restoredTitle.waitForExistence(timeout: 10), "A página fixture não abriu após restore")
         assertReaderShowsFixtureTitle(in: app)
