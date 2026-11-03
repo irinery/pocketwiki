@@ -7,6 +7,12 @@ struct PocketWikiMacApp: App {
     @State private var store = WikiAppStore()
     @State private var updater = CanonicalUpdater()
 
+    private var defaultWindowSize: (width: Double, height: Double) {
+        ProcessInfo.processInfo.environment["NH_TEST_FIXTURE_PROVIDER_URL"] == nil
+            ? (1440, 900)
+            : (1000, 700)
+    }
+
     var body: some Scene {
         WindowGroup("PocketWiki", id: "main") {
             ContentView(store: store, updater: updater)
@@ -21,7 +27,7 @@ struct PocketWikiMacApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact(showsTitle: false))
-        .defaultSize(width: 1440, height: 900)
+        .defaultSize(width: defaultWindowSize.width, height: defaultWindowSize.height)
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("Abrir Pasta...") {
