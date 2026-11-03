@@ -115,10 +115,8 @@ final class Legacy00UITests: XCTestCase {
         let panel = app.dialogs.firstMatch
         XCTAssertTrue(panel.waitForExistence(timeout: 10), "O painel real de seleção de pasta não abriu")
         app.typeKey("g", modifierFlags: [.command, .shift])
-        let locationDialog = app.dialogs.matching(
-            NSPredicate(format: "label CONTAINS[c] %@ OR label CONTAINS[c] %@", "Go to Folder", "Ir para a pasta")
-        ).firstMatch
-        let pathField = locationDialog.textFields.firstMatch
+        let locationSheet = app.sheets.firstMatch
+        let pathField = locationSheet.textFields.firstMatch
         XCTAssertTrue(pathField.waitForExistence(timeout: 5), "O diálogo do Finder para escolher a pasta não abriu")
         pathField.click()
         pathField.typeText(wikiRoot.path)
