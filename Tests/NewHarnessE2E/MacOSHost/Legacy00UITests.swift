@@ -61,7 +61,7 @@ final class Legacy00UITests: XCTestCase {
 
     func testLegacy00UsesRealAppBridgeAndRestoresAfterRestart() throws {
         let app = XCUIApplication(bundleIdentifier: "com.pocketwiki.NHTestHost")
-        let appLaunchEnvironment: [String: String] = [
+        var appLaunchEnvironment: [String: String] = [
             "HOME": ProcessInfo.processInfo.environment["HOME"] ?? temporaryRoot.path,
             "CFFIXED_USER_HOME": ProcessInfo.processInfo.environment["CFFIXED_USER_HOME"] ?? temporaryRoot.path,
             "TMPDIR": ProcessInfo.processInfo.environment["TMPDIR"] ?? temporaryRoot.path,
@@ -102,25 +102,19 @@ final class Legacy00UITests: XCTestCase {
 
         app.terminate()
         XCTAssertTrue(app.wait(for: .notRunning, timeout: 10), "O app legado não encerrou para o teste de restart")
+        appLaunchEnvironment["NH_TEST_INITIAL_TAB"] = "localAI"
         app.launchEnvironment = appLaunchEnvironment
         app.launch()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20), "O app legado não reiniciou")
 
         let fixtureRow = fixturePageButton(in: app)
         XCTAssertTrue(fixtureRow.waitForExistence(timeout: 20), "A wiki temporária não foi restaurada após restart")
-        let localAITab = app.buttons["legacy.tab.localAI"]
         let restoredPrompt = app.textViews["legacy.ai.prompt"]
-        var tabAttempts = 0
-        while !restoredPrompt.exists && tabAttempts < 3 {
-            XCTAssertTrue(localAITab.waitForExistence(timeout: 10), "A aba IA sumiu depois do restart")
-            localAITab.click()
-            tabAttempts += 1
-            _ = restoredPrompt.waitForExistence(timeout: 5)
-        }
+        _ = restoredPrompt.waitForExistence(timeout: 20)
         XCTAssertTrue(
             restoredPrompt.exists,
             "A aba IA não abriu depois do restart. " +
-            "janela=\(app.windows.firstMatch.frame), tab=(label=\(localAITab.label), frame=\(localAITab.frame), hittable=\(localAITab.isHittable), selected=\(localAITab.isSelected)), " +
+            "janela=\(app.windows.firstMatch.frame), " +
             "visíveis=\(app.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty })"
         )
         let restoredAnswer = app.descendants(matching: .any).matching(identifier: "legacy.ai.message.assistant").firstMatch

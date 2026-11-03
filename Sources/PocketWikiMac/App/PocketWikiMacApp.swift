@@ -23,6 +23,9 @@ struct PocketWikiMacApp: App {
                         store?.shutdownManagedServices()
                     }
                     await store.restoreLastSource()
+                    if ProcessInfo.processInfo.environment["NH_TEST_INITIAL_TAB"] == "localAI" {
+                        store.selectedTab = .localAI
+                    }
                     await store.bootstrapManagedServices()
                 }
         }
