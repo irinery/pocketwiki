@@ -18,6 +18,7 @@ struct PocketWikiMacApp: App {
             ContentView(store: store, updater: updater)
                 .frame(minWidth: 980, minHeight: 680)
                 .task {
+                    fitHarnessWindowIfNeeded()
                     appDelegate.terminationHandler = { [weak store] in
                         store?.shutdownManagedServices()
                     }
@@ -55,6 +56,19 @@ struct PocketWikiMacApp: App {
                 .disabled(updater.state.isBusy)
             }
         }
+    }
+
+    private func fitHarnessWindowIfNeeded() {
+        guard ProcessInfo.processInfo.environment["NH_TEST_FIXTURE_PROVIDER_URL"] != nil,
+              let window = NSApp.windows.first,
+              let screen = window.screen ?? NSScreen.main else { return }
+        let visible = screen.visibleFrame.insetBy(dx: 12, dy: 12)
+        let width = min(1000, visible.width)
+        let height = min(700, visible.height)
+        window.setFrame(
+            NSRect(x: visible.midX - width / 2, y: visible.midY - height / 2, width: width, height: height),
+            display: true
+        )
     }
 }
 
