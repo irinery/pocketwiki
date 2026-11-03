@@ -61,7 +61,7 @@ final class Legacy00UITests: XCTestCase {
 
     func testLegacy00UsesRealAppBridgeAndRestoresAfterRestart() throws {
         let app = XCUIApplication(bundleIdentifier: "com.pocketwiki.NHTestHost")
-        app.launchEnvironment = [
+        let appLaunchEnvironment = [
             "HOME": ProcessInfo.processInfo.environment["HOME"] ?? temporaryRoot.path,
             "CFFIXED_USER_HOME": ProcessInfo.processInfo.environment["CFFIXED_USER_HOME"] ?? temporaryRoot.path,
             "TMPDIR": ProcessInfo.processInfo.environment["TMPDIR"] ?? temporaryRoot.path,
@@ -81,6 +81,7 @@ final class Legacy00UITests: XCTestCase {
             "POCKETWIKI_CONVERSATION_STORE_PATH": memoryStoreRoot.path
         ]
 
+        app.launchEnvironment = appLaunchEnvironment
         app.launch()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20), "O app legado macOS real não iniciou")
         selectFixtureWiki(in: app)
@@ -101,6 +102,7 @@ final class Legacy00UITests: XCTestCase {
 
         app.terminate()
         XCTAssertTrue(app.wait(for: .notRunning, timeout: 10), "O app legado não encerrou para o teste de restart")
+        app.launchEnvironment = appLaunchEnvironment
         app.launch()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20), "O app legado não reiniciou")
 
