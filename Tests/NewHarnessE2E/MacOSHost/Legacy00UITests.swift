@@ -180,8 +180,11 @@ final class Legacy00UITests: XCTestCase {
         apiKey.click()
         apiKey.typeText("nh-test-provider-key")
         settings.buttons["Fechar"].click()
+        let providerStatus = app.descendants(matching: .any).matching(identifier: "legacy.ai.provider.status").firstMatch
+        XCTAssertTrue(providerStatus.waitForExistence(timeout: 10), "O status do provider não apareceu depois de fechar as configurações")
+        let previousStatus = (providerStatus.value as? String) ?? providerStatus.label
         app.buttons["legacy.ai.provider.configure"].click()
-        waitForProviderSetup(in: app)
+        waitForProviderSetup(in: app, previousStatus: previousStatus)
 
         let prompt = app.textViews["legacy.ai.prompt"]
         XCTAssertTrue(prompt.waitForExistence(timeout: 10), "O editor da conversa não expôs accessibility ID")
@@ -190,13 +193,16 @@ final class Legacy00UITests: XCTestCase {
         app.buttons["legacy.ai.send"].click()
     }
 
-    private func waitForProviderSetup(in app: XCUIApplication) {
+    private func waitForProviderSetup(in app: XCUIApplication, previousStatus: String) {
         let status = app.descendants(matching: .any).matching(identifier: "legacy.ai.provider.status").firstMatch
         XCTAssertTrue(status.waitForExistence(timeout: 10), "O status do provider não expôs accessibility ID")
+        let initialStatus = previousStatus.lowercased()
         let deadline = Date().addingTimeInterval(30)
         while Date() < deadline {
             let text = ((status.value as? String) ?? status.label).lowercased()
-            if !text.contains("configurando") && !text.contains("carregando") {
+            if !text.isEmpty && text != initialStatus && !text.contains("configurando") && !text.contains("carregando") {
+                let error = app.descendants(matching: .any).matching(identifier: "legacy.ai.error").firstMatch
+                XCTAssertFalse(error.exists, "MiddlewareAuth não configurou o provider: \((error.value as? String) ?? error.label)")
                 return
             }
             RunLoop.current.run(until: Date().addingTimeInterval(0.25))

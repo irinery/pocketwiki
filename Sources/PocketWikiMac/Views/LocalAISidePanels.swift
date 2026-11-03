@@ -223,11 +223,13 @@ struct LocalAISidePanelContent: View {
                     }
                 }
 
-                Text(providerStatusText.pocketTrimmed.pocketIfEmpty(method?.statusFallback ?? "Carregando provedores do MiddlewareAuth..."))
+                let statusText = providerStatusText.pocketTrimmed.pocketIfEmpty(method?.statusFallback ?? "Carregando provedores do MiddlewareAuth...")
+                Text(statusText)
                     .font(.caption.monospaced())
                     .foregroundStyle(PocketWikiTheme.muted)
                     .padding(.top, 1)
                     .lineLimit(2)
+                    .accessibilityLabel(statusText)
                     .accessibilityIdentifier("legacy.ai.provider.status")
             }
         }

@@ -152,6 +152,7 @@ struct LocalAIChatPanel: View {
                     .font(.caption)
                     .foregroundStyle(PocketWikiTheme.bad)
                     .lineLimit(3)
+                    .accessibilityLabel(error)
                     .accessibilityIdentifier("legacy.ai.error")
             }
 
