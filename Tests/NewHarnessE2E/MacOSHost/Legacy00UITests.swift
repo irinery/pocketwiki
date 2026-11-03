@@ -83,7 +83,7 @@ final class Legacy00UITests: XCTestCase {
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20), "O app legado macOS real não iniciou")
         selectFixtureWiki(in: app)
         openFixturePage(in: app)
-        XCTAssertEqual(app.staticTexts["legacy.reader.title"].label, "NH-TEST fixture page")
+        assertReaderShowsFixtureTitle(in: app)
 
         sendFixturePrompt(in: app)
         let answer = app.descendants(matching: .any).matching(identifier: "legacy.ai.message.assistant").firstMatch
@@ -100,7 +100,7 @@ final class Legacy00UITests: XCTestCase {
         fixtureRow.click()
         let restoredTitle = app.staticTexts["legacy.reader.title"]
         XCTAssertTrue(restoredTitle.waitForExistence(timeout: 10), "A página fixture não abriu após restore")
-        XCTAssertEqual(restoredTitle.label, "NH-TEST fixture page")
+        assertReaderShowsFixtureTitle(in: app)
         app.buttons["legacy.tab.localAI"].click()
         let restoredAnswer = app.descendants(matching: .any).matching(identifier: "legacy.ai.message.assistant").firstMatch
         XCTAssertTrue(restoredAnswer.waitForExistence(timeout: 20), "A sessão da conversa não foi restaurada depois do restart")
@@ -143,6 +143,18 @@ final class Legacy00UITests: XCTestCase {
             .matching(identifier: "legacy.sidebar.item.NH-TEST fixture page")
             .matching(NSPredicate(format: "label CONTAINS %@", "index.md"))
             .firstMatch
+    }
+
+    private func assertReaderShowsFixtureTitle(in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
+        let title = app.staticTexts["legacy.reader.title"]
+        let actual = (title.value as? String)?.isEmpty == false ? title.value as? String : title.label
+        XCTAssertEqual(
+            actual,
+            "NH-TEST fixture page",
+            "Leitor expôs label=\(title.label.debugDescription), value=\(String(describing: title.value)), element=\(title.debugDescription)",
+            file: file,
+            line: line
+        )
     }
 
     private func sendFixturePrompt(in app: XCUIApplication) {
