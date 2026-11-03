@@ -29,7 +29,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: irinery/pocketkernel
-          ref: 03f8f30eb781b4d16a9dca76f7548f9781bbef02
+          ref: codex/nh00-locks
           path: .build/dependencies/pocketkernel
           ssh-key: ${{ secrets.POCKETKERNEL_DEPLOY_KEY }}
           persist-credentials: false
