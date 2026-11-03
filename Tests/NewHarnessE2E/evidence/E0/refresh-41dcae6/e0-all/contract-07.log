@@ -1,0 +1,49 @@
+$ npm run test:new-harness-rig
+exit=0
+--- stdout ---
+
+> pocketwiki@0.1.0 test:new-harness-rig
+> node --test Tests/NewHarnessE2E/*.test.mjs
+
+TAP version 13
+# Subtest: E0 aggregator emits gate_passed only for the complete required matrix
+ok 1 - E0 aggregator emits gate_passed only for the complete required matrix
+  ---
+  duration_ms: 1.450541
+  ...
+# Subtest: aggregator rejects a missing surface pair
+ok 2 - aggregator rejects a missing surface pair
+  ---
+  duration_ms: 0.483292
+  ...
+# Subtest: aggregator rejects failed, skipped, duplicate and unexpected cases
+ok 3 - aggregator rejects failed, skipped, duplicate and unexpected cases
+  ---
+  duration_ms: 0.408667
+  ...
+# Subtest: aggregator rejects divergent SHAs, hashes and forbidden authentication modes
+ok 4 - aggregator rejects divergent SHAs, hashes and forbidden authentication modes
+  ---
+  duration_ms: 0.335291
+  ...
+# Subtest: aggregator rejects a non-zero shard exit and unsafe artifacts
+ok 5 - aggregator rejects a non-zero shard exit and unsafe artifacts
+  ---
+  duration_ms: 0.324709
+  ...
+# Subtest: file aggregator requires real artifacts contained in each report directory
+ok 6 - file aggregator requires real artifacts contained in each report directory
+  ---
+  duration_ms: 13.688125
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 105.193667
+
+--- stderr ---
