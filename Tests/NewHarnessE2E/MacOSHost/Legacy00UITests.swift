@@ -122,10 +122,15 @@ final class Legacy00UITests: XCTestCase {
         pathField.typeText(wikiRoot.path)
         app.typeKey(.return, modifierFlags: [])
 
-        let openButton = panel.buttons.matching(
-            NSPredicate(format: "label == %@ OR label == %@", "Open", "Abrir")
-        ).firstMatch
-        XCTAssertTrue(openButton.waitForExistence(timeout: 5), "O painel não expôs o botão Open/Abrir")
+        let openButtonPredicate = NSPredicate(
+            format: "label CONTAINS[c] %@ OR label CONTAINS[c] %@ OR label CONTAINS[c] %@ OR label CONTAINS[c] %@",
+            "Open", "Abrir", "Choose", "Escolher"
+        )
+        let scopedOpenButton = panel.buttons.matching(openButtonPredicate).firstMatch
+        let openButton = scopedOpenButton.exists
+            ? scopedOpenButton
+            : app.buttons.matching(openButtonPredicate).firstMatch
+        XCTAssertTrue(openButton.waitForExistence(timeout: 5), "O painel não expôs o botão de confirmação:\n\(panel.debugDescription)")
         openButton.click()
     }
 
