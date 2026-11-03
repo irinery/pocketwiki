@@ -853,7 +853,7 @@ ok - app bundle contract
   assets/excalidraw-renderer.js  18.7mb ⚠️
 
 ⚡ Done in 418ms
-[33m[plugin builtin:vite-reporter] 
+[33m[plugin builtin:vite-reporter]
 (!) Some chunks are larger than 500 kB after minification. Consider:
 - Using dynamic import() to code-split the application
 - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
@@ -895,7 +895,7 @@ Working copy of https://github.com/swiftlang/swift-cmark resolved at 0.8.0
   assets/excalidraw-renderer.js  18.7mb ⚠️
 
 ⚡ Done in 512ms
-[33m[plugin builtin:vite-reporter] 
+[33m[plugin builtin:vite-reporter]
 (!) Some chunks are larger than 500 kB after minification. Consider:
 - Using dynamic import() to code-split the application
 - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting

@@ -4,4 +4,3 @@ exit=2
 
 --- stderr ---
 NH-TEST macOS configuration failure: Xcode completo com XCTest não está disponível. Instale Xcode ou defina POCKETWIKI_XCODE_DEVELOPER_DIR; a seleção global não foi alterada.
-
