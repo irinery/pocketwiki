@@ -87,7 +87,13 @@ final class Legacy00UITests: XCTestCase {
 
         sendFixturePrompt(in: app)
         let answer = app.descendants(matching: .any).matching(identifier: "legacy.ai.message.assistant").firstMatch
-        XCTAssertTrue(answer.waitForExistence(timeout: 60), "A resposta não chegou pela bridge real Kernel/MiddlewareAuth")
+        let gotAnswer = answer.waitForExistence(timeout: 60)
+        let visibleStatus = app.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }
+        let sendButton = app.buttons["legacy.ai.send"]
+        XCTAssertTrue(
+            gotAnswer,
+            "A resposta não chegou pela bridge real Kernel/MiddlewareAuth. status=\(visibleStatus); enviarHabilitado=\(sendButton.isEnabled); prompt=\(String(describing: app.textViews["legacy.ai.prompt"].value))"
+        )
         XCTAssertTrue(answer.label.contains("nh-test-marker-2026"), "A resposta fixture não trouxe a evidência local esperada")
 
         app.terminate()
