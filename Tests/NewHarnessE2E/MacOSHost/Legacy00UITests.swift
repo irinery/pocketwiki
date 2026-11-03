@@ -3,6 +3,7 @@ import XCTest
 final class Legacy00UITests: XCTestCase {
     private var temporaryRoot: URL!
     private var wikiRoot: URL!
+    private var memoryStoreRoot: URL!
     private var envFile: URL!
     private var fixtureProviderURL: String!
     private var middlewareURL: String!
@@ -13,12 +14,12 @@ final class Legacy00UITests: XCTestCase {
         temporaryRoot = FileManager.default.temporaryDirectory
             .appendingPathComponent("pocketwiki-legacy00-\(UUID().uuidString)", isDirectory: true)
         wikiRoot = temporaryRoot.appendingPathComponent("wiki", isDirectory: true)
-        let memoryStore = temporaryRoot.appendingPathComponent("memory-store", isDirectory: true)
+        memoryStoreRoot = temporaryRoot.appendingPathComponent("memory-store", isDirectory: true)
         fixtureProviderURL = try XCTUnwrap(ProcessInfo.processInfo.environment["NH_TEST_FIXTURE_PROVIDER_URL"])
         middlewareURL = try XCTUnwrap(ProcessInfo.processInfo.environment["NH_TEST_MIDDLEWARE_URL"])
         kernelURL = try XCTUnwrap(ProcessInfo.processInfo.environment["NH_TEST_KERNEL_URL"])
         try FileManager.default.createDirectory(at: wikiRoot, withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: memoryStore, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: memoryStoreRoot, withIntermediateDirectories: true)
         try Data("---\ntitle: NH-TEST fixture page\nstatus: validated\ntrust: high\n---\n\n# NH-TEST fixture page\n\nfixture evidence: nh-test-marker-2026\n".utf8)
             .write(to: wikiRoot.appendingPathComponent("index.md"))
 
@@ -26,7 +27,7 @@ final class Legacy00UITests: XCTestCase {
         let env = [
             "POCKETWIKI_REFERENCE_PATH=\(wikiRoot.path)",
             "POCKETWIKI_REFERENCE_READONLY=true",
-            "POCKETWIKI_MEMORY_PATH=\(memoryStore.path)",
+            "POCKETWIKI_MEMORY_PATH=\(memoryStoreRoot.path)",
             "POCKETWIKI_MEMORY_TOKEN=nh-test-memory-token-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
             "POCKETWIKI_PORT=\(try XCTUnwrap(ProcessInfo.processInfo.environment["NH_TEST_POCKETWIKI_PORT"]))",
             "POCKETWIKI_MDNS=false",
@@ -76,7 +77,8 @@ final class Legacy00UITests: XCTestCase {
             "POCKETWIKI_POCKETKERNEL_BINARY": try XCTUnwrap(ProcessInfo.processInfo.environment["POCKETWIKI_POCKETKERNEL_BINARY"]),
             "POCKETWIKI_MIDDLEWARE_AUTH_BINARY": try XCTUnwrap(ProcessInfo.processInfo.environment["POCKETWIKI_MIDDLEWARE_AUTH_BINARY"]),
             "POCKETWIKI_NODE_BINARY": try XCTUnwrap(ProcessInfo.processInfo.environment["POCKETWIKI_NODE_BINARY"]),
-            "NH_TEST_FIXTURE_PROVIDER_URL": fixtureProviderURL
+            "NH_TEST_FIXTURE_PROVIDER_URL": fixtureProviderURL,
+            "POCKETWIKI_CONVERSATION_STORE_PATH": memoryStoreRoot.path
         ]
 
         app.launch()
