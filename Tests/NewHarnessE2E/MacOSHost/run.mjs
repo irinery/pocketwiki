@@ -104,7 +104,7 @@ try {
   const args = [
     'test', '-project', project,
     '-scheme', 'PocketWikiMacNHTestHost',
-    '-destination', 'platform=macOS',
+    '-destination', 'platform=macOS,arch=arm64',
     '-disableAutomaticPackageResolution',
     '-clonedSourcePackagesDirPath', path.join(tempHome, 'swift-packages'),
     '-resultBundlePath', resultBundle
@@ -118,8 +118,7 @@ try {
   }
   output += '\nProvider fixture requests: ' + JSON.stringify(providerRequests) + '\n';
   if (existsSync(resultBundle)) {
-    const xcrun = path.join(developerDir, 'usr', 'bin', 'xcrun');
-    const summary = spawnSync(xcrun, ['xcresulttool', 'get', 'test-results', 'summary', '--path', resultBundle, '--format', 'json'], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
+    const summary = spawnSync('xcrun', ['xcresulttool', 'get', 'test-results', 'summary', '--path', resultBundle, '--format', 'json'], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
     try {
       if (summary.status !== 0) throw new Error(summary.stderr || summary.error?.message || 'xcresulttool falhou');
       const safeSummary = redactSummary(summary.stdout);
