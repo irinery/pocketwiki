@@ -97,6 +97,7 @@ final class Legacy00UITests: XCTestCase {
             "A resposta não chegou pela bridge real Kernel/MiddlewareAuth. status=\(visibleStatus); enviarHabilitado=\(sendButton.isEnabled); prompt=\(String(describing: app.textViews["legacy.ai.prompt"].value))"
         )
         assertFixtureMarkerVisible(in: app, message: "A resposta fixture não trouxe a evidência local esperada")
+        waitForPortableConversationArchive()
 
         app.terminate()
         XCTAssertTrue(app.wait(for: .notRunning, timeout: 10), "O app legado não encerrou para o teste de restart")
@@ -109,6 +110,30 @@ final class Legacy00UITests: XCTestCase {
         let restoredAnswer = app.descendants(matching: .any).matching(identifier: "legacy.ai.message.assistant").firstMatch
         XCTAssertTrue(restoredAnswer.waitForExistence(timeout: 20), "A sessão da conversa não foi restaurada depois do restart")
         assertFixtureMarkerVisible(in: app, message: "A resposta restaurada perdeu o conteúdo fixture")
+    }
+
+    private func waitForPortableConversationArchive() {
+        let archivePredicate = NSPredicate { _, _ in
+            guard let files = try? FileManager.default.contentsOfDirectory(
+                at: self.memoryStoreRoot,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            ) else { return false }
+
+            return files
+                .filter { $0.lastPathComponent.hasPrefix("session-") && $0.pathExtension == "json" }
+                .contains { file in
+                    guard let data = try? Data(contentsOf: file),
+                          let contents = String(data: data, encoding: .utf8) else { return false }
+                    return contents.contains("nh-test-marker-2026")
+                }
+        }
+        let expectation = XCTNSPredicateExpectation(predicate: archivePredicate, object: nil)
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [expectation], timeout: 10),
+            .completed,
+            "A resposta fixture não foi gravada no store portátil antes do restart"
+        )
     }
 
     private func selectFixtureWiki(in app: XCUIApplication) {
