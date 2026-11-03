@@ -181,11 +181,27 @@ final class Legacy00UITests: XCTestCase {
         apiKey.typeText("nh-test-provider-key")
         settings.buttons["Fechar"].click()
         app.buttons["legacy.ai.provider.configure"].click()
+        waitForProviderSetup(in: app)
 
         let prompt = app.textViews["legacy.ai.prompt"]
         XCTAssertTrue(prompt.waitForExistence(timeout: 10), "O editor da conversa não expôs accessibility ID")
         prompt.click()
         prompt.typeText("Qual é o status do marcador fixture evidence registrado na wiki?")
         app.buttons["legacy.ai.send"].click()
+    }
+
+    private func waitForProviderSetup(in app: XCUIApplication) {
+        let status = app.descendants(matching: .any).matching(identifier: "legacy.ai.provider.status").firstMatch
+        XCTAssertTrue(status.waitForExistence(timeout: 10), "O status do provider não expôs accessibility ID")
+        let deadline = Date().addingTimeInterval(30)
+        while Date() < deadline {
+            let text = ((status.value as? String) ?? status.label).lowercased()
+            if !text.contains("configurando") && !text.contains("carregando") {
+                return
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
+        let error = app.descendants(matching: .any).matching(identifier: "legacy.ai.error").firstMatch
+        XCTFail("O provider não terminou de configurar. status=\((status.value as? String) ?? status.label); erro=\((error.value as? String) ?? error.label)")
     }
 }

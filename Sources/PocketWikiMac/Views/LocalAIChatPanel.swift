@@ -152,6 +152,7 @@ struct LocalAIChatPanel: View {
                     .font(.caption)
                     .foregroundStyle(PocketWikiTheme.bad)
                     .lineLimit(3)
+                    .accessibilityIdentifier("legacy.ai.error")
             }
 
             HStack(alignment: .bottom, spacing: 10) {

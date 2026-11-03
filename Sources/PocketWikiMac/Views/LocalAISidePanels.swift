@@ -228,6 +228,7 @@ struct LocalAISidePanelContent: View {
                     .foregroundStyle(PocketWikiTheme.muted)
                     .padding(.top, 1)
                     .lineLimit(2)
+                    .accessibilityIdentifier("legacy.ai.provider.status")
             }
         }
     }
