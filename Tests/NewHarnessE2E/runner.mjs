@@ -238,7 +238,13 @@ async function runLegacy(surface, artifactDir, tempHome, deadline) {
   const logName = 'legacy-web.log';
   const result = runWithinDeadline(process.execPath, [path.join(webSource, 'Tests/NewHarnessE2E/legacy-web-host.mjs')], {
     cwd: webSource,
-    env: { ...env, PLAYWRIGHT_BROWSERS_PATH: browserPath, NH_TEST_ARTIFACT_DIR: artifactDir },
+    env: {
+      ...env,
+      PLAYWRIGHT_BROWSERS_PATH: browserPath,
+      NH_TEST_ARTIFACT_DIR: artifactDir,
+      POCKETKERNEL_NH00_ROOT: process.env.POCKETKERNEL_NH00_ROOT || path.resolve(root, '../pocketkernel-nh00'),
+      MIDDLEWAREAUTH_NHTEST_ROOT: process.env.MIDDLEWAREAUTH_NHTEST_ROOT || path.resolve(root, '../middlewareAuth')
+    },
     encoding: 'utf8',
     maxBuffer: 8 * 1024 * 1024
   }, deadline);
