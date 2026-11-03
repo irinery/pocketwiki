@@ -110,8 +110,32 @@ final class Legacy00UITests: XCTestCase {
         XCTAssertTrue(fixtureRow.waitForExistence(timeout: 20), "A wiki temporária não foi restaurada após restart")
         app.buttons["legacy.tab.localAI"].click()
         let restoredAnswer = app.descendants(matching: .any).matching(identifier: "legacy.ai.message.assistant").firstMatch
-        XCTAssertTrue(restoredAnswer.waitForExistence(timeout: 20), "A sessão da conversa não foi restaurada depois do restart")
+        let restored = restoredAnswer.waitForExistence(timeout: 20)
+        XCTAssertTrue(
+            restored,
+            "A sessão da conversa não foi restaurada depois do restart. " +
+            "store=\(conversationStoreDiagnostic()), " +
+            "env=\(appLaunchEnvironment["POCKETWIKI_CONVERSATION_STORE_PATH"] ?? "missing"), " +
+            "visible=\(app.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty })"
+        )
         assertFixtureMarkerVisible(in: app, message: "A resposta restaurada perdeu o conteúdo fixture")
+    }
+
+    private func conversationStoreDiagnostic() -> String {
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: memoryStoreRoot,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        )) ?? []
+        let activeID = (try? String(contentsOf: memoryStoreRoot.appendingPathComponent("active-session-id"), encoding: .utf8)) ?? "missing"
+        let sessions = files
+            .filter { $0.lastPathComponent.hasPrefix("session-") && $0.pathExtension == "json" }
+            .map { file -> String in
+                guard let data = try? Data(contentsOf: file),
+                      let contents = String(data: data, encoding: .utf8) else { return "\(file.lastPathComponent):unreadable" }
+                return "\(file.lastPathComponent):marker=\(contents.contains("nh-test-marker-2026"))"
+            }
+        return "active=\(activeID), sessions=\(sessions)"
     }
 
     private func waitForPortableConversationArchive() {
