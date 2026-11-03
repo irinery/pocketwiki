@@ -136,6 +136,12 @@ struct LocalAIChatPanel: View {
                 }
                 .padding(16)
             }
+            .onAppear {
+                guard let last = chat.messages.last else { return }
+                DispatchQueue.main.async {
+                    proxy.scrollTo(last.id, anchor: .bottom)
+                }
+            }
             .onChange(of: chat.messagesRevision) { _, _ in
                 guard let last = chat.messages.last else { return }
                 withAnimation(.easeOut(duration: 0.12)) {
