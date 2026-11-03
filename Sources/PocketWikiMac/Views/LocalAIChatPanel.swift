@@ -381,6 +381,7 @@ private struct LocalAIMessageBubble: View {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .stroke(isUser ? PocketWikiTheme.accent2.opacity(0.38) : PocketWikiTheme.accent.opacity(0.25), lineWidth: 1)
             }
+            .accessibilityElement(children: .combine)
             .accessibilityIdentifier("legacy.ai.message.\(message.role.rawValue)")
 
             if !isUser { Spacer(minLength: 72) }

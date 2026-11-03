@@ -214,10 +214,11 @@ final class Legacy00UITests: XCTestCase {
     }
 
     private func assertFixtureMarkerVisible(in app: XCUIApplication, message: String) {
-        let marker = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "nh-test-marker-2026")).firstMatch
+        let assistant = app.descendants(matching: .any).matching(identifier: "legacy.ai.message.assistant").firstMatch
+        let gotMarker = assistant.waitForExistence(timeout: 10) && assistant.label.contains("nh-test-marker-2026")
         XCTAssertTrue(
-            marker.waitForExistence(timeout: 10),
-            "\(message). Textos visíveis: \(app.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty })"
+            gotMarker,
+            "\(message). Rótulo do balão: \(assistant.label.debugDescription); textos visíveis: \(app.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty })"
         )
     }
 }
