@@ -225,14 +225,14 @@ async function runLegacy(surface, artifactDir, tempHome, deadline) {
     return { ok: false, exitCode: 2, configurationError: true, artifacts: [] };
   }
   const browserPath = path.join(tempHome, 'playwright-browsers');
-  const install = runWithinDeadline('npx', ['playwright', 'install', 'chromium'], {
+  const browserInstall = runWithinDeadline('npx', ['playwright', 'install', 'chromium'], {
     cwd: webSource,
     env: { ...isolatedEnvironment(tempHome), PLAYWRIGHT_BROWSERS_PATH: browserPath },
     encoding: 'utf8',
     maxBuffer: 8 * 1024 * 1024
   }, deadline);
-  if (install.status !== 0) {
-    console.error('LEGACY-00/web Chromium installation failed: ' + (install.stderr || install.error?.message || 'unknown error'));
+  if (browserInstall.status !== 0) {
+    console.error('LEGACY-00/web Chromium installation failed: ' + (browserInstall.stderr || browserInstall.error?.message || 'unknown error'));
     return { ok: false, exitCode: 2, configurationError: true, artifacts: [] };
   }
   const logName = 'legacy-web.log';
