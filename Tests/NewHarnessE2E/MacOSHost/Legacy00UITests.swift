@@ -61,7 +61,7 @@ final class Legacy00UITests: XCTestCase {
 
     func testLegacy00UsesRealAppBridgeAndRestoresAfterRestart() throws {
         let app = XCUIApplication(bundleIdentifier: "com.pocketwiki.NHTestHost")
-        let appLaunchEnvironment = [
+        let appLaunchEnvironment: [String: String] = [
             "HOME": ProcessInfo.processInfo.environment["HOME"] ?? temporaryRoot.path,
             "CFFIXED_USER_HOME": ProcessInfo.processInfo.environment["CFFIXED_USER_HOME"] ?? temporaryRoot.path,
             "TMPDIR": ProcessInfo.processInfo.environment["TMPDIR"] ?? temporaryRoot.path,
