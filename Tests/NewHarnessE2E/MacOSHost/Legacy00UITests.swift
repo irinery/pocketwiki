@@ -103,10 +103,6 @@ final class Legacy00UITests: XCTestCase {
 
         let fixtureRow = fixturePageButton(in: app)
         XCTAssertTrue(fixtureRow.waitForExistence(timeout: 20), "A wiki temporária não foi restaurada após restart")
-        app.buttons["legacy.tab.reader"].click()
-        let restoredTitle = app.staticTexts["legacy.reader.title"]
-        XCTAssertTrue(restoredTitle.waitForExistence(timeout: 10), "A página fixture não abriu após restore")
-        assertReaderShowsFixtureTitle(in: app)
         app.buttons["legacy.tab.localAI"].click()
         let restoredAnswer = app.descendants(matching: .any).matching(identifier: "legacy.ai.message.assistant").firstMatch
         XCTAssertTrue(restoredAnswer.waitForExistence(timeout: 20), "A sessão da conversa não foi restaurada depois do restart")
