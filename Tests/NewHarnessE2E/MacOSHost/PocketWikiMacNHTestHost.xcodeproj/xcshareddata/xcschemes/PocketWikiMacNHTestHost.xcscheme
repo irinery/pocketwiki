@@ -1,20 +1,35 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme LastUpgradeVersion="1600" version="1.7">
-  <BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES">
-    <BuildActionEntries>
-      <BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES">
-        <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="DB9F0D2A365A5764AFA37894" BuildableName="PocketWikiMacNHTestHost.app" BlueprintName="PocketWikiMacNHTestHost" ReferencedContainer="container:PocketWikiMacNHTestHost.xcodeproj"/>
-      </BuildActionEntry>
-      <BuildActionEntry buildForTesting="YES" buildForRunning="NO" buildForProfiling="NO" buildForArchiving="NO" buildForAnalyzing="NO">
-        <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="035AEF6C9EF656268F853BDE" BuildableName="PocketWikiMacNHTestHostUITests.xctest" BlueprintName="PocketWikiMacNHTestHostUITests" ReferencedContainer="container:PocketWikiMacNHTestHost.xcodeproj"/>
-      </BuildActionEntry>
-    </BuildActionEntries>
-  </BuildAction>
-  <TestAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.DebuggerFoundation.Launcher.LLDB" shouldUseLaunchSchemeArgsEnv="YES">
-    <Testables><TestableReference skipped="NO" parallelizable="NO"><BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="035AEF6C9EF656268F853BDE" BuildableName="PocketWikiMacNHTestHostUITests.xctest" BlueprintName="PocketWikiMacNHTestHostUITests" ReferencedContainer="container:PocketWikiMacNHTestHost.xcodeproj"/></TestableReference></Testables>
-  </TestAction>
-  <LaunchAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.DebuggerFoundation.Launcher.LLDB"/>
-  <ProfileAction buildConfiguration="Release" shouldUseLaunchSchemeArgsEnv="YES" savedToolIdentifier="" useCustomWorkingDirectory="NO" debugDocumentVersioning="YES"/>
-  <AnalyzeAction buildConfiguration="Debug"/>
-  <ArchiveAction buildConfiguration="Release" revealArchiveInOrganizer="YES"/>
+   <BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES">
+      <BuildActionEntries>
+         <BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES">
+            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="14F849B0C2AC58FBA3F4436A" BuildableName="PocketWikiMacNHTestHost.app" BlueprintName="PocketWikiMacNHTestHost" ReferencedContainer="container:PocketWikiMacNHTestHost.xcodeproj"/>
+         </BuildActionEntry>
+         <BuildActionEntry buildForTesting="YES" buildForRunning="NO" buildForProfiling="NO" buildForArchiving="NO" buildForAnalyzing="NO">
+            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="22F809C81E815A1C923DF7E7" BuildableName="PocketWikiMacNHTestHostUITests.xctest" BlueprintName="PocketWikiMacNHTestHostUITests" ReferencedContainer="container:PocketWikiMacNHTestHost.xcodeproj"/>
+         </BuildActionEntry>
+      </BuildActionEntries>
+   </BuildAction>
+   <TestAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.DebuggerFoundation.Launcher.LLDB" shouldUseLaunchSchemeArgsEnv="YES">
+      <Testables>
+         <TestableReference skipped="NO" parallelizable="NO">
+            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="22F809C81E815A1C923DF7E7" BuildableName="PocketWikiMacNHTestHostUITests.xctest" BlueprintName="PocketWikiMacNHTestHostUITests" ReferencedContainer="container:PocketWikiMacNHTestHost.xcodeproj"/>
+         </TestableReference>
+      </Testables>
+      <MacroExpansion>
+         <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="14F849B0C2AC58FBA3F4436A" BuildableName="PocketWikiMacNHTestHost.app" BlueprintName="PocketWikiMacNHTestHost" ReferencedContainer="container:PocketWikiMacNHTestHost.xcodeproj"/>
+      </MacroExpansion>
+   </TestAction>
+      <LaunchAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.DebuggerFoundation.Launcher.LLDB" launchStyle="0" useCustomWorkingDirectory="NO" ignoresPersistentStateOnLaunch="NO" debugDocumentVersioning="YES" debugServiceExtension="internal" allowLocationSimulation="YES">
+         <BuildableProductRunnable runnableDebuggingMode="0">
+            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="14F849B0C2AC58FBA3F4436A" BuildableName="PocketWikiMacNHTestHost.app" BlueprintName="PocketWikiMacNHTestHost" ReferencedContainer="container:PocketWikiMacNHTestHost.xcodeproj"/>
+         </BuildableProductRunnable>
+      </LaunchAction>
+   <ProfileAction buildConfiguration="Release" shouldUseLaunchSchemeArgsEnv="YES" savedToolIdentifier="" useCustomWorkingDirectory="NO" debugDocumentVersioning="YES">
+      <BuildableProductRunnable runnableDebuggingMode="0">
+         <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="14F849B0C2AC58FBA3F4436A" BuildableName="PocketWikiMacNHTestHost.app" BlueprintName="PocketWikiMacNHTestHost" ReferencedContainer="container:PocketWikiMacNHTestHost.xcodeproj"/>
+      </BuildableProductRunnable>
+   </ProfileAction>
+   <AnalyzeAction buildConfiguration="Debug"/>
+   <ArchiveAction buildConfiguration="Release" revealArchiveInOrganizer="YES"/>
 </Scheme>
