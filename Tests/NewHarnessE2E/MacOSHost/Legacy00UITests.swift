@@ -95,7 +95,7 @@ final class Legacy00UITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20), "O app legado não reiniciou")
 
-        let fixtureRow = app.buttons["legacy.sidebar.item.NH-TEST fixture page"]
+        let fixtureRow = fixturePageButton(in: app)
         XCTAssertTrue(fixtureRow.waitForExistence(timeout: 20), "A wiki temporária não foi restaurada após restart")
         fixtureRow.click()
         let restoredTitle = app.staticTexts["legacy.reader.title"]
@@ -132,10 +132,17 @@ final class Legacy00UITests: XCTestCase {
     }
 
     private func openFixturePage(in app: XCUIApplication) {
-        let fixtureRow = app.buttons["legacy.sidebar.item.NH-TEST fixture page"]
+        let fixtureRow = fixturePageButton(in: app)
         XCTAssertTrue(fixtureRow.waitForExistence(timeout: 20), "A fixture não apareceu na sidebar")
         fixtureRow.click()
         XCTAssertTrue(app.staticTexts["legacy.reader.title"].waitForExistence(timeout: 10), "O reader não abriu a fixture")
+    }
+
+    private func fixturePageButton(in app: XCUIApplication) -> XCUIElement {
+        app.buttons
+            .matching(identifier: "legacy.sidebar.item.NH-TEST fixture page")
+            .matching(NSPredicate(format: "label CONTAINS %@", "index.md"))
+            .firstMatch
     }
 
     private func sendFixturePrompt(in app: XCUIApplication) {
