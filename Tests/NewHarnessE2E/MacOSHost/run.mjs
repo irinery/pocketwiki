@@ -101,10 +101,21 @@ try {
     LMSTUDIO_BASE_URL: providerURL,
     MCP_LMSTUDIO_MODEL: 'nh-test-model'
   };
+  const destinations = spawnSync(xcodebuild, ['-showdestinations', '-project', project, '-scheme', 'PocketWikiMacNHTestHost'], {
+    cwd: root,
+    env,
+    encoding: 'utf8',
+    maxBuffer: 8 * 1024 * 1024
+  });
+  output += '--- xcodebuild -showdestinations ---\n' + (destinations.stdout || '') + (destinations.stderr || '');
+  if (destinations.status !== 0) throw new Error('xcodebuild não conseguiu listar os destinos macOS disponíveis');
+  const macDestination = [...(destinations.stdout || '').matchAll(/\{[^{}]*platform:macOS, arch:([^,}]+), id:([^,}]+), name:([^}]+)\}/g)]
+    .find((match) => match[3].trim() === 'My Mac');
+  if (!macDestination) throw new Error('Xcode não anunciou o destino My Mac arm64 para este scheme');
   const args = [
     'test', '-project', project,
     '-scheme', 'PocketWikiMacNHTestHost',
-    '-destination', 'platform=macOS,arch=arm64',
+    '-destination', 'id=' + macDestination[2].trim(),
     '-disableAutomaticPackageResolution',
     '-clonedSourcePackagesDirPath', path.join(tempHome, 'swift-packages'),
     '-resultBundlePath', resultBundle
