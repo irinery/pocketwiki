@@ -176,8 +176,10 @@ final class Legacy00UITests: XCTestCase {
         XCTAssertTrue(baseURL.waitForExistence(timeout: 20), "O provider fixture não apareceu no formulário do MiddlewareAuth")
         XCTAssertTrue(apiKey.waitForExistence(timeout: 10), "O campo de credencial do provider fixture não apareceu")
         baseURL.click()
+        baseURL.typeKey("a", modifierFlags: [.command])
         baseURL.typeText(fixtureProviderURL)
         apiKey.click()
+        apiKey.typeKey("a", modifierFlags: [.command])
         apiKey.typeText("nh-test-provider-key")
         settings.buttons["Fechar"].click()
         let providerStatus = app.descendants(matching: .any).matching(identifier: "legacy.ai.provider.status").firstMatch
