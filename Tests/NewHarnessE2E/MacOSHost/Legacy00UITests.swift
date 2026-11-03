@@ -94,7 +94,7 @@ final class Legacy00UITests: XCTestCase {
             gotAnswer,
             "A resposta não chegou pela bridge real Kernel/MiddlewareAuth. status=\(visibleStatus); enviarHabilitado=\(sendButton.isEnabled); prompt=\(String(describing: app.textViews["legacy.ai.prompt"].value))"
         )
-        XCTAssertTrue(answer.label.contains("nh-test-marker-2026"), "A resposta fixture não trouxe a evidência local esperada")
+        assertFixtureMarkerVisible(in: app, message: "A resposta fixture não trouxe a evidência local esperada")
 
         app.terminate()
         XCTAssertTrue(app.wait(for: .notRunning, timeout: 10), "O app legado não encerrou para o teste de restart")
@@ -110,7 +110,7 @@ final class Legacy00UITests: XCTestCase {
         app.buttons["legacy.tab.localAI"].click()
         let restoredAnswer = app.descendants(matching: .any).matching(identifier: "legacy.ai.message.assistant").firstMatch
         XCTAssertTrue(restoredAnswer.waitForExistence(timeout: 20), "A sessão da conversa não foi restaurada depois do restart")
-        XCTAssertTrue(restoredAnswer.label.contains("nh-test-marker-2026"), "A resposta restaurada perdeu o conteúdo fixture")
+        assertFixtureMarkerVisible(in: app, message: "A resposta restaurada perdeu o conteúdo fixture")
     }
 
     private func selectFixtureWiki(in app: XCUIApplication) {
@@ -211,5 +211,13 @@ final class Legacy00UITests: XCTestCase {
         }
         let error = app.descendants(matching: .any).matching(identifier: "legacy.ai.error").firstMatch
         XCTFail("O provider não terminou de configurar. status=\((status.value as? String) ?? status.label); erro=\((error.value as? String) ?? error.label)")
+    }
+
+    private func assertFixtureMarkerVisible(in app: XCUIApplication, message: String) {
+        let marker = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "nh-test-marker-2026")).firstMatch
+        XCTAssertTrue(
+            marker.waitForExistence(timeout: 10),
+            "\(message). Textos visíveis: \(app.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty })"
+        )
     }
 }
