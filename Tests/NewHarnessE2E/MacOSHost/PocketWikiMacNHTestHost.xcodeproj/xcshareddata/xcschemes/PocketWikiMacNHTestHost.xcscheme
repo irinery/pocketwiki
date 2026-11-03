@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Scheme
+   LastUpgradeVersion = "1430"
+   version = "1.7">
+   <BuildAction
+      parallelizeBuildables = "YES"
+      buildImplicitDependencies = "YES"
+      runPostActionsOnFailure = "NO">
+      <BuildActionEntries>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "898A7B22E143EC73BBF1383E"
+               BuildableName = "PocketWikiMacNHTestHost.app"
+               BlueprintName = "PocketWikiMacNHTestHost"
+               ReferencedContainer = "container:PocketWikiMacNHTestHost.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "B8C3C3B846CDD73ECE9075F0"
+               BuildableName = "PocketWikiMacNHTestHostUITests.xctest"
+               BlueprintName = "PocketWikiMacNHTestHostUITests"
+               ReferencedContainer = "container:PocketWikiMacNHTestHost.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+      </BuildActionEntries>
+   </BuildAction>
+   <TestAction
+      buildConfiguration = "Debug"
+      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
+      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
+      shouldUseLaunchSchemeArgsEnv = "NO"
+      onlyGenerateCoverageForSpecifiedTargets = "NO">
+      <MacroExpansion>
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "898A7B22E143EC73BBF1383E"
+            BuildableName = "PocketWikiMacNHTestHost.app"
+            BlueprintName = "PocketWikiMacNHTestHost"
+            ReferencedContainer = "container:PocketWikiMacNHTestHost.xcodeproj">
+         </BuildableReference>
+      </MacroExpansion>
+      <Testables>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "B8C3C3B846CDD73ECE9075F0"
+               BuildableName = "PocketWikiMacNHTestHostUITests.xctest"
+               BlueprintName = "PocketWikiMacNHTestHostUITests"
+               ReferencedContainer = "container:PocketWikiMacNHTestHost.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+      </Testables>
+      <CommandLineArguments>
+      </CommandLineArguments>
+      <EnvironmentVariables>
+         <EnvironmentVariable
+            key = "NH_TEST_FIXTURE_PROVIDER_URL"
+            value = "$(NH_TEST_FIXTURE_PROVIDER_URL)"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "NH_TEST_KERNEL_URL"
+            value = "$(NH_TEST_KERNEL_URL)"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "NH_TEST_MIDDLEWARE_URL"
+            value = "$(NH_TEST_MIDDLEWARE_URL)"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "NH_TEST_POCKETWIKI_PORT"
+            value = "$(NH_TEST_POCKETWIKI_PORT)"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "POCKETWIKI_MIDDLEWARE_AUTH_BINARY"
+            value = "$(POCKETWIKI_MIDDLEWARE_AUTH_BINARY)"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "POCKETWIKI_NODE_BINARY"
+            value = "$(POCKETWIKI_NODE_BINARY)"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "POCKETWIKI_POCKETKERNEL_BINARY"
+            value = "$(POCKETWIKI_POCKETKERNEL_BINARY)"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+      </EnvironmentVariables>
+   </TestAction>
+   <LaunchAction
+      buildConfiguration = "Debug"
+      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
+      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
+      launchStyle = "0"
+      useCustomWorkingDirectory = "NO"
+      ignoresPersistentStateOnLaunch = "NO"
+      debugDocumentVersioning = "YES"
+      debugServiceExtension = "internal"
+      allowLocationSimulation = "YES">
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "898A7B22E143EC73BBF1383E"
+            BuildableName = "PocketWikiMacNHTestHost.app"
+            BlueprintName = "PocketWikiMacNHTestHost"
+            ReferencedContainer = "container:PocketWikiMacNHTestHost.xcodeproj">
+         </BuildableReference>
+      </BuildableProductRunnable>
+   </LaunchAction>
+   <ProfileAction
+      buildConfiguration = "Release"
+      shouldUseLaunchSchemeArgsEnv = "YES"
+      savedToolIdentifier = ""
+      useCustomWorkingDirectory = "NO"
+      debugDocumentVersioning = "YES">
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "898A7B22E143EC73BBF1383E"
+            BuildableName = "PocketWikiMacNHTestHost.app"
+            BlueprintName = "PocketWikiMacNHTestHost"
+            ReferencedContainer = "container:PocketWikiMacNHTestHost.xcodeproj">
+         </BuildableReference>
+      </BuildableProductRunnable>
+   </ProfileAction>
+   <AnalyzeAction
+      buildConfiguration = "Debug">
+   </AnalyzeAction>
+   <ArchiveAction
+      buildConfiguration = "Release"
+      revealArchiveInOrganizer = "YES">
+   </ArchiveAction>
+</Scheme>

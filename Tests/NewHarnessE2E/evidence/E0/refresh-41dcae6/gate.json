@@ -1,0 +1,52 @@
+{
+  "version": "0.2.0",
+  "stage": "E0",
+  "gate_passed": true,
+  "pocketwiki_sha": "41dcae61aa9620eca508ad1ff0bb3e2fe2739216",
+  "pocketkernel_sha": "03f8f30eb781b4d16a9dca76f7548f9781bbef02",
+  "middlewareauth_sha": "04f44f62126c785f7b28718d2eff837c28cb65df",
+  "schema_sha256": "306915400385fa9bd7c22096fb18228d4d2c02e0f272376f8c2c5ebd7bebae70",
+  "fixture_sha256": "697f4057f4f5aeef584ed42a88a895261845cb6834eb994fb2c8878440c74b0c",
+  "matrix_sha256": "d0a1404c0dfae0bd330a21a0e95941dc76614aa6837dda01713a9635c368c95f",
+  "seed": 20261102,
+  "auth_mode": "host_local",
+  "cases": [
+    {
+      "key": "LEGACY-00/web",
+      "status": "passed",
+      "artifact_paths": [
+        "e0-all/legacy-web-evidence.json",
+        "e0-all/legacy-web-process.log",
+        "e0-all/legacy-web-trace.zip",
+        "e0-all/legacy-web.log",
+        "e0-all/legacy-web.png",
+        "e0-all/e0-all.junit.xml"
+      ]
+    },
+    {
+      "key": "LEGACY-00/macos",
+      "status": "passed",
+      "artifact_paths": [
+        "e0-all/legacy-macos.log",
+        "e0-all/legacy-macos.xcresult.summary.json",
+        "e0-all/e0-all.junit.xml"
+      ]
+    },
+    {
+      "key": "CONTRACT-00/service",
+      "status": "passed",
+      "artifact_paths": [
+        "e0-all/contract-01.log",
+        "e0-all/contract-02.log",
+        "e0-all/contract-03.log",
+        "e0-all/contract-04.log",
+        "e0-all/contract-05.log",
+        "e0-all/contract-06.log",
+        "e0-all/contract-07.log",
+        "e0-all/contract-08.log",
+        "e0-all/contract-09.log",
+        "e0-all/e0-all.junit.xml"
+      ]
+    }
+  ]
+}

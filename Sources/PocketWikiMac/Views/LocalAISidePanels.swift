@@ -159,6 +159,7 @@ struct LocalAISidePanelContent: View {
                     .foregroundStyle(PocketWikiTheme.text)
                     .pocketWikiSurface(cornerRadius: 13, tint: PocketWikiTheme.accent)
                     .disabled(isStreaming || method == nil)
+                    .accessibilityIdentifier("legacy.ai.provider.configure")
                     .frame(minWidth: 0, maxWidth: .infinity)
 
                     Button {
@@ -179,6 +180,7 @@ struct LocalAISidePanelContent: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(PocketWikiTheme.dim)
+                    .accessibilityIdentifier("legacy.ai.settings.open")
                     .pocketWikiSurface(cornerRadius: 13)
                     .help("Configurações avançadas")
                 }
@@ -221,11 +223,14 @@ struct LocalAISidePanelContent: View {
                     }
                 }
 
-                Text(providerStatusText.pocketTrimmed.pocketIfEmpty(method?.statusFallback ?? "Carregando provedores do MiddlewareAuth..."))
+                let statusText = providerStatusText.pocketTrimmed.pocketIfEmpty(method?.statusFallback ?? "Carregando provedores do MiddlewareAuth...")
+                Text(statusText)
                     .font(.caption.monospaced())
                     .foregroundStyle(PocketWikiTheme.muted)
                     .padding(.top, 1)
                     .lineLimit(2)
+                    .accessibilityLabel(statusText)
+                    .accessibilityIdentifier("legacy.ai.provider.status")
             }
         }
     }
@@ -432,6 +437,7 @@ struct LocalAIAdvancedSettingsSheet: View {
                 }
                 .textFieldStyle(.plain)
                 .font(.caption.monospaced())
+                .accessibilityIdentifier("legacy.ai.auth.\(field.id)")
                 .localAIInputChrome()
             }
 

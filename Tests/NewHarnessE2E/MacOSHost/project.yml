@@ -1,0 +1,85 @@
+name: PocketWikiMacNHTestHost
+options:
+  bundleIdPrefix: com.pocketwiki
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+packages:
+  MarkdownUI:
+    url: https://github.com/gonzalezreal/swift-markdown-ui
+    version: 2.4.1
+targets:
+  PocketWikiMacNHTestHost:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/PocketWikiMac
+        excludes:
+          - Resources/**
+    dependencies:
+      - package: MarkdownUI
+      - target: PocketWikiResourceBundle
+        embed: true
+    settings:
+      base:
+        CODE_SIGNING_ALLOWED: NO
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Info.plist
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        PRODUCT_BUNDLE_IDENTIFIER: com.pocketwiki.NHTestHost
+        PRODUCT_NAME: PocketWikiMacNHTestHost
+        SWIFT_VERSION: "6.0"
+  PocketWikiResourceBundle:
+    type: bundle
+    platform: macOS
+    productName: PocketWikiMac_PocketWikiMac
+    sources:
+      - path: Tests/NewHarnessE2E/MacOSHost/PocketWikiResourceBundleMarker.swift
+    resources:
+      - path: Sources/PocketWikiMac/Resources
+        type: folder
+        excludes:
+          - "**/* [0-9].*"
+    settings:
+      base:
+        CODE_SIGNING_ALLOWED: NO
+        GENERATE_INFOPLIST_FILE: YES
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        PRODUCT_BUNDLE_IDENTIFIER: com.pocketwiki.NHTestHost.resources
+        PRODUCT_NAME: PocketWikiMac_PocketWikiMac
+        SWIFT_VERSION: "6.0"
+        WRAPPER_EXTENSION: bundle
+  PocketWikiMacNHTestHostUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - path: Tests/NewHarnessE2E/MacOSHost/Legacy00UITests.swift
+    dependencies:
+      - target: PocketWikiMacNHTestHost
+    settings:
+      base:
+        CODE_SIGNING_ALLOWED: NO
+        GENERATE_INFOPLIST_FILE: YES
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        PRODUCT_BUNDLE_IDENTIFIER: com.pocketwiki.NHTestHostUITests
+        PRODUCT_NAME: PocketWikiMacNHTestHostUITests
+        SWIFT_VERSION: "5.0"
+        TEST_TARGET_NAME: PocketWikiMacNHTestHost
+schemes:
+  PocketWikiMacNHTestHost:
+    build:
+      targets:
+        PocketWikiMacNHTestHost: all
+        PocketWikiMacNHTestHostUITests: [test]
+    test:
+      config: Debug
+      targets:
+        - PocketWikiMacNHTestHostUITests
+      environmentVariables:
+        NH_TEST_FIXTURE_PROVIDER_URL: '$(NH_TEST_FIXTURE_PROVIDER_URL)'
+        NH_TEST_MIDDLEWARE_URL: '$(NH_TEST_MIDDLEWARE_URL)'
+        NH_TEST_KERNEL_URL: '$(NH_TEST_KERNEL_URL)'
+        NH_TEST_POCKETWIKI_PORT: '$(NH_TEST_POCKETWIKI_PORT)'
+        POCKETWIKI_POCKETKERNEL_BINARY: '$(POCKETWIKI_POCKETKERNEL_BINARY)'
+        POCKETWIKI_MIDDLEWARE_AUTH_BINARY: '$(POCKETWIKI_MIDDLEWARE_AUTH_BINARY)'
+        POCKETWIKI_NODE_BINARY: '$(POCKETWIKI_NODE_BINARY)'

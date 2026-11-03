@@ -1,0 +1,970 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		00D5F719F75CE8F611826544 /* ExcalidrawSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D8A23ABE68C45829B2DE400 /* ExcalidrawSummary.swift */; };
+		02489CA077CBEA9EE33E22FD /* LocalAIChatSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8752E7B554C1D0D4A04ADC1B /* LocalAIChatSession.swift */; };
+		02AF5B58ECA9E12C67445838 /* WikiBookmarkStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46A44C62A462AF0D4B6791A2 /* WikiBookmarkStore.swift */; };
+		02D6819386F26418CB37E0CE /* PocketWikiMarkdownTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5007F2211BC5A5E1B43A1E0C /* PocketWikiMarkdownTheme.swift */; };
+		0352E975295B09F022DCDBD7 /* LocalAISidePanels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B991B48A238E3BDC5559EC /* LocalAISidePanels.swift */; };
+		06BE7F93509BF5D0AB746F23 /* WikiGraph.swift in Sources */ = {isa = PBXBuildFile; fileRef = F32EB91589C3F9530650EEBF /* WikiGraph.swift */; };
+		0A874416F268D346115FA9EE /* LocalAIEndpointPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C2B1F566D02FEA6B20576DF /* LocalAIEndpointPolicy.swift */; };
+		0B25D777258577F3E27C2BAC /* PocketWikiResourceBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0395842BDB640E5C29DAB0B /* PocketWikiResourceBundle.swift */; };
+		0C86291A015F5445713DEBF2 /* HarnessOperationRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F58FEB66ED63758D9B7F138 /* HarnessOperationRegistry.swift */; };
+		19AADC0650446B586D1F6B1B /* WikiTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 859DDEF2A3C24240F318DD23 /* WikiTab.swift */; };
+		1A913B1AF971179E1C97FCD2 /* JSONValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA5661CE30F03619A965DA71 /* JSONValue.swift */; };
+		1CF00A4994F93E34B685BABC /* WikiIndexer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7109CC66A0C2D0C4B8E39713 /* WikiIndexer.swift */; };
+		1E60D73556FFDA66E6AF3852 /* ServerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C0CD92A6FB322D63716EC67 /* ServerView.swift */; };
+		20048CE9BB4ED833BB1CC6A6 /* DetailContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB9B7D959D20FDBB41A17648 /* DetailContainerView.swift */; };
+		25520BD12274102A90F5E6F1 /* PocketWikiResourceBundleMarker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9710E08A5C4699754E5512D9 /* PocketWikiResourceBundleMarker.swift */; };
+		2734A289CFC98ACC7663F252 /* PocketWikiIconKind.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A24F8422E6BB6B8F4023A65 /* PocketWikiIconKind.swift */; };
+		27B2D8C4CC6C480D8E46240C /* LocalAIView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 247E1046D02321E20667075F /* LocalAIView.swift */; };
+		2989E9DBC9E1A47E424756B6 /* MiddlewareAuthAddonManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64845EE0835F1876BA91E5D9 /* MiddlewareAuthAddonManager.swift */; };
+		2D6F0D9C75065CD9DA226CDA /* LocalAIContextBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6D181A3648A8287DDFF10EE /* LocalAIContextBuilder.swift */; };
+		30107EFF42ECB614AAD6084F /* HealthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEF6F978C487EB1F368A7EA3 /* HealthView.swift */; };
+		33A3D436C47E096CC3A0598D /* LocalAIChatPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 088E9D75C1DD6F698245F2C3 /* LocalAIChatPanel.swift */; };
+		36782DEA0A7AA246ECB2BC86 /* PocketWikiMCPEvidenceStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59A82203C15909F485F50240 /* PocketWikiMCPEvidenceStatus.swift */; };
+		36FBDBFD6847052FBF79824C /* PocketWikiMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3025D06858FA976A2EF6ABAC /* PocketWikiMacApp.swift */; };
+		37A17D4627EDE029E29CED89 /* ExcalidrawView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACEFC069906C4BFC2823BB5A /* ExcalidrawView.swift */; };
+		38667936641B2C0EB92A17B3 /* LocalAIChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B1BAC50F9637F371499BB43 /* LocalAIChatMessage.swift */; };
+		3C3D6E6257D8BFE117725E0E /* PocketAddonDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6ACD55258D255C5EB8073B50 /* PocketAddonDiagnostics.swift */; };
+		3EF85CC8E05924117D59CD9D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A896B61888BDF6D41C32E131 /* ContentView.swift */; };
+		3F13CA529C9A67C6E30A6682 /* PocketWikiSolutionIngestion.swift in Sources */ = {isa = PBXBuildFile; fileRef = F687A11D0281CBE8E9019B4A /* PocketWikiSolutionIngestion.swift */; };
+		3F2F2C05BE002AE2A19E5818 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCAE1BC91EF13D630C612F11 /* DashboardView.swift */; };
+		3F6FFAB6F19E72E2EE888F45 /* PocketWikiTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22CBBA0B8F361E828C79A055 /* PocketWikiTheme.swift */; };
+		40BE9C7C0052A36E94305476 /* SharedViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 552BEAB8102818C99F4D8511 /* SharedViews.swift */; };
+		45204723B8C07D906D6B7125 /* RemoteWikiClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B3864499626BA72F14070D2 /* RemoteWikiClient.swift */; };
+		4674519A1F7C5102BC23595C /* String+PocketWiki.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CDC26BA98F20AB2B8077D72 /* String+PocketWiki.swift */; };
+		4CD7869F09BF893A856EDBE4 /* LocalAIWorkspaceShell.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFF92866B7FB6F357393C843 /* LocalAIWorkspaceShell.swift */; };
+		4E84EDBE3E731BF2BF13D565 /* PocketWikiHTTPServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A271E733E344F0D54DFD2AE5 /* PocketWikiHTTPServer.swift */; };
+		4FE6DF1B134A309036F4B13F /* ExcalidrawEditorResourceResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FE0BA2F3F0791C914723D4C /* ExcalidrawEditorResourceResolver.swift */; };
+		50CCDD6781A3D9AE55B83CB1 /* PocketWikiMDNSResponder.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF9F2E23BADCC5ED939AC87B /* PocketWikiMDNSResponder.swift */; };
+		514BD26B4C9653D55494D793 /* PocketWikiMac_PocketWikiMac.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 882B09C75C9C4B73009B24BE /* PocketWikiMac_PocketWikiMac.bundle */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		5739E1037403CDE79FCBAABA /* CanonicalUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 404CE76A792EBC82BF6DB90D /* CanonicalUpdater.swift */; };
+		600F99AE7066999A37E5AD31 /* LocalAISidePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 046AA9E108B067C72F3CD885 /* LocalAISidePanel.swift */; };
+		64167DDA1193430685C5AEC5 /* WikiTabStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = D72D851E3147873F6C4B7D0A /* WikiTabStrip.swift */; };
+		6B09BB2A725B0607531A1FA3 /* WikiFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBC2C78C992F640358E6A062 /* WikiFile.swift */; };
+		6CCBFD741C25259663C396B4 /* WikiHealthIssue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 403EF935FE86A686D0443F44 /* WikiHealthIssue.swift */; };
+		6E77B79B9CC56CCF46C0827B /* InspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19832299EE6D325CBCCEBABF /* InspectorView.swift */; };
+		749513ED31999A6DA652AFEE /* CanonicalUpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DC10D42EE216081F17DF4F7 /* CanonicalUpdateService.swift */; };
+		74C0CBB72CE38FED4E9E2416 /* PocketWikiServerConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5DFE30BF14534AE7FF85700 /* PocketWikiServerConfiguration.swift */; };
+		75A6744308252A6F325EE669 /* WikiFolderPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DB876EFB29328F112CADC4A /* WikiFolderPicker.swift */; };
+		765B5A87BF915B28C617BADE /* WikiIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 959A44EFE858CFD318E1D3EC /* WikiIndex.swift */; };
+		77DD0BEFD1FDFB84A4954B89 /* LocalAIContextFilePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBD6DE49AB2731B0A47C427A /* LocalAIContextFilePicker.swift */; };
+		79FE1622573CF035E4F1E3CE /* WikiAppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CD386A6340D861CCD1B3553 /* WikiAppStore.swift */; };
+		7BDB1A1343B15BEECB0D176C /* CanonicalRelease.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99D57716A8D8BBE7235B5FFF /* CanonicalRelease.swift */; };
+		7DA923D37C0593568F42FFDD /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA7639F9CAC9859A280FFE63 /* SidebarView.swift */; };
+		8383DEFE4DB56652B506B45C /* PocketKernelProviderBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 874ACFA04E49723FD0A2D650 /* PocketKernelProviderBridge.swift */; };
+		83D52B31CBF37550B00BF3E7 /* WikiFolderLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E50D16EDA0633FE812FB1DBD /* WikiFolderLoader.swift */; };
+		8CFA5F54C8EAD81D52B9E2F2 /* LocalAIResponseLinkifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80355EEE7E75F65B4A13F42D /* LocalAIResponseLinkifier.swift */; };
+		8DBE76B8B0C1130271024B98 /* WikiLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC9578F9896E384AA33D05A0 /* WikiLink.swift */; };
+		911D804E45AED3FF8C73FEDF /* PocketFormatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FDCAB75FF98D4C421A2AF90 /* PocketFormatters.swift */; };
+		927C0D4B924C5F07820C4B3E /* PocketMemoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58BE390377569645EE9F294D /* PocketMemoryStore.swift */; };
+		92EC491EBB7919D58AA210C1 /* WikiGraphView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2135154E8CE82FA90C8E70C5 /* WikiGraphView.swift */; };
+		9316E37F072B37000A306421 /* PocketKernelClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1013EDDFFE6588F9E803C9F0 /* PocketKernelClient.swift */; };
+		9AD6DD53571BAE6F20351914 /* WikiFilePathResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E020EE19348B55CD1F87DDD /* WikiFilePathResolver.swift */; };
+		9B7795FC71F214AE818CB24F /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = CE214BA1B302977047CDDF89 /* MarkdownUI */; };
+		9BF4BD10D3336546983BA086 /* TimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E32A571096451B103B1B1F5 /* TimelineView.swift */; };
+		9C695DA6CD235AA7069733D0 /* SearchPaletteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CE6A00E052B0C59C1930EF8 /* SearchPaletteView.swift */; };
+		A3BB4DAAC6E3832B327B1048 /* MapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41F31F7E542778BF0DB8431F /* MapView.swift */; };
+		A3D4EC364A7FFE990FB08235 /* PocketMemoryClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CA15790A15498C4CC7B4B87 /* PocketMemoryClient.swift */; };
+		A46C9517206A09850274C1D2 /* PocketWikiDateParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21566D8DE448185D89729BCC /* PocketWikiDateParser.swift */; };
+		AE2B5EEF6B3D697D25CD7C7F /* WikiTextParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2C5CC3DA136F033EAE73472 /* WikiTextParser.swift */; };
+		AEB55B92453847B7D31A1E75 /* ExcalidrawParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 753D4337E328622BA75A749A /* ExcalidrawParser.swift */; };
+		AFE2F2C4FC8CAC68CA80CCA4 /* WikiPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B3D56E63C9B8C025838488D /* WikiPage.swift */; };
+		B229B373FEA7D885630E856D /* WikiAnalytics.swift in Sources */ = {isa = PBXBuildFile; fileRef = D153BD0AE03BC123097A829D /* WikiAnalytics.swift */; };
+		B833FC6CED5E5F16030041AC /* WikiSidebarExplorer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F653433637887AD5A68837B /* WikiSidebarExplorer.swift */; };
+		B980E2A5B8807D8082EEC5D2 /* WikiSourceBookmark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59AB3B67F76235E3251C87BC /* WikiSourceBookmark.swift */; };
+		BBBAC62842832C8C4E2318BE /* ExcalidrawWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15799AF3A55440ED1E3D7F96 /* ExcalidrawWebView.swift */; };
+		CD0F59F5755E16D564776469 /* HarnessV1.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E46703CD08CAF4B1C76716A /* HarnessV1.swift */; };
+		CFB58C6D570F50D0E70F39FC /* PocketWikiIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FE236346ADF206BDE557245 /* PocketWikiIcon.swift */; };
+		D36E7FC80DB2E2A0C61E07A6 /* ExternalMiddlewareTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FD90F64DF887852405F1BFA /* ExternalMiddlewareTokenStore.swift */; };
+		D5C745B8CB19D5B53A461D9E /* EnvironmentFileReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 721C8B24E991636F86EC835C /* EnvironmentFileReader.swift */; };
+		DD82212ADC57D3182F53F1A0 /* PocketKernelAddonManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B051EDEC6BA8129E369C8109 /* PocketKernelAddonManager.swift */; };
+		DE98982539294D14DB3B77E6 /* PocketWikiServerPayloads.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C031F7337AE925EC8F7A938 /* PocketWikiServerPayloads.swift */; };
+		E23B93AC5AC066BCDFBBA886 /* PocketWikiServerTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14D9713F4D54701108E1FAE7 /* PocketWikiServerTypes.swift */; };
+		E548DE261078204DE424F507 /* ReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF36AA65DF968717FF733C2E /* ReaderView.swift */; };
+		E699A63D046B2BB3FCB78AE8 /* LMStudioClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C153B111C050A997B80D2D65 /* LMStudioClient.swift */; };
+		EAE1C037466BBAA2D2C095F2 /* MiddlewareAuthClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D6B8687885F76B4C8B58380 /* MiddlewareAuthClient.swift */; };
+		EB0699EE84E4661B93E34801 /* CanonicalUpdateButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E342F1110E61B4BBE195AF5 /* CanonicalUpdateButton.swift */; };
+		ED1A45EF5AA9CA65B42C4C8D /* PortableConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 931A1DA5A58A715E4343B401 /* PortableConversationStore.swift */; };
+		EFD38D9E881FF1D35C039CE7 /* Legacy00UITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86A4939F8425ABAA2E3AF924 /* Legacy00UITests.swift */; };
+		F4670E226302316FB15276DB /* PocketWikiRouteBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 609318E0AF35266BC58FEE2A /* PocketWikiRouteBuilder.swift */; };
+		F78A3B96EE9B9B3E07765333 /* ExcalidrawEditorSchemeHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A33EB41300E2A2F276007D21 /* ExcalidrawEditorSchemeHandler.swift */; };
+		FB34D7FD05B6C99D7EB94520 /* WikiMarkdownFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5092447AAF9818537CEF82D /* WikiMarkdownFormatter.swift */; };
+		FB48935BD4A8279AF4417171 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DDA3BFE2A43A1852C9B1D57 /* WelcomeView.swift */; };
+		FF427B1A2C039BD01A622673 /* LocalAIRuntimeConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4A17DAA8694281EC3DD4950 /* LocalAIRuntimeConfiguration.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		1EFCA67AEC2F2238E775D6C7 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C970BFEDFE280209F6CAD698 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 898A7B22E143EC73BBF1383E;
+			remoteInfo = PocketWikiMacNHTestHost;
+		};
+		F202051CB2A9DB537FAAF165 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C970BFEDFE280209F6CAD698 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E9720FA9792AF1D8261B1E58;
+			remoteInfo = PocketWikiResourceBundle;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		046AA9E108B067C72F3CD885 /* LocalAISidePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAISidePanel.swift; sourceTree = "<group>"; };
+		088E9D75C1DD6F698245F2C3 /* LocalAIChatPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAIChatPanel.swift; sourceTree = "<group>"; };
+		0E342F1110E61B4BBE195AF5 /* CanonicalUpdateButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanonicalUpdateButton.swift; sourceTree = "<group>"; };
+		1013EDDFFE6588F9E803C9F0 /* PocketKernelClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketKernelClient.swift; sourceTree = "<group>"; };
+		14D9713F4D54701108E1FAE7 /* PocketWikiServerTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketWikiServerTypes.swift; sourceTree = "<group>"; };
+		15799AF3A55440ED1E3D7F96 /* ExcalidrawWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExcalidrawWebView.swift; sourceTree = "<group>"; };
+		19832299EE6D325CBCCEBABF /* InspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorView.swift; sourceTree = "<group>"; };
+		1C2B1F566D02FEA6B20576DF /* LocalAIEndpointPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAIEndpointPolicy.swift; sourceTree = "<group>"; };
+		1DDA3BFE2A43A1852C9B1D57 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
+		2135154E8CE82FA90C8E70C5 /* WikiGraphView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WikiGraphView.swift; sourceTree = "<group>"; };
+		21566D8DE448185D89729BCC /* PocketWikiDateParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketWikiDateParser.swift; sourceTree = "<group>"; };
+		22CBBA0B8F361E828C79A055 /* PocketWikiTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketWikiTheme.swift; sourceTree = "<group>"; };
+		247E1046D02321E20667075F /* LocalAIView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAIView.swift; sourceTree = "<group>"; };
+		2E020EE19348B55CD1F87DDD /* WikiFilePathResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WikiFilePathResolver.swift; sourceTree = "<group>"; };
+		3025D06858FA976A2EF6ABAC /* PocketWikiMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketWikiMacApp.swift; sourceTree = "<group>"; };
+		3092002E9EB7EBA5CA3231AE /* PocketWikiMacNHTestHost.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PocketWikiMacNHTestHost.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		3B3864499626BA72F14070D2 /* RemoteWikiClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteWikiClient.swift; sourceTree = "<group>"; };
+		3D6B8687885F76B4C8B58380 /* MiddlewareAuthClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiddlewareAuthClient.swift; sourceTree = "<group>"; };
+		403EF935FE86A686D0443F44 /* WikiHealthIssue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WikiHealthIssue.swift; sourceTree = "<group>"; };
+		404CE76A792EBC82BF6DB90D /* CanonicalUpdater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanonicalUpdater.swift; sourceTree = "<group>"; };
+		41F31F7E542778BF0DB8431F /* MapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapView.swift; sourceTree = "<group>"; };
+		46A44C62A462AF0D4B6791A2 /* WikiBookmarkStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WikiBookmarkStore.swift; sourceTree = "<group>"; };
+		4CD386A6340D861CCD1B3553 /* WikiAppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WikiAppStore.swift; sourceTree = "<group>"; };
+		4CDC26BA98F20AB2B8077D72 /* String+PocketWiki.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+PocketWiki.swift"; sourceTree = "<group>"; };
+		4E46703CD08CAF4B1C76716A /* HarnessV1.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessV1.swift; sourceTree = "<group>"; };
+		5007F2211BC5A5E1B43A1E0C /* PocketWikiMarkdownTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketWikiMarkdownTheme.swift; sourceTree = "<group>"; };
+		552BEAB8102818C99F4D8511 /* SharedViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedViews.swift; sourceTree = "<group>"; };
+		58BE390377569645EE9F294D /* PocketMemoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketMemoryStore.swift; sourceTree = "<group>"; };
+		59A82203C15909F485F50240 /* PocketWikiMCPEvidenceStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketWikiMCPEvidenceStatus.swift; sourceTree = "<group>"; };
+		59AB3B67F76235E3251C87BC /* WikiSourceBookmark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WikiSourceBookmark.swift; sourceTree = "<group>"; };
+		5CA15790A15498C4CC7B4B87 /* PocketMemoryClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketMemoryClient.swift; sourceTree = "<group>"; };
+		5FD90F64DF887852405F1BFA /* ExternalMiddlewareTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalMiddlewareTokenStore.swift; sourceTree = "<group>"; };
+		609318E0AF35266BC58FEE2A /* PocketWikiRouteBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketWikiRouteBuilder.swift; sourceTree = "<group>"; };
+		64845EE0835F1876BA91E5D9 /* MiddlewareAuthAddonManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiddlewareAuthAddonManager.swift; sourceTree = "<group>"; };
+		6ACD55258D255C5EB8073B50 /* PocketAddonDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketAddonDiagnostics.swift; sourceTree = "<group>"; };
+		6C031F7337AE925EC8F7A938 /* PocketWikiServerPayloads.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketWikiServerPayloads.swift; sourceTree = "<group>"; };
+		6C0CD92A6FB322D63716EC67 /* ServerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerView.swift; sourceTree = "<group>"; };
+		6DB876EFB29328F112CADC4A /* WikiFolderPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WikiFolderPicker.swift; sourceTree = "<group>"; };
+		6FDCAB75FF98D4C421A2AF90 /* PocketFormatters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketFormatters.swift; sourceTree = "<group>"; };
+		7109CC66A0C2D0C4B8E39713 /* WikiIndexer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WikiIndexer.swift; sourceTree = "<group>"; };
+		721C8B24E991636F86EC835C /* EnvironmentFileReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentFileReader.swift; sourceTree = "<group>"; };
+		753D4337E328622BA75A749A /* ExcalidrawParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExcalidrawParser.swift; sourceTree = "<group>"; };
+		7A24F8422E6BB6B8F4023A65 /* PocketWikiIconKind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketWikiIconKind.swift; sourceTree = "<group>"; };
+		7CE6A00E052B0C59C1930EF8 /* SearchPaletteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchPaletteView.swift; sourceTree = "<group>"; };
+		7D8A23ABE68C45829B2DE400 /* ExcalidrawSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExcalidrawSummary.swift; sourceTree = "<group>"; };
+		7DC10D42EE216081F17DF4F7 /* CanonicalUpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanonicalUpdateService.swift; sourceTree = "<group>"; };
+		7E32A571096451B103B1B1F5 /* TimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineView.swift; sourceTree = "<group>"; };
+		80355EEE7E75F65B4A13F42D /* LocalAIResponseLinkifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAIResponseLinkifier.swift; sourceTree = "<group>"; };
+		859DDEF2A3C24240F318DD23 /* WikiTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WikiTab.swift; sourceTree = "<group>"; };
+		86A4939F8425ABAA2E3AF924 /* Legacy00UITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Legacy00UITests.swift; sourceTree = "<group>"; };
+		874ACFA04E49723FD0A2D650 /* PocketKernelProviderBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketKernelProviderBridge.swift; sourceTree = "<group>"; };
+		8752E7B554C1D0D4A04ADC1B /* LocalAIChatSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAIChatSession.swift; sourceTree = "<group>"; };
+		882B09C75C9C4B73009B24BE /* PocketWikiMac_PocketWikiMac.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PocketWikiMac_PocketWikiMac.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
+		8B3D56E63C9B8C025838488D /* WikiPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WikiPage.swift; sourceTree = "<group>"; };
+		8F58FEB66ED63758D9B7F138 /* HarnessOperationRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessOperationRegistry.swift; sourceTree = "<group>"; };
+		8F653433637887AD5A68837B /* WikiSidebarExplorer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WikiSidebarExplorer.swift; sourceTree = "<group>"; };
+		8FE0BA2F3F0791C914723D4C /* ExcalidrawEditorResourceResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExcalidrawEditorResourceResolver.swift; sourceTree = "<group>"; };
+		8FE236346ADF206BDE557245 /* PocketWikiIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketWikiIcon.swift; sourceTree = "<group>"; };
+		931A1DA5A58A715E4343B401 /* PortableConversationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortableConversationStore.swift; sourceTree = "<group>"; };
+		959A44EFE858CFD318E1D3EC /* WikiIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WikiIndex.swift; sourceTree = "<group>"; };
+		9710E08A5C4699754E5512D9 /* PocketWikiResourceBundleMarker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketWikiResourceBundleMarker.swift; sourceTree = "<group>"; };
+		99D57716A8D8BBE7235B5FFF /* CanonicalRelease.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanonicalRelease.swift; sourceTree = "<group>"; };
+		9B1BAC50F9637F371499BB43 /* LocalAIChatMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAIChatMessage.swift; sourceTree = "<group>"; };
+		A271E733E344F0D54DFD2AE5 /* PocketWikiHTTPServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketWikiHTTPServer.swift; sourceTree = "<group>"; };
+		A33EB41300E2A2F276007D21 /* ExcalidrawEditorSchemeHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExcalidrawEditorSchemeHandler.swift; sourceTree = "<group>"; };
+		A896B61888BDF6D41C32E131 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		ACEFC069906C4BFC2823BB5A /* ExcalidrawView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExcalidrawView.swift; sourceTree = "<group>"; };
+		AEF6F978C487EB1F368A7EA3 /* HealthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthView.swift; sourceTree = "<group>"; };
+		B051EDEC6BA8129E369C8109 /* PocketKernelAddonManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketKernelAddonManager.swift; sourceTree = "<group>"; };
+		B5092447AAF9818537CEF82D /* WikiMarkdownFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WikiMarkdownFormatter.swift; sourceTree = "<group>"; };
+		BBC2C78C992F640358E6A062 /* WikiFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WikiFile.swift; sourceTree = "<group>"; };
+		BC9578F9896E384AA33D05A0 /* WikiLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WikiLink.swift; sourceTree = "<group>"; };
+		BCAE1BC91EF13D630C612F11 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		BFF92866B7FB6F357393C843 /* LocalAIWorkspaceShell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAIWorkspaceShell.swift; sourceTree = "<group>"; };
+		C153B111C050A997B80D2D65 /* LMStudioClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LMStudioClient.swift; sourceTree = "<group>"; };
+		C2C5CC3DA136F033EAE73472 /* WikiTextParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WikiTextParser.swift; sourceTree = "<group>"; };
+		C6D181A3648A8287DDFF10EE /* LocalAIContextBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAIContextBuilder.swift; sourceTree = "<group>"; };
+		CA5661CE30F03619A965DA71 /* JSONValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONValue.swift; sourceTree = "<group>"; };
+		CF9F2E23BADCC5ED939AC87B /* PocketWikiMDNSResponder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketWikiMDNSResponder.swift; sourceTree = "<group>"; };
+		D153BD0AE03BC123097A829D /* WikiAnalytics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WikiAnalytics.swift; sourceTree = "<group>"; };
+		D72D851E3147873F6C4B7D0A /* WikiTabStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WikiTabStrip.swift; sourceTree = "<group>"; };
+		DEC26EC16210E43E27B7EEBC /* PocketWikiMacNHTestHostUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PocketWikiMacNHTestHostUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		E50D16EDA0633FE812FB1DBD /* WikiFolderLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WikiFolderLoader.swift; sourceTree = "<group>"; };
+		EB9B7D959D20FDBB41A17648 /* DetailContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailContainerView.swift; sourceTree = "<group>"; };
+		EF36AA65DF968717FF733C2E /* ReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderView.swift; sourceTree = "<group>"; };
+		F0395842BDB640E5C29DAB0B /* PocketWikiResourceBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketWikiResourceBundle.swift; sourceTree = "<group>"; };
+		F32EB91589C3F9530650EEBF /* WikiGraph.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WikiGraph.swift; sourceTree = "<group>"; };
+		F4A17DAA8694281EC3DD4950 /* LocalAIRuntimeConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAIRuntimeConfiguration.swift; sourceTree = "<group>"; };
+		F4B991B48A238E3BDC5559EC /* LocalAISidePanels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAISidePanels.swift; sourceTree = "<group>"; };
+		F5DFE30BF14534AE7FF85700 /* PocketWikiServerConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketWikiServerConfiguration.swift; sourceTree = "<group>"; };
+		F687A11D0281CBE8E9019B4A /* PocketWikiSolutionIngestion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketWikiSolutionIngestion.swift; sourceTree = "<group>"; };
+		FA7639F9CAC9859A280FFE63 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		FBD6DE49AB2731B0A47C427A /* LocalAIContextFilePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAIContextFilePicker.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		3306F7F5CD8B55705360FF2E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9B7795FC71F214AE818CB24F /* MarkdownUI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		00F84D5487B0777AAA658E75 /* MacOSHost */ = {
+			isa = PBXGroup;
+			children = (
+				86A4939F8425ABAA2E3AF924 /* Legacy00UITests.swift */,
+				9710E08A5C4699754E5512D9 /* PocketWikiResourceBundleMarker.swift */,
+			);
+			path = MacOSHost;
+			sourceTree = "<group>";
+		};
+		23A7CE1E11F5387C9108592B /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				0E342F1110E61B4BBE195AF5 /* CanonicalUpdateButton.swift */,
+				A896B61888BDF6D41C32E131 /* ContentView.swift */,
+				BCAE1BC91EF13D630C612F11 /* DashboardView.swift */,
+				EB9B7D959D20FDBB41A17648 /* DetailContainerView.swift */,
+				A33EB41300E2A2F276007D21 /* ExcalidrawEditorSchemeHandler.swift */,
+				ACEFC069906C4BFC2823BB5A /* ExcalidrawView.swift */,
+				15799AF3A55440ED1E3D7F96 /* ExcalidrawWebView.swift */,
+				AEF6F978C487EB1F368A7EA3 /* HealthView.swift */,
+				19832299EE6D325CBCCEBABF /* InspectorView.swift */,
+				088E9D75C1DD6F698245F2C3 /* LocalAIChatPanel.swift */,
+				F4B991B48A238E3BDC5559EC /* LocalAISidePanels.swift */,
+				247E1046D02321E20667075F /* LocalAIView.swift */,
+				BFF92866B7FB6F357393C843 /* LocalAIWorkspaceShell.swift */,
+				41F31F7E542778BF0DB8431F /* MapView.swift */,
+				8FE236346ADF206BDE557245 /* PocketWikiIcon.swift */,
+				EF36AA65DF968717FF733C2E /* ReaderView.swift */,
+				7CE6A00E052B0C59C1930EF8 /* SearchPaletteView.swift */,
+				6C0CD92A6FB322D63716EC67 /* ServerView.swift */,
+				552BEAB8102818C99F4D8511 /* SharedViews.swift */,
+				FA7639F9CAC9859A280FFE63 /* SidebarView.swift */,
+				7E32A571096451B103B1B1F5 /* TimelineView.swift */,
+				1DDA3BFE2A43A1852C9B1D57 /* WelcomeView.swift */,
+				2135154E8CE82FA90C8E70C5 /* WikiGraphView.swift */,
+				D72D851E3147873F6C4B7D0A /* WikiTabStrip.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		248880F7B93B35AC70507199 /* NewHarnessE2E */ = {
+			isa = PBXGroup;
+			children = (
+				00F84D5487B0777AAA658E75 /* MacOSHost */,
+			);
+			path = NewHarnessE2E;
+			sourceTree = "<group>";
+		};
+		3FF866BAE5B68A091476E0FE /* Stores */ = {
+			isa = PBXGroup;
+			children = (
+				404CE76A792EBC82BF6DB90D /* CanonicalUpdater.swift */,
+				8752E7B554C1D0D4A04ADC1B /* LocalAIChatSession.swift */,
+				931A1DA5A58A715E4343B401 /* PortableConversationStore.swift */,
+				4CD386A6340D861CCD1B3553 /* WikiAppStore.swift */,
+				46A44C62A462AF0D4B6791A2 /* WikiBookmarkStore.swift */,
+			);
+			path = Stores;
+			sourceTree = "<group>";
+		};
+		61978FCF258D5853A85B948D /* Support */ = {
+			isa = PBXGroup;
+			children = (
+				721C8B24E991636F86EC835C /* EnvironmentFileReader.swift */,
+				80355EEE7E75F65B4A13F42D /* LocalAIResponseLinkifier.swift */,
+				6FDCAB75FF98D4C421A2AF90 /* PocketFormatters.swift */,
+				21566D8DE448185D89729BCC /* PocketWikiDateParser.swift */,
+				5007F2211BC5A5E1B43A1E0C /* PocketWikiMarkdownTheme.swift */,
+				F0395842BDB640E5C29DAB0B /* PocketWikiResourceBundle.swift */,
+				22CBBA0B8F361E828C79A055 /* PocketWikiTheme.swift */,
+				4CDC26BA98F20AB2B8077D72 /* String+PocketWiki.swift */,
+				B5092447AAF9818537CEF82D /* WikiMarkdownFormatter.swift */,
+			);
+			path = Support;
+			sourceTree = "<group>";
+		};
+		6BFAD97F9BB4171AA7E5342C /* PocketWikiMac */ = {
+			isa = PBXGroup;
+			children = (
+				C7A66ABE4DD1ED322601A427 /* App */,
+				77D9D32CB9214A47EED0CE9F /* Models */,
+				CC3FCF0AD83CF8E6276A11AF /* Services */,
+				3FF866BAE5B68A091476E0FE /* Stores */,
+				61978FCF258D5853A85B948D /* Support */,
+				23A7CE1E11F5387C9108592B /* Views */,
+			);
+			path = PocketWikiMac;
+			sourceTree = "<group>";
+		};
+		77D9D32CB9214A47EED0CE9F /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				99D57716A8D8BBE7235B5FFF /* CanonicalRelease.swift */,
+				7D8A23ABE68C45829B2DE400 /* ExcalidrawSummary.swift */,
+				CA5661CE30F03619A965DA71 /* JSONValue.swift */,
+				9B1BAC50F9637F371499BB43 /* LocalAIChatMessage.swift */,
+				046AA9E108B067C72F3CD885 /* LocalAISidePanel.swift */,
+				6ACD55258D255C5EB8073B50 /* PocketAddonDiagnostics.swift */,
+				7A24F8422E6BB6B8F4023A65 /* PocketWikiIconKind.swift */,
+				59A82203C15909F485F50240 /* PocketWikiMCPEvidenceStatus.swift */,
+				14D9713F4D54701108E1FAE7 /* PocketWikiServerTypes.swift */,
+				BBC2C78C992F640358E6A062 /* WikiFile.swift */,
+				F32EB91589C3F9530650EEBF /* WikiGraph.swift */,
+				403EF935FE86A686D0443F44 /* WikiHealthIssue.swift */,
+				959A44EFE858CFD318E1D3EC /* WikiIndex.swift */,
+				BC9578F9896E384AA33D05A0 /* WikiLink.swift */,
+				8B3D56E63C9B8C025838488D /* WikiPage.swift */,
+				59AB3B67F76235E3251C87BC /* WikiSourceBookmark.swift */,
+				859DDEF2A3C24240F318DD23 /* WikiTab.swift */,
+				8EA8D779D2E56765F1008A2C /* Harness */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		7FD27244A17D23D1C5901FB4 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				6BFAD97F9BB4171AA7E5342C /* PocketWikiMac */,
+			);
+			name = Sources;
+			path = ../../../Sources;
+			sourceTree = "<group>";
+		};
+		8EA8D779D2E56765F1008A2C /* Harness */ = {
+			isa = PBXGroup;
+			children = (
+				8F58FEB66ED63758D9B7F138 /* HarnessOperationRegistry.swift */,
+				4E46703CD08CAF4B1C76716A /* HarnessV1.swift */,
+			);
+			path = Harness;
+			sourceTree = "<group>";
+		};
+		990FD67CB15B0D0BF7A4CFDA = {
+			isa = PBXGroup;
+			children = (
+				7FD27244A17D23D1C5901FB4 /* Sources */,
+				CC295ACA9EDCA1565A77DFCF /* Tests */,
+				F185F6B332E72B7B5DCE4586 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		C7A66ABE4DD1ED322601A427 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				3025D06858FA976A2EF6ABAC /* PocketWikiMacApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		CC295ACA9EDCA1565A77DFCF /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				248880F7B93B35AC70507199 /* NewHarnessE2E */,
+			);
+			name = Tests;
+			path = ../..;
+			sourceTree = "<group>";
+		};
+		CC3FCF0AD83CF8E6276A11AF /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				7DC10D42EE216081F17DF4F7 /* CanonicalUpdateService.swift */,
+				8FE0BA2F3F0791C914723D4C /* ExcalidrawEditorResourceResolver.swift */,
+				753D4337E328622BA75A749A /* ExcalidrawParser.swift */,
+				5FD90F64DF887852405F1BFA /* ExternalMiddlewareTokenStore.swift */,
+				C153B111C050A997B80D2D65 /* LMStudioClient.swift */,
+				C6D181A3648A8287DDFF10EE /* LocalAIContextBuilder.swift */,
+				FBD6DE49AB2731B0A47C427A /* LocalAIContextFilePicker.swift */,
+				1C2B1F566D02FEA6B20576DF /* LocalAIEndpointPolicy.swift */,
+				F4A17DAA8694281EC3DD4950 /* LocalAIRuntimeConfiguration.swift */,
+				64845EE0835F1876BA91E5D9 /* MiddlewareAuthAddonManager.swift */,
+				3D6B8687885F76B4C8B58380 /* MiddlewareAuthClient.swift */,
+				B051EDEC6BA8129E369C8109 /* PocketKernelAddonManager.swift */,
+				1013EDDFFE6588F9E803C9F0 /* PocketKernelClient.swift */,
+				874ACFA04E49723FD0A2D650 /* PocketKernelProviderBridge.swift */,
+				5CA15790A15498C4CC7B4B87 /* PocketMemoryClient.swift */,
+				58BE390377569645EE9F294D /* PocketMemoryStore.swift */,
+				A271E733E344F0D54DFD2AE5 /* PocketWikiHTTPServer.swift */,
+				CF9F2E23BADCC5ED939AC87B /* PocketWikiMDNSResponder.swift */,
+				609318E0AF35266BC58FEE2A /* PocketWikiRouteBuilder.swift */,
+				F5DFE30BF14534AE7FF85700 /* PocketWikiServerConfiguration.swift */,
+				6C031F7337AE925EC8F7A938 /* PocketWikiServerPayloads.swift */,
+				F687A11D0281CBE8E9019B4A /* PocketWikiSolutionIngestion.swift */,
+				3B3864499626BA72F14070D2 /* RemoteWikiClient.swift */,
+				D153BD0AE03BC123097A829D /* WikiAnalytics.swift */,
+				2E020EE19348B55CD1F87DDD /* WikiFilePathResolver.swift */,
+				E50D16EDA0633FE812FB1DBD /* WikiFolderLoader.swift */,
+				6DB876EFB29328F112CADC4A /* WikiFolderPicker.swift */,
+				7109CC66A0C2D0C4B8E39713 /* WikiIndexer.swift */,
+				8F653433637887AD5A68837B /* WikiSidebarExplorer.swift */,
+				C2C5CC3DA136F033EAE73472 /* WikiTextParser.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		F185F6B332E72B7B5DCE4586 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				882B09C75C9C4B73009B24BE /* PocketWikiMac_PocketWikiMac.bundle */,
+				3092002E9EB7EBA5CA3231AE /* PocketWikiMacNHTestHost.app */,
+				DEC26EC16210E43E27B7EEBC /* PocketWikiMacNHTestHostUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		898A7B22E143EC73BBF1383E /* PocketWikiMacNHTestHost */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 582B82127723D7FCFB1B35BC /* Build configuration list for PBXNativeTarget "PocketWikiMacNHTestHost" */;
+			buildPhases = (
+				4A1F8801D31BC71B8E06277D /* Sources */,
+				CC4B0B5D375EA153D3DB2C33 /* Resources */,
+				3306F7F5CD8B55705360FF2E /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CCDB537230A594BA45117143 /* PBXTargetDependency */,
+			);
+			name = PocketWikiMacNHTestHost;
+			packageProductDependencies = (
+				CE214BA1B302977047CDDF89 /* MarkdownUI */,
+			);
+			productName = PocketWikiMacNHTestHost;
+			productReference = 3092002E9EB7EBA5CA3231AE /* PocketWikiMacNHTestHost.app */;
+			productType = "com.apple.product-type.application";
+		};
+		B8C3C3B846CDD73ECE9075F0 /* PocketWikiMacNHTestHostUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8CF7C9DC2DAEBB6122E43DFF /* Build configuration list for PBXNativeTarget "PocketWikiMacNHTestHostUITests" */;
+			buildPhases = (
+				733340CE5CA287822408804D /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AEBC4000DEC7F26086797332 /* PBXTargetDependency */,
+			);
+			name = PocketWikiMacNHTestHostUITests;
+			packageProductDependencies = (
+			);
+			productName = PocketWikiMacNHTestHostUITests;
+			productReference = DEC26EC16210E43E27B7EEBC /* PocketWikiMacNHTestHostUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		E9720FA9792AF1D8261B1E58 /* PocketWikiResourceBundle */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F969052C580813BB9FBE06F3 /* Build configuration list for PBXNativeTarget "PocketWikiResourceBundle" */;
+			buildPhases = (
+				F98A81CB434D5D94E30BBFBA /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PocketWikiResourceBundle;
+			packageProductDependencies = (
+			);
+			productName = PocketWikiResourceBundle;
+			productReference = 882B09C75C9C4B73009B24BE /* PocketWikiMac_PocketWikiMac.bundle */;
+			productType = "com.apple.product-type.bundle";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		C970BFEDFE280209F6CAD698 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					B8C3C3B846CDD73ECE9075F0 = {
+						TestTargetID = 898A7B22E143EC73BBF1383E;
+					};
+				};
+			};
+			buildConfigurationList = C67A47C836701BFE6E8C4A14 /* Build configuration list for PBXProject "PocketWikiMacNHTestHost" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 990FD67CB15B0D0BF7A4CFDA;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				C679D8016AAFE6A9A6249150 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = F185F6B332E72B7B5DCE4586 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				898A7B22E143EC73BBF1383E /* PocketWikiMacNHTestHost */,
+				E9720FA9792AF1D8261B1E58 /* PocketWikiResourceBundle */,
+				B8C3C3B846CDD73ECE9075F0 /* PocketWikiMacNHTestHostUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		CC4B0B5D375EA153D3DB2C33 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				514BD26B4C9653D55494D793 /* PocketWikiMac_PocketWikiMac.bundle in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		4A1F8801D31BC71B8E06277D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7BDB1A1343B15BEECB0D176C /* CanonicalRelease.swift in Sources */,
+				EB0699EE84E4661B93E34801 /* CanonicalUpdateButton.swift in Sources */,
+				749513ED31999A6DA652AFEE /* CanonicalUpdateService.swift in Sources */,
+				5739E1037403CDE79FCBAABA /* CanonicalUpdater.swift in Sources */,
+				3EF85CC8E05924117D59CD9D /* ContentView.swift in Sources */,
+				3F2F2C05BE002AE2A19E5818 /* DashboardView.swift in Sources */,
+				20048CE9BB4ED833BB1CC6A6 /* DetailContainerView.swift in Sources */,
+				D5C745B8CB19D5B53A461D9E /* EnvironmentFileReader.swift in Sources */,
+				4FE6DF1B134A309036F4B13F /* ExcalidrawEditorResourceResolver.swift in Sources */,
+				F78A3B96EE9B9B3E07765333 /* ExcalidrawEditorSchemeHandler.swift in Sources */,
+				AEB55B92453847B7D31A1E75 /* ExcalidrawParser.swift in Sources */,
+				00D5F719F75CE8F611826544 /* ExcalidrawSummary.swift in Sources */,
+				37A17D4627EDE029E29CED89 /* ExcalidrawView.swift in Sources */,
+				BBBAC62842832C8C4E2318BE /* ExcalidrawWebView.swift in Sources */,
+				D36E7FC80DB2E2A0C61E07A6 /* ExternalMiddlewareTokenStore.swift in Sources */,
+				0C86291A015F5445713DEBF2 /* HarnessOperationRegistry.swift in Sources */,
+				CD0F59F5755E16D564776469 /* HarnessV1.swift in Sources */,
+				30107EFF42ECB614AAD6084F /* HealthView.swift in Sources */,
+				6E77B79B9CC56CCF46C0827B /* InspectorView.swift in Sources */,
+				1A913B1AF971179E1C97FCD2 /* JSONValue.swift in Sources */,
+				E699A63D046B2BB3FCB78AE8 /* LMStudioClient.swift in Sources */,
+				38667936641B2C0EB92A17B3 /* LocalAIChatMessage.swift in Sources */,
+				33A3D436C47E096CC3A0598D /* LocalAIChatPanel.swift in Sources */,
+				02489CA077CBEA9EE33E22FD /* LocalAIChatSession.swift in Sources */,
+				2D6F0D9C75065CD9DA226CDA /* LocalAIContextBuilder.swift in Sources */,
+				77DD0BEFD1FDFB84A4954B89 /* LocalAIContextFilePicker.swift in Sources */,
+				0A874416F268D346115FA9EE /* LocalAIEndpointPolicy.swift in Sources */,
+				8CFA5F54C8EAD81D52B9E2F2 /* LocalAIResponseLinkifier.swift in Sources */,
+				FF427B1A2C039BD01A622673 /* LocalAIRuntimeConfiguration.swift in Sources */,
+				600F99AE7066999A37E5AD31 /* LocalAISidePanel.swift in Sources */,
+				0352E975295B09F022DCDBD7 /* LocalAISidePanels.swift in Sources */,
+				27B2D8C4CC6C480D8E46240C /* LocalAIView.swift in Sources */,
+				4CD7869F09BF893A856EDBE4 /* LocalAIWorkspaceShell.swift in Sources */,
+				A3BB4DAAC6E3832B327B1048 /* MapView.swift in Sources */,
+				2989E9DBC9E1A47E424756B6 /* MiddlewareAuthAddonManager.swift in Sources */,
+				EAE1C037466BBAA2D2C095F2 /* MiddlewareAuthClient.swift in Sources */,
+				3C3D6E6257D8BFE117725E0E /* PocketAddonDiagnostics.swift in Sources */,
+				911D804E45AED3FF8C73FEDF /* PocketFormatters.swift in Sources */,
+				DD82212ADC57D3182F53F1A0 /* PocketKernelAddonManager.swift in Sources */,
+				9316E37F072B37000A306421 /* PocketKernelClient.swift in Sources */,
+				8383DEFE4DB56652B506B45C /* PocketKernelProviderBridge.swift in Sources */,
+				A3D4EC364A7FFE990FB08235 /* PocketMemoryClient.swift in Sources */,
+				927C0D4B924C5F07820C4B3E /* PocketMemoryStore.swift in Sources */,
+				A46C9517206A09850274C1D2 /* PocketWikiDateParser.swift in Sources */,
+				4E84EDBE3E731BF2BF13D565 /* PocketWikiHTTPServer.swift in Sources */,
+				CFB58C6D570F50D0E70F39FC /* PocketWikiIcon.swift in Sources */,
+				2734A289CFC98ACC7663F252 /* PocketWikiIconKind.swift in Sources */,
+				36782DEA0A7AA246ECB2BC86 /* PocketWikiMCPEvidenceStatus.swift in Sources */,
+				50CCDD6781A3D9AE55B83CB1 /* PocketWikiMDNSResponder.swift in Sources */,
+				36FBDBFD6847052FBF79824C /* PocketWikiMacApp.swift in Sources */,
+				02D6819386F26418CB37E0CE /* PocketWikiMarkdownTheme.swift in Sources */,
+				0B25D777258577F3E27C2BAC /* PocketWikiResourceBundle.swift in Sources */,
+				F4670E226302316FB15276DB /* PocketWikiRouteBuilder.swift in Sources */,
+				74C0CBB72CE38FED4E9E2416 /* PocketWikiServerConfiguration.swift in Sources */,
+				DE98982539294D14DB3B77E6 /* PocketWikiServerPayloads.swift in Sources */,
+				E23B93AC5AC066BCDFBBA886 /* PocketWikiServerTypes.swift in Sources */,
+				3F13CA529C9A67C6E30A6682 /* PocketWikiSolutionIngestion.swift in Sources */,
+				3F6FFAB6F19E72E2EE888F45 /* PocketWikiTheme.swift in Sources */,
+				ED1A45EF5AA9CA65B42C4C8D /* PortableConversationStore.swift in Sources */,
+				E548DE261078204DE424F507 /* ReaderView.swift in Sources */,
+				45204723B8C07D906D6B7125 /* RemoteWikiClient.swift in Sources */,
+				9C695DA6CD235AA7069733D0 /* SearchPaletteView.swift in Sources */,
+				1E60D73556FFDA66E6AF3852 /* ServerView.swift in Sources */,
+				40BE9C7C0052A36E94305476 /* SharedViews.swift in Sources */,
+				7DA923D37C0593568F42FFDD /* SidebarView.swift in Sources */,
+				4674519A1F7C5102BC23595C /* String+PocketWiki.swift in Sources */,
+				9BF4BD10D3336546983BA086 /* TimelineView.swift in Sources */,
+				FB48935BD4A8279AF4417171 /* WelcomeView.swift in Sources */,
+				B229B373FEA7D885630E856D /* WikiAnalytics.swift in Sources */,
+				79FE1622573CF035E4F1E3CE /* WikiAppStore.swift in Sources */,
+				02AF5B58ECA9E12C67445838 /* WikiBookmarkStore.swift in Sources */,
+				6B09BB2A725B0607531A1FA3 /* WikiFile.swift in Sources */,
+				9AD6DD53571BAE6F20351914 /* WikiFilePathResolver.swift in Sources */,
+				83D52B31CBF37550B00BF3E7 /* WikiFolderLoader.swift in Sources */,
+				75A6744308252A6F325EE669 /* WikiFolderPicker.swift in Sources */,
+				06BE7F93509BF5D0AB746F23 /* WikiGraph.swift in Sources */,
+				92EC491EBB7919D58AA210C1 /* WikiGraphView.swift in Sources */,
+				6CCBFD741C25259663C396B4 /* WikiHealthIssue.swift in Sources */,
+				765B5A87BF915B28C617BADE /* WikiIndex.swift in Sources */,
+				1CF00A4994F93E34B685BABC /* WikiIndexer.swift in Sources */,
+				8DBE76B8B0C1130271024B98 /* WikiLink.swift in Sources */,
+				FB34D7FD05B6C99D7EB94520 /* WikiMarkdownFormatter.swift in Sources */,
+				AFE2F2C4FC8CAC68CA80CCA4 /* WikiPage.swift in Sources */,
+				B833FC6CED5E5F16030041AC /* WikiSidebarExplorer.swift in Sources */,
+				B980E2A5B8807D8082EEC5D2 /* WikiSourceBookmark.swift in Sources */,
+				19AADC0650446B586D1F6B1B /* WikiTab.swift in Sources */,
+				64167DDA1193430685C5AEC5 /* WikiTabStrip.swift in Sources */,
+				AE2B5EEF6B3D697D25CD7C7F /* WikiTextParser.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		733340CE5CA287822408804D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EFD38D9E881FF1D35C039CE7 /* Legacy00UITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F98A81CB434D5D94E30BBFBA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				25520BD12274102A90F5E6F1 /* PocketWikiResourceBundleMarker.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		AEBC4000DEC7F26086797332 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 898A7B22E143EC73BBF1383E /* PocketWikiMacNHTestHost */;
+			targetProxy = 1EFCA67AEC2F2238E775D6C7 /* PBXContainerItemProxy */;
+		};
+		CCDB537230A594BA45117143 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E9720FA9792AF1D8261B1E58 /* PocketWikiResourceBundle */;
+			targetProxy = F202051CB2A9DB537FAAF165 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		2991D17C2C32903ABC43F85A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		4533B6F4CC2BABE812FEEB62 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		55649FEA3C50F09F034F50AC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.pocketwiki.NHTestHost.resources;
+				PRODUCT_NAME = PocketWikiMac_PocketWikiMac;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 6.0;
+				WRAPPER_EXTENSION = bundle;
+			};
+			name = Release;
+		};
+		600FD8820595C8AFC972AA77 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGNING_ALLOWED = NO;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.pocketwiki.NHTestHost;
+				PRODUCT_NAME = PocketWikiMacNHTestHost;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		9F52CC4B6BE57578310AB3A7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.pocketwiki.NHTestHostUITests;
+				PRODUCT_NAME = PocketWikiMacNHTestHostUITests;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = PocketWikiMacNHTestHost;
+			};
+			name = Release;
+		};
+		C09C36A22EE24363236FB7AB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.pocketwiki.NHTestHostUITests;
+				PRODUCT_NAME = PocketWikiMacNHTestHostUITests;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = PocketWikiMacNHTestHost;
+			};
+			name = Debug;
+		};
+		CA9B25D55284CF7EBC68C016 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGNING_ALLOWED = NO;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.pocketwiki.NHTestHost;
+				PRODUCT_NAME = PocketWikiMacNHTestHost;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		D2EFB2E7D30328250BDA016B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.pocketwiki.NHTestHost.resources;
+				PRODUCT_NAME = PocketWikiMac_PocketWikiMac;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 6.0;
+				WRAPPER_EXTENSION = bundle;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		582B82127723D7FCFB1B35BC /* Build configuration list for PBXNativeTarget "PocketWikiMacNHTestHost" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CA9B25D55284CF7EBC68C016 /* Debug */,
+				600FD8820595C8AFC972AA77 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		8CF7C9DC2DAEBB6122E43DFF /* Build configuration list for PBXNativeTarget "PocketWikiMacNHTestHostUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C09C36A22EE24363236FB7AB /* Debug */,
+				9F52CC4B6BE57578310AB3A7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C67A47C836701BFE6E8C4A14 /* Build configuration list for PBXProject "PocketWikiMacNHTestHost" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4533B6F4CC2BABE812FEEB62 /* Debug */,
+				2991D17C2C32903ABC43F85A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F969052C580813BB9FBE06F3 /* Build configuration list for PBXNativeTarget "PocketWikiResourceBundle" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D2EFB2E7D30328250BDA016B /* Debug */,
+				55649FEA3C50F09F034F50AC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		C679D8016AAFE6A9A6249150 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/gonzalezreal/swift-markdown-ui";
+			requirement = {
+				kind = exactVersion;
+				version = 2.4.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		CE214BA1B302977047CDDF89 /* MarkdownUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C679D8016AAFE6A9A6249150 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
+			productName = MarkdownUI;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = C970BFEDFE280209F6CAD698 /* Project object */;
+}

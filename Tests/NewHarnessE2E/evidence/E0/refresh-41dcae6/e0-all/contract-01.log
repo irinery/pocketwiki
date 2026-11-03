@@ -1,0 +1,20 @@
+$ npm ci --include=dev --userconfig=/dev/null --cache /var/folders/y3/p6x0rn5562l5qyxy7x6jqrsc0000gn/T/nh-test-runtime-VxrIsf/npm-cache
+exit=0
+--- stdout ---
+
+added 274 packages, and audited 275 packages in 7s
+
+16 packages are looking for funding
+  run `npm fund` for details
+
+17 vulnerabilities (2 low, 8 moderate, 6 high, 1 critical)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+
+--- stderr ---

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="NH-TEST E0/all" tests="3" failures="0" errors="0" skipped="0">
+  <testcase classname="NH-TEST.web" name="LEGACY-00"></testcase>
+  <testcase classname="NH-TEST.macos" name="LEGACY-00"></testcase>
+  <testcase classname="NH-TEST.service" name="CONTRACT-00"></testcase>
+</testsuite>

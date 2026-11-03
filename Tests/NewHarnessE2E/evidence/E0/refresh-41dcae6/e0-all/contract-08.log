@@ -1,0 +1,914 @@
+$ sh script/ci.sh
+exit=0
+--- stdout ---
+
+> pocketwiki@0.1.0 build:excalidraw
+> npm run clean:generated-duplicates && npm run build:excalidraw-renderer && npm run test:excalidraw-desktop && npm run build:excalidraw-desktop && npm run clean:generated-duplicates
+
+
+> pocketwiki@0.1.0 clean:generated-duplicates
+> find Sources/PocketWikiMac/Resources/ExcalidrawEditor -type f -name '* [0-9].*' -delete 2>/dev/null || true
+
+
+> pocketwiki@0.1.0 build:excalidraw-renderer
+> esbuild src/excalidraw-renderer.js --bundle --format=esm --target=es2020 --minify --outfile=assets/excalidraw-renderer.js && cp node_modules/lz-string/libs/lz-string.min.js assets/lz-string.min.js
+
+
+> pocketwiki@0.1.0 test:excalidraw-desktop
+> node src/excalidraw-desktop/document.test.mjs
+
+ok - excalidraw desktop document middleware
+
+> pocketwiki@0.1.0 build:excalidraw-desktop
+> vite build --config vite.excalidraw.config.mjs
+
+[36mvite v8.0.14 [32mbuilding client environment for production...[36m[39m
+[2Ktransforming...✓ 2275 modules transformed.
+rendering chunks...
+computing gzip size...
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/index.html                                           0.48 kB │ gzip:   0.32 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/Assistant-SemiBold-SCI4bEL9.woff2            20.21 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/Assistant-Regular-DVxZuzxb.woff2             20.23 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/Assistant-Medium-DrcxCXg3.woff2              20.32 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/Assistant-Bold-gm-uSS1B.woff2                20.38 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/index-Bb38NQQe.css                          142.96 kB │ gzip:  22.64 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/pie-LRSECV5Y-Df6XLFlv.js                      0.08 kB │ gzip:   0.09 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/info-J43DQDTF-Bo0AdZH5.js                     0.08 kB │ gzip:   0.10 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/radar-GUYGQ44K-XdpmRVyf.js                    0.08 kB │ gzip:   0.10 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/packet-YPE3B663-DLn-HKsx.js                   0.08 kB │ gzip:   0.10 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/treemap-LRROVOQU-D5Z_mgsS.js                  0.08 kB │ gzip:   0.10 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/wardley-L42UT6IY-hL8-HQod.js                  0.08 kB │ gzip:   0.10 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/gitGraph-WXDBUCRP-C64503iq.js                 0.09 kB │ gzip:   0.10 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/treeView-BLDUP644-iEU7b73o.js                 0.09 kB │ gzip:   0.10 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/percentages-BXMCSKIN-Ck5KOQwZ.js              0.09 kB │ gzip:   0.09 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/architecture-7EHR7CIX-D9cWJOTe.js             0.09 kB │ gzip:   0.10 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/eventmodeling-FCH6USID-ByDaMxGx.js            0.09 kB │ gzip:   0.10 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/image-GAAHSSAO-GMGbf_6Q.js                    0.10 kB │ gzip:   0.09 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/array-BifhSqXX.js                             0.10 kB │ gzip:   0.11 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/channel-DI6AR2Pu.js                           0.11 kB │ gzip:   0.12 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/init-D6jRqBbL.js                              0.14 kB │ gzip:   0.12 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/subset-shared.chunk-D7FcCP7s.js               0.17 kB │ gzip:   0.15 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/chunk-QZHKN3VN-Cs2liKlt.js                    0.18 kB │ gzip:   0.14 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/chunk-4BX2VUAB-DFzzGZuU.js                    0.21 kB │ gzip:   0.15 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/chunk-55IACEB6-B060YN2w.js                    0.22 kB │ gzip:   0.19 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/chunk-WU5MYG2G-Cwkb-Rke.js                    0.27 kB │ gzip:   0.23 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/chunk-FMBD7UC4-Dz85Jle4.js                    0.35 kB │ gzip:   0.25 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/subset-worker.chunk-CdicHJOS.js               0.35 kB │ gzip:   0.27 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/file-open-7c801643-DZtJT5zp.js                0.44 kB │ gzip:   0.31 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/file-open-002ab408-BHUWm0Sh.js                0.52 kB │ gzip:   0.32 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/chunk-2J33WTMH-Bj_Psgwe.js                    0.53 kB │ gzip:   0.38 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/directory-open-01563666-D4xXyWb_.js           0.58 kB │ gzip:   0.36 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/infoDiagram-5YYISTIA-Dx1p5GaG.js              0.61 kB │ gzip:   0.40 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/stateDiagram-v2-BHNVJYJU-BERZHIwh.js          0.67 kB │ gzip:   0.40 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/file-save-3189631c-CO9S4HFW.js                0.69 kB │ gzip:   0.44 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/classDiagram-4FO5ZUOK-Lv4qCg6R.js             0.74 kB │ gzip:   0.43 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/classDiagram-v2-Q7XG4LA2-Lv4qCg6R.js          0.74 kB │ gzip:   0.43 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/file-save-745eba88-Bwdfz6OZ.js                0.85 kB │ gzip:   0.49 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/en-B4ZKOASM-Ct9lOiKe.js                       0.86 kB │ gzip:   0.45 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/line-CWr0vLd_.js                              0.94 kB │ gzip:   0.47 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/chunk-L5ZTLDWV-Z7CelZXW.js                    0.95 kB │ gzip:   0.58 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/ordinal-hYBb2elL.js                           1.17 kB │ gzip:   0.56 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/directory-open-4ed118d0-1i309Asm.js           1.51 kB │ gzip:   0.76 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/chunk-NZK2D7GU-D9iAqpjh.js                    1.83 kB │ gzip:   0.89 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/chunk-ND2GUHAM-BPCrDSn9.js                    1.93 kB │ gzip:   0.86 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/chunk-BSJP7CBP-BmvD1I4T.js                    2.09 kB │ gzip:   0.81 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/dist-C-xtikrd.js                              2.16 kB │ gzip:   0.96 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/path-BWPyau1x.js                              2.31 kB │ gzip:   0.99 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/diagram-5GNKFQAL-JVasAh_P.js                  2.78 kB │ gzip:   1.34 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/roundRect-D01gJrlt.js                         2.87 kB │ gzip:   0.99 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/chunk-LZXEDZCA-bt0pqAv0.js                    3.18 kB │ gzip:   1.41 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/arc-Di8rJOcO.js                               3.47 kB │ gzip:   1.46 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/diagram-LMA3HP47-jyNN9rM1.js                  4.24 kB │ gzip:   1.82 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/defaultLocale-C8Fc0cco.js                     4.64 kB │ gzip:   2.12 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/pieDiagram-4H26LBE5-6LWaNuCD.js               5.22 kB │ gzip:   2.27 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/linear-Dcmj4jeU.js                            5.52 kB │ gzip:   2.25 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/diagram-2AECGRRQ-BEkHPpvU.js                  5.76 kB │ gzip:   2.39 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/si-LK-N5RQ5JYF-Di3CUfTw.js                    8.57 kB │ gzip:   3.35 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/az-AZ-76LH7QW2-Bq7qlPfW.js                    8.60 kB │ gzip:   3.58 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/zh-HK-E62DVLB3-D8jHtz6F.js                    9.07 kB │ gzip:   4.08 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/kk-KZ-P5N5QNE5-BiYRnrDZ.js                   10.11 kB │ gzip:   4.18 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/kaa-6HZHGXH3-BnC8lV-3.js                     10.16 kB │ gzip:   4.17 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/stateDiagram-AJRCARHV-2NaCT-jf.js            10.52 kB │ gzip:   3.68 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/diagram-KO2AKTUF-Fs5rzj8j.js                 10.58 kB │ gzip:   4.08 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/dagre-BM42HDAG-DJrHeMrJ.js                   11.24 kB │ gzip:   4.17 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/lt-LT-XHIRWOB4-CpOgOoqy.js                   12.49 kB │ gzip:   5.35 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/vi-VN-M7AON7JQ-NZMcCU_x.js                   13.85 kB │ gzip:   5.78 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/da-DK-5WZEPLOC-D8akEMu4.js                   14.40 kB │ gzip:   6.06 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/th-TH-HPSO5L25-Cl5SEDj3.js                   15.51 kB │ gzip:   5.17 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/diagram-OG6HWLK6-Dh3eO4ry.js                 15.52 kB │ gzip:   5.41 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/nn-NO-6E72VCQL-BjNfwHPY.js                   15.95 kB │ gzip:   6.71 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/nl-NL-IS3SIHDZ-C5cQ8E2p.js                   16.72 kB │ gzip:   6.91 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/ishikawaDiagram-YF4QCWOH-CFdYP-Eq.js         17.31 kB │ gzip:   6.51 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/my-MM-5M5IBNSE-BimDC0o_.js                   17.56 kB │ gzip:   5.28 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/hu-HU-A5ZG7DT2-HYyIW8ef.js                   18.07 kB │ gzip:   7.57 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/fi-FI-Z5N7JZ37-C4B1SdIH.js                   18.40 kB │ gzip:   7.52 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/kab-KAB-ZGHBKWFO-Ceb79Dzp.js                 18.77 kB │ gzip:   7.54 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/zh-TW-RAJ6MFWO-CjcEqc97.js                   18.98 kB │ gzip:   8.85 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/zh-CN-LNUGB5OW-R4AFoeb_.js                   19.04 kB │ gzip:   8.86 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/lv-LV-5QDEKY6T-B3JlWBhx.js                   19.13 kB │ gzip:   7.78 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/gl-ES-HMX3MZ6V-DAjeFefK.js                   19.38 kB │ gzip:   7.72 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/tr-TR-DEFEU3FU-CTHzhqto.js                   19.50 kB │ gzip:   7.95 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/cs-CZ-2BRQDIVT-DBa0U2mb.js                   19.52 kB │ gzip:   8.39 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/pt-PT-UZXXM6DQ-CS5uMoTi.js                   19.64 kB │ gzip:   7.78 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/id-ID-SAP4L64H-DeYR-4Nf.js                   19.67 kB │ gzip:   7.67 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/ca-ES-6MX7JW3Y-lYZgBOfb.js                   19.78 kB │ gzip:   7.89 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/oc-FR-POXYY2M6-OLPehjlo.js                   19.83 kB │ gzip:   7.78 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/nb-NO-T6EIAALU-Cx6fJGDf.js                   20.09 kB │ gzip:   8.18 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/kanban-definition-UN3LZRKU-BqLPWJzR.js       20.22 kB │ gzip:   7.13 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/he-IL-6SHJWFNN-BYmphk1J.js                   20.31 kB │ gzip:   7.53 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/bg-BG-XCXSNQG7-DXVR0YRH.js                   20.75 kB │ gzip:   7.38 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/pt-BR-5N22H2LF-CZoENslS.js                   21.03 kB │ gzip:   8.20 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/eu-ES-A7QVB2H4-CoC0T7bk.js                   21.19 kB │ gzip:   8.21 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/es-ES-U4NZUMDT-BTOTtZJ8.js                   21.34 kB │ gzip:   8.48 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/sl-SI-NN7IZMDC-C1eotvnN.js                   21.35 kB │ gzip:   8.57 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/sv-SE-XGPEYMSR-DDXV1VRU.js                   21.51 kB │ gzip:   8.55 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/it-IT-JPQ66NNP-BbKsRRTN.js                   22.05 kB │ gzip:   8.57 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/[REDACTED].js                   22.30 kB │ gzip:   9.10 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/pl-PL-T2D74RX3-BK4RgSNT.js                   22.49 kB │ gzip:   9.22 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/sankeyDiagram-5OEKKPKP-DEYTqV9U.js           22.78 kB │ gzip:   8.24 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/ro-RO-JPDTUUEW-BmTq4x9q.js                   23.14 kB │ gzip:   8.93 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/journeyDiagram-JHISSGLW-BVeZYZFA.js          23.16 kB │ gzip:   8.15 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/de-DE-XR44H4JA-DC-zySlY.js                   23.33 kB │ gzip:   8.96 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/ja-JP-DBVTYXUO-Q70Gs7Wf.js                   23.39 kB │ gzip:   8.78 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/mindmap-definition-RKZ34NQL-DP_6Z2bn.js      23.41 kB │ gzip:   7.97 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/fr-FR-RHASNOE6-C-3_GRTE.js                   23.44 kB │ gzip:   8.86 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/bn-BD-2XOGV67Q-Bpb796JF.js                   23.59 kB │ gzip:   6.67 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/ko-KR-MTYHY66A-Ns4BFhcM.js                   23.87 kB │ gzip:   9.17 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/graphlib-B8gBHxth.js                         23.90 kB │ gzip:   8.31 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/fa-IR-HGAKTJCU-3zaH6Xeq.js                   24.23 kB │ gzip:   8.43 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/wardleyDiagram-YWT4CUSO-Dy82jaEO.js          25.18 kB │ gzip:   6.52 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/ar-SA-G6X2FPQ2-DakmfWX6.js                   25.66 kB │ gzip:   9.10 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/erDiagram-TEJ5UH35-DybABitw.js               26.81 kB │ gzip:   9.32 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/rough.esm-CSKSodPl.js                        27.10 kB │ gzip:   8.85 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/pa-IN-N4M65BXN-xO-VkJVn.js                   27.97 kB │ gzip:   7.97 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/gitGraphDiagram-PVQCEYII-CkoTnmc8.js         28.97 kB │ gzip:   8.55 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/ku-TR-6OUDTVRD-CpwP8ZYi.js                   29.32 kB │ gzip:   9.26 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/el-GR-BZB4AONW-BQsgtPCi.js                   29.66 kB │ gzip:   9.59 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/timeline-definition-PNZ67QCA-BYA1Z9pb.js     30.38 kB │ gzip:   9.96 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/ru-RU-B4JR7IUQ-LFeTZp-d.js                   30.73 kB │ gzip:   9.85 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/chunk-5ZQYHXKU-D_Ry1ath.js                   30.86 kB │ gzip:   8.50 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/requirementDiagram-4Y6WPE33-BIsdMspH.js      30.96 kB │ gzip:   9.75 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/uk-UA-QMV73CPH-D-U4ovUz.js                   31.63 kB │ gzip:  10.09 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/pica-yN4n5uFc.js                             32.08 kB │ gzip:  12.52 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/hi-IN-IWLTKZ5I-gRzOS7qY.js                   32.34 kB │ gzip:   9.07 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/chunk-KSCS5N6A-DY6DfRJD.js                   33.33 kB │ gzip:   7.06 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/quadrantDiagram-W4KKPZXB-CaMz5mct.js         33.51 kB │ gzip:   9.73 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/ta-IN-2NMHFXQM-BvU07R9g.js                   35.26 kB │ gzip:   8.49 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/km-KH-HSX4SM5Z-CmmvK2BB.js                   36.64 kB │ gzip:   9.20 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/chunk-AQP2D5EJ-hYww-uAx.js                   36.71 kB │ gzip:  11.86 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/dagre-Bx709z4p.js                            36.86 kB │ gzip:  13.23 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/xychartDiagram-2RQKCTM6-CuyU_IaH.js          40.04 kB │ gzip:  11.19 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/vennDiagram-CIIHVFJN-Dl7g2qsS.js             40.62 kB │ gzip:  14.89 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/chunk-XPW4576I-D_NwzZsD.js                   41.85 kB │ gzip:  14.22 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/mr-IN-CRQNXWMA-ChMqEYlZ.js                   42.24 kB │ gzip:  10.67 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/image-blob-reduce.esm-NzmDxm1v.js            45.46 kB │ gzip:  16.31 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/src-Dzafnxzm.js                              45.83 kB │ gzip:  16.05 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/chunk-727SXJPM-BIb-lazF.js                   48.57 kB │ gzip:  15.69 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/chunk-O5CBEL6O-2lyxZGtJ.js                   52.52 kB │ gzip:  17.14 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/flowDiagram-I6XJVG4X-D-ETj3Kg.js             60.23 kB │ gzip:  19.52 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/c4Diagram-AAUBKEIU-BDA-FPqj.js               69.16 kB │ gzip:  19.32 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/ganttDiagram-6RSMTGT7-D7LHBxXU.js            69.27 kB │ gzip:  22.71 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/blockDiagram-GPEHLZMM-Dp0L95kI.js            72.67 kB │ gzip:  20.67 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/cose-bilkent-S5V4N54A-BLubrioc.js            81.40 kB │ gzip:  21.56 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/dist-DSQRq6-Q.js                             85.21 kB │ gzip:  28.29 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/chunk-3OPIFGDE-DJN4yReE.js                   98.84 kB │ gzip:  24.20 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/sequenceDiagram-3UESZ5HK-L0UZJX0t.js        115.73 kB │ gzip:  30.54 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/architectureDiagram-3BPJPVTR-CKUU26_a.js    146.93 kB │ gzip:  40.28 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/chunk-CSCIHK7Q-BpraZ21M.js                  226.14 kB │ gzip:  35.70 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/katex-Vhh-h91d.js                           258.88 kB │ gzip:  77.46 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/cytoscape.esm-FqbQrHcz.js                   434.29 kB │ gzip: 137.58 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/mermaid-parser.core-DQWCWhDh.js             603.61 kB │ gzip: 140.25 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/index-CkaiAd06.js                         1,280.49 kB │ gzip: 410.14 kB
+Sources/PocketWikiMac/Resources/ExcalidrawEditor/assets/chunk-EIO257PC-SVn7mmto.js                1,821.03 kB │ gzip: 744.21 kB
+
+[32m✓ built in 1.23s[39m
+
+> pocketwiki@0.1.0 clean:generated-duplicates
+> find Sources/PocketWikiMac/Resources/ExcalidrawEditor -type f -name '* [0-9].*' -delete 2>/dev/null || true
+
+
+> pocketwiki@0.1.0 build:graph-view
+> mkdir -p Sources/PocketWikiMac/Resources/GraphView && cp src/graph-view/index.html Sources/PocketWikiMac/Resources/GraphView/index.html && esbuild src/graph-view/graph-core.ts --bundle --format=esm --target=es2020 --outfile=Sources/PocketWikiMac/Resources/GraphView/graph-core.js && esbuild src/graph-view/layout-worker.ts --bundle --format=esm --target=es2020 --outfile=Sources/PocketWikiMac/Resources/GraphView/layout-worker.js && esbuild src/graph-view/main.ts --bundle --format=iife --target=es2020 --outfile=Sources/PocketWikiMac/Resources/GraphView/graph.js
+
+
+> pocketwiki@0.1.0 test
+> npm run test:solutions && npm run test:mcp && npm run test:graph-view && npm run test:excalidraw-desktop && npm run test:memory
+
+
+> pocketwiki@0.1.0 test:solutions
+> node --test src/solutions/*.test.mjs
+
+TAP version 13
+# Subtest: PW-SOL-01 criação válida retorna 201, indexa Markdown e não persiste token
+ok 1 - PW-SOL-01 criação válida retorna 201, indexa Markdown e não persiste token
+  ---
+  duration_ms: 12.318541
+  ...
+# Subtest: PW-SOL-02 mesma chave e payload retorna o resultado gravado sem segunda escrita
+ok 2 - PW-SOL-02 mesma chave e payload retorna o resultado gravado sem segunda escrita
+  ---
+  duration_ms: 7.272542
+  ...
+# Subtest: PW-SOL-03 mesma chave com payload diferente retorna 409
+ok 3 - PW-SOL-03 mesma chave com payload diferente retorna 409
+  ---
+  duration_ms: 3.941375
+  ...
+# Subtest: PW-SOL-04 solução existente sem If-Match retorna 409 e mantém bytes
+ok 4 - PW-SOL-04 solução existente sem If-Match retorna 409 e mantém bytes
+  ---
+  duration_ms: 4.998666
+  ...
+# Subtest: PW-SOL-05 update com revisão correta retorna 200 e nova revisão
+ok 5 - PW-SOL-05 update com revisão correta retorna 200 e nova revisão
+  ---
+  duration_ms: 7.465459
+  ...
+# Subtest: PW-SOL-06 update com revisão antiga retorna 412 e mantém bytes
+ok 6 - PW-SOL-06 update com revisão antiga retorna 412 e mantém bytes
+  ---
+  duration_ms: 6.534541
+  ...
+# Subtest: PW-SOL-07 edição manual altera a revisão remota observada
+ok 7 - PW-SOL-07 edição manual altera a revisão remota observada
+  ---
+  duration_ms: 4.324958
+  ...
+# Subtest: PW-SOL-08 bearer ausente ou inválido retorna 401 sem detalhar divergência
+ok 8 - PW-SOL-08 bearer ausente ou inválido retorna 401 sem detalhar divergência
+  ---
+  duration_ms: 1.682292
+  ...
+# Subtest: PW-SOL-09 base read-only retorna 403
+ok 9 - PW-SOL-09 base read-only retorna 403
+  ---
+  duration_ms: 1.024958
+  ...
+# Subtest: PW-SOL-10 traversal e symlink não escrevem fora da raiz
+ok 10 - PW-SOL-10 traversal e symlink não escrevem fora da raiz
+  ---
+  duration_ms: 1.265084
+  ...
+# Subtest: PW-SOL-11 falha de indexação faz rollback e não confirma idempotência
+ok 11 - PW-SOL-11 falha de indexação faz rollback e não confirma idempotência
+  ---
+  duration_ms: 2.727958
+  ...
+# Subtest: PW-SOL-12 payload acima do limite retorna 413 antes de acumular o corpo
+ok 12 - PW-SOL-12 payload acima do limite retorna 413 antes de acumular o corpo
+  ---
+  duration_ms: 1.675583
+  ...
+# Subtest: PW-SOL-13 response e logs não contêm token nem Markdown integral
+ok 13 - PW-SOL-13 response e logs não contêm token nem Markdown integral
+  ---
+  duration_ms: 0.818791
+  ...
+# Subtest: PW-SOL-14 idempotência continua funcionando a partir do store em disco
+ok 14 - PW-SOL-14 idempotência continua funcionando a partir do store em disco
+  ---
+  duration_ms: 3.670083
+  ...
+# Subtest: PW-SOL-15 output_hash divergente retorna erro específico 422
+ok 15 - PW-SOL-15 output_hash divergente retorna erro específico 422
+  ---
+  duration_ms: 0.514292
+  ...
+# Subtest: PW-SOL-16 servidor sem token falha fechado com 503
+ok 16 - PW-SOL-16 servidor sem token falha fechado com 503
+  ---
+  duration_ms: 0.549625
+  ...
+# Subtest: PW-SOL-17 Content-Type diferente de JSON retorna 415
+ok 17 - PW-SOL-17 Content-Type diferente de JSON retorna 415
+  ---
+  duration_ms: 0.41375
+  ...
+# Subtest: PW-SOL-18 JSON fora do schema retorna 422 sem ecoar conteúdo
+ok 18 - PW-SOL-18 JSON fora do schema retorna 422 sem ecoar conteúdo
+  ---
+  duration_ms: 0.633625
+  ...
+1..18
+# tests 18
+# suites 0
+# pass 18
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 137.018709
+
+> pocketwiki@0.1.0 test:mcp
+> node --test src/mcp/*.test.mjs
+
+TAP version 13
+# Subtest: PW-MCP-01 initialize responde handshake valido
+ok 1 - PW-MCP-01 initialize responde handshake valido
+  ---
+  duration_ms: 39.514958
+  ...
+# Subtest: PW-MCP-02 tools/list contem wiki.search e wiki.get_document
+ok 2 - PW-MCP-02 tools/list contem wiki.search e wiki.get_document
+  ---
+  duration_ms: 0.523209
+  ...
+# Subtest: PW-MCP-03 wiki.search omite deprecated por padrao
+ok 3 - PW-MCP-03 wiki.search omite deprecated por padrao
+  ---
+  duration_ms: 13.292584
+  ...
+# Subtest: PW-MCP-04 wiki.search respeita limit
+ok 4 - PW-MCP-04 wiki.search respeita limit
+  ---
+  duration_ms: 2.363792
+  ...
+# Subtest: PW-MCP-05 wiki.get_document redige segredo e garante evidence_only
+ok 5 - PW-MCP-05 wiki.get_document redige segredo e garante evidence_only
+  ---
+  duration_ms: 2.470375
+  ...
+# Subtest: PW-MCP-06 prompt injection fica como texto e nao vira acao
+ok 6 - PW-MCP-06 prompt injection fica como texto e nao vira acao
+  ---
+  duration_ms: 1.456583
+  ...
+# Subtest: PW-MCP-07 document_id inexistente retorna erro tipado
+ok 7 - PW-MCP-07 document_id inexistente retorna erro tipado
+  ---
+  duration_ms: 1.655125
+  ...
+# Subtest: PW-MCP-08 fluxo PocketKernel recebe evidencia validated/high
+ok 8 - PW-MCP-08 fluxo PocketKernel recebe evidencia validated/high
+  ---
+  duration_ms: 14.922583
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 161.98775
+
+> pocketwiki@0.1.0 test:graph-view
+> node --test src/graph-view/*.test.mjs
+
+TAP version 13
+# Subtest: global filter keeps all nodes and edges
+ok 1 - global filter keeps all nodes and edges
+  ---
+  duration_ms: 0.593542
+  ...
+# Subtest: local filter uses bidirectional BFS depth
+ok 2 - local filter uses bidirectional BFS depth
+  ---
+  duration_ms: 0.555583
+  ...
+# Subtest: local filter falls back to global without selection and handles cycles
+ok 3 - local filter falls back to global without selection and handles cycles
+  ---
+  duration_ms: 0.197833
+  ...
+# Subtest: search is case-insensitive and truncates long terms
+ok 4 - search is case-insensitive and truncates long terms
+  ---
+  duration_ms: 0.107792
+  ...
+# Subtest: world/screen transforms roundtrip
+ok 5 - world/screen transforms roundtrip
+  ---
+  duration_ms: 0.139584
+  ...
+# Subtest: hit test prioritizes higher incoming degree
+ok 6 - hit test prioritizes higher incoming degree
+  ---
+  duration_ms: 0.125833
+  ...
+# Subtest: initial layout is deterministic and finite
+ok 7 - initial layout is deterministic and finite
+  ---
+  duration_ms: 0.183291
+  ...
+# Subtest: web cockpit graph script remains parseable
+ok 8 - web cockpit graph script remains parseable
+  ---
+  duration_ms: 4.015667
+  ...
+# Subtest: web cockpit uses the live map controls and worker renderer
+ok 9 - web cockpit uses the live map controls and worker renderer
+  ---
+  duration_ms: 0.329
+  ...
+# Subtest: web cockpit declares pinned map and local drag physics
+ok 10 - web cockpit declares pinned map and local drag physics
+  ---
+  duration_ms: 0.150833
+  ...
+# Subtest: graph renderers expose interactive drag APIs
+ok 11 - graph renderers expose interactive drag APIs
+  ---
+  duration_ms: 0.0955
+  ...
+# Subtest: graph renderers do not use global edge springs or external halos
+ok 12 - graph renderers do not use global edge springs or external halos
+  ---
+  duration_ms: 0.157916
+  ...
+# Subtest: graph palette is grayscale-only in both renderers
+ok 13 - graph palette is grayscale-only in both renderers
+  ---
+  duration_ms: 0.217917
+  ...
+1..13
+# tests 13
+# suites 0
+# pass 13
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 52.846083
+
+> pocketwiki@0.1.0 test:excalidraw-desktop
+> node src/excalidraw-desktop/document.test.mjs
+
+ok - excalidraw desktop document middleware
+
+> pocketwiki@0.1.0 test:memory
+> node --test src/memory/*.test.mjs
+
+TAP version 13
+# Subtest: API interna protege, persiste, consulta e reabre a mesma memoria
+ok 1 - API interna protege, persiste, consulta e reabre a mesma memoria
+  ---
+  duration_ms: 172.186666
+  ...
+# Subtest: captura registros portaveis, persiste e ignora reenvio do mesmo evento
+ok 2 - captura registros portaveis, persiste e ignora reenvio do mesmo evento
+  ---
+  duration_ms: 9.977625
+  ...
+# Subtest: nota MEMORY.md e conversa local entram no contexto sem provider
+ok 3 - nota MEMORY.md e conversa local entram no contexto sem provider
+  ---
+  duration_ms: 6.215
+  ...
+# Subtest: lotes paralelos preservam todos os eventos e entradas invalidas sao rejeitadas
+ok 4 - lotes paralelos preservam todos os eventos e entradas invalidas sao rejeitadas
+  ---
+  duration_ms: 17.489667
+  ...
+# Subtest: restaura conversa e mantém o histórico ao trocar provider/modelo
+ok 5 - restaura conversa e mantém o histórico ao trocar provider/modelo
+  ---
+  duration_ms: 6.774125
+  ...
+# Subtest: importa sessão JSON do app Mac, retoma arquivo e continua com outro modelo
+ok 6 - importa sessão JSON do app Mac, retoma arquivo e continua com outro modelo
+  ---
+  duration_ms: 1.363958
+  ...
+# Subtest: mantém eventos pendentes e reenvia após recarregar
+ok 7 - mantém eventos pendentes e reenvia após recarregar
+  ---
+  duration_ms: 3.26675
+  ...
+# Subtest: preserva o registro completo além do limite de renderização
+ok 8 - preserva o registro completo além do limite de renderização
+  ---
+  duration_ms: 2.781916
+  ...
+# Subtest: limita o evento enviado sem cortar a transcricao local
+ok 9 - limita o evento enviado sem cortar a transcricao local
+  ---
+  duration_ms: 0.904208
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 215.98375
+
+> pocketwiki@0.1.0 test:memory:swift
+> sh scripts/test-pocket-memory-swift.sh
+
+PocketMemoryStore Swift: OK
+resolve_release_version: ok
+Building for debugging...
+[0/50] Write swift-version--79AA4F9932D1E87A.txt
+[1/50] Compiling cmark-gfm-extensions tasklist.c
+[2/50] Compiling cmark-gfm utf8.c
+[3/50] Compiling cmark-gfm-extensions strikethrough.c
+[4/50] Compiling cmark-gfm-extensions table.c
+[5/50] Compiling cmark-gfm-extensions ext_scanners.c
+[6/50] Compiling cmark-gfm-extensions tagfilter.c
+[7/50] Compiling cmark-gfm xml.c
+[8/50] Compiling cmark-gfm-extensions core-extensions.c
+[9/50] Compiling cmark-gfm syntax_extension.c
+[10/50] Compiling cmark-gfm render.c
+[11/50] Compiling cmark-gfm registry.c
+[12/50] Compiling cmark-gfm references.c
+[13/50] Compiling cmark-gfm plugin.c
+[14/50] Compiling cmark-gfm scanners.c
+[15/50] Compiling cmark-gfm plaintext.c
+[16/50] Compiling cmark-gfm map.c
+[17/50] Compiling cmark-gfm node.c
+[18/50] Compiling cmark-gfm man.c
+[19/50] Compiling cmark-gfm linked_list.c
+[20/50] Compiling cmark-gfm iterator.c
+[21/50] Compiling cmark-gfm latex.c
+[22/50] Compiling cmark-gfm html.c
+[23/50] Compiling cmark-gfm inlines.c
+[24/50] Compiling cmark-gfm houdini_html_e.c
+[25/50] Compiling cmark-gfm houdini_html_u.c
+[26/50] Compiling cmark-gfm houdini_href_e.c
+[27/50] Compiling cmark-gfm footnotes.c
+[28/50] Compiling cmark-gfm cmark_ctype.c
+[29/50] Compiling cmark-gfm commonmark.c
+[30/50] Compiling cmark-gfm-extensions autolink.c
+[31/50] Compiling cmark-gfm cmark.c
+[32/50] Compiling cmark-gfm buffer.c
+[33/50] Copying wiki-review.md
+[34/50] Copying pocketwiki-logo.png
+[35/50] Copying layout-worker.js
+[35/50] Copying index.html
+[35/50] Copying graph.js
+[38/50] Copying graph-core.js
+[38/50] Copying PocketWikiMac.icns
+[40/50] Compiling cmark-gfm arena.c
+[40/50] Write sources
+[40/50] Write PocketWikiMac-entitlement.plist
+[41/50] Write sources
+[45/50] Copying ExcalidrawEditor
+[46/50] Compiling cmark-gfm blocks.c
+[48/58] Emitting module NetworkImage
+[49/61] Compiling NetworkImage TaskModifier.swift
+[50/61] Compiling NetworkImage URLSession+NetworkImage.swift
+[51/61] Compiling NetworkImage View+NetworkImageLoader.swift
+[52/61] Compiling NetworkImage NetworkImageLoader.swift
+[53/61] Compiling NetworkImage NetworkImageModel.swift
+[54/61] Compiling NetworkImage NetworkImageState.swift
+[55/61] Compiling NetworkImage Deprecations.swift
+[56/61] Compiling NetworkImage ImageSource.swift
+[57/61] Compiling NetworkImage NetworkImage.swift
+[58/61] Compiling NetworkImage NetworkImageCache.swift
+[59/104] Emitting module MarkdownUI
+[60/125] Compiling MarkdownUI Blockquote.swift
+[61/125] Compiling MarkdownUI BulletedList.swift
+[62/125] Compiling MarkdownUI CodeBlock.swift
+[63/125] Compiling MarkdownUI Heading.swift
+[64/125] Compiling MarkdownUI ListContentBuilder.swift
+[65/125] Compiling MarkdownUI ListItem.swift
+[66/125] Compiling MarkdownUI MarkdownContent.swift
+[67/125] Compiling MarkdownUI MarkdownContentBuilder.swift
+[68/125] Compiling MarkdownUI NumberedList.swift
+[69/125] Compiling MarkdownUI Paragraph.swift
+[70/125] Compiling MarkdownUI TaskList.swift
+[71/125] Compiling MarkdownUI TaskListContentBuilder.swift
+[72/125] Compiling MarkdownUI TaskListItem.swift
+[73/125] Compiling MarkdownUI TextTable.swift
+[74/125] Compiling MarkdownUI TextTableColumn.swift
+[75/125] Compiling MarkdownUI TextTableColumnAlignment.swift
+[76/125] Compiling MarkdownUI TextTableColumnBuilder.swift
+[77/125] Compiling MarkdownUI TextTableRow.swift
+[78/125] Compiling MarkdownUI TextTableRowBuilder.swift
+[79/125] Compiling MarkdownUI ThematicBreak.swift
+[80/125] Compiling MarkdownUI Code.swift
+[81/146] Compiling MarkdownUI Emphasis.swift
+[82/146] Compiling MarkdownUI InlineContent.swift
+[83/146] Compiling MarkdownUI InlineContentBuilder.swift
+[84/146] Compiling MarkdownUI InlineImage.swift
+[85/146] Compiling MarkdownUI InlineLink.swift
+[86/146] Compiling MarkdownUI LineBreak.swift
+[87/146] Compiling MarkdownUI SoftBreak.swift
+[88/146] Compiling MarkdownUI Strikethrough.swift
+[89/146] Compiling MarkdownUI Strong.swift
+[90/146] Compiling MarkdownUI AssetImageProvider.swift
+[91/146] Compiling MarkdownUI AssetInlineImageProvider.swift
+[92/146] Compiling MarkdownUI CodeSyntaxHighlighter.swift
+[93/146] Compiling MarkdownUI DefaultImageProvider.swift
+[94/146] Compiling MarkdownUI DefaultInlineImageProvider.swift
+[95/146] Compiling MarkdownUI ImageProvider.swift
+[96/146] Compiling MarkdownUI InlineImageProvider.swift
+[97/146] Compiling MarkdownUI BlockNode+Rewrite.swift
+[98/146] Compiling MarkdownUI BlockNode.swift
+[99/146] Compiling MarkdownUI HTMLTag.swift
+[100/146] Compiling MarkdownUI InlineNode+Collect.swift
+[101/146] Compiling MarkdownUI InlineNode+Rewrite.swift
+[102/167] Compiling MarkdownUI InlineNode.swift
+[103/167] Compiling MarkdownUI MarkdownParser.swift
+[104/167] Compiling MarkdownUI AttributedStringInlineRenderer.swift
+[105/167] Compiling MarkdownUI InlineTextStyles.swift
+[106/167] Compiling MarkdownUI TextInlineRenderer.swift
+[107/167] Compiling MarkdownUI BlockConfiguration.swift
+[108/167] Compiling MarkdownUI BlockStyle.swift
+[109/167] Compiling MarkdownUI CodeBlockConfiguration.swift
+[110/167] Compiling MarkdownUI ListBullet.swift
+[111/167] Compiling MarkdownUI ListMarkerConfiguration.swift
+[112/167] Compiling MarkdownUI TableBackgroundStyle.swift
+[113/167] Compiling MarkdownUI TableBorderStyle.swift
+[114/167] Compiling MarkdownUI TableCellConfiguration.swift
+[115/167] Compiling MarkdownUI TaskListMarkerConfiguration.swift
+[116/167] Compiling MarkdownUI BackgroundColor.swift
+[117/167] Compiling MarkdownUI EmptyTextStyle.swift
+[118/167] Compiling MarkdownUI Font+FontProperties.swift
+[119/167] Compiling MarkdownUI FontCapsVariant.swift
+[120/167] Compiling MarkdownUI FontDigitVariant.swift
+[121/167] Compiling MarkdownUI FontFamily.swift
+[122/167] Compiling MarkdownUI FontFamilyVariant.swift
+[123/188] Compiling MarkdownUI Indexed.swift
+[124/188] Compiling MarkdownUI InlineNode+PlainText.swift
+[125/188] Compiling MarkdownUI InlineNode+RawImageData.swift
+[126/188] Compiling MarkdownUI Int+Roman.swift
+[127/188] Compiling MarkdownUI RelativeSize.swift
+[128/188] Compiling MarkdownUI ResizeToFit.swift
+[129/188] Compiling MarkdownUI String+KebabCase.swift
+[130/188] Compiling MarkdownUI BlockMargin.swift
+[131/188] Compiling MarkdownUI BlockNode+View.swift
+[132/188] Compiling MarkdownUI BlockSequence.swift
+[133/188] Compiling MarkdownUI BlockquoteView.swift
+[134/188] Compiling MarkdownUI BulletedListView.swift
+[135/188] Compiling MarkdownUI CodeBlockView.swift
+[136/188] Compiling MarkdownUI ColumnWidthPreference.swift
+[137/188] Compiling MarkdownUI HeadingView.swift
+[138/188] Compiling MarkdownUI ImageFlow.swift
+[139/188] Compiling MarkdownUI ListItemSequence.swift
+[140/188] Compiling MarkdownUI ListItemView.swift
+[141/188] Compiling MarkdownUI NumberedListView.swift
+[142/188] Compiling MarkdownUI ParagraphView.swift
+[143/188] Compiling MarkdownUI TableBackgroundView.swift
+[144/188] Compiling MarkdownUI FontProperties.swift
+[145/188] Compiling MarkdownUI FontPropertiesAttribute.swift
+[146/188] Compiling MarkdownUI FontSize.swift
+[147/188] Compiling MarkdownUI FontStyle.swift
+[148/188] Compiling MarkdownUI FontWeight.swift
+[149/188] Compiling MarkdownUI FontWidth.swift
+[150/188] Compiling MarkdownUI ForegroundColor.swift
+[151/188] Compiling MarkdownUI StrikethroughStyle.swift
+[152/188] Compiling MarkdownUI TextKerning.swift
+[153/188] Compiling MarkdownUI TextTracking.swift
+[154/188] Compiling MarkdownUI UnderlineStyle.swift
+[155/188] Compiling MarkdownUI TextStyle.swift
+[156/188] Compiling MarkdownUI TextStyleBuilder.swift
+[157/188] Compiling MarkdownUI Theme+Basic.swift
+[158/188] Compiling MarkdownUI Theme+DocC.swift
+[159/188] Compiling MarkdownUI Theme+GitHub.swift
+[160/188] Compiling MarkdownUI Theme.swift
+[161/188] Compiling MarkdownUI BlockNode+ColorSchemeImage.swift
+[162/188] Compiling MarkdownUI Color+RGBA.swift
+[163/188] Compiling MarkdownUI Deprecations.swift
+[164/188] Compiling MarkdownUI FlowLayout.swift
+[165/188] Compiling MarkdownUI TableBorderSelector.swift
+[166/188] Compiling MarkdownUI TableBorderView.swift
+[167/188] Compiling MarkdownUI TableBounds.swift
+[168/188] Compiling MarkdownUI TableCell.swift
+[169/188] Compiling MarkdownUI TableView.swift
+[170/188] Compiling MarkdownUI TaskListItemView.swift
+[171/188] Compiling MarkdownUI TaskListView.swift
+[172/188] Compiling MarkdownUI TextStyleAttributesReader.swift
+[173/188] Compiling MarkdownUI ThematicBreakView.swift
+[174/188] Compiling MarkdownUI Environment+BaseURL.swift
+[175/188] Compiling MarkdownUI Environment+CodeSyntaxHighlighter.swift
+[176/188] Compiling MarkdownUI Environment+ImageProvider.swift
+[177/188] Compiling MarkdownUI Environment+InlineImageProvider.swift
+[178/188] Compiling MarkdownUI Environment+List.swift
+[179/188] Compiling MarkdownUI Environment+SoftBreakMode.swift
+[180/188] Compiling MarkdownUI Environment+Table.swift
+[181/188] Compiling MarkdownUI Environment+TextStyle.swift
+[182/188] Compiling MarkdownUI Environment+Theme.swift
+[183/188] Compiling MarkdownUI ImageView.swift
+[184/188] Compiling MarkdownUI InlineText.swift
+[185/188] Compiling MarkdownUI Markdown.swift
+[186/234] Compiling PocketWikiMac PocketWikiMacApp.swift
+[187/234] Compiling PocketWikiMac CanonicalRelease.swift
+[188/234] Compiling PocketWikiMac ExcalidrawSummary.swift
+[189/234] Compiling PocketWikiMac HarnessOperationRegistry.swift
+[190/234] Compiling PocketWikiMac HarnessV1.swift
+[191/234] Compiling PocketWikiMac JSONValue.swift
+[192/234] Compiling PocketWikiMac LocalAIChatMessage.swift
+[193/234] Compiling PocketWikiMac LocalAISidePanel.swift
+[194/234] Compiling PocketWikiMac PocketAddonDiagnostics.swift
+[195/234] Compiling PocketWikiMac PocketWikiIconKind.swift
+[196/234] Compiling PocketWikiMac PocketWikiMCPEvidenceStatus.swift
+[197/234] Compiling PocketWikiMac PocketWikiServerTypes.swift
+[198/234] Compiling PocketWikiMac WikiFile.swift
+[199/234] Compiling PocketWikiMac WikiGraph.swift
+[200/234] Compiling PocketWikiMac WikiHealthIssue.swift
+[201/234] Compiling PocketWikiMac WikiIndex.swift
+[202/234] Compiling PocketWikiMac WikiLink.swift
+[203/234] Compiling PocketWikiMac WikiPage.swift
+[204/234] Compiling PocketWikiMac WikiSourceBookmark.swift
+[205/234] Compiling PocketWikiMac WikiTab.swift
+[206/234] Compiling PocketWikiMac CanonicalUpdateService.swift
+[207/234] Compiling PocketWikiMac ExcalidrawEditorResourceResolver.swift
+[208/234] Compiling PocketWikiMac ExcalidrawParser.swift
+[209/256] Compiling PocketWikiMac ExternalMiddlewareTokenStore.swift
+[210/256] Compiling PocketWikiMac LMStudioClient.swift
+[211/256] Compiling PocketWikiMac LocalAIContextBuilder.swift
+[212/256] Compiling PocketWikiMac LocalAIContextFilePicker.swift
+[213/256] Compiling PocketWikiMac LocalAIEndpointPolicy.swift
+[214/256] Compiling PocketWikiMac LocalAIRuntimeConfiguration.swift
+[215/256] Compiling PocketWikiMac MiddlewareAuthAddonManager.swift
+[216/256] Compiling PocketWikiMac MiddlewareAuthClient.swift
+[217/256] Compiling PocketWikiMac PocketKernelAddonManager.swift
+[218/256] Compiling PocketWikiMac PocketKernelClient.swift
+[219/256] Compiling PocketWikiMac PocketKernelProviderBridge.swift
+[220/256] Compiling PocketWikiMac PocketMemoryClient.swift
+[221/256] Compiling PocketWikiMac PocketMemoryStore.swift
+[222/256] Compiling PocketWikiMac PocketWikiHTTPServer.swift
+[223/256] Compiling PocketWikiMac PocketWikiMDNSResponder.swift
+[224/256] Compiling PocketWikiMac PocketWikiRouteBuilder.swift
+[225/256] Compiling PocketWikiMac PocketWikiServerConfiguration.swift
+[226/256] Compiling PocketWikiMac PocketWikiServerPayloads.swift
+[227/256] Compiling PocketWikiMac PocketWikiSolutionIngestion.swift
+[228/256] Compiling PocketWikiMac RemoteWikiClient.swift
+[229/256] Compiling PocketWikiMac WikiAnalytics.swift
+[230/256] Compiling PocketWikiMac WikiFilePathResolver.swift
+[231/256] Emitting module PocketWikiMac
+[232/278] Compiling PocketWikiMac WikiFolderLoader.swift
+[233/278] Compiling PocketWikiMac WikiFolderPicker.swift
+[234/278] Compiling PocketWikiMac WikiIndexer.swift
+[235/278] Compiling PocketWikiMac WikiSidebarExplorer.swift
+[236/278] Compiling PocketWikiMac WikiTextParser.swift
+[237/278] Compiling PocketWikiMac CanonicalUpdater.swift
+[238/278] Compiling PocketWikiMac LocalAIChatSession.swift
+[239/278] Compiling PocketWikiMac PortableConversationStore.swift
+[240/278] Compiling PocketWikiMac WikiAppStore.swift
+[241/278] Compiling PocketWikiMac WikiBookmarkStore.swift
+[242/278] Compiling PocketWikiMac EnvironmentFileReader.swift
+[243/278] Compiling PocketWikiMac LocalAIResponseLinkifier.swift
+[244/278] Compiling PocketWikiMac PocketFormatters.swift
+[245/278] Compiling PocketWikiMac PocketWikiDateParser.swift
+[246/278] Compiling PocketWikiMac PocketWikiMarkdownTheme.swift
+[247/278] Compiling PocketWikiMac PocketWikiResourceBundle.swift
+[248/278] Compiling PocketWikiMac PocketWikiTheme.swift
+[249/278] Compiling PocketWikiMac String+PocketWiki.swift
+[250/278] Compiling PocketWikiMac WikiMarkdownFormatter.swift
+[251/278] Compiling PocketWikiMac CanonicalUpdateButton.swift
+[252/278] Compiling PocketWikiMac ContentView.swift
+[253/278] Compiling PocketWikiMac DashboardView.swift
+[254/278] Compiling PocketWikiMac DetailContainerView.swift
+[255/278] Compiling PocketWikiMac ExcalidrawEditorSchemeHandler.swift
+[256/278] Compiling PocketWikiMac ExcalidrawView.swift
+[257/278] Compiling PocketWikiMac ExcalidrawWebView.swift
+[258/278] Compiling PocketWikiMac HealthView.swift
+[259/278] Compiling PocketWikiMac InspectorView.swift
+[260/278] Compiling PocketWikiMac LocalAIChatPanel.swift
+[261/278] Compiling PocketWikiMac LocalAISidePanels.swift
+[262/278] Compiling PocketWikiMac LocalAIView.swift
+[263/278] Compiling PocketWikiMac LocalAIWorkspaceShell.swift
+[264/278] Compiling PocketWikiMac MapView.swift
+[265/278] Compiling PocketWikiMac PocketWikiIcon.swift
+[266/278] Compiling PocketWikiMac ReaderView.swift
+[267/278] Compiling PocketWikiMac SearchPaletteView.swift
+[268/278] Compiling PocketWikiMac ServerView.swift
+[269/278] Compiling PocketWikiMac SharedViews.swift
+[270/278] Compiling PocketWikiMac SidebarView.swift
+[271/278] Compiling PocketWikiMac TimelineView.swift
+[272/278] Compiling PocketWikiMac WelcomeView.swift
+[273/278] Compiling PocketWikiMac WikiGraphView.swift
+[274/278] Compiling PocketWikiMac WikiTabStrip.swift
+[275/278] Compiling PocketWikiMac resource_bundle_accessor.swift
+[275/278] Write Objects.LinkFileList
+[276/278] Linking PocketWikiMac
+[277/278] Applying PocketWikiMac
+Build complete! (55.32s)
+ok - slug path
+ok - frontmatter
+ok - tags ignore code
+ok - wiki links
+ok - summary fallback
+ok - resolved links
+ok - missing links
+ok - folder eligibility
+ok - file size limit
+ok - excalidraw size limit
+ok - oversized excalidraw load issue
+ok - excalidraw editor resource resolver
+ok - extension kind
+ok - excalidraw json
+ok - excalidraw markdown json fence
+ok - excalidraw markdown fallback
+ok - excalidraw invalid fallback
+ok - excalidraw preview clamp source
+ok - safe wiki file path
+ok - analytics
+ok - timeline
+ok - markdown strips duplicate title
+ok - markdown display links
+ok - local ai endpoint policy
+ok - local ai runtime configuration
+ok - environment file safety
+ok - local ai model parsing
+ok - local ai chat parsing
+ok - local ai remote proxy endpoint
+ok - local ai context builder
+ok - local ai automatic context
+ok - local ai manual context
+ok - local ai response linkifier
+ok - server configuration
+ok - server routes
+ok - server files payload
+ok - remote wiki decode
+ok - sidebar explorer
+ok - graph local filter
+ok - graph orphan targets
+ok - graph global limit
+ok - graph deduplicates edges
+ok - graph truncates high fanout
+ok - graph oversized node
+ok - canonical release versions
+ok - add-on build integrity
+ok - desktop tabs include map and server
+47 core tests passing
+[0/1] Planning build
+Building for debugging...
+[0/3] Write swift-version--79AA4F9932D1E87A.txt
+Build complete! (2.64s)
+ok - native server http contract
+ok - slow wiki read keeps main actor responsive
+ok - native memory http contract
+ok - native solutions ingestion contract
+ok - remote client against native server
+ok - middleware auth add-on lifecycle
+ok - middleware auth external ownership and credentials
+ok - PocketKernel add-on and MCP wrapper lifecycle
+ok - PocketKernel provider bridge routes MiddlewareAuth
+ok - PocketKernel structured answer parsing
+ok - web runtime assets
+ok - excalidraw editor bundle resolver
+12 integration tests passing
+ok - app bundle contract
+12 integration checks passing
+
+--- stderr ---
+
+  assets/excalidraw-renderer.js  18.7mb ⚠️
+
+⚡ Done in 418ms
+[33m[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+
+  Sources/PocketWikiMac/Resources/GraphView/graph-core.js  7.4kb
+
+⚡ Done in 3ms
+
+  Sources/PocketWikiMac/Resources/GraphView/layout-worker.js  9.6kb
+
+⚡ Done in 3ms
+
+  Sources/PocketWikiMac/Resources/GraphView/graph.js  33.6kb
+
+⚡ Done in 4ms
+Fetching https://github.com/gonzalezreal/swift-markdown-ui
+Fetching https://github.com/gonzalezreal/NetworkImage
+[1/8546] Fetching swift-markdown-ui
+[2/9618] Fetching swift-markdown-ui, networkimage
+Fetched https://github.com/gonzalezreal/NetworkImage from cache (2.54s)
+Fetched https://github.com/gonzalezreal/swift-markdown-ui from cache (2.54s)
+Computing version for https://github.com/gonzalezreal/swift-markdown-ui
+Fetching https://github.com/swiftlang/swift-cmark
+[1/18675] Fetching swift-cmark
+Fetched https://github.com/swiftlang/swift-cmark from cache (1.36s)
+Computed https://github.com/gonzalezreal/swift-markdown-ui at 2.4.1 (5.07s)
+Computing version for https://github.com/swiftlang/swift-cmark
+Computed https://github.com/swiftlang/swift-cmark at 0.8.0 (0.55s)
+Computing version for https://github.com/gonzalezreal/NetworkImage
+Computed https://github.com/gonzalezreal/NetworkImage at 6.0.1 (0.34s)
+Creating working copy for https://github.com/gonzalezreal/NetworkImage
+Working copy of https://github.com/gonzalezreal/NetworkImage resolved at 6.0.1
+Creating working copy for https://github.com/gonzalezreal/swift-markdown-ui
+Working copy of https://github.com/gonzalezreal/swift-markdown-ui resolved at 2.4.1
+Creating working copy for https://github.com/swiftlang/swift-cmark
+Working copy of https://github.com/swiftlang/swift-cmark resolved at 0.8.0
+
+  assets/excalidraw-renderer.js  18.7mb ⚠️
+
+⚡ Done in 512ms
+[33m[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+
+  Sources/PocketWikiMac/Resources/GraphView/graph-core.js  7.4kb
+
+⚡ Done in 9ms
+
+  Sources/PocketWikiMac/Resources/GraphView/layout-worker.js  9.6kb
+
+⚡ Done in 4ms
+
+  Sources/PocketWikiMac/Resources/GraphView/graph.js  33.6kb
+
+⚡ Done in 15ms

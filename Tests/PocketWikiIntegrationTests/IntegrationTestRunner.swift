@@ -1092,7 +1092,12 @@ struct IntegrationTestRunner {
     static func testWebRuntimeAssets() async throws {
         let root = try PocketWikiWebRuntimeResolver.webRoot()
         try expect(root.appendingPathComponent("wiki-cockpit.html").path.hasSuffix("wiki-cockpit.html"), "web root did not resolve cockpit")
-        try expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("assets/favicon.png").path), "favicon asset missing")
+        let bundledFavicon = root.appendingPathComponent("assets/favicon.png").path
+        let sourceFavicon = root.appendingPathComponent("favicon.png").path
+        try expect(
+            FileManager.default.fileExists(atPath: bundledFavicon) || FileManager.default.fileExists(atPath: sourceFavicon),
+            "favicon asset missing"
+        )
         try expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("sw.js").path), "service worker missing")
     }
 

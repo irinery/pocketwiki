@@ -44,6 +44,7 @@ struct ReaderView: View {
                 .foregroundStyle(PocketWikiTheme.text)
                 .lineLimit(3)
                 .textSelection(.enabled)
+                .accessibilityIdentifier("legacy.reader.title")
 
             FlowLayout(spacing: 8) {
                 Label("\(page.wordCount) palavras", systemImage: "text.word.spacing")

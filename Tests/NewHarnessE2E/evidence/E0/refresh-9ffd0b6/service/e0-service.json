@@ -1,0 +1,32 @@
+{
+  "version": "0.2.0",
+  "stage": "E0",
+  "pocketwiki_sha": "9ffd0b62709e77e0906ddfd8169237a9411057f4",
+  "pocketkernel_sha": "03f8f30eb781b4d16a9dca76f7548f9781bbef02",
+  "middlewareauth_sha": "04f44f62126c785f7b28718d2eff837c28cb65df",
+  "schema_sha256": "306915400385fa9bd7c22096fb18228d4d2c02e0f272376f8c2c5ebd7bebae70",
+  "fixture_sha256": "697f4057f4f5aeef584ed42a88a895261845cb6834eb994fb2c8878440c74b0c",
+  "matrix_sha256": "d0a1404c0dfae0bd330a21a0e95941dc76614aa6837dda01713a9635c368c95f",
+  "seed": 20261102,
+  "auth_mode": "host_local",
+  "cases": [
+    {
+      "id": "CONTRACT-00",
+      "surface": "service",
+      "status": "passed",
+      "artifact_paths": [
+        "e0-service/contract-01.log",
+        "e0-service/contract-02.log",
+        "e0-service/contract-03.log",
+        "e0-service/contract-04.log",
+        "e0-service/contract-05.log",
+        "e0-service/contract-06.log",
+        "e0-service/contract-07.log",
+        "e0-service/contract-08.log",
+        "e0-service/contract-09.log",
+        "e0-service/e0-service.junit.xml"
+      ]
+    }
+  ],
+  "exit_code": 0
+}

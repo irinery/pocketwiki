@@ -81,7 +81,7 @@ git worktree add -b codex/nh-e2-0003-01 \
   "$NH_WORK_ROOT/e2-0003-01" "$NH_BASE_SHA"
 ```
 
-O valor entre `<...>` é instrução de execução futura substituída pelo relatório, não um campo indefinido da especificação. Repetir com nome único para cada lane. No repo Kernel usar seu próprio `NH_KERNEL_BASE_SHA` do mesmo gate. Não usar branch `codex/new-harness-rfcs` como base de implementação sem integrar/aceitar o draft e aprovar E0.
+O valor entre `<...>` é instrução de execução futura substituída pelo relatório, não um campo indefinido da especificação. Repetir com nome único para cada lane. No repo Kernel usar seu próprio `NH_KERNEL_BASE_SHA` do mesmo gate. Em E0, usar o SHA documental/handoff imutável autorizado em e0-handoff.md, mesmo antes do merge em main. A aprovação do gate E0 é pré-condição de E1, nunca da implementação de E0.
 
 ## Prompt de delegação sugerido
 
@@ -118,3 +118,7 @@ Mudança de contrato entre etapas exige patch no schema, fixtures JS/Swift e nov
 ## Escopo da liberação E0
 
 A revisão 0.2.0 pode liberar o início de NH-00/NH-TEST, não o fechamento do gate E0. E0 ainda precisa entregar schemas, validadores, registry, credencial local scoped e rig real, executar a matriz e registrar os SHAs. E1 depende da aprovação desse gate. MiddlewareAuth possui SHA próprio registrado em qualquer etapa que o execute; sua emissão de sessão nova é entregue por environments/01 em E3.
+
+## Coordenação atual da E0
+
+[e0-handoff.md](e0-handoff.md) autoriza a base NH-00 para NH-TEST sem exigir merge em main, fechamento da issue #21 ou aprovação prévia de E0. Define um único escritor por worktree. Esta decisão substitui qualquer condição anterior conflitante.

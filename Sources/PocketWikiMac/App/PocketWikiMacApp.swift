@@ -7,21 +7,31 @@ struct PocketWikiMacApp: App {
     @State private var store = WikiAppStore()
     @State private var updater = CanonicalUpdater()
 
+    private var defaultWindowSize: (width: Double, height: Double) {
+        ProcessInfo.processInfo.environment["NH_TEST_FIXTURE_PROVIDER_URL"] == nil
+            ? (1440, 900)
+            : (1000, 700)
+    }
+
     var body: some Scene {
         WindowGroup("PocketWiki", id: "main") {
             ContentView(store: store, updater: updater)
                 .frame(minWidth: 980, minHeight: 680)
                 .task {
+                    fitHarnessWindowIfNeeded()
                     appDelegate.terminationHandler = { [weak store] in
                         store?.shutdownManagedServices()
                     }
                     await store.restoreLastSource()
+                    if ProcessInfo.processInfo.environment["NH_TEST_INITIAL_TAB"] == "localAI" {
+                        store.selectedTab = .localAI
+                    }
                     await store.bootstrapManagedServices()
                 }
         }
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact(showsTitle: false))
-        .defaultSize(width: 1440, height: 900)
+        .defaultSize(width: defaultWindowSize.width, height: defaultWindowSize.height)
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("Abrir Pasta...") {
@@ -49,6 +59,19 @@ struct PocketWikiMacApp: App {
                 .disabled(updater.state.isBusy)
             }
         }
+    }
+
+    private func fitHarnessWindowIfNeeded() {
+        guard ProcessInfo.processInfo.environment["NH_TEST_FIXTURE_PROVIDER_URL"] != nil,
+              let window = NSApp.windows.first,
+              let screen = window.screen ?? NSScreen.main else { return }
+        let visible = screen.visibleFrame.insetBy(dx: 12, dy: 12)
+        let width = min(1000, visible.width)
+        let height = min(700, visible.height)
+        window.setFrame(
+            NSRect(x: visible.midX - width / 2, y: visible.midY - height / 2, width: width, height: height),
+            display: true
+        )
     }
 }
 

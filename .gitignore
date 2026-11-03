@@ -3,6 +3,7 @@
 !.env.example
 .DS_Store
 node_modules/
+assets/marked.min.js
 .pocketwiki-cache/
 .build/
 dist/

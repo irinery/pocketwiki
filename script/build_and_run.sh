@@ -111,6 +111,7 @@ esac
 
 npm --prefix "$ROOT_DIR" run build:excalidraw
 npm --prefix "$ROOT_DIR" run build:graph-view
+npm --prefix "$ROOT_DIR" run build:legacy-web-assets
 swift build --package-path "$ROOT_DIR"
 BUILD_BINARY="$(swift build --package-path "$ROOT_DIR" --show-bin-path)/$PRODUCT_NAME"
 
@@ -153,6 +154,10 @@ for file in wiki-cockpit.html offline.html manifest.webmanifest sw.js favicon.ic
 done
 if [ -d "$ROOT_DIR/assets" ]; then
   ditto --noextattr --norsrc "$ROOT_DIR/assets" "$APP_WEB/assets"
+fi
+if [ -f "$ROOT_DIR/favicon.png" ]; then
+  mkdir -p "$APP_WEB/assets"
+  cp "$ROOT_DIR/favicon.png" "$APP_WEB/assets/favicon.png"
 fi
 
 cat >"$INFO_PLIST" <<PLIST
