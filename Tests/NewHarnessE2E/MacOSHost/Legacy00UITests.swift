@@ -117,7 +117,12 @@ final class Legacy00UITests: XCTestCase {
             tabAttempts += 1
             _ = restoredPrompt.waitForExistence(timeout: 5)
         }
-        XCTAssertTrue(restoredPrompt.exists, "A aba IA não abriu depois do restart. Visíveis: \(app.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty })")
+        XCTAssertTrue(
+            restoredPrompt.exists,
+            "A aba IA não abriu depois do restart. " +
+            "janela=\(app.windows.firstMatch.frame), tab=(label=\(localAITab.label), frame=\(localAITab.frame), hittable=\(localAITab.isHittable), selected=\(localAITab.isSelected)), " +
+            "visíveis=\(app.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty })"
+        )
         let restoredAnswer = app.descendants(matching: .any).matching(identifier: "legacy.ai.message.assistant").firstMatch
         let restored = restoredAnswer.waitForExistence(timeout: 20)
         XCTAssertTrue(
