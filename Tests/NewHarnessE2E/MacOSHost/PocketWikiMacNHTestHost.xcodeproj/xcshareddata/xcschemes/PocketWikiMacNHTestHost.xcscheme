@@ -41,7 +41,7 @@
       buildConfiguration = "Debug"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
-      shouldUseLaunchSchemeArgsEnv = "YES"
+      shouldUseLaunchSchemeArgsEnv = "NO"
       onlyGenerateCoverageForSpecifiedTargets = "NO">
       <MacroExpansion>
          <BuildableReference
@@ -67,6 +67,43 @@
       </Testables>
       <CommandLineArguments>
       </CommandLineArguments>
+      <EnvironmentVariables>
+         <EnvironmentVariable
+            key = "NH_TEST_FIXTURE_PROVIDER_URL"
+            value = "$(NH_TEST_FIXTURE_PROVIDER_URL)"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "NH_TEST_KERNEL_URL"
+            value = "$(NH_TEST_KERNEL_URL)"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "NH_TEST_MIDDLEWARE_URL"
+            value = "$(NH_TEST_MIDDLEWARE_URL)"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "NH_TEST_POCKETWIKI_PORT"
+            value = "$(NH_TEST_POCKETWIKI_PORT)"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "POCKETWIKI_MIDDLEWARE_AUTH_BINARY"
+            value = "$(POCKETWIKI_MIDDLEWARE_AUTH_BINARY)"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "POCKETWIKI_NODE_BINARY"
+            value = "$(POCKETWIKI_NODE_BINARY)"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "POCKETWIKI_POCKETKERNEL_BINARY"
+            value = "$(POCKETWIKI_POCKETKERNEL_BINARY)"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+      </EnvironmentVariables>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"

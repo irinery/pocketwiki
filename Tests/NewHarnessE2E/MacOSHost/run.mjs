@@ -118,7 +118,14 @@ try {
     '-destination', 'id=' + macDestination[2].trim(),
     '-disableAutomaticPackageResolution',
     '-clonedSourcePackagesDirPath', path.join(tempHome, 'swift-packages'),
-    '-resultBundlePath', resultBundle
+    '-resultBundlePath', resultBundle,
+    `NH_TEST_FIXTURE_PROVIDER_URL=${providerURL}`,
+    `NH_TEST_MIDDLEWARE_URL=${middlewareURL}`,
+    `NH_TEST_KERNEL_URL=${kernelURL}`,
+    `NH_TEST_POCKETWIKI_PORT=${pocketWikiPort}`,
+    `POCKETWIKI_POCKETKERNEL_BINARY=${kernelBinary}`,
+    `POCKETWIKI_MIDDLEWARE_AUTH_BINARY=${middlewareBinary}`,
+    `POCKETWIKI_NODE_BINARY=${process.execPath}`
   ];
   const run = await runAndCapture(xcodebuild, args, root, env);
   output += run.output;
