@@ -122,11 +122,7 @@ final class Legacy00UITests: XCTestCase {
         pathField.typeText(wikiRoot.path)
         app.typeKey(.return, modifierFlags: [])
 
-        let openButtonPredicate = NSPredicate(
-            format: "label CONTAINS[c] %@ OR label CONTAINS[c] %@ OR label CONTAINS[c] %@ OR label CONTAINS[c] %@",
-            "Open", "Abrir", "Choose", "Escolher"
-        )
-        let openButton = panel.buttons.matching(openButtonPredicate).firstMatch
+        let openButton = panel.buttons["OKButton"]
         XCTAssertTrue(
             openButton.waitForExistence(timeout: 5),
             "O painel não expôs o botão de confirmação. Botões: \(panel.buttons.allElementsBoundByIndex.map { "\($0.identifier)=\($0.label)" }); painel: \(panel.debugDescription)"
