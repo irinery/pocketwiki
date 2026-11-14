@@ -14,9 +14,9 @@ let log = '', status = 1;
 async function run(program, argv, options = {}) {
   return new Promise((resolve, reject) => {
     const { timeoutMS, ...spawnOptions } = options;
-    const child = spawn(program, argv, { ...spawnOptions, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(program, argv, { ...spawnOptions, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
     let output = '';
-    const timer = setTimeout(() => child.kill('SIGKILL'), options.timeoutMS || 180000);
+    const timer = setTimeout(() => { try { process.kill(-child.pid, 'SIGKILL'); } catch {} }, timeoutMS || 180000);
     for (const stream of [child.stdout, child.stderr]) stream.on('data', data => { output = (output + data.toString()).slice(-65536); });
     child.once('error', error => { clearTimeout(timer); reject(error); });
     child.once('close', code => { clearTimeout(timer); log += `$ ${program} ${argv.join(' ')}\n${output}\nexit=${code}\n`; resolve(code); });
