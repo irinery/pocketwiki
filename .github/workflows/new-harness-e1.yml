@@ -2,6 +2,9 @@ name: New Harness E1
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - codex/nh-e1-integration
 
 permissions:
   contents: read
