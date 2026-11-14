@@ -52,13 +52,14 @@ export class RuntimeProjection {
     if (!this.started || !valid('streamEnvelope', event) || event.environment_id !== this.environmentId || event.thread_id !== this.threadId || event.module !== 'runtime') throw fail('ERR_INVALID', 'Evento inválido');
     const payload = event.delivery === 'inline' && resolvedPayload === undefined ? event.payload : event.delivery === 'reference' ? resolvedPayload : undefined;
     if (!valid('runtimeModuleEvent', payload)) throw fail('ERR_INVALID', 'Payload inválido');
-    if (event.seq <= this.boundary) return;
     const fingerprint = canonical([event, payload]);
     if (this.seen.has(event.event_id)) {
       if (this.seen.get(event.event_id) === fingerprint) return;
       throw fail('ERR_INVALID', 'Evento conflitante');
     }
-    if (this.sequences.has(event.seq) || event.seq <= (this.events.at(-1)?.seq ?? this.boundary)) throw fail('ERR_INVALID', 'Sequência inválida');
+    if (this.sequences.has(event.seq)) throw fail('ERR_INVALID', 'Sequência conflitante');
+    if (event.seq <= this.boundary) return;
+    if (event.seq <= (this.events.at(-1)?.seq ?? this.boundary)) throw fail('ERR_INVALID', 'Sequência inválida');
     const size = new TextEncoder().encode(fingerprint).length;
     if (this.bytes + size > 4_194_304 || this.dedupBytes + size > 4_194_304 || this.seen.size >= 4096) throw fail('ERR_RESYNC_REQUIRED', 'Projeção precisa de novo snapshot');
     this.bytes += size; this.dedupBytes += size; this.seen.set(event.event_id, fingerprint); this.sequences.set(event.seq, event.event_id);

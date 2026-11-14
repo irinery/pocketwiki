@@ -14,6 +14,7 @@ export function mountRuntimePanel(root, client) {
     status.textContent = state.error === 'LEGACY_SERVER' ? 'Execução durável indisponível. O chat legado continua disponível.' : state.error ? state.error : state.available ? `Revisão ${state.revision} · evento ${state.lastSeq}` : 'Conectando';
     submit.disabled = !state.available || !!state.pendingCommandId;
     resolve.hidden = !state.pendingCommandId; retry.hidden = !state.pendingCommandId;
+    resolve.disabled = !!state.pendingBusy; retry.disabled = !!state.pendingBusy;
     input.disabled = !!state.pendingCommandId;
     receipts.replaceChildren(...state.receipts.map(receipt => {
       const { commandId, label, completed } = receiptPresentation(receipt);

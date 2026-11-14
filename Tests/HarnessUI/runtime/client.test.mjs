@@ -52,3 +52,12 @@ test('reconexão antiga não publica depois de uma mais nova', async () => {
   resolvers[1](snapshot(2)); await second; resolvers[0](snapshot(1)); await first;
   assert.equal(client.state.lastSeq, 2); client.close();
 });
+test('consulta antiga não limpa intenção nova e consultas simultâneas são bloqueadas', async () => {
+  let finish; let calls = 0;
+  const transport = { receipt: () => { calls++; return new Promise(resolve => { finish = resolve; }); } };
+  const client = new RuntimeClient({ transport, environmentId: id, threadId: id }); client.pendingCommandId = id;
+  const first = client.resolvePending(); await client.resolvePending(); assert.equal(calls, 1);
+  const newer = '22222222-2222-4222-8222-222222222222'; client.pendingCommandId = newer;
+  finish({ command_id: id, revision: 1, state: 'accepted' }); await first;
+  assert.equal(client.pendingCommandId, newer);
+});

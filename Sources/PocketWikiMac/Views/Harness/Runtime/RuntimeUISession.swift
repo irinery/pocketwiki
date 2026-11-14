@@ -31,6 +31,7 @@ final class RuntimeUISession: ObservableObject {
     @Published private(set) var lastSeq = 0
     @Published private(set) var receipts: [Receipt] = []
     @Published private(set) var pending: HarnessV1.Command<RuntimeTransport.DispatchInput>?
+    @Published private(set) var pendingBusy = false
     @Published var draft = ""
     private let transport: RuntimeTransport, environmentID: UUID, threadID: UUID, schemaHash: String, schemaData: Data
     private let schema: [String: Any]
@@ -96,23 +97,26 @@ final class RuntimeUISession: ObservableObject {
         onFrame?(frame.seq, lastSeq)
     }
     func submit() async {
-        guard available, pending == nil, !draft.isEmpty, draft.utf8.count <= 32768 else { return }
+        guard available, pending == nil, !pendingBusy, !draft.isEmpty, draft.utf8.count <= 32768 else { return }
         let id = UUID(), text = draft
         let input = RuntimeTransport.DispatchInput(commandID: id, threadID: threadID, expectedRevision: revision, operation: "submit", text: text, runID: nil)
         let command = HarnessV1.Command(protocolMajor: 1, commandID: id, environmentID: environmentID, expectedRevision: revision, operation: "runtime.dispatch", input: input)
-        pending = command
-        do { let receipt = try await transport.dispatch(copyCommand(command)); pending = nil; merge(receipt); if draft == text { draft = "" } }
-        catch { self.error = "Não foi possível confirmar o comando; consulte ou repita a mesma intenção." }
+        pending = command; pendingBusy = true
+        defer { pendingBusy = false }
+        do { let receipt = try await transport.dispatch(copyCommand(command)); guard pending?.commandID == id else { return }; pending = nil; merge(receipt); if draft == text { draft = "" } }
+        catch { if pending?.commandID == id { self.error = "Não foi possível confirmar o comando; consulte ou repita a mesma intenção." } }
     }
     func resolvePending() async {
-        guard let pending else { return }
-        do { let receipt = try await transport.receipt(commandID: pending.commandID, environmentID: environmentID); self.pending = nil; merge(receipt) }
-        catch { self.error = "Não foi possível consultar o comando pendente." }
+        guard let pending, !pendingBusy else { return }
+        let id = pending.commandID; pendingBusy = true; defer { pendingBusy = false }
+        do { let receipt = try await transport.receipt(commandID: id, environmentID: environmentID); guard self.pending?.commandID == id else { return }; self.pending = nil; merge(receipt) }
+        catch { if self.pending?.commandID == id { self.error = "Não foi possível consultar o comando pendente." } }
     }
     func retryPending() async {
-        guard let pending else { return }
-        do { let receipt = try await transport.dispatch(copyCommand(pending)); self.pending = nil; merge(receipt) }
-        catch { self.error = "Não foi possível repetir o comando pendente." }
+        guard let pending, !pendingBusy else { return }
+        let id = pending.commandID; pendingBusy = true; defer { pendingBusy = false }
+        do { let receipt = try await transport.dispatch(copyCommand(pending)); guard self.pending?.commandID == id else { return }; self.pending = nil; merge(receipt) }
+        catch { if self.pending?.commandID == id { self.error = "Não foi possível repetir o comando pendente." } }
     }
     private func copyCommand(_ command: HarnessV1.Command<RuntimeTransport.DispatchInput>) -> HarnessV1.Command<RuntimeTransport.DispatchInput> {
         let input = command.input

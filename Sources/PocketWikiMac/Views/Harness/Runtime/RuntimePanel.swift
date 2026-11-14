@@ -18,8 +18,8 @@ struct RuntimePanel: View {
                 .disabled(!session.available || session.pending != nil || session.draft.isEmpty)
                 .accessibilityIdentifier("runtime-submit")
             if session.pending != nil {
-                Button("Consultar comando pendente") { Task { await session.resolvePending() } }
-                Button("Repetir comando pendente") { Task { await session.retryPending() } }
+                Button("Consultar comando pendente") { Task { await session.resolvePending() } }.disabled(session.pendingBusy)
+                Button("Repetir comando pendente") { Task { await session.retryPending() } }.disabled(session.pendingBusy)
             }
             List(session.receipts) { receipt in
                 HStack { Text(receipt.label); Spacer(); Text(receipt.id).font(.caption.monospaced()) }

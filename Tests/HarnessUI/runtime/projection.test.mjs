@@ -56,3 +56,10 @@ test('dedup continua após publicação e limite exige novo snapshot', () => {
   assert.throws(() => p.appendPage(page), { code: 'ERR_INVALID' });
   assert.throws(() => p.finish(), { code: 'ERR_INVALID' });
 });
+test('replay conflitante já publicado é recusado', () => {
+  const p = new RuntimeProjection({ environmentId: id, threadId: id }); p.appendPage(page); p.bufferEvent(event(11)); p.finish();
+  const altered = event(11); altered.payload.value.state = 'pending';
+  assert.throws(() => p.bufferEvent(altered), { code: 'ERR_INVALID' });
+  const other = new RuntimeProjection({ environmentId: id, threadId: id }); other.appendPage(page); other.bufferEvent(event(11)); other.finish();
+  assert.throws(() => other.bufferEvent({ ...event(11), event_id: id }), { code: 'ERR_INVALID' });
+});
