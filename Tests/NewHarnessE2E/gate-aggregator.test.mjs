@@ -1,10 +1,11 @@
 import test from 'node:test';
+import { execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import matrix from '../../docs/rfcs/new-harness/matriz-verificacao.json' with { type: 'json' };
-import { aggregateReportFiles, aggregateReports } from './gate-aggregator.mjs';
+import { aggregateReportFiles, aggregateReports, targetIdentity } from './gate-aggregator.mjs';
 
 const sha1 = 'a'.repeat(40);
 const sha256 = 'b'.repeat(64);
@@ -107,4 +108,35 @@ test('file aggregator requires real artifacts contained in each report directory
   const linkedPath = path.join(path.dirname(files[0]), 'linked.json');
   await writeFile(linkedPath, JSON.stringify(linkedReport));
   await assert.rejects(() => aggregateReportFiles('E0', [linkedPath, ...files.slice(1)], identity), /artifact must be a regular file inside/);
+});
+
+test('target identity hashes real checkout files and rejects wrong or dirty checkouts', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'nh-target-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const repos = ['wiki', 'kernel', 'middleware'].map((name) => path.join(root, name));
+  for (const repo of repos) {
+    await mkdir(repo);
+    execFileSync('git', ['init', '-q', repo]);
+    await writeFile(path.join(repo, 'tracked'), path.basename(repo));
+  }
+  const files = [
+    'src/harness/contracts/corpus-v1.json', 'src/harness/contracts/operation-registry.json',
+    'Tests/Harness/nh00-acceptance-regressions.json', 'docs/rfcs/new-harness/manifest.json',
+    'src/harness/contracts/harness-v1.schema.json', 'docs/rfcs/new-harness/matriz-verificacao.json'
+  ];
+  for (const file of files) {
+    await mkdir(path.dirname(path.join(repos[0], file)), { recursive: true });
+    await writeFile(path.join(repos[0], file), file);
+  }
+  for (const repo of repos) {
+    execFileSync('git', ['-C', repo, 'add', '.']);
+    execFileSync('git', ['-C', repo, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'fixture']);
+  }
+  const sha = execFileSync('git', ['-C', repos[0], 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+  const actual = await targetIdentity(...repos, sha);
+  assert.equal(actual.pocketwiki_sha, sha);
+  assert.match(actual.fixture_sha256, /^[a-f0-9]{64}$/);
+  await assert.rejects(() => targetIdentity(...repos, 'f'.repeat(40)), /target SHA differs/);
+  await writeFile(path.join(repos[0], files[0]), 'changed');
+  await assert.rejects(() => targetIdentity(...repos, sha), /modified tracked files/);
 });

@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { runAndCapture } from '../deadline-process.mjs';
 import { createServer as createNetServer } from 'node:net';
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -113,10 +114,11 @@ try {
     .find((match) => match[3].trim() === 'My Mac');
   if (!macDestination) throw new Error('Xcode não anunciou o destino My Mac arm64 para este scheme');
   const args = [
-    'test', '-project', project,
+    'test-without-building', '-project', project,
     '-scheme', 'PocketWikiMacNHTestHost',
     '-destination', 'id=' + macDestination[2].trim(),
     '-disableAutomaticPackageResolution',
+    '-derivedDataPath', path.join(tempHome, 'derived-data'),
     '-clonedSourcePackagesDirPath', path.join(tempHome, 'swift-packages'),
     '-resultBundlePath', resultBundle,
     `NH_TEST_FIXTURE_PROVIDER_URL=${providerURL}`,
@@ -127,7 +129,14 @@ try {
     `POCKETWIKI_MIDDLEWARE_AUTH_BINARY=${middlewareBinary}`,
     `POCKETWIKI_NODE_BINARY=${process.execPath}`
   ];
-  const run = await runAndCapture(xcodebuild, args, root, env);
+  const buildArgs = [...args];
+  buildArgs[0] = 'build-for-testing';
+  const resultIndex = buildArgs.indexOf('-resultBundlePath');
+  buildArgs.splice(resultIndex, 2);
+  const build = await runAndCapture(xcodebuild, buildArgs, root, env, 12 * 60_000);
+  output += '--- build-for-testing ---\n' + build.output;
+  if (build.status !== 0) throw new Error('xcodebuild build-for-testing falhou ou excedeu o prazo');
+  const run = await runAndCapture(xcodebuild, args, root, env, 180_000);
   output += run.output;
   status = run.status;
   if (status === 0 && !providerRequests.some((item) => item.prompt_contains_wiki_marker && item.authorized && item.model === 'nh-test-model')) {
@@ -203,17 +212,6 @@ async function makeWritable(target) {
   if (info.isSymbolicLink()) return;
   await chmod(target, info.isDirectory() ? 0o700 : 0o600);
   if (info.isDirectory()) for (const entry of await readdir(target)) await makeWritable(path.join(target, entry));
-}
-
-function runAndCapture(command, args, cwd, env) {
-  return new Promise((resolve) => {
-    const child = spawn(command, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
-    let output = '';
-    child.stdout.setEncoding('utf8').on('data', (chunk) => { output += chunk; });
-    child.stderr.setEncoding('utf8').on('data', (chunk) => { output += chunk; });
-    child.once('error', (error) => resolve({ status: 2, output: 'Falha ao iniciar xcodebuild: ' + error.message + '\n' }));
-    child.once('exit', (code, signal) => resolve({ status: code ?? 2, output: output + (signal ? '\nxcodebuild signal: ' + signal + '\n' : '') }));
-  });
 }
 
 async function availableLoopbackURL() {

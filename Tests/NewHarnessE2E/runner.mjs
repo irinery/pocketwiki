@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { chmod, cp, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
+import { runWithinDeadline } from './deadline-sync.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -38,7 +39,8 @@ try {
 
   const cases = [];
   for (const pair of selected) {
-    const scenarioTimeout = pair.surface === 'web' ? 180_000 : 15 * 60_000;
+    // macOS launcher enforces 180s on XCTest after its build preparation.
+    const scenarioTimeout = pair.surface === 'macos' ? 20 * 60_000 : 180_000;
     const deadline = Date.now() + scenarioTimeout;
     const id = pair.scenario.id;
     const result = id === 'CONTRACT-00'
@@ -147,12 +149,13 @@ async function runContract(artifactDir, tempHome, shas, deadline) {
   for (let index = 0; index < commands.length; index += 1) {
     const [binary, commandArgs, cwd, overrides = {}] = commands[index];
     const logName = 'contract-' + String(index + 1).padStart(2, '0') + '.log';
+    const commandDeadline = index === 0 ? Date.now() + 15 * 60_000 : deadline;
     const result = runWithinDeadline(binary, commandArgs, {
       cwd,
       env: { ...env, ...overrides, NH_BUILD_DIR: path.join(tempHome, 'kernel-builds') },
       encoding: 'utf8',
       maxBuffer: 32 * 1024 * 1024
-    }, deadline, 15 * 60_000);
+    }, commandDeadline, 15 * 60_000);
     const status = result.status === 0 ? 'PASS' : 'FAIL';
     const body = '$ ' + binary + ' ' + commandArgs.join(' ') + '\nexit=' + String(result.status) +
       '\n--- stdout ---\n' + (result.stdout || '') + '\n--- stderr ---\n' + (result.stderr || result.error?.message || '');
@@ -161,6 +164,8 @@ async function runContract(artifactDir, tempHome, shas, deadline) {
     console.log(status + ' CONTRACT-00 ' + binary + ' ' + commandArgs.join(' ') + ' exit=' + String(result.status));
     if (result.status !== 0) passed = false;
     if (binary === 'npm' && commandArgs[0] === 'ci') {
+      // Dependency installation is preparation, not part of CONTRACT-00 execution.
+      deadline = Date.now() + 180_000;
       const restore = spawnSync('git', ['restore', '--', 'node_modules/.package-lock.json'], { cwd: pocketwikiSource, encoding: 'utf8' });
       if (restore.status !== 0) passed = false;
     }
@@ -182,7 +187,7 @@ async function runLegacy(surface, artifactDir, tempHome, deadline) {
       },
       encoding: 'utf8',
       maxBuffer: 8 * 1024 * 1024
-    }, deadline, 15 * 60_000);
+    }, deadline, 20 * 60_000);
     const body = '$ node Tests/NewHarnessE2E/MacOSHost/run.mjs --result-bundle-path <report-dir>/legacy-macos.xcresult\nexit=' + String(result.status) +
       '\n--- stdout ---\n' + redact(result.stdout || '') + '\n--- stderr ---\n' + redact(result.stderr || result.error?.message || '');
     const logName = 'legacy-macos.log';
@@ -202,12 +207,13 @@ async function runLegacy(surface, artifactDir, tempHome, deadline) {
   const webSource = await cloneGitSnapshot(root, pocketwikiSHA, path.join(tempHome, 'sources/pocketwiki-web'));
   const env = isolatedEnvironment(tempHome);
   const npmCache = path.join(tempHome, 'npm-cache-web');
+  const preparationDeadline = Date.now() + 15 * 60_000;
   const install = runWithinDeadline('npm', ['ci', '--include=dev', '--userconfig=/dev/null', '--cache', npmCache], {
     cwd: webSource,
     env,
     encoding: 'utf8',
     maxBuffer: 16 * 1024 * 1024
-  }, deadline, 180_000);
+  }, preparationDeadline, 15 * 60_000);
   if (install.status !== 0) {
     const logName = 'legacy-web.log';
     await writeFile(path.join(artifactDir, logName), '$ npm ci --include=dev --userconfig=/dev/null --cache <isolated-cache>\nexit=' + String(install.status) +
@@ -219,7 +225,7 @@ async function runLegacy(surface, artifactDir, tempHome, deadline) {
     env,
     encoding: 'utf8',
     maxBuffer: 4 * 1024 * 1024
-  }, deadline, 30_000);
+  }, preparationDeadline, 15 * 60_000);
   if (vendorBuild.status !== 0) {
     console.error('LEGACY-00/web local vendor build failed: ' + (vendorBuild.stderr || vendorBuild.error?.message || 'unknown error'));
     return { ok: false, exitCode: 2, configurationError: true, artifacts: [] };
@@ -230,11 +236,12 @@ async function runLegacy(surface, artifactDir, tempHome, deadline) {
     env: { ...isolatedEnvironment(tempHome), PLAYWRIGHT_BROWSERS_PATH: browserPath },
     encoding: 'utf8',
     maxBuffer: 8 * 1024 * 1024
-  }, deadline);
+  }, preparationDeadline, 15 * 60_000);
   if (browserInstall.status !== 0) {
     console.error('LEGACY-00/web Chromium installation failed: ' + (browserInstall.stderr || browserInstall.error?.message || 'unknown error'));
     return { ok: false, exitCode: 2, configurationError: true, artifacts: [] };
   }
+  deadline = Date.now() + 180_000;
   const logName = 'legacy-web.log';
   const result = runWithinDeadline(process.execPath, [path.join(webSource, 'Tests/NewHarnessE2E/legacy-web-host.mjs')], {
     cwd: webSource,
@@ -342,9 +349,4 @@ async function hashFiles(files) {
 }
 async function sha256File(file) { return createHash('sha256').update(await readFile(file)).digest('hex'); }
 function configError(message) { return Object.assign(new Error(message), { exitCode: 2 }); }
-function runWithinDeadline(binary, args, options, deadline, cap = 180_000) {
-  const timeLeft = Math.min(cap, deadline - Date.now());
-  if (timeLeft <= 0) return { status: null, error: new Error('global 180s scenario deadline exceeded') };
-  return spawnSync(binary, args, { ...options, timeout: timeLeft });
-}
 function xmlEscape(value) { return String(value).replace(/[<>&"']/g, (character) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[character]); }
