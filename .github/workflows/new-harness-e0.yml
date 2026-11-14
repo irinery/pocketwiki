@@ -13,6 +13,83 @@ permissions:
   contents: read
 
 jobs:
+  linux-regression:
+    name: Linux regression (Node and Go)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      POCKETKERNEL_NH00_ROOT: ${{ github.workspace }}/.build/dependencies/pocketkernel
+      MIDDLEWAREAUTH_NHTEST_ROOT: ${{ github.workspace }}/.build/dependencies/middlewareAuth
+
+    steps:
+      - name: Checkout PocketWiki
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned PocketKernel
+        uses: actions/checkout@v4
+        with:
+          repository: irinery/pocketkernel
+          ref: ece7ed7439d552315a87b99ef94bd9fb85786cab
+          path: .build/dependencies/pocketkernel
+          ssh-key: ${{ secrets.POCKETKERNEL_DEPLOY_KEY }}
+          persist-credentials: false
+
+      - name: Checkout pinned MiddlewareAuth
+        uses: actions/checkout@v4
+        with:
+          repository: irinery/middlewareAuth
+          ref: 04f44f62126c785f7b28718d2eff837c28cb65df
+          path: .build/dependencies/middlewareAuth
+
+      - name: Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+          cache: npm
+
+      - name: Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.26.0
+          cache: false
+
+      - name: Verify environment and pinned dependencies
+        run: |
+          node --version
+          npm --version
+          go version
+          command -v ps
+          command -v jq
+          git rev-parse HEAD
+          test "$(git -C "$POCKETKERNEL_NH00_ROOT" rev-parse HEAD)" = ece7ed7439d552315a87b99ef94bd9fb85786cab
+          test "$(git -C "$MIDDLEWAREAUTH_NHTEST_ROOT" rev-parse HEAD)" = 04f44f62126c785f7b28718d2eff837c28cb65df
+
+      - name: Install Node dependencies
+        run: npm ci --include=dev
+
+      - name: Run PocketWiki regression
+        run: npm test
+
+      - name: Run Node harness contracts and rig
+        run: |
+          node --test src/harness/contracts/validate.test.mjs src/harness/local-host.test.mjs
+          npm run test:new-harness-rig
+
+      - name: Run Kernel tests
+        working-directory: .build/dependencies/pocketkernel
+        run: go test ./...
+
+      - name: Run bootstrap and interoperability checks
+        run: |
+          npm run test:nh00-bootstrap
+          sh script/validate_pocket_interop_contract.sh
+
+      - name: Build Linux Kernel matrix
+        working-directory: .build/dependencies/pocketkernel
+        env:
+          NH_BUILD_DIR: ${{ runner.temp }}/pocketkernel-builds
+        run: sh script/build_nh00_matrix.sh
+
   e0:
     name: CONTRACT-00 + LEGACY-00 (service, web, macOS)
     runs-on: macos-15
