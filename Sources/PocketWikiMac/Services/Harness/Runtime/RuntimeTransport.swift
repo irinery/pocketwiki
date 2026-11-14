@@ -292,7 +292,7 @@ struct RuntimeTransport {
         if let queryOperation {
             guard let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw Failure.invalidResponse }
             if queryOperation == "runtime.receipt" {
-                guard Set(raw.keys) == Set(["receipt_id", "revision", "state"]),
+                guard Set(raw.keys) == Set(["receipt_id", "revision", "state"]), Self.canonicalUUID(raw["receipt_id"]),
                       let result = try? JSONDecoder().decode(ReceiptResult.self, from: data), result.revision >= 0,
                       result.revision <= 9_007_199_254_740_991,
                       ["accepted", "pending", "succeeded", "failed", "uncertain"].contains(result.state) else { throw Failure.invalidResponse }

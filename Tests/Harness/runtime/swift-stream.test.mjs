@@ -18,6 +18,7 @@ test('Swift SSE autentica, valida envelope e propaga erro do Kernel via HTTP rea
   let commandBody = '';
   const server = http.createServer((req, res) => {
     calls++; requests.push({ url: req.url, auth: req.headers.authorization, last: req.headers['last-event-id'] });
+    if (calls === 21 || calls === 22) { req.resume(); res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ receipt_id: calls === 21 ? id : '00000000-0000-0000-0000-000000000000', revision: 1, state: 'succeeded' })); return; }
     if (calls === 20) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.write('{'); return; }
     if (calls === 17 || calls === 18 || calls === 19) {
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
@@ -47,7 +48,7 @@ test('Swift SSE autentica, valida envelope e propaga erro do Kernel via HTTP rea
     let stderr = ''; child.stderr.on('data', data => stderr += data);
     const [exit] = await once(child, 'exit');
     assert.equal(exit, 0, stderr);
-    assert.equal(calls, 20);
+    assert.equal(calls, 22);
     assert.deepEqual(requests.slice(0, 3), Array.from({ length: 3 }, () => ({ url: `/v1/harness/streams/thread/${id}?after_seq=3&modules=runtime`, auth: 'Bearer test-secret', last: '3' })));
     assert.equal(requests[3].url, '/v1/harness/commands');
     for (const request of requests.slice(4, 6)) assert.deepEqual(request, { url: `/v1/harness/payloads/${id}`, auth: 'Bearer test-secret', last: undefined });
@@ -58,6 +59,7 @@ test('Swift SSE autentica, valida envelope e propaga erro do Kernel via HTTP rea
     for (const request of requests.slice(14, 16)) assert.deepEqual(request, { url: `/v1/harness/receipts/${id}`, auth: 'Bearer test-secret', last: undefined });
     for (const request of requests.slice(16, 19)) assert.deepEqual(request, { url: `/v1/harness/streams/thread/${id}?after_seq=3&modules=runtime`, auth: 'Bearer test-secret', last: '3' });
     assert.equal(requests[19].url, '/v1/harness/capabilities');
+    for (const request of requests.slice(20)) assert.deepEqual(request, { url: '/v1/harness/query/runtime.receipt', auth: 'Bearer test-secret', last: undefined });
     assert.deepEqual(JSON.parse(commandBody), { protocol_major: 1, command_id: id, environment_id: id, expected_revision: 0, operation: 'runtime.dispatch', input: { command_id: id, thread_id: id, expected_revision: 0, operation: 'submit', text: 'Olá' } });
   } finally { server.close(); await rm(dir, { recursive: true, force: true }); }
 });

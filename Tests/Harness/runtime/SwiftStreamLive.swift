@@ -76,5 +76,8 @@ private struct Snapshot: Decodable { let module: String }
         let quick = try RuntimeTransport(baseURL: URL(string: CommandLine.arguments[1])!, bearer: "test-secret", requestTimeout: 0.25)
         do { _ = try await quick.capabilities(environmentID: thread, schemaSHA256: hash); throw RuntimeTransport.Failure.invalidArgument }
         catch let error as URLError where error.code == .timedOut { }
+        _ = try await client.queryReceipt(commandID: thread)
+        do { _ = try await client.queryReceipt(commandID: thread); throw RuntimeTransport.Failure.invalidArgument }
+        catch RuntimeTransport.Failure.invalidResponse { }
     }
 }
