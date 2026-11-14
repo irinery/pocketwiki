@@ -29,7 +29,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: irinery/pocketkernel
-          ref: codex/nh00-locks
+          ref: ece7ed7439d552315a87b99ef94bd9fb85786cab
           path: .build/dependencies/pocketkernel
           ssh-key: ${{ secrets.POCKETKERNEL_DEPLOY_KEY }}
           persist-credentials: false
@@ -62,7 +62,7 @@ jobs:
           swift --version
           xcodebuild -version
           git rev-parse HEAD
-          test "$(git -C "$POCKETKERNEL_NH00_ROOT" rev-parse HEAD)" = 03f8f30eb781b4d16a9dca76f7548f9781bbef02
+          test "$(git -C "$POCKETKERNEL_NH00_ROOT" rev-parse HEAD)" = ece7ed7439d552315a87b99ef94bd9fb85786cab
           test "$(git -C "$MIDDLEWAREAUTH_NHTEST_ROOT" rev-parse HEAD)" = 04f44f62126c785f7b28718d2eff837c28cb65df
 
       - name: Run all E0 shards
