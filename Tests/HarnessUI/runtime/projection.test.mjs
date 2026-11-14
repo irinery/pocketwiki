@@ -35,3 +35,12 @@ test('mesmo event_id com conteúdo diferente invalida montagem', () => {
   assert.throws(() => p.bufferEvent(changed), { code: 'ERR_INVALID' });
   assert.throws(() => p.finish(), { code: 'ERR_INVALID' });
 });
+
+test('stream longo descarta buffer já publicado e mantém dedup', () => {
+  const p = new RuntimeProjection({ environmentId: id, threadId: id }); p.appendPage(page); p.finish();
+  for (let seq = 11; seq < 6011; seq++) {
+    const e = event(seq); p.bufferEvent(e); p.finish(); p.bufferEvent(e);
+    assert.equal(p.bytes, 0);
+  }
+  assert.equal(p.finish().lastSeq, 6010);
+});

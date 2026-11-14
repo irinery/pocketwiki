@@ -20,7 +20,7 @@ export function mountRuntimePanel(root, client) {
   form.addEventListener('submit', async event => {
     event.preventDefault(); submit.disabled = true;
     try { await client.submit(input.value); input.value = ''; }
-    catch (error) { status.textContent = `${error.code || 'ERR_UNAVAILABLE'}: ${error.message}`; }
+    catch (error) { status.textContent = 'Não foi possível enviar o comando.'; }
     finally { submit.disabled = !client.state.available; }
   });
   return { open: () => client.open(), reconnect: () => client.reconnect() };

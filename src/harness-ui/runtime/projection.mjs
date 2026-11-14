@@ -34,7 +34,7 @@ export class RuntimeProjection {
       effects.set(item.effect_id, clone(item));
     }
     this.receipts = receipts; this.effects = effects; this.started = true;
-    this.snapshotId = d.snapshot_id; this.revision = d.revision; this.boundary = d.as_of_seq;
+    this.snapshotId = d.snapshot_id; this.revision = d.revision; this.boundary = d.as_of_seq; this.asOfSeq = d.as_of_seq;
     this.nextCursor = d.next_cursor; this.complete = d.next_cursor == null;
     if (d.next_cursor != null) this.cursors.add(d.next_cursor);
   }
@@ -84,6 +84,10 @@ export class RuntimeProjection {
         map.set(key, clone(p.value));
       } else throw fail('ERR_INVALID', 'Mutação inválida');
     }
-    return { snapshotId: this.snapshotId, revision, asOfSeq: this.boundary, lastSeq, receipts, effects };
+    // Once published, the confirmed cursor subsumes its events. Keep only
+    // materialized entities; replay at or before the cursor is ignored.
+    this.receipts = receipts; this.effects = effects; this.revision = revision; this.boundary = lastSeq;
+    this.events = []; this.seen.clear(); this.sequences.clear(); this.bytes = 0;
+    return { snapshotId: this.snapshotId, revision, asOfSeq: this.asOfSeq, lastSeq, receipts: new Map(receipts), effects: new Map(effects) };
   }
 }
