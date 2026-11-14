@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { replayProofSHA256, canonicalJSON } from './replay-proof.mjs';
 import { execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
@@ -162,12 +163,42 @@ test('target identity hashes real checkout files and rejects wrong or dirty chec
 });
 
 
-test('E1 requires all six cumulative pairs and rejects missing or duplicate E1 cases', () => {
+test('E1 requires all six cumulative pairs and validates replay artifact bindings', async t => {
   const input = reports().map(report => ({ ...report, stage: 'E1' }));
   input[0].cases.push({ id: 'SERVICE-0002', surface: 'service', status: 'passed', artifact_paths: ['service/runtime.log'] });
   input[1].cases.push({ id: 'UI-0002', surface: 'web', status: 'passed', artifact_paths: ['web/runtime.log'] });
   input[2].cases.push({ id: 'UI-0002', surface: 'macos', status: 'passed', artifact_paths: ['macos/runtime.log'] });
-  assert.throws(() => aggregateReports('E1', input, matrix), /requires integrated RFC 0002 replay at boundary 10/);
+  assert.throws(() => aggregateReports('E1', input, matrix), /invalid integrated replay/);
+  for (const [index, surface] of [[1, 'web'], [2, 'macos']]) {
+    const nonce = 'a'.repeat(32), state = seq => ({ revision: 1, lastSeq: seq, receipts: [], effects: [] });
+    const digest = data => replayProofSHA256(Buffer.from(canonicalJSON(data)));
+    const frame = (seq, after) => ({ seq, before_cursor: 10, after_cursor: after, before_state: state(10), after_state: state(after), before: digest(state(10)), after: digest(state(after)) });
+    const proof = { version: 1, level: 'integration', surface, nonce, boundary: 10, frames: [frame(9, 10), frame(10, 10), frame(11, 11)] };
+    Object.assign(input[index].cases[1], { replay_proof: proof, replay_nonce: nonce, replay_proof_sha256: replayProofSHA256(Buffer.from(JSON.stringify(proof))), replay_proof_path: surface + '/proof.json', replay_host_path: surface + '/result.json' });
+    input[index].cases[1].artifact_paths.push(surface + '/proof.json', surface + '/result.json');
+  }
+  assert.equal(aggregateReports('E1', input, matrix).gate_passed, true);
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'nh-replay-proof-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const paths = [];
+  for (const [index, report] of input.entries()) {
+    for (const item of report.cases) for (const artifact of item.artifact_paths) {
+      const target = path.join(dir, artifact); await mkdir(path.dirname(target), { recursive: true });
+      let content = 'fixture';
+      if (artifact === item.replay_proof_path) content = JSON.stringify(item.replay_proof);
+      if (artifact === item.replay_host_path) content = JSON.stringify({ surface: item.surface, cases: [{ id: '02-01', status: 'passed', replay_nonce: item.replay_nonce, replay_proof_sha256: item.replay_proof_sha256 }] });
+      await writeFile(target, content);
+    }
+    const reportPath = path.join(dir, `shard-${index}.json`); await writeFile(reportPath, JSON.stringify(report)); paths.push(reportPath);
+  }
+  assert.equal((await aggregateReportFiles('E1', paths, identity)).gate_passed, true);
+  await writeFile(path.join(dir, 'web/proof.json'), '{}');
+  await assert.rejects(() => aggregateReportFiles('E1', paths, identity), /replay proof artifact mismatch/);
+
+  const badBoundary = structuredClone(input); badBoundary[1].cases[1].replay_proof.boundary = 9;
+  assert.throws(() => aggregateReports('E1', badBoundary, matrix), /invalid integrated replay/);
+  const badLevel = structuredClone(input); badLevel[1].cases[1].replay_proof.level = 'unit';
+  assert.throws(() => aggregateReports('E1', badLevel, matrix), /invalid integrated replay/);
   const missing = structuredClone(input); missing[2].cases.pop();
   assert.throws(() => aggregateReports('E1', missing, matrix), /missing required.*UI-0002\/macos/);
   const duplicate = structuredClone(input); duplicate[0].cases.push(structuredClone(duplicate[0].cases[1]));

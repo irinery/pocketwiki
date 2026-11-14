@@ -1,3 +1,4 @@
+import { validateReplayProof, replayProofSHA256 } from './replay-proof.mjs';
 import { assertTrackedFlags } from './git-snapshot.mjs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -73,6 +74,10 @@ export function aggregateReports(stage, reports, matrix) {
       if (!Array.isArray(result.artifact_paths) || result.artifact_paths.length === 0 || result.artifact_paths.some((item) => !isSafeRelativePath(item))) {
         throw new Error('artifact_paths must be safe relative paths: ' + key);
       }
+      if (result.id === 'UI-0002') {
+        validateReplayProof(result.replay_proof, { surface: result.surface, nonce: result.replay_nonce });
+        if (!isSafeRelativePath(result.replay_proof_path) || !result.artifact_paths.includes(result.replay_proof_path) || !isSafeRelativePath(result.replay_host_path) || !result.artifact_paths.includes(result.replay_host_path) || !/^[a-f0-9]{64}$/.test(result.replay_proof_sha256 || '')) throw new Error('invalid replay proof artifact binding: ' + key);
+      }
       if (scenario.stage <= 2 && report.auth_mode !== 'host_local') {
         throw new Error('forbidden auth_mode for ' + key + ': ' + report.auth_mode);
       }
@@ -82,10 +87,6 @@ export function aggregateReports(stage, reports, matrix) {
 
   const missing = [...expected.keys()].filter((key) => !actual.has(key));
   if (missing.length) throw new Error('missing required scenario/surface pairs: ' + missing.join(', '));
-  // Remove only alongside an integrated B=10 scenario and validated evidence.
-  if ([...actual.keys()].some(key => key.startsWith('UI-0002/'))) {
-    throw new Error('UI-0002 requires integrated RFC 0002 replay at boundary 10');
-  }
   return {
     version: '0.2.0',
     stage,
@@ -173,6 +174,21 @@ async function verifyArtifacts(reportPath, report) {
   if (!report || !Array.isArray(report.cases)) throw new Error('report cases must be an array');
   const reportDirectory = await realpath(path.dirname(reportPath));
   for (const result of report.cases) {
+    if (result.id === 'UI-0002') {
+      if (!isSafeRelativePath(result.replay_proof_path) || !result.artifact_paths?.includes(result.replay_proof_path)) throw new Error('invalid replay proof artifact binding');
+      const proofPath = path.resolve(reportDirectory, ...result.replay_proof_path.split('/'));
+      const resolved = await realpath(proofPath), metadata = await lstat(proofPath);
+      if (!resolved.startsWith(reportDirectory + path.sep) || !metadata.isFile() || metadata.isSymbolicLink()) throw new Error('invalid replay proof file');
+      if (!isSafeRelativePath(result.replay_host_path) || !result.artifact_paths.includes(result.replay_host_path)) throw new Error('invalid replay host artifact binding');
+      const hostPath = path.resolve(reportDirectory, ...result.replay_host_path.split('/'));
+      const hostResolved = await realpath(hostPath), hostMetadata = await lstat(hostPath);
+      if (!hostResolved.startsWith(reportDirectory + path.sep) || !hostMetadata.isFile() || hostMetadata.isSymbolicLink()) throw new Error('invalid replay host file');
+      const host = JSON.parse(await readFile(hostPath, 'utf8'));
+      const rows = Array.isArray(host.cases) ? host.cases.filter(row => row.id === '02-01') : [];
+      if (host.surface !== result.surface || rows.length !== 1 || rows[0].status !== 'passed' || rows[0].replay_nonce !== result.replay_nonce || rows[0].replay_proof_sha256 !== result.replay_proof_sha256) throw new Error('replay host artifact mismatch');
+      const bytes = await readFile(proofPath);
+      if (replayProofSHA256(bytes) !== result.replay_proof_sha256 || JSON.stringify(JSON.parse(bytes)) !== JSON.stringify(result.replay_proof)) throw new Error('replay proof artifact mismatch');
+    }
     if (!Array.isArray(result.artifact_paths)) throw new Error('artifact_paths must be an array');
     for (const relativePath of result.artifact_paths) {
       if (!isSafeRelativePath(relativePath)) throw new Error('unsafe artifact path: ' + String(relativePath));

@@ -1,3 +1,4 @@
+import { validateReplayProof, replayProofSHA256 } from '../../NewHarnessE2E/replay-proof.mjs';
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHash, randomBytes } from 'node:crypto';
@@ -26,6 +27,18 @@ async function run(program, argv, options = {}) {
     child.once('error', error => { clearTimeout(timer); reject(error); });
     child.once('close', code => { clearTimeout(timer); log += `$ ${program} ${argv.join(' ')}\n${output}\nexit=${code}\n`; resolve(code); });
   });
+}
+async function finishReplay(row, code) {
+  row.status = 'failed';
+  if (code !== 0) { row.detail = `replay falhou: exit ${code}`; return; }
+  try {
+    const bytes = await readFile(path.join(reportDir, 'replay-proof.json'));
+    const nonce = process.env.NH_REPLAY_NONCE;
+    row.replay_nonce = nonce;
+    row.replay_proof_sha256 = replayProofSHA256(bytes);
+    validateReplayProof(JSON.parse(bytes), { surface, nonce });
+    row.status = 'passed'; row.detail = 'replay integrado literal validado';
+  } catch (error) { row.detail = `replay literal não comprovado: ${error.message}`; }
 }
 try {
   assertTrackedFlags(process.cwd());
@@ -76,8 +89,8 @@ try {
     for (const [id, flag, detail] of scenarios) {
       const code = await run(process.execPath, ['Tests/HarnessUI/runtime/web-smoke.mjs'], { env: { ...baseEnv, [flag]: '1' } });
       const row = cases.find(item => item.id === id);
-      row.status = code === 0 && id !== '02-01' ? 'passed' : 'failed';
-      row.detail = code === 0 ? (id === '02-01' ? detail + '; RFC exige B=10 integrado, ainda não comprovado' : detail || 'validado') : `host falhou: exit ${code}`;
+      if (id === '02-01') await finishReplay(row, code);
+      else { row.status = code === 0 ? 'passed' : 'failed'; row.detail = code === 0 ? detail || 'validado' : `host falhou: exit ${code}`; }
     }
     const bundle = path.join(temp, 'runtime-bundle.js');
     if (await run('npx', ['esbuild', 'Tests/HarnessUI/runtime/web/main.mjs', '--bundle', '--format=esm', '--platform=browser', '--inject:Tests/HarnessUI/runtime/web/buffer-shim.mjs', `--outfile=${bundle}`], { timeoutMS: 600000 })) throw new Error('bundle runtime falhou');
@@ -101,7 +114,9 @@ try {
     const env = { ...process.env, RUNTIME_KERNEL_BINARY: kernel, RUNTIME_MACOS: '1', RUNTIME_DERIVED_DATA: derived, RUNTIME_ARTIFACT_DIR: reportDir, NH_TEST_SEED: String(seed), NH_TEST_SEED: String(seed) };
     for (const [id, flag] of [['02-01', 'RUNTIME_REPLAY'], ['02-03', 'RUNTIME_PAUSE_EFFECT'], ['02-04', 'RUNTIME_INCOMPATIBLE']]) {
       const code = await run(process.execPath, ['Tests/HarnessUI/runtime/web-smoke.mjs'], { env: { ...env, [flag]: '1' } });
-      const row = cases.find(item => item.id === id); row.status = code === 0 && id !== '02-01' ? 'passed' : 'failed'; row.detail = code === 0 ? (id === '02-01' ? 'Kernel: B=9, replay 8/9/10/11/12; B=10/9/10/11 apenas em testes unitários JS e Swift; RFC exige B=10 integrado, ainda não comprovado' : 'validado') : `XCTest falhou: exit ${code}`;
+      const row = cases.find(item => item.id === id);
+      if (id === '02-01') await finishReplay(row, code);
+      else { row.status = code === 0 ? 'passed' : 'failed'; row.detail = code === 0 ? 'validado' : `XCTest falhou: exit ${code}`; }
     }
     // This host enforces separate build and 180s XCTest deadlines internally.
     const resultPath = path.join(temp, 'legacy-macos.xcresult');
