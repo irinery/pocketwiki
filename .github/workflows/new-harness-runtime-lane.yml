@@ -52,7 +52,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: irinery/pocketkernel
-          ref: ee4428ece80b8be4b0ff4d91efa684df0d99ae4d
+          ref: 47ea351d6bf8a2ff507665b3355972904c92ae1d
           path: .build/dependencies/pocketkernel
           ssh-key: ${{ secrets.POCKETKERNEL_DEPLOY_KEY }}
           persist-credentials: false
@@ -68,7 +68,7 @@ jobs:
       - name: Verify pinned sources and toolchain
         run: |
           sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
-          test "$(git -C .build/dependencies/pocketkernel rev-parse HEAD)" = ee4428ece80b8be4b0ff4d91efa684df0d99ae4d
+          test "$(git -C .build/dependencies/pocketkernel rev-parse HEAD)" = 47ea351d6bf8a2ff507665b3355972904c92ae1d
           git rev-parse HEAD
           node --version
           go version
@@ -78,7 +78,7 @@ jobs:
           CGO_ENABLED: '0'
         run: |
           (cd .build/dependencies/pocketkernel && go build -trimpath -o "$RUNNER_TEMP/runtime-kernel" ./cmd/pocketkernel)
-          swiftc -swift-version 6 Sources/PocketWikiMac/Models/Harness/HarnessOperationRegistry.swift Sources/PocketWikiMac/Models/Harness/HarnessV1.swift Sources/PocketWikiMac/Services/Harness/Runtime/RuntimeTransport.swift Tests/Harness/runtime/SwiftKernelIntegration.swift -o "$RUNNER_TEMP/runtime-swift"
+          swiftc -swift-version 6 Sources/PocketWikiMac/Models/Harness/HarnessOperationRegistry.swift Sources/PocketWikiMac/Models/Harness/HarnessV1.swift Sources/PocketWikiMac/Services/Harness/Runtime/RuntimeTransport.swift Sources/PocketWikiMac/Services/Harness/Runtime/RuntimeProjection.swift Tests/Harness/runtime/SwiftKernelIntegration.swift -o "$RUNNER_TEMP/runtime-swift"
       - name: Exercise real bootstrap, ledger and SSE
         env:
           RUNTIME_KERNEL_BINARY: ${{ runner.temp }}/runtime-kernel

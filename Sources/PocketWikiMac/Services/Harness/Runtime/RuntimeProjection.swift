@@ -8,6 +8,7 @@ final class RuntimeProjection {
         let revision: Int
         let asOfSeq: Int
         let lastSeq: Int
+        let appliedEventCount: Int
         let receipts: [String: [String: Any]]
         let effects: [String: [String: Any]]
     }
@@ -121,6 +122,6 @@ final class RuntimeProjection {
                 if type == "RuntimeReceipt" { rs.removeValue(forKey: key) } else { es.removeValue(forKey: key) }
             } else { throw Failure.invalidEvent }
         }
-        return View(snapshotID: id, revision: latestRevision, asOfSeq: boundary, lastSeq: events.last?.0 ?? boundary, receipts: rs, effects: es)
+        return View(snapshotID: id, revision: latestRevision, asOfSeq: boundary, lastSeq: events.last?.0 ?? boundary, appliedEventCount: events.count, receipts: rs, effects: es)
     }
 }
