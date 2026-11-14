@@ -16,6 +16,8 @@ test('captura precisa ser PNG de tamanho limitado', async () => {
   assert.throws(() => requireRuntimeScreenshot(Buffer.alloc(24)));
   const oversized = Buffer.from(png); oversized.writeUInt32BE(2000, 20);
   assert.throws(() => requireRuntimeScreenshot(oversized));
+  assert.doesNotThrow(() => requireRuntimeScreenshot(oversized, { maxHeight: 2048 }));
+  assert.throws(() => requireRuntimeScreenshot(png, { maxHeight: 2049 }));
   const textChunk = Buffer.from([0, 0, 0, 0, 116, 69, 88, 116, 0, 0, 0, 0]);
   assert.throws(() => requireRuntimeScreenshot(Buffer.concat([png.subarray(0, -12), textChunk, png.subarray(-12)])));
 });
