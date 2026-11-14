@@ -31,3 +31,7 @@ test('repetição após falha ambígua usa o mesmo envelope', async () => {
   await assert.rejects(client.submit('oi', id)); await client.retryPending();
   assert.deepEqual(calls[0], calls[1]); assert.equal(client.pendingCommandId, undefined);
 });
+test('404 legado com corpo não-harness mantém fallback', async () => {
+  const client = new RuntimeClient({ transport: { async capabilities() { throw new Error('Invalid Kernel error (HTTP 404)'); } }, environmentId: id, threadId: id });
+  await assert.rejects(client.open()); assert.equal(client.state.error, 'LEGACY_SERVER'); assert.equal(client.state.available, false);
+});

@@ -14,7 +14,7 @@ export class RuntimeClient {
       await this.transport.capabilities({ environmentId: this.environmentId, schemaSHA256: this.schemaSHA256 });
       await this.reconnect();
     } catch (error) {
-      this.publish({ available: false, error: error.status === 404 || error.status === 405 || /^Kernel HTTP (404|405)$/.test(error.message) ? 'LEGACY_SERVER' : error.code || 'ERR_UNAVAILABLE' });
+      this.publish({ available: false, error: error.status === 404 || error.status === 405 || /^(?:Kernel HTTP (?:404|405)|Invalid Kernel error \(HTTP (?:404|405)\))$/.test(error.message) ? 'LEGACY_SERVER' : error.code || 'ERR_UNAVAILABLE' });
       throw error;
     }
   }
