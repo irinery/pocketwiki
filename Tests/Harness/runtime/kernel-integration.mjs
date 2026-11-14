@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { createHash, randomUUID } from 'node:crypto';
 import http from 'node:http';
@@ -10,6 +9,7 @@ import { LocalCredentialHost } from '../../../src/harness/local-host.mjs';
 import { KernelLocalBootstrapClient } from '../../../src/harness/kernel-bootstrap.mjs';
 import { RuntimeTransport } from '../../../src/harness/runtime/transport.mjs';
 import { validateAgainst } from '../../../src/harness/contracts/validate.mjs';
+import { spawnBeforeDeadline } from './spawn-before-deadline.mjs';
 
 const kernel = process.env.RUNTIME_KERNEL_BINARY;
 const swiftClient = process.env.RUNTIME_SWIFT_BINARY;
@@ -225,7 +225,7 @@ async function waitForUncertain(events, effectID) {
   }
 }
 async function startSwift(base, bearer, commandID, secondID) {
-  const child = spawn(swiftClient, [base, environment, thread, commandID, schemaHash, secondID], { stdio: ['pipe', 'pipe', 'pipe'] });
+  const child = spawnBeforeDeadline(deadline, swiftClient, [base, environment, thread, commandID, schemaHash, secondID], { stdio: ['pipe', 'pipe', 'pipe'] });
   children.push(child); let stderr = ''; child.stderr.on('data', chunk => { stderr += chunk.toString(); });
   const lines = createInterface({ input: child.stdout });
   child.stdin.write(`${bearer}\n`);
@@ -246,7 +246,7 @@ function closeBootstrapClients() {
 async function startKernel({ pauseAfterEffect = false } = {}) {
   const args = ['-mode', 'serve', '-mock-model', '-addr', '127.0.0.1:0', '-harness-rig-ready', '-harness-db', dbPath, '-harness-auth-store', path.join(dir, 'auth.json'), '-harness-bootstrap-socket', socketPath, '-harness-temp-root', ioPath, '-harness-audience', audience, '-harness-schema-sha256', schemaHash];
   if (pauseAfterEffect) args.push('-harness-rig-pause-after-effect');
-  const child = spawn(kernel, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawnBeforeDeadline(deadline, kernel, args, { stdio: ['ignore', 'pipe', 'pipe'] });
   children.push(child);
   let resolveBarrier, resolveDrain, rejectDrain;
   const barrier = new Promise(resolve => { resolveBarrier = resolve; });
