@@ -59,5 +59,5 @@ export class RuntimeTransport {
 function validReceipt(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const keys = ['command_id', 'receipt_id', 'environment_id', 'revision', 'state', 'duplicate', 'result_ref'];
-  return Object.keys(value).every(key => keys.includes(key)) && uuid(value.command_id) && uuid(value.receipt_id) && uuid(value.environment_id) && int(value.revision) && ['accepted', 'pending', 'succeeded', 'failed', 'uncertain'].includes(value.state) && typeof value.duplicate === 'boolean' && (value.result_ref === undefined || uuid(value.result_ref));
+  return Object.keys(value).every(key => keys.includes(key)) && uuid(value.command_id) && uuid(value.receipt_id) && uuid(value.environment_id) && int(value.revision) && ['accepted', 'pending', 'succeeded', 'failed', 'uncertain'].includes(value.state) && typeof value.duplicate === 'boolean' && (value.result_ref === undefined || value.result_ref === null || uuid(value.result_ref));
 }
