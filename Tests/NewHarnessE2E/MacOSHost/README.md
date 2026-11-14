@@ -6,6 +6,8 @@ O launcher compila os executáveis reais PocketKernel e MiddlewareAuth dos check
 
 O launcher extrai do `.xcresult` apenas o resumo JSON do XCTest, redige os canários de credencial e remove o bundle bruto, que pode conter snapshots de UI. O runner externo registra o log redigido, o resumo JSON e o JUnit. A evidência do provider guarda contagem/modelo e flags do marcador, sem corpo do prompt nem credenciais.
 
+Quando o teste legado falha, o teardown tenta capturar somente o título visível da página fixture, desde que corresponda exatamente ao conteúdo de teste. O launcher seleciona apenas esse attachment, valida o PNG e remove metadados; caso o elemento ou o attachment não esteja disponível, registra a indisponibilidade sem alterar o resultado da falha. O bundle bruto fica no diretório temporário, fora da árvore de artefatos, inclusive em timeout; nenhuma captura do desktop é exportada.
+
 Pré-requisito: Xcode completo com SDK macOS e XCTest, Node.js 22.14.0 e Go 1.26.0. Não use apenas Command Line Tools. O workflow [`new-harness-e0.yml`](../../../.github/workflows/new-harness-e0.yml) fixa Xcode 16.4, os SHAs de PocketKernel/MiddlewareAuth registrados em `nhtest-base-shas.md` e os pins Swift do projeto. Ele roda a matriz inteira E0 no mesmo checkout PocketWiki, agrega os relatórios e publica os artefatos redigidos.
 
 Execução manual exige checkouts locais nestes caminhos (ou as variáveis equivalentes abaixo):

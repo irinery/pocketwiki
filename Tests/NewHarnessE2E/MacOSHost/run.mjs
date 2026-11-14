@@ -1,4 +1,5 @@
 import { runtimeScreenshotPayload, sanitizeRuntimeScreenshot } from './runtime-screenshot.mjs';
+import { legacyFailureScreenshotPayload } from './legacy-failure-screenshot.mjs';
 import { assertRuntimeProof, runtimeProofExitCode } from './runtime-proof.mjs';
 import { createHelperLauncher, cleanupManagedHelpers } from './managed-helpers.mjs';
 import { helperPaths } from './supervisor.mjs';
@@ -9,7 +10,7 @@ import { runWithinDeadline, requireProcessListing } from '../deadline-sync.mjs';
 import { createServer as createNetServer } from 'node:net';
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,8 +22,10 @@ const logPath = resultBundle.replace(/\.xcresult$/, '') + '.log';
 const runtimeHook = process.env.NH_RUNTIME_LEGACY_UI === '1';
 const proofOutput = resultBundle + '.runtime-proof.json';
 const screenshotOutput = resultBundle + '.runtime-fallback.png';
+const failureScreenshotOutput = resultBundle + '.legacy-fixture-failure.png';
 await rm(proofOutput, { force: true });
 await rm(screenshotOutput, { force: true });
+await rm(failureScreenshotOutput, { force: true });
 try { requireProcessListing(); } catch (error) { reportConfigFailure(error.message); }
 const explicitDeveloperDir = process.env.POCKETWIKI_XCODE_DEVELOPER_DIR || process.env.DEVELOPER_DIR;
 const selected = explicitDeveloperDir
@@ -74,6 +77,7 @@ let output = '';
 let status = 2;
 let runtimeProofVerified = false;
 let runtimeScreenshot;
+let failureScreenshotSaved = false;
 const proofNonce = process.env.NH_RUNTIME_PROOF_NONCE || '';
 const proofSHA = process.env.NH_RUNTIME_PROOF_SHA || '';
 const proofMarker = path.join(tempHome, 'runtime-xctest-proof');
@@ -192,6 +196,18 @@ try {
       status = status === 0 ? 1 : status;
       output += '\nFAIL: não foi possível extrair o resumo sanitizado do xcresult. ' + error.message + '\n';
     } finally {
+      if (status !== 0) {
+        try {
+          const screenshot = await extractLegacyFailureScreenshot(resultBundle, tempHome, developerDir);
+          await writeFile(failureScreenshotOutput + '.tmp', screenshot, { mode: 0o600 });
+          await rename(failureScreenshotOutput + '.tmp', failureScreenshotOutput);
+          failureScreenshotSaved = true;
+        } catch {
+          // Missing or unsafe fixture attachments must not replace the XCTest failure.
+          await rm(failureScreenshotOutput, { force: true }).catch(() => {});
+          await rm(failureScreenshotOutput + '.tmp', { force: true }).catch(() => {});
+        }
+      }
       await makeWritable(resultBundle);
       await rm(resultBundle, { recursive: true, force: true });
     }
@@ -208,6 +224,7 @@ try {
   const checkedStatus = runtimeProofExitCode(status, runtimeHook, runtimeProofVerified);
   if (checkedStatus !== status) output += '\nFAIL: prova runtime ou xcresult ausente.\n';
   status = checkedStatus;
+  if (status !== 0) output += failureScreenshotSaved ? '\nScreenshot da fixture: disponível.\n' : '\nScreenshot da fixture: indisponível.\n';
   if (runtimeHook && status === 0 && runtimeProofVerified) {
     await writeFile(screenshotOutput, runtimeScreenshot, { mode: 0o600 });
     await writeFile(proofOutput, JSON.stringify({ nonce: proofNonce, pocketwiki_sha: proofSHA, runtime_fallback_verified: true, legacy_capability_status: 404, skipped_tests: 0 }, null, 2) + '\n', { mode: 0o600 });
@@ -237,6 +254,19 @@ async function extractRuntimeScreenshot(bundle, tempHome, developerDir) {
   if (extracted.status !== 0) throw new Error('falha ao extrair screenshot do slot fixture');
   const info = await lstat(file);
   if (!info.isFile() || info.isSymbolicLink()) throw new Error('screenshot do slot inválido');
+  return sanitizeRuntimeScreenshot(await readFile(file));
+}
+
+async function extractLegacyFailureScreenshot(bundle, tempHome, developerDir) {
+  const toolEnv = { ...process.env, DEVELOPER_DIR: developerDir };
+  const activity = spawnSync('xcrun', ['xcresulttool', 'get', 'test-results', 'activities', '--test-id', 'Legacy00UITests/testLegacy00UsesRealAppBridgeAndRestoresAfterRestart()', '--path', bundle, '--compact'], { env: toolEnv, encoding: 'utf8', timeout: 30_000, maxBuffer: 8 * 1024 * 1024 });
+  if (activity.status !== 0) throw new Error('fixture activity unavailable');
+  const payload = legacyFailureScreenshotPayload(JSON.parse(activity.stdout));
+  const file = path.join(tempHome, 'legacy-fixture-failure-selected.png');
+  const extracted = spawnSync('xcrun', ['xcresulttool', 'export', 'object', '--legacy', '--type', 'file', '--id', payload, '--path', bundle, '--output-path', file], { env: toolEnv, encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024 });
+  if (extracted.status !== 0) throw new Error('fixture attachment unavailable');
+  const info = await lstat(file);
+  if (!info.isFile() || info.isSymbolicLink() || info.size > 8 * 1024 * 1024) throw new Error('invalid fixture attachment');
   return sanitizeRuntimeScreenshot(await readFile(file));
 }
 

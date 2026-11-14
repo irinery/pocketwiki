@@ -9,6 +9,13 @@ final class Legacy00UITests: XCTestCase {
     private var fixtureProviderURL: String!
     private var middlewareURL: String!
     private var kernelURL: String!
+    private var testApp: XCUIApplication?
+    private var sawFailure = false
+
+    override func record(_ issue: XCTIssue) {
+        sawFailure = true
+        super.record(issue)
+    }
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -55,6 +62,18 @@ final class Legacy00UITests: XCTestCase {
     }
 
     override func tearDownWithError() throws {
+        if sawFailure, let app = testApp, app.state == .runningForeground {
+            let title = app.staticTexts["legacy.reader.title"]
+            if title.exists && title.isHittable {
+                let text = (title.value as? String)?.isEmpty == false ? title.value as? String : title.label
+                if text == "NH-TEST fixture page" {
+                    let attachment = XCTAttachment(screenshot: title.screenshot())
+                    attachment.name = "nh-legacy-fixture-failure"
+                    attachment.lifetime = .keepAlways
+                    add(attachment)
+                }
+            }
+        }
         if let temporaryRoot {
             try? FileManager.default.removeItem(at: temporaryRoot)
         }
@@ -62,6 +81,7 @@ final class Legacy00UITests: XCTestCase {
 
     func testLegacy00UsesRealAppBridgeAndRestoresAfterRestart() throws {
         let app = XCUIApplication(bundleIdentifier: "com.pocketwiki.NHTestHost")
+        testApp = app
         var appLaunchEnvironment: [String: String] = [
             "HOME": ProcessInfo.processInfo.environment["HOME"] ?? temporaryRoot.path,
             "CFFIXED_USER_HOME": ProcessInfo.processInfo.environment["CFFIXED_USER_HOME"] ?? temporaryRoot.path,

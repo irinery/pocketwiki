@@ -2,7 +2,7 @@ import { DEFAULT_FIXTURE_SEED } from '../Harness/runtime/fixture-identities.mjs'
 import { superviseMacHost } from './MacOSHost/supervisor.mjs';
 import { exportGitSnapshot } from './git-snapshot.mjs';
 import { existsSync } from 'node:fs';
-import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { runWithinDeadline, requireProcessListing } from './deadline-sync.mjs';
@@ -228,7 +228,10 @@ async function runRuntimeUI(surface, artifactDir, tempHome, targetSHA) {
 
 async function runLegacy(surface, artifactDir, tempHome, deadline, targetSHA) {
   if (surface === 'macos') {
-    const resultBundle = path.join(artifactDir, 'legacy-macos.xcresult');
+    // Keep the raw bundle outside the upload tree, including on timeout or crash.
+    const resultBundle = path.join(tempHome, 'legacy-macos.xcresult');
+    const artifactBase = path.join(artifactDir, 'legacy-macos.xcresult');
+    for (const suffix of ['.summary.json', '.legacy-fixture-failure.png']) await rm(artifactBase + suffix, { force: true });
     const macSource = await cloneGitSnapshot(root, targetSHA, path.join(tempHome, 'sources/pocketwiki-macos'));
     const hostScript = path.join(macSource, 'Tests/NewHarnessE2E/MacOSHost/run.mjs');
     const result = await superviseMacHost(process.execPath, [hostScript, '--result-bundle-path', resultBundle], {
@@ -242,8 +245,16 @@ async function runLegacy(surface, artifactDir, tempHome, deadline, targetSHA) {
       encoding: 'utf8',
       maxBuffer: 8 * 1024 * 1024
     }, deadline, 30 * 60_000);
-    const body = '$ node Tests/NewHarnessE2E/MacOSHost/run.mjs --result-bundle-path <report-dir>/legacy-macos.xcresult\nexit=' + String(result.status) +
-      '\n--- stdout ---\n' + redact(result.stdout || '') + '\n--- stderr ---\n' + redact(result.stderr || result.error?.message || '');
+    for (const suffix of ['.summary.json', ...(result.status !== 0 ? ['.legacy-fixture-failure.png'] : [])]) {
+      if (existsSync(resultBundle + suffix)) {
+        try { await copyFile(resultBundle + suffix, artifactBase + suffix); }
+        catch { await rm(artifactBase + suffix, { force: true }).catch(() => {}); }
+      }
+    }
+    const screenshotAvailable = existsSync(artifactBase + '.legacy-fixture-failure.png');
+    const body = '$ node Tests/NewHarnessE2E/MacOSHost/run.mjs --result-bundle-path <temporary-dir>/legacy-macos.xcresult\nexit=' + String(result.status) +
+      '\n--- stdout ---\n' + redact(result.stdout || '') + '\n--- stderr ---\n' + redact(result.stderr || result.error?.message || '') +
+      (result.status !== 0 ? '\nScreenshot da fixture: ' + (screenshotAvailable ? 'disponível' : 'indisponível') + '.\n' : '');
     const logName = 'legacy-macos.log';
     await writeFile(path.join(artifactDir, logName), body + '\n');
     console.log('LEGACY-00/macos ' + (result.status === 0 ? 'passed' : 'failed') + ' exit=' + String(result.status));
@@ -253,7 +264,8 @@ async function runLegacy(surface, artifactDir, tempHome, deadline, targetSHA) {
       configurationError: result.status === 2,
       artifacts: [
         path.join(path.basename(artifactDir), logName),
-        ...(existsSync(resultBundle + '.summary.json') ? [path.join(path.basename(artifactDir), path.basename(resultBundle) + '.summary.json')] : [])
+        ...(result.status !== 0 && screenshotAvailable ? [path.join(path.basename(artifactDir), path.basename(artifactBase) + '.legacy-fixture-failure.png')] : []),
+        ...(existsSync(artifactBase + '.summary.json') ? [path.join(path.basename(artifactDir), path.basename(artifactBase) + '.summary.json')] : [])
       ]
     };
   }
