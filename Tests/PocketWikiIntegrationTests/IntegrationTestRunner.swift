@@ -911,13 +911,10 @@ struct IntegrationTestRunner {
             )
             try expect(!runtimeEvents.contains(where: \.presentsAlert), "successful PocketKernel recovery should not request a modal")
 
-            let occupiedKernelPort = try availablePort()
             let externalKernel = Process()
             externalKernel.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
             externalKernel.arguments = ["-c", #"""
             from http.server import BaseHTTPRequestHandler, HTTPServer
-            import sys
-
             class Handler(BaseHTTPRequestHandler):
                 def do_GET(self):
                     self.send_response(405)
@@ -925,18 +922,33 @@ struct IntegrationTestRunner {
                 def log_message(self, format, *args):
                     pass
 
-            HTTPServer(("127.0.0.1", int(sys.argv[1])), Handler).serve_forever()
-            """#, String(occupiedKernelPort)]
-            externalKernel.standardOutput = FileHandle.nullDevice
-            externalKernel.standardError = FileHandle.nullDevice
+            server = HTTPServer(("127.0.0.1", 0), Handler)
+            print(server.server_address[1], flush=True)
+            server.serve_forever()
+            """#]
+            let externalReady = Pipe()
+            externalKernel.standardOutput = externalReady.fileHandleForWriting
+            externalKernel.standardError = FileHandle.standardError
             try externalKernel.run()
+            try? externalReady.fileHandleForWriting.close()
             defer {
                 if externalKernel.isRunning {
                     externalKernel.terminate()
                     externalKernel.waitUntilExit()
                 }
             }
-            try await Task.sleep(for: .milliseconds(250))
+            try awaitFixtureReadiness(externalReady, process: externalKernel, timeoutMS: 5_000)
+            var externalPortBuffer = [UInt8](repeating: 0, count: 32)
+            let externalPortBytes = externalPortBuffer.withUnsafeMutableBytes {
+                Darwin.read(externalReady.fileHandleForReading.fileDescriptor, $0.baseAddress, $0.count)
+            }
+            try expect(externalPortBytes > 0, "external PocketKernel fixture did not report its port")
+            let externalPortText = String(bytes: externalPortBuffer.prefix(externalPortBytes), encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let occupiedKernelPort = try require(externalPortText.flatMap(Int.init), "external PocketKernel fixture reported an invalid port")
+            let externalURL = try require(URL(string: "http://127.0.0.1:\(occupiedKernelPort)/v1/kernel"), "external PocketKernel fixture URL is invalid")
+            let externalResponse = try await request(externalURL)
+            try expect(externalResponse.status == 405, "external PocketKernel fixture is not healthy")
 
             var automaticConfiguration = configuration
             automaticConfiguration.pocketKernelAddonMode = .automatic
