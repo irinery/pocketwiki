@@ -52,7 +52,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: irinery/pocketkernel
-          ref: 47ea351d6bf8a2ff507665b3355972904c92ae1d
+          ref: 582e216c13feb7485fa9620d9543b272ec3794b5
           path: .build/dependencies/pocketkernel
           ssh-key: ${{ secrets.POCKETKERNEL_DEPLOY_KEY }}
           persist-credentials: false
@@ -68,7 +68,7 @@ jobs:
       - name: Verify pinned sources and toolchain
         run: |
           sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
-          test "$(git -C .build/dependencies/pocketkernel rev-parse HEAD)" = 47ea351d6bf8a2ff507665b3355972904c92ae1d
+          test "$(git -C .build/dependencies/pocketkernel rev-parse HEAD)" = 582e216c13feb7485fa9620d9543b272ec3794b5
           git rev-parse HEAD
           node --version
           go version
