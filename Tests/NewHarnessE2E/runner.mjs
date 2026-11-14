@@ -131,10 +131,13 @@ async function runContract(artifactDir, tempHome, shas, deadline, targetSHA) {
   ];
   const artifacts = [];
   let passed = true;
+  let regressionDeadline;
   for (let index = 0; index < commands.length; index += 1) {
     const [binary, commandArgs, cwd, overrides = {}] = commands[index];
     const logName = 'contract-' + String(index + 1).padStart(2, '0') + '.log';
-    const commandDeadline = index === 0 ? Date.now() + 15 * 60_000 : deadline;
+    // Full CI and cross-build are mandatory gate checks with a separate bounded budget.
+    if (index === 7) regressionDeadline = Date.now() + 15 * 60_000;
+    const commandDeadline = index === 0 ? Date.now() + 15 * 60_000 : (index >= 7 ? regressionDeadline : deadline);
     const result = await runWithinDeadline(binary, commandArgs, {
       cwd,
       env: { ...env, ...overrides, NH_BUILD_DIR: path.join(tempHome, 'kernel-builds') },
