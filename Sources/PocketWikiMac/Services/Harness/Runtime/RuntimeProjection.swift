@@ -29,6 +29,9 @@ final class RuntimeProjection {
     private var effects: [String: [String: Any]] = [:]
     private var events: [(Int, String, [String: Any])] = []
     private var eventBytes = 0
+    // Reiniciar por snapshot quando a janela encher preserva detecção exata de conflitos.
+    static let maxTrackedEvents = 4096
+    private var invalidated = false
     private var seenEvents: [String: (Int, SHA256.Digest, SHA256.Digest?)] = [:]
     private var lastAppliedSeq = 0
     private var appliedEventCount = 0
@@ -76,7 +79,10 @@ final class RuntimeProjection {
     }
     /// Eventos são validados antes de entrar no buffer; referência deve ser resolvida pelo transporte antes desta chamada.
     func bufferEvent(_ data: Data, resolvedPayload: Data? = nil) throws {
-        guard started, data.count + (resolvedPayload?.count ?? 0) <= 4_194_304 else { throw Failure.overflow }
+        guard !invalidated else { throw Failure.overflow }
+        guard started, data.count + (resolvedPayload?.count ?? 0) <= 4_194_304 else {
+            invalidated = true; throw Failure.overflow
+        }
         guard let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               HarnessV1.validateCorpusValue(event, schemaName: "streamEnvelope", document: schema),
               event["environment_id"] as? String == environmentID, event["thread_id"] as? String == threadID,
@@ -89,14 +95,23 @@ final class RuntimeProjection {
                 HarnessV1.validateCorpusValue(resolved, schemaName: "runtimeModuleEvent", document: schema) { payload = resolved }
         else { throw Failure.invalidEvent }
         if seq <= boundary { return }
-        let digest = SHA256.hash(data: data), payloadDigest = resolvedPayload.map { SHA256.hash(data: $0) }
+        // JSON equivalente deve produzir a mesma identidade, independentemente da ordem ou espaços.
+        let canonicalEvent = try JSONSerialization.data(withJSONObject: event, options: [.sortedKeys, .fragmentsAllowed])
+        let canonicalPayload = try resolvedPayload.map { _ in
+            try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys, .fragmentsAllowed])
+        }
+        let digest = SHA256.hash(data: canonicalEvent), payloadDigest = canonicalPayload.map { SHA256.hash(data: $0) }
         if let previous = seenEvents[id] { if previous.0 == seq && previous.1 == digest && previous.2 == payloadDigest { return }; throw Failure.invalidEvent }
         if let previous = seenSequences[seq] { if previous == id { return }; throw Failure.invalidEvent }
         guard seq > (events.last?.0 ?? max(boundary, lastAppliedSeq)) else { throw Failure.invalidEvent }
-        guard eventBytes + data.count + (resolvedPayload?.count ?? 0) <= 4_194_304 else { throw Failure.overflow }
+        guard seenEvents.count < Self.maxTrackedEvents,
+              eventBytes + data.count + (resolvedPayload?.count ?? 0) <= 4_194_304 else {
+            invalidated = true; throw Failure.overflow
+        }
         events.append((seq, id, payload)); seenEvents[id] = (seq, digest, payloadDigest); seenSequences[seq] = id; eventBytes += data.count + (resolvedPayload?.count ?? 0)
     }
     func finish() throws -> View {
+        guard !invalidated else { throw Failure.overflow }
         guard complete, let id = snapshotID else { throw Failure.incomplete }
         guard (events.last?.0 ?? max(boundary, lastAppliedSeq)) >= confirmedSeq else { throw Failure.stale }
         var rs = receipts, es = effects
