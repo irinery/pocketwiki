@@ -3,7 +3,11 @@ import { validateAgainst } from '../../harness/contracts/validate.mjs';
 const valid = (name, value) => validateAgainst(name, value).valid;
 const fail = (code, message) => Object.assign(new Error(message), { code });
 const clone = value => structuredClone(value);
-const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
+const canonical = value => {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+  return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`;
+};
 
 // A snapshot is staged until every page has been validated. A caller only
 // publishes finish(), so a bad page or event cannot partially update the UI.
@@ -44,7 +48,7 @@ export class RuntimeProjection {
     const payload = event.delivery === 'inline' && resolvedPayload === undefined ? event.payload : event.delivery === 'reference' ? resolvedPayload : undefined;
     if (!valid('runtimeModuleEvent', payload)) throw fail('ERR_INVALID', 'Payload inválido');
     if (event.seq <= this.boundary) return;
-    const fingerprint = JSON.stringify(canonical([event, payload]));
+    const fingerprint = canonical([event, payload]);
     if (this.seen.has(event.event_id)) {
       if (this.seen.get(event.event_id) === fingerprint) return;
       throw fail('ERR_INVALID', 'Evento conflitante');
