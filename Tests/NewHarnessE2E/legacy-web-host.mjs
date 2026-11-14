@@ -24,6 +24,8 @@ let artifactDir;
 let evidenceChild;
 let bridges;
 let uiKernelRequest;
+let runtimeLegacyCapabilityStatus;
+const runtimeBundle = process.env.NH_RUNTIME_UI_BUNDLE;
 const services = [];
 const bridgesTranscript = { requests: [] };
 let provider;
@@ -94,7 +96,7 @@ try {
 
   artifactDir = process.env.NH_TEST_ARTIFACT_DIR || temp;
   await mkdir(artifactDir, { recursive: true });
-  browser = await chromium.launchPersistentContext(path.join(temp, 'browser-profile'), { headless: true, acceptDownloads: false });
+  browser = await chromium.launchPersistentContext(path.join(temp, 'browser-profile'), { headless: true, acceptDownloads: false, ...(runtimeBundle ? { serviceWorkers: 'block' } : {}) });
   await browser.tracing.start({ screenshots: true, snapshots: true, sources: false });
   traceStarted = true;
   page = await browser.newPage();
@@ -110,6 +112,16 @@ try {
   page.on('request', (request) => {
     if (new URL(request.url()).origin !== new URL(host.baseURL).origin && !externalRequests.includes(request.url())) externalRequests.push(request.url());
   });
+  if (runtimeBundle) {
+    const bundle = await readFile(runtimeBundle);
+    await page.route('**/nh-runtime-bundle.js', route => route.fulfill({ status: 200, contentType: 'text/javascript', body: bundle }));
+    await page.route('**/v1/harness/**', async route => {
+      const url = new URL(route.request().url());
+      const upstream = await fetch(new URL(url.pathname + url.search, bridges.kernelURL), { method: route.request().method() });
+      runtimeLegacyCapabilityStatus = upstream.status;
+      await route.fulfill({ status: upstream.status, headers: Object.fromEntries(upstream.headers), body: Buffer.from(await upstream.arrayBuffer()) });
+    });
+  }
   await page.route('**/api/kernel/query', async (route) => {
     try { uiKernelRequest = JSON.parse(route.request().postData() || '{}'); } catch { uiKernelRequest = { parse_error: true }; }
     await route.continue();
@@ -125,6 +137,21 @@ try {
   assert((await page.title()).length > 0, 'legacy cockpit page has no title');
   assert(externalRequests.length === 0, 'legacy page attempted external network access: ' + externalRequests.join(','));
   await page.locator('.tab[data-panel="ai"]').click();
+  if (runtimeBundle) {
+    await page.evaluate(async () => {
+      const slot = document.createElement('main');
+      slot.id = 'runtime-slot';
+      document.querySelector('#panel-ai .scroll').prepend(slot);
+      const { mount } = await import('/nh-runtime-bundle.js');
+      window.nhRuntime = mount({ bearer: 'fixture', environmentId: '11111111-1111-4111-8111-111111111111', threadId: '22222222-2222-4222-8222-222222222222', schemaSHA256: '0'.repeat(64) });
+      try { await window.nhRuntime.panel.open(); } catch (error) { window.nhRuntimeError = String(error.message); }
+    });
+    assert(runtimeLegacyCapabilityStatus === 404, 'legacy capability status: ' + String(runtimeLegacyCapabilityStatus) + '; client error: ' + await page.evaluate(() => window.nhRuntimeError));
+    assert(await page.evaluate(() => window.nhRuntime.client.state.error === 'LEGACY_SERVER'), 'fallback error: ' + await page.evaluate(() => window.nhRuntimeError));
+    await page.getByRole('status').filter({ hasText: /Execução durável indisponível/ }).waitFor({ state: 'visible' });
+    assert(await page.getByRole('button', { name: 'Enviar comando' }).isDisabled(), 'runtime command must remain disabled on the legacy Kernel');
+    assert(runtimeLegacyCapabilityStatus === 404, 'legacy Kernel must return a real capability 404');
+  }
   await page.locator('.ai-side-toggle[data-ai-side="llm"]').click();
   await page.locator('#ai-method').selectOption('lmstudio');
   await page.locator('#ai-open-settings').click();
@@ -173,6 +200,7 @@ try {
     mcp_tools: evidence.tools,
     mcp_search_match: true,
     middlewareauth_health: true,
+    ...(runtimeBundle ? { runtime_legacy_capability_status: runtimeLegacyCapabilityStatus, runtime_fallback_visible: true } : {}),
     pocketkernel_ready: true,
     provider_fixture_requests: bridges.transcript.requests.length,
     provider_fixture_received_wiki_marker: bridges.transcript.requests.some((item) => item.hasWikiMarker),
