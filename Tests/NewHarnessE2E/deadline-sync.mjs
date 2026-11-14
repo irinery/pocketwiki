@@ -23,7 +23,7 @@ export function runWithinDeadline(binary, args, options, deadline, cap = 180_000
     return Promise.resolve({ status: null, error });
   }
   const timeLeft = Math.min(cap, deadline - Date.now());
-  if (timeLeft <= 0) return Promise.resolve({ status: null, error: new Error('global scenario deadline exceeded') });
+  if (timeLeft <= 0) return Promise.resolve({ status: null, error: Object.assign(new Error('global scenario deadline exceeded'), { code: 'ETIMEDOUT' }) });
   return new Promise((resolve) => {
     const { snapshotProcesses, ...spawnOptions } = options;
     const child = spawn(binary, args, { ...spawnOptions, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });

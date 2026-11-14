@@ -1,0 +1,134 @@
+name: New Harness E1 UI PR
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-ui:
+    name: UI-0002 / ${{ matrix.surface }}
+    runs-on: macos-15
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        surface: [web, macos]
+    env:
+      POCKETKERNEL_NH00_ROOT: ${{ github.workspace }}/.build/dependencies/pocketkernel
+      MIDDLEWAREAUTH_NHTEST_ROOT: ${{ github.workspace }}/.build/dependencies/middlewareAuth
+      NH_TEST_SEED: '20261102'
+
+    steps:
+      # For a pull_request, checkout uses GitHub's synthetic merge SHA (GITHUB_SHA).
+      - name: Checkout PocketWiki merge
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require private dependency access
+        env:
+          DEPLOY_KEY: ${{ secrets.POCKETKERNEL_DEPLOY_KEY }}
+        run: |
+          if [ -z "$DEPLOY_KEY" ]; then
+            echo '::error::POCKETKERNEL_DEPLOY_KEY ausente; o teste real não pode ser executado.'
+            exit 1
+          fi
+
+      - name: Checkout pinned PocketKernel
+        uses: actions/checkout@v4
+        with:
+          repository: irinery/pocketkernel
+          ref: 582e216c13feb7485fa9620d9543b272ec3794b5
+          path: .build/dependencies/pocketkernel
+          ssh-key: ${{ secrets.POCKETKERNEL_DEPLOY_KEY }}
+          persist-credentials: false
+
+      - name: Checkout pinned MiddlewareAuth
+        uses: actions/checkout@v4
+        with:
+          repository: irinery/middlewareAuth
+          ref: 04f44f62126c785f7b28718d2eff837c28cb65df
+          path: .build/dependencies/middlewareAuth
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+          cache: npm
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.26.0
+          cache: false
+
+      - name: Prepare macOS toolchain
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+          test "$(uname -m)" = arm64
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C "$POCKETKERNEL_NH00_ROOT" rev-parse HEAD)" = 582e216c13feb7485fa9620d9543b272ec3794b5
+          test "$(git -C "$MIDDLEWAREAUTH_NHTEST_ROOT" rev-parse HEAD)" = 04f44f62126c785f7b28718d2eff837c28cb65df
+          node --version
+          go version
+          swift --version
+          xcodebuild -version
+          xcodegen --version
+          test "$(xcodegen --version)" = 'Version: 2.46.0'
+
+      - name: Run real runtime UI host
+        env:
+          SURFACE: ${{ matrix.surface }}
+          REPORT_DIR: ${{ runner.temp }}/e1-ui-${{ matrix.surface }}
+        run: |
+          node Tests/HarnessUI/runtime/run-host.mjs --surface "$SURFACE" --report-dir "$REPORT_DIR"
+          jq -e --arg surface "$SURFACE" '
+            .surface == $surface and .invalidated != true and
+            (.cases | length == 4 and (map(.id) | sort) == ["02-01", "02-02", "02-03", "02-04"] and all(.[]; .status == "passed"))
+          ' "$REPORT_DIR/result.json" >/dev/null
+          schema_sha=$(shasum -a 256 src/harness/contracts/harness-v1.schema.json | awk '{print $1}')
+          jq -e --arg sha "$GITHUB_SHA" --arg schema "$schema_sha" '
+            .pocketwiki_sha == $sha and
+            .pocketkernel_sha == "582e216c13feb7485fa9620d9543b272ec3794b5" and
+            .middlewareauth_sha == "04f44f62126c785f7b28718d2eff837c28cb65df" and
+            .seed == 20261102 and .auth_mode == "host_local" and .schema_sha256 == $schema
+          ' "$REPORT_DIR/identity.json" >/dev/null
+          test -s "$REPORT_DIR/host.log"
+          for image in runtime-replay.png runtime-accepted.png runtime-incompatible.png; do
+            test -s "$REPORT_DIR/$image"
+          done
+          if [ "$SURFACE" = web ]; then
+            for artifact in runtime-accepted-before-release.png runtime-replay-trace.zip runtime-accepted-trace.zip runtime-incompatible-trace.zip legacy-web/legacy-web-runtime-fallback.png legacy-web/legacy-web-trace.zip legacy-web/legacy-web-evidence.json; do
+              test -s "$REPORT_DIR/$artifact"
+            done
+          else
+            jq -e --arg sha "$GITHUB_SHA" '
+              .pocketwiki_sha == $sha and .runtime_fallback_verified == true and
+              .legacy_capability_status == 404 and .skipped_tests == 0 and
+              (.nonce | type == "string" and test("^[a-f0-9]{32,128}$"))
+            ' "$REPORT_DIR/legacy-macos.runtime-proof.json" >/dev/null
+            test -s "$REPORT_DIR/legacy-macos.runtime-fallback.png"
+            for summary in runtime-replay.summary.json runtime-accepted.summary.json runtime-incompatible.summary.json legacy-macos.summary.json; do
+              jq -e '.result == "Passed" and .failedTests == 0 and .skippedTests == 0 and .passedTests > 0' "$REPORT_DIR/$summary" >/dev/null
+            done
+          fi
+
+      - name: Upload redacted UI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e1-ui-${{ matrix.surface }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/e1-ui-${{ matrix.surface }}/
+            !${{ runner.temp }}/e1-ui-${{ matrix.surface }}/**/*.xcresult
+            !${{ runner.temp }}/e1-ui-${{ matrix.surface }}/**/*.xcresult/**
+          if-no-files-found: error
+          retention-days: 14

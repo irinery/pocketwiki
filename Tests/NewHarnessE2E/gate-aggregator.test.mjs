@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import matrix from '../../docs/rfcs/new-harness/matriz-verificacao.json' with { type: 'json' };
-import { aggregateReportFiles, aggregateReports, targetIdentity, assertSameIdentity, assertPinnedDependencies } from './gate-aggregator.mjs';
+import { aggregateReportFiles, aggregateReports, targetIdentity, assertSameIdentity, assertPinnedDependencies, fixtureDigest } from './gate-aggregator.mjs';
 
 const sha1 = 'a'.repeat(40);
 const sha256 = 'b'.repeat(64);
@@ -128,30 +128,35 @@ test('target identity hashes real checkout files and rejects wrong or dirty chec
     await mkdir(path.dirname(path.join(repos[0], file)), { recursive: true });
     await writeFile(path.join(repos[0], file), file);
   }
+  await writeFile(path.join(repos[0], 'docs/rfcs/new-harness/fixture-hashes-v1.json'), JSON.stringify({ version: 1, stages: { E0: files.slice(0, 4), E1: ['src/harness/contracts/harness-v1.schema.json'] } }));
   for (const repo of repos) {
     execFileSync('git', ['-C', repo, 'add', '.']);
     execFileSync('git', ['-C', repo, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'fixture']);
   }
   const sha = execFileSync('git', ['-C', repos[0], 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
-  const actual = await targetIdentity(...repos, sha);
+  const actual = await targetIdentity(...repos, sha, 'E0');
   assert.equal(actual.pocketwiki_sha, sha);
   assert.match(actual.fixture_sha256, /^[a-f0-9]{64}$/);
+  await assert.rejects(() => targetIdentity(...repos, sha), /stage must/);
+  assert.equal(actual.fixture_sha256, await fixtureDigest(repos[0], 'E0'));
+  assert.equal((await targetIdentity(...repos, sha, 'E1')).fixture_sha256, await fixtureDigest(repos[0], 'E1'));
+  assert.notEqual(actual.fixture_sha256, (await targetIdentity(...repos, sha, 'E1')).fixture_sha256);
   execFileSync('git', ['-C', repos[0], 'update-index', '--skip-worktree', files[0]]);
   await writeFile(path.join(repos[0], files[0]), 'hidden change');
-  await assert.rejects(() => targetIdentity(...repos, sha), /skip-worktree/);
+  await assert.rejects(() => targetIdentity(...repos, sha, 'E0'), /skip-worktree/);
   execFileSync('git', ['-C', repos[0], 'update-index', '--no-skip-worktree', files[0]]);
   execFileSync('git', ['-C', repos[0], 'restore', '--', files[0]]);
   execFileSync('git', ['-C', repos[0], 'update-index', '--assume-unchanged', files[0]]);
-  await assert.rejects(() => targetIdentity(...repos, sha), /assume-unchanged/);
+  await assert.rejects(() => targetIdentity(...repos, sha, 'E0'), /assume-unchanged/);
   execFileSync('git', ['-C', repos[0], 'update-index', '--no-assume-unchanged', files[0]]);
-  await assert.rejects(() => targetIdentity(...repos, 'f'.repeat(40)), /target SHA differs/);
+  await assert.rejects(() => targetIdentity(...repos, 'f'.repeat(40), 'E0'), /target SHA differs/);
   await writeFile(path.join(repos[0], files[0]), 'changed');
-  await assert.rejects(() => targetIdentity(...repos, sha), /modified tracked files/);
+  await assert.rejects(() => targetIdentity(...repos, sha, 'E0'), /modified tracked files/);
   execFileSync('git', ['-C', repos[0], 'add', '.']);
   execFileSync('git', ['-C', repos[0], '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'changed during execution']);
   const changedSHA = execFileSync('git', ['-C', repos[0], 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
-  await assert.rejects(() => targetIdentity(...repos, sha), /target SHA differs/);
-  const changed = await targetIdentity(...repos, changedSHA);
+  await assert.rejects(() => targetIdentity(...repos, sha, 'E0'), /target SHA differs/);
+  const changed = await targetIdentity(...repos, changedSHA, 'E0');
   assert.throws(() => assertSameIdentity(actual, changed), /target build mismatch/);
 
 });
