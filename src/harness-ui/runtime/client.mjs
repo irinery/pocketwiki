@@ -20,23 +20,26 @@ export class RuntimeClient {
   }
   async reconnect() {
     this.streamAbort?.abort();
+    const generation = this.generation = (this.generation || 0) + 1;
     this.publish({ available: false });
-    try { return await this.reconnectChecked(); }
+    try { return await this.reconnectChecked(generation); }
     catch (error) {
-      this.publish({ available: false, error: error.code || 'ERR_UNAVAILABLE' });
+      if (generation === this.generation) this.publish({ available: false, error: error.code || 'ERR_UNAVAILABLE' });
       throw error;
     }
   }
-  async reconnectChecked() {
+  async reconnectChecked(generation) {
     const p = new RuntimeProjection({ environmentId: this.environmentId, threadId: this.threadId, confirmedRevision: this.state.revision, confirmedSeq: this.state.lastSeq });
     let cursor;
     do {
       const page = await this.transport.snapshot(this.threadId, { cursor });
+      if (generation !== this.generation) return;
       p.appendPage(page, cursor); cursor = page.data.next_cursor;
     } while (cursor != null);
     const view = p.finish();
     const abort = new AbortController(); this.streamAbort = abort;
     const response = await this.transport.stream(this.threadId, view.lastSeq, { signal: abort.signal });
+    if (generation !== this.generation) { abort.abort(); return; }
     this.projection = p; this.publishView(view);
     this.streamTask = this.consume(response, abort);
   }
@@ -53,7 +56,7 @@ export class RuntimeClient {
       } else if (!abort.signal.aborted) this.publish({ available: false, error: error.code || 'ERR_INVALID' });
     }
   }
-  close() { this.streamAbort?.abort(); }
+  close() { this.generation = (this.generation || 0) + 1; this.streamAbort?.abort(); }
 
   publishView(view) {
     this.publish({ available: true, error: null, revision: view.revision, lastSeq: view.lastSeq, receipts: [...view.receipts.values()] });

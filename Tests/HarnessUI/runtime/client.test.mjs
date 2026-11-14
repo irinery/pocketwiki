@@ -44,3 +44,11 @@ test('limite de deduplicação inicia resnapshot sem espera', async () => {
   const response = new Response(new ReadableStream({ start(controller) { controller.enqueue(bytes); controller.close(); } }));
   await client.consume(response, new AbortController()); assert.equal(reconnected, true);
 });
+test('reconexão antiga não publica depois de uma mais nova', async () => {
+  const resolvers = []; const transport = { snapshot: () => new Promise(resolve => resolvers.push(resolve)), stream: async () => new Response(new ReadableStream({ start() {} }), { headers: { 'content-type': 'text/event-stream' } }) };
+  const client = new RuntimeClient({ transport, environmentId: id, threadId: id });
+  const first = client.reconnect(), second = client.reconnect();
+  const snapshot = seq => ({ module: 'runtime', data: { snapshot_id: id, revision: seq, as_of_seq: seq, receipts: [], effects: [] } });
+  resolvers[1](snapshot(2)); await second; resolvers[0](snapshot(1)); await first;
+  assert.equal(client.state.lastSeq, 2); client.close();
+});

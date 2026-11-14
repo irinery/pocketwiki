@@ -36,6 +36,7 @@ final class RuntimeUISession: ObservableObject {
     private let schema: [String: Any]
     private var projection: RuntimeProjection?
     private var streamTask: Task<Void, Never>?
+    private var generation = 0
     var onFrame: ((Int, Int) -> Void)?
 
     init(transport: RuntimeTransport, environmentID: UUID, threadID: UUID, schemaHash: String, schemaData: Data) throws {
@@ -47,12 +48,13 @@ final class RuntimeUISession: ObservableObject {
         catch { available = false; self.error = "Execução durável indisponível" }
     }
     func reconnect() async {
-        streamTask?.cancel(); available = false
+        streamTask?.cancel(); generation += 1; let current = generation; available = false
         do {
             let p = try RuntimeProjection(schema: schema, environmentID: environmentID, threadID: threadID, pageSize: 100, confirmedRevision: revision, confirmedSeq: lastSeq)
             var cursor: String?
             repeat {
                 let page: RuntimeUIPage = try await transport.snapshot(threadID: threadID, cursor: cursor, schema: try JSONSerialization.jsonObject(with: schemaData) as! [String: Any])
+                guard current == generation else { return }
                 try p.appendPage(JSONEncoder().encode(page), requestedCursor: cursor); cursor = page.data.next_cursor
             } while cursor != nil
             let view = try p.finish()
@@ -72,7 +74,7 @@ final class RuntimeUISession: ObservableObject {
                     self.available = false; self.error = "ERR_INVALID"
                 }
             }
-        } catch { available = false; self.error = "ERR_UNAVAILABLE" }
+        } catch { if current == generation { available = false; self.error = "ERR_UNAVAILABLE" } }
     }
     private func publish(_ view: RuntimeProjection.View) {
         revision = view.revision; lastSeq = view.lastSeq
@@ -87,6 +89,7 @@ final class RuntimeUISession: ObservableObject {
         var payload: Data?
         if let inline = frame.payload { object["payload"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(inline)) }
         if let ref = frame.payloadRef { object["payload_ref"] = ref.uuidString.lowercased(); payload = try await transport.payload(ref: ref, schema: try JSONSerialization.jsonObject(with: schemaData) as! [String: Any]) }
+        try Task.checkCancellation()
         guard let projection else { throw RuntimeTransport.Failure.invalidResponse }
         try projection.bufferEvent(JSONSerialization.data(withJSONObject: object), resolvedPayload: payload)
         publish(try projection.finish())
