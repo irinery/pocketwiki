@@ -1,10 +1,24 @@
 import XCTest
 
 final class RuntimeUITests: XCTestCase {
+    private var recordedFailure = false
+    override func record(_ issue: XCTIssue) {
+        recordedFailure = true
+        super.record(issue)
+    }
     func testRuntimePanel() throws {
         let app = XCUIApplication(), env = ProcessInfo.processInfo.environment
+        addTeardownBlock {
+            guard self.recordedFailure else { return }
+            let slot = app.descendants(matching: .any).matching(identifier: "runtime-test-slot").firstMatch
+            guard slot.exists else { print("runtime failure screenshot unavailable: fixture slot absent"); return }
+            let attachment = XCTAttachment(screenshot: slot.screenshot())
+            attachment.name = "runtime-failure-slot"
+            attachment.lifetime = .keepAlways
+            self.add(attachment)
+        }
         guard let config = env["NH_RUNTIME_CONFIG_PATH"], !config.isEmpty else { XCTFail("NH_RUNTIME_CONFIG_PATH ausente"); return }
-        let replay = env["NH_RUNTIME_SCENARIO"] == "replay"
+        let replay = env["NH_RUNTIME_SCENARIO"] == "replay" && env["NH_RUNTIME_TEST_FORCE_FAILURE"] != "1"
         var frames: [(Int, Int, Int)] = []
         let replayed = replay ? expectation(description: "replay 8/9") : nil
         let advanced = replay ? expectation(description: "eventos 10/11/12") : nil
@@ -14,7 +28,11 @@ final class RuntimeUITests: XCTestCase {
         }
         defer { DistributedNotificationCenter.default().removeObserver(observer) }
         let configuration = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: config))) as? [String: String])
-        app.launchEnvironment["NH_RUNTIME_CONFIG_PATH"] = config; app.launch()
+        app.launchEnvironment["NH_RUNTIME_CONFIG_PATH"] = config; app.launchArguments += ["-ApplePersistenceIgnoreState", "YES"]; app.launch()
+        if env["NH_RUNTIME_TEST_FORCE_FAILURE"] == "1" {
+            XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "runtime-test-slot").firstMatch.waitForExistence(timeout: 10))
+            XCTFail("forced runtime fixture failure"); return
+        }
         XCTAssertTrue(app.staticTexts["Runtime conectado"].waitForExistence(timeout: 30))
         let submit = app.buttons["runtime-submit"]
         func receiptIsVisible(_ id: String) -> Bool { app.descendants(matching: .any).matching(identifier: "runtime-receipt-" + id).firstMatch.exists }

@@ -33,6 +33,6 @@ struct RuntimeHostApp: App {
         _session = StateObject(wrappedValue: session)
     }
     var body: some Scene {
-        WindowGroup("PocketWiki runtime test host") { RuntimePanel(session: session).frame(minWidth: 650, minHeight: 620) }
+        WindowGroup("PocketWiki runtime test host") { RuntimePanel(session: session).frame(minWidth: 650, minHeight: 620).accessibilityElement(children: .contain).accessibilityIdentifier("runtime-test-slot") }
     }
 }

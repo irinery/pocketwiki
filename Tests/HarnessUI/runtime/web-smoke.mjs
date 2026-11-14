@@ -104,7 +104,7 @@ try {
     await writeFile(configPath, JSON.stringify({ baseURL: `http://127.0.0.1:${server.address().port}`, bearer, environmentID: environmentId, threadID: threadId, schemaSHA256, schemaPath: path.resolve('src/harness/contracts/harness-v1.schema.json'), commandIDs: commandIds.join(','), commandID: commandIds[0], seedCommandID: fixtureID('seed-command'), observeFrames: replay ? '1' : '0' }), { mode: 0o600 });
     const scenario = replay ? 'replay' : incompatible ? 'incompatible' : pauseEffect ? 'accepted' : 'connect';
     const resultPath = path.join(tmp, `runtime-${scenario}.xcresult`);
-    const test = spawn('xcodebuild', ['-resultBundlePath', resultPath, '-project', 'Tests/HarnessUI/runtime/macos/PocketWikiRuntimeUIHost.xcodeproj', '-scheme', 'PocketWikiRuntimeUIHost', '-destination', 'platform=macOS,arch=arm64', '-derivedDataPath', process.env.RUNTIME_DERIVED_DATA, 'test-without-building', 'CODE_SIGNING_ALLOWED=NO', '-quiet'], { env: { ...process.env, NH_RUNTIME_CONFIG_PATH: configPath, NH_RUNTIME_SCENARIO: scenario }, stdio: ['ignore', 'pipe', 'pipe'] });
+    const test = spawn('xcodebuild', ['-resultBundlePath', resultPath, '-project', 'Tests/HarnessUI/runtime/macos/PocketWikiRuntimeUIHost.xcodeproj', '-scheme', 'PocketWikiRuntimeUIHost', '-destination', 'platform=macOS,arch=arm64', '-derivedDataPath', process.env.RUNTIME_DERIVED_DATA, 'test-without-building', 'CODE_SIGNING_ALLOWED=NO', '-quiet'], { env: { ...process.env, NH_RUNTIME_CONFIG_PATH: configPath, NH_RUNTIME_SCENARIO: scenario, NH_RUNTIME_TEST_FORCE_FAILURE: process.env.NH_RUNTIME_TEST_FORCE_FAILURE || '0' }, stdio: ['ignore', 'pipe', 'pipe'] });
     let output = ''; for (const stream of [test.stdout, test.stderr]) stream.on('data', chunk => { output = (output + chunk.toString()).slice(-12000); });
     const [code] = await once(test, 'exit');
     if (process.env.RUNTIME_ARTIFACT_DIR) {
@@ -121,6 +121,16 @@ try {
       const screenshotBytes = sanitizeRuntimeScreenshot(await readFile(path.join(attachments, screenshot)), { maxWidth: 4096, maxHeight: 2048 });
       requireRuntimeScreenshot(screenshotBytes, { maxHeight: 2048 });
       await writeFile(path.join(process.env.RUNTIME_ARTIFACT_DIR, `runtime-${scenario}.png`), screenshotBytes, { mode: 0o600 });
+      } else {
+        try {
+          const attachments = path.join(tmp, `failure-attachments-${scenario}`); await mkdir(attachments);
+          await call('xcrun', ['xcresulttool', 'export', 'attachments', '--path', resultPath, '--output-path', attachments, '--filter', 'runtime-failure-slot*']);
+          const files = (await readdir(attachments)).filter(file => file.toLowerCase().endsWith('.png'));
+          if (files.length !== 1) throw new Error('slot fixture ausente ou ambíguo');
+          const bytes = sanitizeRuntimeScreenshot(await readFile(path.join(attachments, files[0])), { maxWidth: 4096, maxHeight: 2048 });
+          requireRuntimeScreenshot(bytes, { maxHeight: 2048 });
+          await writeFile(path.join(process.env.RUNTIME_ARTIFACT_DIR, `runtime-${scenario}-failure.png`), bytes, { mode: 0o600 });
+        } catch { console.error('Captura de falha macOS indisponível para slot fixture'); }
       }
     }
     if (code !== 0) throw new Error(`XCTest falhou (${code}): ${output}`);
