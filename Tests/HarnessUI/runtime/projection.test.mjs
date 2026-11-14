@@ -27,3 +27,11 @@ test('ack aceito não é apresentado como concluído', async () => {
   assert.throws(() => p.bufferEvent(event(11)), { code: 'ERR_INVALID' });
   assert.throws(() => p.finish(), { code: 'ERR_INVALID' });
 });
+
+test('mesmo event_id com conteúdo diferente invalida montagem', () => {
+  const p = new RuntimeProjection({ environmentId: id, threadId: id }); p.appendPage(page);
+  p.bufferEvent(event(11));
+  const changed = event(11); changed.payload.value.state = 'pending';
+  assert.throws(() => p.bufferEvent(changed), { code: 'ERR_INVALID' });
+  assert.throws(() => p.finish(), { code: 'ERR_INVALID' });
+});
