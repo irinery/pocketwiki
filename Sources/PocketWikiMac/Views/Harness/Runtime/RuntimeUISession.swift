@@ -59,7 +59,14 @@ final class RuntimeUISession: ObservableObject {
             projection = p; publish(view)
             streamTask = Task { [weak self] in
                 do { for try await frame in stream { guard let self, !Task.isCancelled else { return }; try await self.apply(frame) } }
-                catch { guard let self, !Task.isCancelled else { return }; self.available = false; self.error = "ERR_INVALID" }
+                catch RuntimeProjection.Failure.overflow {
+                    guard let self, !Task.isCancelled else { return }
+                    self.available = false
+                    Task { await self.reconnect() }
+                } catch {
+                    guard let self, !Task.isCancelled else { return }
+                    self.available = false; self.error = "ERR_INVALID"
+                }
             }
         } catch { available = false; self.error = "ERR_UNAVAILABLE" }
     }
