@@ -161,7 +161,10 @@ async function run() {
   assert.equal(recoveredStat.mtimeMs, effectStat.mtimeMs);
   assert.equal((await readdir(path.join(ioPath, 'effects'))).length, 3);
   if (process.env.RUNTIME_EVIDENCE_PATH) {
-    await writeFile(process.env.RUNTIME_EVIDENCE_PATH, JSON.stringify({ receipts: [firstReceipt, reopenedReceipt, uncertain], events_before_crash: eventsBeforeCrash.events, events_after_recovery: recoveredEvents.events }, null, 2) + '\n');
+    const pick = (value, keys) => Object.fromEntries(keys.filter(key => value[key] !== undefined).map(key => [key, value[key]]));
+    const receipt = value => pick(value, ['command_id', 'receipt_id', 'payload_sha256', 'revision', 'effect_id', 'state', 'result_ref']);
+    const event = value => pick(value, ['event_id', 'thread_id', 'seq', 'kind', 'effect_id']);
+    await writeFile(process.env.RUNTIME_EVIDENCE_PATH, JSON.stringify({ receipts: [firstReceipt, reopenedReceipt, uncertain].map(receipt), events_before_crash: eventsBeforeCrash.events.map(event), events_after_recovery: recoveredEvents.events.map(event) }, null, 2) + '\n');
   }
   console.log('Kernel real: bootstrap E0, autorização, dispatch, recuperação, efeito, receipt, snapshot MVCC, SSE e clientes JS/Swift verificados');
 }
