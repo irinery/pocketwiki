@@ -28,6 +28,7 @@ test('owned helper cleanup covers success, failure and timeout teardown', async 
     finally { await cleanupManagedHelpers([{ ledger, binary, launcher }]); }
     await exited;
     assert.notEqual(child.signalCode, null);
+    await cleanupManagedHelpers([{ ledger, binary, launcher }]);
   }
 });
 
