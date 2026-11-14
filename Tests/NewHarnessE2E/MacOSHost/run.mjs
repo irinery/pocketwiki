@@ -1,4 +1,5 @@
 import { createHelperLauncher, cleanupManagedHelpers } from './managed-helpers.mjs';
+import { helperPaths } from './supervisor.mjs';
 import { exportGitSnapshot } from '../git-snapshot.mjs';
 import { createServer } from 'node:http';
 import { runAndCapture } from '../deadline-process.mjs';
@@ -32,11 +33,9 @@ await mkdir(path.dirname(resultBundle), { recursive: true });
 const kernelRoot = process.env.POCKETKERNEL_NH00_ROOT || path.resolve(root, '../pocketkernel-nh00');
 const middlewareRoot = process.env.MIDDLEWAREAUTH_NHTEST_ROOT || path.resolve(root, '../middlewareAuth');
 const tempHome = await mkdtemp(path.join(os.tmpdir(), 'pocketwiki-legacy00-macos-'));
-const kernelBinary = path.join(tempHome, 'pocketkernel.real');
-const middlewareBinary = path.join(tempHome, 'middleware-codex-oauth.real');
-const kernelLauncher = path.join(tempHome, 'pocketkernel');
-const middlewareLauncher = path.join(tempHome, 'middleware-codex-oauth');
-const helpers = [{ binary: kernelBinary, launcher: kernelLauncher, ledger: path.join(tempHome, 'kernel.pids') }, { binary: middlewareBinary, launcher: middlewareLauncher, ledger: path.join(tempHome, 'middleware.pids') }];
+const supervised = Boolean(process.env.NH_MAC_HELPER_DIR);
+const helpers = helperPaths(process.env.NH_MAC_HELPER_DIR || tempHome);
+const [{ binary: kernelBinary, launcher: kernelLauncher }, { binary: middlewareBinary, launcher: middlewareLauncher }] = helpers;
 const providerRequests = [];
 const provider = createServer(async (request, response) => {
   const chunks = [];
@@ -67,8 +66,10 @@ const provider = createServer(async (request, response) => {
 let output = '';
 let status = 2;
 try {
-  await createHelperLauncher(kernelLauncher, kernelBinary, helpers[0].ledger);
-  await createHelperLauncher(middlewareLauncher, middlewareBinary, helpers[1].ledger);
+  if (!supervised) {
+    await createHelperLauncher(kernelLauncher, kernelBinary, helpers[0].ledger);
+    await createHelperLauncher(middlewareLauncher, middlewareBinary, helpers[1].ledger);
+  }
   const pinned = await readFile(path.join(root, 'docs/rfcs/new-harness/nhtest-base-shas.md'), 'utf8');
   const kernelSHA = pinned.match(/PocketKernel: \x60([a-f0-9]{40})\x60/)?.[1];
   const middlewareSHA = pinned.match(/MiddlewareAuth: \x60([a-f0-9]{40})\x60/)?.[1];

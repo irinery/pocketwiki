@@ -1,3 +1,4 @@
+import { superviseMacHost } from './MacOSHost/supervisor.mjs';
 import { exportGitSnapshot } from './git-snapshot.mjs';
 import { existsSync } from 'node:fs';
 import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
@@ -227,7 +228,7 @@ async function runLegacy(surface, artifactDir, tempHome, deadline, targetSHA) {
     const resultBundle = path.join(artifactDir, 'legacy-macos.xcresult');
     const macSource = await cloneGitSnapshot(root, targetSHA, path.join(tempHome, 'sources/pocketwiki-macos'));
     const hostScript = path.join(macSource, 'Tests/NewHarnessE2E/MacOSHost/run.mjs');
-    const result = await runWithinDeadline(process.execPath, [hostScript, '--result-bundle-path', resultBundle], {
+    const result = await superviseMacHost(process.execPath, [hostScript, '--result-bundle-path', resultBundle], {
       cwd: macSource,
       env: {
         ...isolatedEnvironment(tempHome),
