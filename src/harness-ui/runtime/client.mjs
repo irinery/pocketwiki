@@ -33,7 +33,10 @@ export class RuntimeClient {
   }
   async consume(response, abort) {
     try {
-      for await (const event of runtimeFrames(response)) await this.applyEvent(event);
+      for await (const event of runtimeFrames(response)) {
+        if (abort.signal.aborted) break;
+        await this.applyEvent(event, abort.signal);
+      }
       if (!abort.signal.aborted) this.publish({ available: false, error: 'ERR_UNAVAILABLE' });
     } catch (error) {
       if (!abort.signal.aborted) this.publish({ available: false, error: error.code || 'ERR_INVALID' });
@@ -44,12 +47,14 @@ export class RuntimeClient {
   publishView(view) {
     this.publish({ available: true, error: null, revision: view.revision, lastSeq: view.lastSeq, receipts: [...view.receipts.values()] });
   }
-  async applyEvent(event) {
+  async applyEvent(event, signal) {
     try {
       const payload = event.delivery === 'reference' ? await this.transport.payload(event.payload_ref) : undefined;
+      if (signal?.aborted) return;
       this.projection.bufferEvent(event, payload);
       this.publishView(this.projection.finish());
     } catch (error) {
+      if (signal?.aborted) return;
       this.publish({ available: false, error: error.code || 'ERR_INVALID' });
       throw error;
     }
