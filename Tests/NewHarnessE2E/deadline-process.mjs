@@ -1,8 +1,11 @@
-import { killProcessTree } from './deadline-sync.mjs';
+import { killProcessTree, requireProcessListing } from './deadline-sync.mjs';
 import { spawn } from 'node:child_process';
 
 // A timeout is always a failure, even if the process subsequently reports exit 0.
 export function runAndCapture(command, args, cwd, env, timeout) {
+  try { requireProcessListing(env); } catch (error) {
+    return Promise.resolve({ status: 2, output: error.message + '\n' });
+  }
   return new Promise((resolve) => {
     const child = spawn(command, args, { cwd, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
     let output = '';
