@@ -73,6 +73,74 @@ struct RuntimeTransport {
         guard ["runtime.receipt", "runtime.events"].contains(operation) else { throw Failure.invalidArgument }
         return try await request("/v1/harness/query/\(operation)", method: "POST", body: JSONEncoder().encode(input))
     }
+    /// Entrega somente envelopes completos e válidos. Cancelar a sequência encerra a conexão.
+    func stream<Payload: Codable & Equatable & Sendable>(environmentID: UUID, threadID: UUID, afterSeq: Int,
+        payloadType: Payload.Type) throws -> AsyncThrowingStream<HarnessV1.StreamEnvelope<Payload>, Error> {
+        guard afterSeq >= 0 else { throw Failure.invalidArgument }
+        guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else { throw Failure.invalidURL }
+        components.path = "/v1/harness/streams/thread/\(threadID.uuidString.lowercased())"
+        components.queryItems = [URLQueryItem(name: "after_seq", value: String(afterSeq)), URLQueryItem(name: "modules", value: "runtime")]
+        guard let url = components.url else { throw Failure.invalidURL }
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
+        request.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        request.setValue(String(afterSeq), forHTTPHeaderField: "Last-Event-ID")
+        let session = self.session
+        let streamRequest = request
+        return AsyncThrowingStream(bufferingPolicy: .bufferingOldest(16)) { continuation in
+            let task = Task {
+                do {
+                    let (bytes, response) = try await session.bytes(for: streamRequest)
+                    guard let http = response as? HTTPURLResponse else { throw Failure.invalidResponse }
+                    if !(200...299).contains(http.statusCode) {
+                        var data = Data()
+                        for try await byte in bytes {
+                            guard data.count < 4096 else { throw Failure.invalidResponse }
+                            data.append(byte)
+                        }
+                        guard let remote = try? JSONDecoder().decode(HarnessV1.Error.self, from: data) else { throw Failure.invalidResponse }
+                        throw Failure.remote(status: http.statusCode, error: remote)
+                    }
+                    guard http.value(forHTTPHeaderField: "Content-Type")?.lowercased().hasPrefix("text/event-stream") == true else { throw Failure.invalidResponse }
+                    var line = Data(), dataLines: [String] = []
+                    var eventID: String?, frameSize = 0, previousSeq = afterSeq
+                    for try await byte in bytes {
+                        try Task.checkCancellation()
+                        frameSize += 1
+                        guard frameSize <= 278_528 else { throw Failure.invalidResponse }
+                        if byte != 10 { line.append(byte); continue }
+                        if line.last == 13 { line.removeLast() }
+                        guard let text = String(data: line, encoding: .utf8) else { throw Failure.invalidResponse }
+                        line.removeAll(keepingCapacity: true)
+                        if text.isEmpty {
+                            if !dataLines.isEmpty {
+                                guard let eventID, let seq = Int(eventID), seq > previousSeq,
+                                      let data = dataLines.joined(separator: "\n").data(using: .utf8),
+                                      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                                      Set(object.keys).isSubset(of: ["protocol_major", "event_id", "environment_id", "thread_id", "seq", "committed_at_ms", "module", "delivery", "payload", "payload_ref"]),
+                                      let envelope = try? JSONDecoder().decode(HarnessV1.StreamEnvelope<Payload>.self, from: data),
+                                      envelope.environmentID == environmentID, envelope.threadID == threadID, envelope.module == .runtime, envelope.seq == seq else { throw Failure.invalidResponse }
+                                try envelope.validate()
+                                previousSeq = seq
+                                if case .dropped = continuation.yield(envelope) { throw Failure.invalidResponse }
+                            }
+                            dataLines.removeAll(keepingCapacity: true); eventID = nil; frameSize = 0
+                        } else if !text.hasPrefix(":") {
+                            let parts = text.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+                            let field = String(parts[0]); var value = parts.count == 2 ? String(parts[1]) : ""
+                            if value.first == " " { value.removeFirst() }
+                            if field == "data" { dataLines.append(value) }
+                            else if field == "id" { eventID = value }
+                        }
+                    }
+                    // An interrupted or incomplete frame is never emitted.
+                    if !line.isEmpty || !dataLines.isEmpty { throw Failure.invalidResponse }
+                    continuation.finish()
+                } catch { continuation.finish(throwing: error) }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
     private func get<T: Decodable>(_ path: String) async throws -> T { try await request(path) }
     private func request<T: Decodable>(_ path: String, method: String = "GET", query: [URLQueryItem] = [], body: Data? = nil) async throws -> T {
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else { throw Failure.invalidURL }
