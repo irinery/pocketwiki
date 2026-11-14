@@ -21,12 +21,15 @@ test('process failure is preserved and successful execution passes', async () =>
 
 test('synchronous shard deadline fails on timeout and expired deadline', async () => {
   const { runWithinDeadline } = await import('./deadline-sync.mjs');
-  const timeout = await runWithinDeadline(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {}, Date.now() + 100);
+  // The global deadline leaves time for process-listing preflight; the cap
+  // independently exercises timeout after the child is started.
+  const timeout = await runWithinDeadline(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {}, Date.now() + 5000, 150);
   assert.equal(timeout.status, null);
   assert.equal(timeout.error.code, 'ETIMEDOUT');
   assert.doesNotMatch(timeout.error.message, /cleanup failed/);
   const expired = await runWithinDeadline(process.execPath, ['-e', 'process.exit(0)'], {}, Date.now() - 1);
   assert.equal(expired.status, null);
+  assert.equal(expired.error.code, 'ETIMEDOUT');
   assert.match(expired.error.message, /deadline exceeded/);
 });
 
