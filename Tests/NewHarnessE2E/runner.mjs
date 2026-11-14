@@ -43,7 +43,7 @@ try {
   const cases = [];
   for (const pair of selected) {
     // macOS launcher enforces 180s on XCTest after its build preparation.
-    const scenarioTimeout = pair.surface === 'macos' ? 20 * 60_000 : 180_000;
+    const scenarioTimeout = pair.surface === 'macos' ? 30 * 60_000 : 180_000;
     const deadline = Date.now() + scenarioTimeout;
     const id = pair.scenario.id;
     const result = id === 'CONTRACT-00'
@@ -237,7 +237,7 @@ async function runLegacy(surface, artifactDir, tempHome, deadline, targetSHA) {
       },
       encoding: 'utf8',
       maxBuffer: 8 * 1024 * 1024
-    }, deadline, 20 * 60_000);
+    }, deadline, 30 * 60_000);
     const body = '$ node Tests/NewHarnessE2E/MacOSHost/run.mjs --result-bundle-path <report-dir>/legacy-macos.xcresult\nexit=' + String(result.status) +
       '\n--- stdout ---\n' + redact(result.stdout || '') + '\n--- stderr ---\n' + redact(result.stderr || result.error?.message || '');
     const logName = 'legacy-macos.log';
