@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 // Run each command in its own process group so timeout kills the complete tree.
 export function runWithinDeadline(binary, args, options, deadline, cap = 180_000) {
@@ -12,7 +12,7 @@ export function runWithinDeadline(binary, args, options, deadline, cap = 180_000
     let exceeded = false;
     const limit = options.maxBuffer || 10 * 1024 * 1024;
     function kill() {
-      try { process.kill(-child.pid, 'SIGKILL'); } catch { child.kill('SIGKILL'); }
+      killProcessTree(child.pid);
     }
     const timer = setTimeout(() => {
       exceeded = true;
@@ -34,4 +34,24 @@ export function runWithinDeadline(binary, args, options, deadline, cap = 180_000
       resolve({ status: exceeded || error ? null : status, stdout, stderr, error });
     });
   });
+}
+
+// Descendants may have started their own process groups; enumerate before killing.
+export function killProcessTree(rootPID) {
+  const snapshot = spawnSync('ps', ['-axo', 'pid=,ppid='], { encoding: 'utf8', timeout: 5000 });
+  const children = new Map();
+  for (const line of (snapshot.stdout || '').split('\n')) {
+    const match = /^\s*(\d+)\s+(\d+)\s*$/.exec(line);
+    if (!match) continue;
+    const pid = Number(match[1]); const parent = Number(match[2]);
+    if (!children.has(parent)) children.set(parent, []);
+    children.get(parent).push(pid);
+  }
+  const order = [];
+  function visit(pid) { for (const child of children.get(pid) || []) visit(child); order.push(pid); }
+  visit(rootPID);
+  for (const pid of order) {
+    try { process.kill(-pid, 'SIGKILL'); } catch {}
+    try { process.kill(pid, 'SIGKILL'); } catch {}
+  }
 }

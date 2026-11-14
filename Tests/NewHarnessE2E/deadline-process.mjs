@@ -1,3 +1,4 @@
+import { killProcessTree } from './deadline-sync.mjs';
 import { spawn } from 'node:child_process';
 
 // A timeout is always a failure, even if the process subsequently reports exit 0.
@@ -8,7 +9,7 @@ export function runAndCapture(command, args, cwd, env, timeout) {
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
-      try { process.kill(-child.pid, 'SIGKILL'); } catch { child.kill('SIGKILL'); }
+      killProcessTree(child.pid);
     }, timeout);
     child.stdout.setEncoding('utf8').on('data', (chunk) => { output += chunk; });
     child.stderr.setEncoding('utf8').on('data', (chunk) => { output += chunk; });

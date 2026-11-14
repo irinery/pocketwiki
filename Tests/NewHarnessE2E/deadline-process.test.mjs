@@ -40,3 +40,15 @@ test('hard deadline kills a child that ignores SIGTERM and its descendant', asyn
   assert.ok(pid > 0);
   assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
 });
+
+test('deadline kills detached nested process groups', async () => {
+  const { runWithinDeadline } = await import('./deadline-sync.mjs');
+  const nested = `const { spawn } = require('node:child_process');
+    const p = spawn(process.execPath, ['-e', "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)"], { detached: true, stdio: 'ignore' });
+    console.log(p.pid); setInterval(() => {}, 1000);`;
+  const result = await runWithinDeadline(process.execPath, ['-e', nested], {}, Date.now() + 500);
+  assert.equal(result.error.code, 'ETIMEDOUT');
+  const pid = Number(result.stdout.trim());
+  assert.ok(pid > 0);
+  assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+});

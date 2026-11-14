@@ -8,9 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const baseSHAs = parsePinnedSHAs(await readFile(path.join(root, 'docs/rfcs/new-harness/nhtest-base-shas.md'), 'utf8'));
 const matrixPath = path.join(root, 'docs/rfcs/new-harness/matriz-verificacao.json');
-const matrix = JSON.parse(await readFile(matrixPath, 'utf8'));
 const args = parseArgs(process.argv.slice(2));
 const stage = args.stage;
 const surface = args.surface;
@@ -25,6 +23,8 @@ try {
   const middlewareRoot = process.env.MIDDLEWAREAUTH_NHTEST_ROOT || path.resolve(root, '../middlewareAuth');
   const targetSHA = gitSHA(root);
   const identity = await targetIdentity(root, kernelRoot, middlewareRoot, targetSHA);
+  const baseSHAs = parsePinnedSHAs(await readFile(path.join(root, 'docs/rfcs/new-harness/nhtest-base-shas.md'), 'utf8'));
+  const matrix = JSON.parse(await readFile(matrixPath, 'utf8'));
   const selected = selectedPairs(stageNumber, surface, matrix);
   const unsupported = selected.filter(({ scenario }) => scenario.id !== 'CONTRACT-00' && scenario.id !== 'LEGACY-00');
   if (unsupported.length) throw configError('faltam dependências/handlers dos cenários: ' + unsupported.map(({ scenario }) => scenario.id).join(', '));
@@ -164,9 +164,10 @@ async function runContract(artifactDir, tempHome, shas, deadline, targetSHA) {
 async function runLegacy(surface, artifactDir, tempHome, deadline, targetSHA) {
   if (surface === 'macos') {
     const resultBundle = path.join(artifactDir, 'legacy-macos.xcresult');
-    const hostScript = path.join(root, 'Tests/NewHarnessE2E/MacOSHost/run.mjs');
+    const macSource = await cloneGitSnapshot(root, targetSHA, path.join(tempHome, 'sources/pocketwiki-macos'));
+    const hostScript = path.join(macSource, 'Tests/NewHarnessE2E/MacOSHost/run.mjs');
     const result = await runWithinDeadline(process.execPath, [hostScript, '--result-bundle-path', resultBundle], {
-      cwd: root,
+      cwd: macSource,
       env: {
         ...isolatedEnvironment(tempHome),
         POCKETWIKI_XCODE_DEVELOPER_DIR: process.env.POCKETWIKI_XCODE_DEVELOPER_DIR || '',
