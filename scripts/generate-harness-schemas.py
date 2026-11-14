@@ -277,6 +277,21 @@ def operation_inputs():
 def main():
     schema = json.loads(SCHEMA_PATH.read_text())
     definitions = schema["$defs"]
+    # Preserve the historical commandReceipt wire shape; it is a dispatch result.
+    definitions["runtimeDispatchResult"] = {"$ref": "#/$defs/commandReceipt"}
+    definitions["httpCommandReceipt"] = {
+        "type": "object", "additionalProperties": False,
+        "required": ["command_id", "receipt_id", "environment_id", "revision", "state", "duplicate"],
+        "properties": {
+            "command_id": {"$ref": "#/$defs/uuid"},
+            "receipt_id": {"$ref": "#/$defs/uuid"},
+            "environment_id": {"$ref": "#/$defs/uuid"},
+            "revision": {"type": "integer", "minimum": 0},
+            "state": {"enum": ["accepted", "pending", "succeeded", "failed", "uncertain"]},
+            "duplicate": {"type": "boolean"},
+            "result_ref": {"$ref": "#/$defs/uuid"},
+        },
+    }
     registry, input_schemas = operation_inputs()
     feature_snapshots = {}
     seen = {}

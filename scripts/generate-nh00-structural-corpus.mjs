@@ -115,6 +115,31 @@ for (const entity of schema['x-entityTypes'] ?? []) {
   }
 }
 
+// R1 defines the projection key. E0 validators only validate JCS syntax, so
+// retain their existing acceptance of a different valid key until enforcement is introduced.
+const runtimeEvent = structuredClone(slots.find(({ id }) => id === `${prefix}EVENT-runtime-RuntimeEvent-upsert-VALID`).value);
+runtimeEvent.payload.entity_key = JSON.stringify(runtimeEvent.payload.value.event_id);
+slots.push(slot(`${prefix}E1-RUNTIME-EVENT-CANONICAL-KEY`, 'streamEnvelope', true, structuredClone(runtimeEvent)));
+runtimeEvent.payload.entity_key = JSON.stringify('22222222-2222-4222-8222-222222222222');
+slots.push(slot(`${prefix}E1-RUNTIME-EVENT-LEGACY-KEY-ACCEPTED`, 'streamEnvelope', true, runtimeEvent));
+
+// Additive E1 contracts: exercise both names and reject cross-boundary shapes.
+const dispatch = { receipt_id: uuid, revision: 0, state: 'accepted' };
+const http = { command_id: uuid, receipt_id: uuid, environment_id: uuid, revision: 0, state: 'pending', duplicate: false };
+for (const [name, target, valid, value] of [
+  ['DISPATCH-VALID', 'runtimeDispatchResult', true, dispatch],
+  ['LEGACY-VALID', 'commandReceipt', true, dispatch],
+  ['HTTP-VALID', 'httpCommandReceipt', true, http],
+  ['HTTP-RESULT-REF', 'httpCommandReceipt', true, { ...http, result_ref: uuid }],
+  ['HTTP-REJECT-DISPATCH', 'httpCommandReceipt', false, dispatch],
+  ['DISPATCH-REJECT-HTTP', 'runtimeDispatchResult', false, http],
+  ['LEGACY-REJECT-HTTP', 'commandReceipt', false, http],
+  ['HTTP-EXTRA', 'httpCommandReceipt', false, { ...http, extra: true }],
+  ['HTTP-NULL-RESULT', 'httpCommandReceipt', false, { ...http, result_ref: null }],
+  ['HTTP-BAD-DUPLICATE', 'httpCommandReceipt', false, { ...http, duplicate: 0 }],
+  ['HTTP-BAD-STATE', 'httpCommandReceipt', false, { ...http, state: 'duplicate' }],
+]) slots.push(slot(`${prefix}E1-${name}`, target, valid, value));
+
 const previous = corpus.slots.filter(({ id }) => !id.startsWith(prefix));
 corpus.slots = [...previous, ...slots];
 await writeFile(new URL('../src/harness/contracts/corpus-v1.json', import.meta.url), `${JSON.stringify(corpus, null, 2)}\n`);
