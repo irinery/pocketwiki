@@ -32,7 +32,11 @@ try {
   const kernel = path.join(temp, 'pocketkernel');
   if (await run('go', ['build', '-o', kernel, './cmd/pocketkernel'], { cwd: snapshot, env: { ...process.env, GOFLAGS: '-buildvcs=false' } })) throw new Error('build Kernel falhou');
   try { await access('node_modules/@playwright/test/package.json'); }
-  catch { if (await run('npm', ['ci', '--ignore-scripts'], { timeoutMS: 600000 })) throw new Error('npm ci falhou'); }
+  catch {
+    if (await run('git', ['diff', '--quiet', '--', 'node_modules']) || await run('git', ['diff', '--cached', '--quiet', '--', 'node_modules'])) throw new Error('node_modules rastreados têm alterações locais');
+    if (await run('npm', ['ci', '--ignore-scripts'], { timeoutMS: 600000 })) throw new Error('npm ci falhou');
+    if (await run('git', ['restore', '--worktree', '--', 'node_modules'])) throw new Error('não foi possível restaurar dependências rastreadas');
+  }
   const literalSwift = path.join(temp, 'replay-literal');
   const swiftSources = ['Sources/PocketWikiMac/Models/Harness/HarnessV1.swift', 'Sources/PocketWikiMac/Models/Harness/HarnessOperationRegistry.swift', 'Sources/PocketWikiMac/Services/Harness/Runtime/RuntimeProjection.swift', 'Tests/HarnessUI/runtime/macos/RuntimeReplayLiteral.swift'];
   if (await run('swiftc', ['-parse-as-library', ...swiftSources, '-o', literalSwift], { timeoutMS: 600000 })) throw new Error('build teste Swift literal falhou');
