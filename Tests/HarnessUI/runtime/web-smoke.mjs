@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { createHash } from 'node:crypto';
 import { fixtureUUID } from './fixture-ids.mjs';
+import { requireRuntimeScreenshot } from './runtime-proof.mjs';
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createInterface } from 'node:readline';
-import { copyFile, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
@@ -115,7 +116,9 @@ try {
       const files = await readdir(attachments);
       const screenshot = files.find(file => file.toLowerCase().endsWith('.png'));
       if (!screenshot) throw new Error('captura de teste nativo ausente');
-      await copyFile(path.join(attachments, screenshot), path.join(process.env.RUNTIME_ARTIFACT_DIR, `runtime-${scenario}.png`));
+      const screenshotBytes = await readFile(path.join(attachments, screenshot));
+      requireRuntimeScreenshot(screenshotBytes); // Fail closed until metadata has been stripped.
+      await writeFile(path.join(process.env.RUNTIME_ARTIFACT_DIR, `runtime-${scenario}.png`), screenshotBytes, { mode: 0o600 });
       }
     }
     if (code !== 0) throw new Error(`XCTest falhou (${code}): ${output}`);
