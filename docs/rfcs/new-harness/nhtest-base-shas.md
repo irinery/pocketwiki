@@ -1,4 +1,12 @@
-# NH-TEST — bases imutáveis registradas antes da implementação
+# NH-TEST — pin ativo e bases históricas
+
+## Pin ativo para E0
+
+- PocketKernel: `ece7ed7439d552315a87b99ef94bd9fb85786cab` (merge da PR #14).
+
+O runner e os hosts leem a primeira ocorrência de `PocketKernel` neste arquivo; o workflow E0 também fixa e verifica esse mesmo SHA. O pin ativo de MiddlewareAuth continua sendo o registrado abaixo.
+
+## Bases imutáveis registradas antes da implementação
 
 - PocketWiki: `5d516e59c6fcdf41a551f8725d1ca19d770d41c1` (`codex/nh-e0-nh00`, NH-00 aprovada; base exata do novo worktree).
 - PocketKernel: `03f8f30eb781b4d16a9dca76f7548f9781bbef02` (`codex/nh00-locks`, checkout/worktree separada; NH-TEST não altera esse histórico).
