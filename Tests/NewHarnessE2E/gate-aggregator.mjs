@@ -19,9 +19,7 @@ export async function aggregateReportFiles(stage, reportPaths, target) {
     return report;
   }));
   const result = aggregateReports(stage, reports, matrix);
-  for (const field of [...hashFields, ...digestFields]) {
-    if (result[field] !== target[field]) throw new Error('target build mismatch: ' + field);
-  }
+  assertSameIdentity(target, result);
   return result;
 }
 
@@ -90,6 +88,12 @@ export function aggregateReports(stage, reports, matrix) {
     ...identity,
     cases: [...actual.entries()].map(([key, result]) => ({ key, status: result.status, artifact_paths: result.artifact_paths }))
   };
+}
+
+export function assertSameIdentity(expected, actual) {
+  for (const field of [...hashFields, ...digestFields]) {
+    if (expected[field] !== actual[field]) throw new Error('target build mismatch: ' + field);
+  }
 }
 
 // Identity is computed from clean checkouts, including the exact files consumed by the runner.

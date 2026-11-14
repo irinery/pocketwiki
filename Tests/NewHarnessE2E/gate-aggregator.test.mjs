@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import matrix from '../../docs/rfcs/new-harness/matriz-verificacao.json' with { type: 'json' };
-import { aggregateReportFiles, aggregateReports, targetIdentity } from './gate-aggregator.mjs';
+import { aggregateReportFiles, aggregateReports, targetIdentity, assertSameIdentity } from './gate-aggregator.mjs';
 
 const sha1 = 'a'.repeat(40);
 const sha256 = 'b'.repeat(64);
@@ -139,4 +139,11 @@ test('target identity hashes real checkout files and rejects wrong or dirty chec
   await assert.rejects(() => targetIdentity(...repos, 'f'.repeat(40)), /target SHA differs/);
   await writeFile(path.join(repos[0], files[0]), 'changed');
   await assert.rejects(() => targetIdentity(...repos, sha), /modified tracked files/);
+  execFileSync('git', ['-C', repos[0], 'add', '.']);
+  execFileSync('git', ['-C', repos[0], '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'changed during execution']);
+  const changedSHA = execFileSync('git', ['-C', repos[0], 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+  await assert.rejects(() => targetIdentity(...repos, sha), /target SHA differs/);
+  const changed = await targetIdentity(...repos, changedSHA);
+  assert.throws(() => assertSameIdentity(actual, changed), /target build mismatch/);
+
 });

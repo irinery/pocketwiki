@@ -1,7 +1,8 @@
 import { createServer } from 'node:http';
 import { runAndCapture } from '../deadline-process.mjs';
+import { runWithinDeadline } from '../deadline-sync.mjs';
 import { createServer as createNetServer } from 'node:net';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { chmod, cp, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -70,7 +71,7 @@ try {
   const middlewareSource = path.join(tempHome, 'sources', 'middlewareauth');
   await exportCleanSnapshot(kernelRoot, kernelSource);
   await exportCleanSnapshot(middlewareRoot, middlewareSource);
-  const built = buildHelpers({ kernelRoot: kernelSource, middlewareRoot: middlewareSource, kernelBinary, middlewareBinary, tempHome });
+  const built = await buildHelpers({ kernelRoot: kernelSource, middlewareRoot: middlewareSource, kernelBinary, middlewareBinary, tempHome });
   if (built.status !== 0) {
     output += built.output;
     throw new Error('não foi possível compilar PocketKernel/MiddlewareAuth reais no diretório temporário');
@@ -102,12 +103,12 @@ try {
     LMSTUDIO_BASE_URL: providerURL,
     MCP_LMSTUDIO_MODEL: 'nh-test-model'
   };
-  const destinations = spawnSync(xcodebuild, ['-showdestinations', '-project', project, '-scheme', 'PocketWikiMacNHTestHost'], {
+  const destinations = await runWithinDeadline(xcodebuild, ['-showdestinations', '-project', project, '-scheme', 'PocketWikiMacNHTestHost'], {
     cwd: root,
     env,
     encoding: 'utf8',
     maxBuffer: 8 * 1024 * 1024
-  });
+  }, Date.now() + 60_000);
   output += '--- xcodebuild -showdestinations ---\n' + (destinations.stdout || '') + (destinations.stderr || '');
   if (destinations.status !== 0) throw new Error('xcodebuild não conseguiu listar os destinos macOS disponíveis');
   const macDestination = [...(destinations.stdout || '').matchAll(/\{[^{}]*platform:macOS, arch:([^,}]+), id:([^,}]+), name:([^}]+)\}/g)]
@@ -172,12 +173,13 @@ try {
 }
 process.exit(status);
 
-function buildHelpers({ kernelRoot, middlewareRoot, kernelBinary, middlewareBinary, tempHome }) {
+async function buildHelpers({ kernelRoot, middlewareRoot, kernelBinary, middlewareBinary, tempHome }) {
   const common = { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 };
   const env = { ...process.env, HOME: tempHome, CGO_ENABLED: '0', GOCACHE: path.join(tempHome, 'go-cache'), GOPATH: path.join(tempHome, 'go') };
-  const kernel = spawnSync('go', ['build', '-mod=readonly', '-o', kernelBinary, './cmd/pocketkernel'], { ...common, cwd: kernelRoot, env });
+  const deadline = Date.now() + 12 * 60_000;
+  const kernel = await runWithinDeadline('go', ['build', '-mod=readonly', '-o', kernelBinary, './cmd/pocketkernel'], { ...common, cwd: kernelRoot, env }, deadline, 12 * 60_000);
   if (kernel.status !== 0) return { status: kernel.status ?? 2, output: '--- go build PocketKernel ---\n' + (kernel.stdout || '') + (kernel.stderr || kernel.error?.message || '') };
-  const middleware = spawnSync('go', ['build', '-mod=readonly', '-o', middlewareBinary, './cmd/middleware-codex-oauth'], { ...common, cwd: middlewareRoot, env });
+  const middleware = await runWithinDeadline('go', ['build', '-mod=readonly', '-o', middlewareBinary, './cmd/middleware-codex-oauth'], { ...common, cwd: middlewareRoot, env }, deadline, 12 * 60_000);
   if (middleware.status !== 0) return { status: middleware.status ?? 2, output: '--- go build MiddlewareAuth ---\n' + (middleware.stdout || '') + (middleware.stderr || middleware.error?.message || '') };
   return { status: 0, output: '' };
 }

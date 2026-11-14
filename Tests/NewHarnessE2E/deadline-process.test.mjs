@@ -18,10 +18,25 @@ test('process failure is preserved and successful execution passes', async () =>
 
 test('synchronous shard deadline fails on timeout and expired deadline', async () => {
   const { runWithinDeadline } = await import('./deadline-sync.mjs');
-  const timeout = runWithinDeadline(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {}, Date.now() + 100);
+  const timeout = await runWithinDeadline(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {}, Date.now() + 100);
   assert.equal(timeout.status, null);
   assert.equal(timeout.error.code, 'ETIMEDOUT');
-  const expired = runWithinDeadline(process.execPath, ['-e', 'process.exit(0)'], {}, Date.now() - 1);
+  const expired = await runWithinDeadline(process.execPath, ['-e', 'process.exit(0)'], {}, Date.now() - 1);
   assert.equal(expired.status, null);
   assert.match(expired.error.message, /deadline exceeded/);
+});
+
+test('hard deadline kills a child that ignores SIGTERM and its descendant', async () => {
+  const { runWithinDeadline } = await import('./deadline-sync.mjs');
+  const source = `const { spawn } = require('node:child_process');
+    process.on('SIGTERM', () => {});
+    const child = spawn(process.execPath, ['-e', "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)"]);
+    console.log(child.pid); setInterval(() => {}, 1000);`;
+  const start = Date.now();
+  const result = await runWithinDeadline(process.execPath, ['-e', source], {}, Date.now() + 500);
+  assert.equal(result.error.code, 'ETIMEDOUT');
+  assert.ok(Date.now() - start < 5000);
+  const pid = Number(result.stdout.trim());
+  assert.ok(pid > 0);
+  assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
 });
