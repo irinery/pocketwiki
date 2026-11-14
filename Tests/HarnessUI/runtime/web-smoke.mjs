@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { createHash, randomUUID } from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { fixtureUUID } from './fixture-ids.mjs';
+import { spawn, execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { createInterface } from 'node:readline';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
@@ -25,7 +27,10 @@ let releaseStream;
 if (!binary) throw new Error('RUNTIME_KERNEL_BINARY obrigatório');
 const tmp = await mkdtemp(path.join(os.tmpdir(), 'e1-ui-')); const socketPath = path.join(tmp, 'boot.sock');
 const io = path.join(tmp, 'io'); await mkdir(io);
-const principalId = randomUUID(), environmentId = randomUUID(), threadId = randomUUID();
+const seed = Number(process.env.NH_TEST_SEED ?? '20261102');
+const fixtureScope = replay ? 'replay' : incompatible ? 'incompatible' : pauseEffect ? 'accepted' : legacy ? 'legacy' : 'connect';
+const fixtureID = label => fixtureUUID(seed, `${macos ? 'macos' : 'web'}/${fixtureScope}/${label}`);
+const principalId = fixtureID('principal'), environmentId = fixtureID('environment'), threadId = fixtureID('thread');
 const audience = 'pocketkernel.harness.v1';
 const schemaSHA256 = createHash('sha256').update(await readFile('src/harness/contracts/harness-v1.schema.json')).digest('hex');
 const buildResult = await build({ entryPoints: ['Tests/HarnessUI/runtime/web/main.mjs'], bundle: true, format: 'esm', platform: 'browser', inject: ['Tests/HarnessUI/runtime/web/buffer-shim.mjs'], write: false });
@@ -47,7 +52,7 @@ try {
     const abort = new AbortController();
     const stream = await transport.stream(threadId, 0, { signal: abort.signal });
     const frames = runtimeFrames(stream)[Symbol.asyncIterator]();
-    const commandId = randomUUID();
+    const commandId = fixtureID('seed-command');
     await transport.dispatch({ protocol_major: 1, command_id: commandId, environment_id: environmentId, expected_revision: 0, operation: 'runtime.dispatch', input: { command_id: commandId, thread_id: threadId, expected_revision: 0, operation: 'submit', text: 'seed replay' } });
     for (;;) {
       const { value, done } = await frames.next();
@@ -92,11 +97,26 @@ try {
   server.listen(0,'127.0.0.1'); await once(server,'listening');
   if (macos) {
     const configPath = path.join(tmp, 'native-config.json');
-    await writeFile(configPath, JSON.stringify({ baseURL: `http://127.0.0.1:${server.address().port}`, bearer, environmentID: environmentId, threadID: threadId, schemaSHA256, schemaPath: path.resolve('src/harness/contracts/harness-v1.schema.json'), observeFrames: replay ? '1' : '0' }), { mode: 0o600 });
+    await writeFile(configPath, JSON.stringify({ baseURL: `http://127.0.0.1:${server.address().port}`, bearer, environmentID: environmentId, threadID: threadId, schemaSHA256, schemaPath: path.resolve('src/harness/contracts/harness-v1.schema.json'), commandID: fixtureID('ui-command'), observeFrames: replay ? '1' : '0' }), { mode: 0o600 });
     const scenario = replay ? 'replay' : incompatible ? 'incompatible' : pauseEffect ? 'accepted' : 'connect';
-    const test = spawn('xcodebuild', ['-project', 'Tests/HarnessUI/runtime/macos/PocketWikiRuntimeUIHost.xcodeproj', '-scheme', 'PocketWikiRuntimeUIHost', '-destination', 'platform=macOS,arch=arm64', '-derivedDataPath', process.env.RUNTIME_DERIVED_DATA, 'test-without-building', 'CODE_SIGNING_ALLOWED=NO', '-quiet'], { env: { ...process.env, NH_RUNTIME_CONFIG_PATH: configPath, NH_RUNTIME_SCENARIO: scenario }, stdio: ['ignore', 'pipe', 'pipe'] });
+    const resultPath = path.join(tmp, `runtime-${scenario}.xcresult`);
+    const test = spawn('xcodebuild', ['-resultBundlePath', resultPath, '-project', 'Tests/HarnessUI/runtime/macos/PocketWikiRuntimeUIHost.xcodeproj', '-scheme', 'PocketWikiRuntimeUIHost', '-destination', 'platform=macOS,arch=arm64', '-derivedDataPath', process.env.RUNTIME_DERIVED_DATA, 'test-without-building', 'CODE_SIGNING_ALLOWED=NO', '-quiet'], { env: { ...process.env, NH_RUNTIME_CONFIG_PATH: configPath, NH_RUNTIME_SCENARIO: scenario }, stdio: ['ignore', 'pipe', 'pipe'] });
     let output = ''; for (const stream of [test.stdout, test.stderr]) stream.on('data', chunk => { output = (output + chunk.toString()).slice(-12000); });
     const [code] = await once(test, 'exit');
+    if (process.env.RUNTIME_ARTIFACT_DIR) {
+      const call = promisify(execFile);
+      const { stdout } = await call('xcrun', ['xcresulttool', 'get', 'test-results', 'summary', '--path', resultPath, '--format', 'json']);
+      const summary = JSON.parse(stdout);
+      await writeFile(path.join(process.env.RUNTIME_ARTIFACT_DIR, `runtime-${scenario}.summary.json`), JSON.stringify({ result: summary.result, totalTestCount: summary.totalTestCount, passedTests: summary.passedTests, failedTests: summary.failedTests, skippedTests: summary.skippedTests }, null, 2) + '\n', { mode: 0o600 });
+      if (code === 0) {
+      const attachments = path.join(tmp, `attachments-${scenario}`); await mkdir(attachments);
+      await call('xcrun', ['xcresulttool', 'export', 'attachments', '--path', resultPath, '--output-path', attachments, '--filter', 'runtime-fixture*']);
+      const files = await readdir(attachments);
+      const screenshot = files.find(file => file.toLowerCase().endsWith('.png'));
+      if (!screenshot) throw new Error('captura de teste nativo ausente');
+      await copyFile(path.join(attachments, screenshot), path.join(process.env.RUNTIME_ARTIFACT_DIR, `runtime-${scenario}.png`));
+      }
+    }
     if (code !== 0) throw new Error(`XCTest falhou (${code}): ${output}`);
     console.log(`macOS XCTest: ${scenario} validado`);
   } else {
@@ -109,7 +129,7 @@ try {
     const original = window.runtime.client.applyEvent.bind(window.runtime.client);
     window.runtime.client.applyEvent = async (...args) => { await original(...args); window.seen.push(args[0].seq); window.views.push({ lastSeq: window.runtime.client.state.lastSeq, receipts: window.runtime.client.state.receipts.length }); if (wake && window.seen.length >= wake.count) { wake.resolve(); wake = null; } };
     try { await window.runtime.panel.open(); } catch (error) { if (!config.legacy) throw error; }
-  }, { bearer, environmentId, threadId, schemaSHA256, legacy });
+  }, { bearer, environmentId, threadId, schemaSHA256, commandId: fixtureID('ui-command'), legacy });
   if (replay) {
     await page.evaluate(() => window.waitSeen(2));
     assert.deepEqual(await page.evaluate(() => window.seen.slice(0, 2)), [8, 9]);
@@ -145,6 +165,7 @@ try {
     assert.equal(await page.locator('[data-completed="true"]').count(), 1);
   }
   }
+  if (process.env.RUNTIME_ARTIFACT_DIR) await page.screenshot({ path: path.join(process.env.RUNTIME_ARTIFACT_DIR, `runtime-${replay ? 'replay' : incompatible ? 'incompatible' : pauseEffect ? 'accepted' : legacy ? 'legacy' : 'connect'}.png`) });
   await page.evaluate(() => window.runtime.client.close());
   if (!legacy) console.log(replay ? 'Chromium: snapshot real 9 ignorou replay 8/9 e aplicou 10/11/12' : incompatible ? 'Chromium: versão incompatível recusada sem aplicar frame' : pauseEffect ? 'Chromium: receipt aceito antes da confirmação do efeito' : 'Chromium: bootstrap scoped, painel, dispatch e efeito real verificados');
   }

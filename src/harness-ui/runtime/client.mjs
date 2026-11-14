@@ -4,8 +4,8 @@ import { validateAgainst } from '../../harness/contracts/validate.mjs';
 
 // The host owns transport and credentials; this client only holds UI state.
 export class RuntimeClient {
-  constructor({ transport, environmentId, threadId, schemaSHA256, onChange = () => {} }) {
-    Object.assign(this, { transport, environmentId, threadId, schemaSHA256, onChange });
+  constructor({ transport, environmentId, threadId, schemaSHA256, onChange = () => {}, newCommandId = () => crypto.randomUUID() }) {
+    Object.assign(this, { transport, environmentId, threadId, schemaSHA256, onChange, newCommandId });
     this.state = { available: false, receipts: [], revision: 0, lastSeq: 0 };
   }
   publish(patch) { this.state = { ...this.state, ...patch }; this.onChange(this.state); }
@@ -73,7 +73,7 @@ export class RuntimeClient {
       throw error;
     }
   }
-  async submit(text, commandId = crypto.randomUUID()) {
+  async submit(text, commandId = this.newCommandId()) {
     if (!this.state.available || this.pendingCommandId || this.pendingBusy) throw Object.assign(new Error('Runtime indisponível ou comando pendente'), { code: 'ERR_UNAVAILABLE' });
     const command = { protocol_major: 1, command_id: commandId, environment_id: this.environmentId, expected_revision: this.state.revision, operation: 'runtime.dispatch', input: { command_id: commandId, thread_id: this.threadId, expected_revision: this.state.revision, operation: 'submit', text } };
     if (!validateAgainst('command', command).valid) throw Object.assign(new Error('Comando inválido'), { code: 'ERR_INVALID' });
