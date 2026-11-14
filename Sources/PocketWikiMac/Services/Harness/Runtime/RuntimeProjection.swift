@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 /// Monta uma visão isolada; o chamador publica `finish` atomicamente no cache por ambiente/thread.
 final class RuntimeProjection {
@@ -28,7 +29,9 @@ final class RuntimeProjection {
     private var effects: [String: [String: Any]] = [:]
     private var events: [(Int, String, [String: Any])] = []
     private var eventBytes = 0
-    private var seenEvents: [String: (Int, Data, Data?)] = [:]
+    private var seenEvents: [String: (Int, SHA256.Digest, SHA256.Digest?)] = [:]
+    private var lastAppliedSeq = 0
+    private var appliedEventCount = 0
     private var seenSequences: [Int: String] = [:]
     private var cursors = Set<String>()
 
@@ -86,15 +89,16 @@ final class RuntimeProjection {
                 HarnessV1.validateCorpusValue(resolved, schemaName: "runtimeModuleEvent", document: schema) { payload = resolved }
         else { throw Failure.invalidEvent }
         if seq <= boundary { return }
-        if let previous = seenEvents[id] { if previous.0 == seq && previous.1 == data && previous.2 == resolvedPayload { return }; throw Failure.invalidEvent }
+        let digest = SHA256.hash(data: data), payloadDigest = resolvedPayload.map { SHA256.hash(data: $0) }
+        if let previous = seenEvents[id] { if previous.0 == seq && previous.1 == digest && previous.2 == payloadDigest { return }; throw Failure.invalidEvent }
         if let previous = seenSequences[seq] { if previous == id { return }; throw Failure.invalidEvent }
-        guard seq > (events.last?.0 ?? boundary) else { throw Failure.invalidEvent }
+        guard seq > (events.last?.0 ?? max(boundary, lastAppliedSeq)) else { throw Failure.invalidEvent }
         guard eventBytes + data.count + (resolvedPayload?.count ?? 0) <= 4_194_304 else { throw Failure.overflow }
-        events.append((seq, id, payload)); seenEvents[id] = (seq, data, resolvedPayload); seenSequences[seq] = id; eventBytes += data.count + (resolvedPayload?.count ?? 0)
+        events.append((seq, id, payload)); seenEvents[id] = (seq, digest, payloadDigest); seenSequences[seq] = id; eventBytes += data.count + (resolvedPayload?.count ?? 0)
     }
     func finish() throws -> View {
         guard complete, let id = snapshotID else { throw Failure.incomplete }
-        guard (events.last?.0 ?? boundary) >= confirmedSeq else { throw Failure.stale }
+        guard (events.last?.0 ?? max(boundary, lastAppliedSeq)) >= confirmedSeq else { throw Failure.stale }
         var rs = receipts, es = effects
         var latestRevision = revision
         for (_, _, payload) in events {
@@ -123,6 +127,12 @@ final class RuntimeProjection {
                 if type == "RuntimeReceipt" { rs.removeValue(forKey: key) } else { es.removeValue(forKey: key) }
             } else { throw Failure.invalidEvent }
         }
-        return View(snapshotID: id, revision: latestRevision, asOfSeq: boundary, lastSeq: events.last?.0 ?? boundary, appliedEventCount: events.count, receipts: rs, effects: es)
+        let newLastSeq = events.last?.0 ?? max(boundary, lastAppliedSeq)
+        let newCount = appliedEventCount + events.count
+        // Só publica e compacta depois de validar todos os eventos do lote.
+        receipts = rs; effects = es; revision = latestRevision
+        lastAppliedSeq = newLastSeq; appliedEventCount = newCount
+        events.removeAll(keepingCapacity: false); eventBytes = 0
+        return View(snapshotID: id, revision: latestRevision, asOfSeq: boundary, lastSeq: newLastSeq, appliedEventCount: newCount, receipts: rs, effects: es)
     }
 }

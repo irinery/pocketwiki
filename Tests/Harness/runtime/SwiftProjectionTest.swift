@@ -54,9 +54,25 @@ import Foundation
         almostFull.append(Data(repeating: 32, count: 4_194_304 - eventData.count - payloadData.count - 100))
         try budget.bufferEvent(almostFull, resolvedPayload: payloadData)
         try budget.bufferEvent(almostFull, resolvedPayload: payloadData)
-        guard try budget.finish().appliedEventCount == 1 else { fatalError("duplicate counted twice") }
         var nextEvent = event; nextEvent["event_id"] = id; nextEvent["seq"] = 4
         do { try budget.bufferEvent(encoded(nextEvent), resolvedPayload: payloadData); fatalError("overflow accepted") } catch RuntimeProjection.Failure.overflow { }
+        guard try budget.finish().appliedEventCount == 1 else { fatalError("duplicate counted twice") }
+        try budget.bufferEvent(encoded(nextEvent), resolvedPayload: payloadData)
+        guard try budget.finish().lastSeq == 4 else { fatalError("budget not released") }
+        try budget.bufferEvent(almostFull, resolvedPayload: payloadData)
+        do { try budget.bufferEvent(almostFull, resolvedPayload: encoded(wrong)); fatalError("changed replay accepted") } catch RuntimeProjection.Failure.invalidEvent { }
+        let longStream = try RuntimeProjection(schema: schema, environmentID: uid, threadID: uid, pageSize: 1, confirmedRevision: 0)
+        try longStream.appendPage(page(nil), requestedCursor: nil)
+        for n in 3..<53 {
+            var item = event
+            item["event_id"] = String(format: "%08x-1111-4111-8111-111111111111", n)
+            item["seq"] = n
+            var data = try encoded(item)
+            data.append(Data(repeating: 32, count: 100_000))
+            try longStream.bufferEvent(data, resolvedPayload: payloadData)
+            let v = try longStream.finish()
+            guard v.lastSeq == n, v.appliedEventCount == n - 2, v.effects[id2] != nil else { fatalError("long stream lost state") }
+        }
         let p6 = try RuntimeProjection(schema: schema, environmentID: uid, threadID: uid, pageSize: 1, confirmedRevision: 0)
         try p6.appendPage(page(nil), requestedCursor: nil)
         try p6.bufferEvent(eventData, resolvedPayload: payloadData)
