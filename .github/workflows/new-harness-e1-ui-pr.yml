@@ -106,7 +106,7 @@ jobs:
             test -s "$REPORT_DIR/$image"
           done
           if [ "$SURFACE" = web ]; then
-            for artifact in runtime-accepted-before-release.png legacy-web/legacy-web-runtime-fallback.png legacy-web/legacy-web-trace.zip legacy-web/legacy-web-evidence.json; do
+            for artifact in runtime-accepted-before-release.png runtime-replay-trace.zip runtime-accepted-trace.zip runtime-incompatible-trace.zip legacy-web/legacy-web-runtime-fallback.png legacy-web/legacy-web-trace.zip legacy-web/legacy-web-evidence.json; do
               test -s "$REPORT_DIR/$artifact"
             done
           else

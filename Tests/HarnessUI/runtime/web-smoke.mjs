@@ -3,6 +3,7 @@ import { once } from 'node:events';
 import { createHash } from 'node:crypto';
 import { fixtureUUID } from './fixture-ids.mjs';
 import { requireRuntimeScreenshot } from './runtime-proof.mjs';
+import { sanitizeWebTrace } from './web-trace.mjs';
 import { sanitizeRuntimeScreenshot } from '../../NewHarnessE2E/MacOSHost/runtime-screenshot.mjs';
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -38,7 +39,7 @@ const audience = 'pocketkernel.harness.v1';
 const schemaSHA256 = createHash('sha256').update(await readFile('src/harness/contracts/harness-v1.schema.json')).digest('hex');
 const buildResult = await build({ entryPoints: ['Tests/HarnessUI/runtime/web/main.mjs'], bundle: true, format: 'esm', platform: 'browser', inject: ['Tests/HarnessUI/runtime/web/buffer-shim.mjs'], write: false });
 const child = spawn(binary, ['-mode','serve','-mock-model','-addr','127.0.0.1:0','-harness-rig-ready','-harness-db',path.join(tmp,'runtime.db'),'-harness-auth-store',path.join(tmp,'auth.json'),'-harness-bootstrap-socket',socketPath,'-harness-temp-root',io,'-harness-audience',audience,'-harness-schema-sha256',schemaSHA256, ...(pauseEffect ? ['-harness-rig-pause-after-effect'] : [])], { stdio: ['ignore','pipe','pipe'] });
-let browser, server, bootstrap, legacyChild;
+let browser, server, bootstrap, legacyChild, page, traceStarted = false, bearer, scenarioError;
 try {
   const base = await new Promise((resolve, reject) => {
     for (const input of [child.stdout, child.stderr]) createInterface({input}).on('line', line => { const match = /^HARNESS_READY (127\.0\.0\.1:[0-9]+)$/.exec(line); if (match) resolve(`http://${match[1]}`); });
@@ -48,7 +49,7 @@ try {
   await new Promise((resolve, reject) => { const req = http.request({socketPath,path:'/v1/runtime/threads',method:'POST',headers:{'content-type':'application/json','content-length':Buffer.byteLength(body)}}, res => { res.resume(); res.once('end', () => res.statusCode === 204 ? resolve() : reject(new Error(`thread HTTP ${res.statusCode}`))); }); req.on('error',reject); req.end(body); });
   bootstrap = new KernelLocalBootstrapClient({ socketPath }); const scopes = ['read','submit'];
   await bootstrap.registerAggregateGrant({ principal_id: principalId, environment_id: environmentId, audience, aggregate_id: threadId, scopes });
-  let bearer; const credentialHost = new LocalCredentialHost({ principalId, environmentId, audience, grantedScopes: scopes, deliverBearer: async value => { bearer = value.bearer; }, persistVerifier: verifier => bootstrap.persistVerifier(verifier) });
+  const credentialHost = new LocalCredentialHost({ principalId, environmentId, audience, grantedScopes: scopes, deliverBearer: async value => { bearer = value.bearer; }, persistVerifier: verifier => bootstrap.persistVerifier(verifier) });
   await credentialHost.bootstrap(scopes, { aggregateId: threadId });
   if (replay) {
     const transport = new RuntimeTransport({ baseURL: base, bearer });
@@ -125,7 +126,7 @@ try {
     if (code !== 0) throw new Error(`XCTest falhou (${code}): ${output}`);
     console.log(`macOS XCTest: ${scenario} validado`);
   } else {
-  browser = await chromium.launch({headless:true}); const page = await browser.newPage();
+  browser = await chromium.launch({headless:true}); page = await browser.newPage();
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
   await page.evaluate(async config => {
     const { mount } = await import('/bundle.js'); window.runtime = mount(config);
@@ -133,8 +134,14 @@ try {
     window.waitSeen = count => window.seen.length >= count ? Promise.resolve() : new Promise(resolve => { wake = { count, resolve }; });
     const original = window.runtime.client.applyEvent.bind(window.runtime.client);
     window.runtime.client.applyEvent = async (...args) => { await original(...args); window.seen.push(args[0].seq); window.views.push({ lastSeq: window.runtime.client.state.lastSeq, receipts: window.runtime.client.state.receipts.length }); if (wake && window.seen.length >= wake.count) { wake.resolve(); wake = null; } };
-    try { await window.runtime.panel.open(); } catch (error) { if (!config.legacy) throw error; }
   }, { bearer, environmentId, threadId, schemaSHA256, commandIds, legacy });
+  // Start after credential injection so the mount arguments never enter the trace.
+  await page.context().tracing.start({ screenshots: false, snapshots: true, sources: false });
+  traceStarted = true;
+  await page.evaluate(async legacy => {
+    try { await window.runtime.panel.open(); } catch (error) { if (!legacy) throw error; }
+  }, legacy);
+  if (process.env.RUNTIME_TEST_FORCE_FAILURE === '1') throw new Error('forced fixture failure');
   if (replay) {
     await page.evaluate(() => window.waitSeen(2));
     assert.deepEqual(await page.evaluate(() => window.seen.slice(0, 2)), [8, 9]);
@@ -185,9 +192,30 @@ try {
   await page.evaluate(() => window.runtime.client.close());
   if (!legacy) console.log(replay ? 'Chromium: snapshot real 9 ignorou replay 8/9 e aplicou 10/11/12' : incompatible ? 'Chromium: versão incompatível recusada sem aplicar frame' : pauseEffect ? 'Chromium: receipt aceito antes da confirmação do efeito' : 'Chromium: bootstrap scoped, painel, dispatch e efeito real verificados');
   }
+} catch (error) {
+  scenarioError = error;
+  if (page && process.env.RUNTIME_ARTIFACT_DIR) {
+    try {
+      const bytes = sanitizeRuntimeScreenshot(await page.locator('#runtime-slot').screenshot(), { maxWidth: 4096, maxHeight: 2048 });
+      requireRuntimeScreenshot(bytes, { maxHeight: 2048 });
+      await writeFile(path.join(process.env.RUNTIME_ARTIFACT_DIR, `runtime-${fixtureScope}-failure.png`), bytes, { mode: 0o600 });
+    } catch (captureError) { console.error('Captura de falha indisponível:', captureError.message); }
+  }
 } finally {
+  if (traceStarted) {
+    try {
+      const rawTrace = path.join(tmp, 'web-trace-raw.zip');
+      await page.context().tracing.stop({ path: rawTrace });
+      if (process.env.RUNTIME_ARTIFACT_DIR) await sanitizeWebTrace(rawTrace, tmp, path.join(process.env.RUNTIME_ARTIFACT_DIR, `runtime-${fixtureScope}-trace.zip`), [bearer]);
+    } catch (error) {
+      console.error('Falha ao sanitizar trace:', error.message);
+      scenarioError ??= error;
+    }
+  }
   await browser?.close(); if (server) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   bootstrap?.close(); if (legacyChild && legacyChild.exitCode === null) { const exited = once(legacyChild, 'exit'); legacyChild.kill('SIGTERM'); await exited; }
   if (child.exitCode === null) { const exited = once(child,'exit'); child.kill('SIGTERM'); await exited; }
   await rm(tmp,{recursive:true,force:true});
 }
+
+if (scenarioError) throw scenarioError;
