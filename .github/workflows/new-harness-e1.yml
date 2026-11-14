@@ -130,11 +130,16 @@ jobs:
       - name: Select pinned Xcode
         run: |
           sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+          test "$(xcodegen --version)" = 'Version: 2.46.0'
           node --version
           npm --version
           go version
           swift --version
           xcodebuild -version
+          xcodegen --version
           git rev-parse HEAD
           test "$(git -C "$POCKETKERNEL_NH00_ROOT" rev-parse HEAD)" = 582e216c13feb7485fa9620d9543b272ec3794b5
           test "$(git -C "$MIDDLEWAREAUTH_NHTEST_ROOT" rev-parse HEAD)" = 04f44f62126c785f7b28718d2eff837c28cb65df
@@ -155,6 +160,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: nh-test-e1-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/nh-test-e1/
+          path: |
+            ${{ runner.temp }}/nh-test-e1/
+            !${{ runner.temp }}/nh-test-e1/**/*.xcresult
+            !${{ runner.temp }}/nh-test-e1/**/*.xcresult/**
           if-no-files-found: warn
           retention-days: 14
