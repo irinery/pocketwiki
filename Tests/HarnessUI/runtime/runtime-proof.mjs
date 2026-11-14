@@ -5,3 +5,12 @@ export function requireRuntimeProof(proof, { nonce, pocketwikiSHA }) {
       proof.nonce !== nonce || proof.pocketwiki_sha !== pocketwikiSHA || proof.runtime_fallback_verified !== true ||
       proof.legacy_capability_status !== 404 || proof.skipped_tests !== 0) throw new Error('prova do hook nativo ausente ou inválida');
 }
+
+export function requireRuntimeScreenshot(data) {
+  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  const end = Buffer.from([0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130]);
+  if (!Buffer.isBuffer(data) || data.length < 45 || data.length > 10 * 1024 * 1024 ||
+      !data.subarray(0, 8).equals(signature) || data.readUInt32BE(8) !== 13 || data.toString('ascii', 12, 16) !== 'IHDR' ||
+      data.readUInt32BE(16) < 1 || data.readUInt32BE(16) > 4096 || data.readUInt32BE(20) < 1 || data.readUInt32BE(20) > 1024 ||
+      !data.subarray(-12).equals(end)) throw new Error('captura do slot inválida');
+}

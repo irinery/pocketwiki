@@ -1,7 +1,7 @@
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHash, randomBytes } from 'node:crypto';
-import { requireRuntimeProof } from './runtime-proof.mjs';
+import { requireRuntimeProof, requireRuntimeScreenshot } from './runtime-proof.mjs';
 import { superviseMacHost } from '../../NewHarnessE2E/MacOSHost/supervisor.mjs';
 import { assertTrackedFlags } from '../../NewHarnessE2E/git-snapshot.mjs';
 import { access, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -125,7 +125,7 @@ try {
     } catch { legacyCode = null; log += 'Prova válida do hook nativo ausente.\n'; }
     try {
       const screenshot = await readFile(resultPath + '.runtime-fallback.png');
-      if (screenshot.length < 24 || screenshot.length > 10 * 1024 * 1024 || !screenshot.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) throw new Error('PNG inválido');
+      requireRuntimeScreenshot(screenshot);
       await writeFile(path.join(reportDir, 'legacy-macos.runtime-fallback.png'), screenshot, { mode: 0o600 });
     } catch { legacyCode = null; log += 'Captura sanitizada do slot nativo ausente.\n'; }
     const legacyRow = cases.find(item => item.id === '02-02');
