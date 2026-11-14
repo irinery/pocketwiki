@@ -60,7 +60,7 @@ try {
   const swiftSources = ['Sources/PocketWikiMac/Models/Harness/HarnessV1.swift', 'Sources/PocketWikiMac/Models/Harness/HarnessOperationRegistry.swift', 'Sources/PocketWikiMac/Services/Harness/Runtime/RuntimeProjection.swift', 'Tests/HarnessUI/runtime/macos/RuntimeReplayLiteral.swift'];
   if (await run('swiftc', ['-parse-as-library', ...swiftSources, '-o', literalSwift], { timeoutMS: 600000 })) throw new Error('build teste Swift literal falhou');
   if (await run(literalSwift, [])) throw new Error('replay Swift literal falhou');
-  if (await run(process.execPath, ['--test', 'Tests/HarnessUI/runtime/projection.test.mjs', 'Tests/HarnessUI/runtime/fixture-ids.test.mjs'])) throw new Error('replay JS literal falhou');
+  if (await run(process.execPath, ['--test', 'Tests/HarnessUI/runtime/projection.test.mjs', 'Tests/HarnessUI/runtime/fixture-ids.test.mjs', 'Tests/HarnessUI/runtime/runtime-proof.test.mjs'])) throw new Error('replay JS literal falhou');
   if (surface === 'web') {
     if (await run('npx', ['playwright', 'install', 'chromium-headless-shell'], { timeoutMS: 600000 })) throw new Error('Chromium indisponível');
     const legacySource = await readFile('Tests/HarnessUI/runtime/legacy-host/main.go');
