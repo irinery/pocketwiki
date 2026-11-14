@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { chmod, cp, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
-import { runWithinDeadline } from './deadline-sync.mjs';
+import { runWithinDeadline, requireProcessListing } from './deadline-sync.mjs';
 import { targetIdentity, assertSameIdentity } from './gate-aggregator.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,6 +19,7 @@ let exitCode = 0;
 let tempHome;
 
 try {
+  requireProcessListing();
   const kernelRoot = process.env.POCKETKERNEL_NH00_ROOT || path.resolve(root, '../pocketkernel-nh00');
   const middlewareRoot = process.env.MIDDLEWAREAUTH_NHTEST_ROOT || path.resolve(root, '../middlewareAuth');
   const targetSHA = gitSHA(root);

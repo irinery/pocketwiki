@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { runAndCapture } from '../deadline-process.mjs';
-import { runWithinDeadline } from '../deadline-sync.mjs';
+import { runWithinDeadline, requireProcessListing } from '../deadline-sync.mjs';
 import { createServer as createNetServer } from 'node:net';
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -13,6 +13,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const project = path.join(root, 'Tests/NewHarnessE2E/MacOSHost/PocketWikiMacNHTestHost.xcodeproj');
 const resultBundle = parseFlag(process.argv.slice(2), '--result-bundle-path');
 const logPath = resultBundle.replace(/\.xcresult$/, '') + '.log';
+try { requireProcessListing(); } catch (error) { reportConfigFailure(error.message); }
 const explicitDeveloperDir = process.env.POCKETWIKI_XCODE_DEVELOPER_DIR || process.env.DEVELOPER_DIR;
 const selected = explicitDeveloperDir
   ? { status: 0, stdout: explicitDeveloperDir }

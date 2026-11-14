@@ -1,7 +1,27 @@
 import { spawn, spawnSync } from 'node:child_process';
 
+// Cleanup requires a working process table. Fail before starting any workload.
+export function requireProcessListing(env = process.env) {
+  const snapshot = spawnSync('ps', ['-axo', 'pid=,ppid='], { env, encoding: 'utf8', timeout: 5000 });
+  const records = (snapshot.stdout || '').split('\n')
+    .map((line) => /^\s*(\d+)\s+(\d+)\s*$/.exec(line))
+    .filter(Boolean);
+  if (snapshot.status !== 0 || !records.some((record) => Number(record[1]) === process.pid && Number(record[2]) === process.ppid)) {
+    const error = new Error('ps indisponível ou incapaz de listar a árvore de processos');
+    error.exitCode = 2;
+    throw error;
+  }
+}
+
 // Run each command in its own process group so timeout kills the complete tree.
 export function runWithinDeadline(binary, args, options, deadline, cap = 180_000) {
+  try {
+    // killProcessTree invokes ps using this process's environment.
+    requireProcessListing(process.env);
+    requireProcessListing(options.env || process.env);
+  } catch (error) {
+    return Promise.resolve({ status: null, error });
+  }
   const timeLeft = Math.min(cap, deadline - Date.now());
   if (timeLeft <= 0) return Promise.resolve({ status: null, error: new Error('global scenario deadline exceeded') });
   return new Promise((resolve) => {
