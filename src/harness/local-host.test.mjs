@@ -53,16 +53,26 @@ test('local bootstrap refuses scopes the host did not grant', async () => {
   await assert.rejects(host.bootstrap(['read', 'scm.merge']), { code: 'ERR_FORBIDDEN' });
 });
 
-test('local credentials bind an aggregate and persist revocation after process delivery failure', async () => {
+test('partial delivery failure never persists an active credential', async () => {
   let bearer;
   let persisted;
   const host = new LocalCredentialHost({
     principalId, environmentId, audience: 'pocketkernel.harness', grantedScopes: ['read'],
-    persistVerifier: async (verifier) => { persisted = verifier; },
+    persistVerifier: async (verifier) => { persisted = verifier; throw new Error('control channel unavailable'); },
     deliverBearer: async ({ bearer: value }) => { bearer = value; throw new Error('private delivery failed'); }
   });
   await assert.rejects(host.bootstrap(['read'], { aggregateId: threadId }));
-  assert.equal(persisted.revoked, true);
-  assert.equal(persisted.aggregate_id, threadId);
+  assert.equal(persisted, undefined);
   assert.throws(() => host.authenticate(bearer, { audience: 'pocketkernel.harness', aggregateId: threadId }), { code: 'ERR_FORBIDDEN' });
+});
+
+test('activation failure reports an indeterminate outcome after delivery', async () => {
+  let bearer;
+  const host = new LocalCredentialHost({
+    principalId, environmentId, audience: 'pocketkernel.harness', grantedScopes: ['read'],
+    deliverBearer: async (delivery) => { bearer = delivery.bearer; },
+    persistVerifier: async () => { throw new Error('ack lost'); }
+  });
+  await assert.rejects(host.bootstrap(['read']), { code: 'ERR_ACTIVATION_UNKNOWN' });
+  assert.throws(() => host.authenticate(bearer, { audience: 'pocketkernel.harness' }), { code: 'ERR_FORBIDDEN' });
 });

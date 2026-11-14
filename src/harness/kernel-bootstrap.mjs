@@ -23,6 +23,7 @@ export class KernelLocalBootstrapClient {
     const result = await new Promise((resolve, reject) => {
       const request = http.request({
         socketPath: this.#socketPath,
+        agent: false,
         path,
         method: 'POST',
         headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) },

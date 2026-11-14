@@ -3,7 +3,8 @@ import { spawn } from 'node:child_process';
 import { fork } from 'node:child_process';
 import { once } from 'node:events';
 import { createInterface } from 'node:readline';
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, rename, rm, stat } from 'node:fs/promises';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -57,9 +58,30 @@ try {
   assert.equal(failedDelivery.error, 'ERR_DELIVERY');
   await assertRequest(kernel.http, failedDelivery.bearer, ids.aggregate, 'read', 403);
 
+  const disconnected = await issue({ principalId: ids.principal, environmentId: ids.environment, audience, aggregateId: ids.aggregate, failDelivery: true, disconnectBeforeDeliveryFailure: true });
+  await assertRequest(kernel.http, disconnected.bearer, ids.aggregate, 'read', 403);
+  assert.equal(disconnected.error, 'ERR_DELIVERY');
+  await rename(`${socketPath}.offline`, socketPath);
+
+  // Relay the activation to the real Kernel, then drop its response. This
+  // demonstrates the unavoidable ambiguity when the commit ACK is lost.
+  const proxyPath = path.join(temp, 'drop-ack.sock');
+  const proxy = net.createServer((client) => {
+    const upstream = net.connect(socketPath);
+    client.pipe(upstream);
+    upstream.once('data', () => { client.destroy(); upstream.destroy(); });
+    upstream.on('error', () => client.destroy());
+    client.on('error', () => upstream.destroy());
+  });
+  await new Promise((resolve) => proxy.listen(proxyPath, resolve));
+  const unknown = await issue({ principalId: ids.principal, environmentId: ids.environment, audience, aggregateId: ids.aggregate, socketPath: proxyPath });
+  assert.equal(unknown.error, 'ERR_ACTIVATION_UNKNOWN');
+  await assertRequest(kernel.http, unknown.bearer, ids.aggregate, 'read', 200);
+  await new Promise((resolve) => proxy.close(resolve));
+
   const restart = await issue({ principalId: ids.principal, environmentId: ids.environment, audience, aggregateId: ids.aggregate });
   const restartBearer = restart.bearer;
-  await assert.equal(await effectCount(kernel.http), 1, 'all denials occur before the test effect');
+  await assert.equal(await effectCount(kernel.http), 2, 'all denials occur before the test effect');
 
   const disk = await readFile(storePath, 'utf8');
   const logs = `${hostWorker.logs.join('')}\n${kernelLogBuffers.flat().join('')}`;
@@ -85,10 +107,10 @@ async function issue(config) {
   const result = await hostWorker.call({
     method: 'issue', id: hostId,
     config: {
-      socketPath, principalId: config.principalId, environmentId: config.environmentId,
+      socketPath: config.socketPath ?? socketPath, principalId: config.principalId, environmentId: config.environmentId,
       audience: config.audience, aggregateId: config.aggregateId,
       grantedScopes: config.grantedScopes ?? ['read'], requestedScopes: config.requestedScopes ?? ['read'],
-      nowMS: config.nowMS, failDelivery: Boolean(config.failDelivery),
+      nowMS: config.nowMS, failDelivery: Boolean(config.failDelivery), disconnectBeforeDeliveryFailure: Boolean(config.disconnectBeforeDeliveryFailure),
       ...(config.grantScopes ? { grant: { principal_id: config.principalId, environment_id: config.environmentId, audience: config.audience, aggregate_id: config.aggregateId, scopes: config.grantScopes } } : {})
     }
   });

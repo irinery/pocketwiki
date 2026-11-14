@@ -1,5 +1,6 @@
 import { KernelLocalBootstrapClient } from '../src/harness/kernel-bootstrap.mjs';
 import { LocalCredentialHost } from '../src/harness/local-host.mjs';
+import { rename } from 'node:fs/promises';
 
 const hosts = new Map();
 
@@ -18,6 +19,7 @@ process.on('message', async (message) => {
         persistVerifier: (verifier) => kernel.persistVerifier(verifier),
         deliverBearer: async ({ bearer }) => {
           process.send({ id: message.id, type: 'bearer', bearer });
+          if (config.disconnectBeforeDeliveryFailure) await rename(config.socketPath, `${config.socketPath}.offline`);
           if (config.failDelivery) throw new Error('injected private process channel failure');
         },
         now: config.nowMS === undefined ? () => Date.now() : () => config.nowMS
