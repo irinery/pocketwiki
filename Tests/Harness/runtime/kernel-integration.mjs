@@ -4,7 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import http from 'node:http';
 import { createInterface } from 'node:readline';
 import path from 'node:path';
-import { mkdtemp, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { LocalCredentialHost } from '../../../src/harness/local-host.mjs';
 import { KernelLocalBootstrapClient } from '../../../src/harness/kernel-bootstrap.mjs';
 import { RuntimeTransport } from '../../../src/harness/runtime/transport.mjs';
@@ -160,6 +160,9 @@ async function run() {
   assert.equal(recoveredStat.ino, effectStat.ino);
   assert.equal(recoveredStat.mtimeMs, effectStat.mtimeMs);
   assert.equal((await readdir(path.join(ioPath, 'effects'))).length, 3);
+  if (process.env.RUNTIME_EVIDENCE_PATH) {
+    await writeFile(process.env.RUNTIME_EVIDENCE_PATH, JSON.stringify({ receipts: [firstReceipt, reopenedReceipt, uncertain], events_before_crash: eventsBeforeCrash.events, events_after_recovery: recoveredEvents.events }, null, 2) + '\n');
+  }
   console.log('Kernel real: bootstrap E0, autorização, dispatch, recuperação, efeito, receipt, snapshot MVCC, SSE e clientes JS/Swift verificados');
 }
 

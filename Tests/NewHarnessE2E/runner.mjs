@@ -174,6 +174,7 @@ async function runRuntimeService(artifactDir, tempHome, targetSHA, shas) {
   const env = isolatedEnvironment(tempHome);
   const logName = 'service-0002.log';
   const artifacts = [path.posix.join(path.basename(artifactDir), logName)];
+  const evidence = path.join(artifactDir, 'service-0002-receipts-events.json');
   let log = '';
   const commands = [
     ['go', ['build', '-trimpath', '-o', kernel, './cmd/pocketkernel'], kernelSource],
@@ -183,7 +184,7 @@ async function runRuntimeService(artifactDir, tempHome, targetSHA, shas) {
   for (let i = 0; i < commands.length; i++) {
     const [binary, argv, cwd] = commands[i];
     const timeout = i < 2 ? 15 * 60_000 : 180_000;
-    const result = await runWithinDeadline(binary, argv, { cwd, env: { ...env, RUNTIME_KERNEL_BINARY: kernel, RUNTIME_SWIFT_BINARY: swift }, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }, Date.now() + timeout, timeout);
+    const result = await runWithinDeadline(binary, argv, { cwd, env: { ...env, RUNTIME_KERNEL_BINARY: kernel, RUNTIME_SWIFT_BINARY: swift, RUNTIME_EVIDENCE_PATH: evidence }, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }, Date.now() + timeout, timeout);
     log += '$ ' + path.basename(binary) + ' ' + argv.join(' ') + '\nexit=' + result.status + '\n' + (result.stdout || '') + '\n' + (result.stderr || result.error?.message || '') + '\n';
     if (result.status !== 0) {
       await writeFile(path.join(artifactDir, logName), redact(log));
@@ -191,6 +192,8 @@ async function runRuntimeService(artifactDir, tempHome, targetSHA, shas) {
     }
   }
   await writeFile(path.join(artifactDir, logName), redact(log));
+  if (!existsSync(evidence)) return { ok: false, exitCode: 1, artifacts };
+  artifacts.push(path.posix.join(path.basename(artifactDir), path.basename(evidence)));
   return { ok: true, artifacts };
 }
 
