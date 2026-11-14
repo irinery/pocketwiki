@@ -44,3 +44,9 @@ test('stream longo descarta buffer já publicado e mantém dedup', () => {
   }
   assert.equal(p.finish().lastSeq, 6010);
 });
+
+ test('página inválida invalida a montagem inteira', () => {
+  const p = new RuntimeProjection({ environmentId: id, threadId: id }); p.appendPage(page);
+  assert.throws(() => p.appendPage(page), { code: 'ERR_INVALID' });
+  assert.throws(() => p.finish(), { code: 'ERR_INVALID' });
+});

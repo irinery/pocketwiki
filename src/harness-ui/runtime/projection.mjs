@@ -18,6 +18,10 @@ export class RuntimeProjection {
     this.cursors = new Set(); this.seen = new Map(); this.sequences = new Map(); this.bytes = 0;
   }
   appendPage(page, requestedCursor) {
+    try { return this.appendPageChecked(page, requestedCursor); }
+    catch (error) { this.invalid = true; throw error; }
+  }
+  appendPageChecked(page, requestedCursor) {
     const d = page?.data;
     if (this.complete || !valid('snapshotEnvelope', page) || page.module !== 'runtime' ||
         (!this.started ? requestedCursor != null : requestedCursor !== this.nextCursor || requestedCursor == null) ||
