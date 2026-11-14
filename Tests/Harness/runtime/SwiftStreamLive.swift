@@ -79,5 +79,12 @@ private struct Snapshot: Decodable { let module: String }
         _ = try await client.queryReceipt(commandID: thread)
         do { _ = try await client.queryReceipt(commandID: thread); throw RuntimeTransport.Failure.invalidArgument }
         catch RuntimeTransport.Failure.invalidResponse { }
+        let incompatible = try client.stream(environmentID: thread, threadID: thread, afterSeq: 3, payloadType: RuntimeEvent.self, schemaData: schemaData)
+        do { for try await _ in incompatible { throw RuntimeTransport.Failure.invalidArgument }; throw RuntimeTransport.Failure.invalidArgument }
+        catch RuntimeTransport.Failure.incompatible { }
+        let malformed = try client.stream(environmentID: thread, threadID: thread, afterSeq: 3, payloadType: RuntimeEvent.self, schemaData: schemaData)
+        do { for try await _ in malformed { throw RuntimeTransport.Failure.invalidArgument }; throw RuntimeTransport.Failure.invalidArgument }
+        catch RuntimeTransport.Failure.invalidResponse { }
+
     }
 }
