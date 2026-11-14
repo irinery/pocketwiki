@@ -21,6 +21,7 @@ struct RuntimePanel: View {
                 Button("Consultar comando pendente") { Task { await session.resolvePending() } }.disabled(session.pendingBusy)
                 Button("Repetir comando pendente") { Task { await session.retryPending() } }.disabled(session.pendingBusy)
             }
+            Text("\(session.receipts.count) \(session.receipts.count == 1 ? "recibo" : "recibos")")
             List(session.receipts) { receipt in
                 HStack { Text(receipt.label); Spacer(); Text(receipt.id).font(.caption.monospaced()) }
                     .accessibilityIdentifier("runtime-receipt-\(receipt.id)")

@@ -35,14 +35,15 @@ final class RuntimeUISession: ObservableObject {
     @Published var draft = ""
     private let transport: RuntimeTransport, environmentID: UUID, threadID: UUID, schemaHash: String, schemaData: Data
     private let schema: [String: Any]
+    private let newCommandID: () -> UUID
     private var projection: RuntimeProjection?
     private var streamTask: Task<Void, Never>?
     private var generation = 0
-    var onFrame: ((Int, Int) -> Void)?
+    var onFrame: ((Int, Int, Int) -> Void)?
 
-    init(transport: RuntimeTransport, environmentID: UUID, threadID: UUID, schemaHash: String, schemaData: Data) throws {
+    init(transport: RuntimeTransport, environmentID: UUID, threadID: UUID, schemaHash: String, schemaData: Data, newCommandID: @escaping () -> UUID = { UUID() }) throws {
         guard let schema = try JSONSerialization.jsonObject(with: schemaData) as? [String: Any] else { throw RuntimeTransport.Failure.invalidArgument }
-        self.transport = transport; self.environmentID = environmentID; self.threadID = threadID; self.schemaHash = schemaHash; self.schemaData = schemaData; self.schema = schema
+        self.transport = transport; self.environmentID = environmentID; self.threadID = threadID; self.schemaHash = schemaHash; self.schemaData = schemaData; self.schema = schema; self.newCommandID = newCommandID
     }
     func open() async {
         do { _ = try await transport.capabilities(environmentID: environmentID, schemaSHA256: schemaHash); await reconnect() }
@@ -62,8 +63,11 @@ final class RuntimeUISession: ObservableObject {
             let stream = try transport.stream(environmentID: environmentID, threadID: threadID, afterSeq: view.lastSeq, payloadType: RuntimeUIMutation.self, schemaData: schemaData)
             projection = p; publish(view)
             streamTask = Task { [weak self] in
-                do { for try await frame in stream { guard let self, !Task.isCancelled else { return }; try await self.apply(frame) } }
-                catch RuntimeProjection.Failure.overflow {
+                do {
+                    for try await frame in stream { guard let self, !Task.isCancelled else { return }; try await self.apply(frame) }
+                    guard let self, !Task.isCancelled, self.generation == current else { return }
+                    self.available = false; self.error = "ERR_UNAVAILABLE"
+                } catch RuntimeProjection.Failure.overflow {
                     guard let self, !Task.isCancelled else { return }
                     self.available = false
                     Task { await self.reconnect() }
@@ -94,17 +98,32 @@ final class RuntimeUISession: ObservableObject {
         guard let projection else { throw RuntimeTransport.Failure.invalidResponse }
         try projection.bufferEvent(JSONSerialization.data(withJSONObject: object), resolvedPayload: payload)
         publish(try projection.finish())
-        onFrame?(frame.seq, lastSeq)
+        onFrame?(frame.seq, lastSeq, receipts.count)
     }
     func submit() async {
         guard available, pending == nil, !pendingBusy, !draft.isEmpty, draft.utf8.count <= 32768 else { return }
-        let id = UUID(), text = draft
+        let id = newCommandID(), text = draft
         let input = RuntimeTransport.DispatchInput(commandID: id, threadID: threadID, expectedRevision: revision, operation: "submit", text: text, runID: nil)
         let command = HarnessV1.Command(protocolMajor: 1, commandID: id, environmentID: environmentID, expectedRevision: revision, operation: "runtime.dispatch", input: input)
         pending = command; pendingBusy = true
         defer { pendingBusy = false }
         do { let receipt = try await transport.dispatch(copyCommand(command)); guard pending?.commandID == id else { return }; pending = nil; merge(receipt); if draft == text { draft = "" } }
-        catch { if pending?.commandID == id { self.error = "Não foi possível confirmar o comando; consulte ou repita a mesma intenção." } }
+        catch {
+            guard pending?.commandID == id else { return }
+            if Self.definitivelyRejected(error) {
+                pending = nil
+                self.error = "O comando foi recusado. Revise o texto e tente novamente."
+            } else {
+                self.error = "Não foi possível confirmar o comando; consulte ou repita a mesma intenção."
+            }
+        }
+    }
+    private static func definitivelyRejected(_ error: Error) -> Bool {
+        switch error {
+        case RuntimeTransport.Failure.invalidArgument: return true
+        case RuntimeTransport.Failure.remote(let status, _): return (400..<500).contains(status) && status != 408 && status != 429
+        default: return false
+        }
     }
     func resolvePending() async {
         guard let pending, !pendingBusy else { return }

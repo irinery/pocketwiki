@@ -15,10 +15,10 @@ struct RuntimeHostApp: App {
               let threadText = config["threadID"], let thread = UUID(uuidString: threadText),
               let schemaPath = config["schemaPath"], let schemaData = try? Data(contentsOf: URL(fileURLWithPath: schemaPath)),
               let hash = config["schemaSHA256"], let transport = try? RuntimeTransport(baseURL: url, bearer: bearer),
-              let session = try? RuntimeUISession(transport: transport, environmentID: environment, threadID: thread, schemaHash: hash, schemaData: schemaData) else { fatalError("Invalid runtime host configuration") }
+              let session = try? RuntimeUISession(transport: transport, environmentID: environment, threadID: thread, schemaHash: hash, schemaData: schemaData, newCommandID: { config["commandID"].flatMap(UUID.init(uuidString:)) ?? UUID() }) else { fatalError("Invalid runtime host configuration") }
         if config["observeFrames"] == "1" {
-            session.onFrame = { seq, cursor in
-                DistributedNotificationCenter.default().post(name: Notification.Name("com.pocketwiki.RuntimeUIFrame"), object: nil, userInfo: ["seq": seq, "cursor": cursor])
+            session.onFrame = { seq, cursor, receiptCount in
+                DistributedNotificationCenter.default().post(name: Notification.Name("com.pocketwiki.RuntimeUIFrame"), object: nil, userInfo: ["seq": seq, "cursor": cursor, "receiptCount": receiptCount])
             }
         }
         _session = StateObject(wrappedValue: session)
