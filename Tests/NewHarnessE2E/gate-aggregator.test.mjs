@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import matrix from '../../docs/rfcs/new-harness/matriz-verificacao.json' with { type: 'json' };
-import { aggregateReportFiles, aggregateReports, targetIdentity, assertSameIdentity } from './gate-aggregator.mjs';
+import { aggregateReportFiles, aggregateReports, targetIdentity, assertSameIdentity, assertPinnedDependencies } from './gate-aggregator.mjs';
 
 const sha1 = 'a'.repeat(40);
 const sha256 = 'b'.repeat(64);
@@ -136,6 +136,14 @@ test('target identity hashes real checkout files and rejects wrong or dirty chec
   const actual = await targetIdentity(...repos, sha);
   assert.equal(actual.pocketwiki_sha, sha);
   assert.match(actual.fixture_sha256, /^[a-f0-9]{64}$/);
+  execFileSync('git', ['-C', repos[0], 'update-index', '--skip-worktree', files[0]]);
+  await writeFile(path.join(repos[0], files[0]), 'hidden change');
+  await assert.rejects(() => targetIdentity(...repos, sha), /skip-worktree/);
+  execFileSync('git', ['-C', repos[0], 'update-index', '--no-skip-worktree', files[0]]);
+  execFileSync('git', ['-C', repos[0], 'restore', '--', files[0]]);
+  execFileSync('git', ['-C', repos[0], 'update-index', '--assume-unchanged', files[0]]);
+  await assert.rejects(() => targetIdentity(...repos, sha), /assume-unchanged/);
+  execFileSync('git', ['-C', repos[0], 'update-index', '--no-assume-unchanged', files[0]]);
   await assert.rejects(() => targetIdentity(...repos, 'f'.repeat(40)), /target SHA differs/);
   await writeFile(path.join(repos[0], files[0]), 'changed');
   await assert.rejects(() => targetIdentity(...repos, sha), /modified tracked files/);
@@ -146,4 +154,27 @@ test('target identity hashes real checkout files and rejects wrong or dirty chec
   const changed = await targetIdentity(...repos, changedSHA);
   assert.throws(() => assertSameIdentity(actual, changed), /target build mismatch/);
 
+});
+
+
+test('E1 requires all six cumulative pairs and rejects missing or duplicate E1 cases', () => {
+  const input = reports().map(report => ({ ...report, stage: 'E1' }));
+  input[0].cases.push({ id: 'SERVICE-0002', surface: 'service', status: 'passed', artifact_paths: ['service/runtime.log'] });
+  input[1].cases.push({ id: 'UI-0002', surface: 'web', status: 'passed', artifact_paths: ['web/runtime.log'] });
+  input[2].cases.push({ id: 'UI-0002', surface: 'macos', status: 'passed', artifact_paths: ['macos/runtime.log'] });
+  assert.equal(aggregateReports('E1', input, matrix).cases.length, 6);
+  const missing = structuredClone(input); missing[2].cases.pop();
+  assert.throws(() => aggregateReports('E1', missing, matrix), /missing required.*UI-0002\/macos/);
+  const duplicate = structuredClone(input); duplicate[0].cases.push(structuredClone(duplicate[0].cases[1]));
+  assert.throws(() => aggregateReports('E1', duplicate, matrix), /duplicate/);
+  const stale = structuredClone(input); stale[0].pocketkernel_sha = 'e'.repeat(40);
+  assert.throws(() => aggregateReports('E1', stale, matrix), /divergent pocketkernel_sha/);
+});
+
+
+test('active dependency pins are mandatory and exact', () => {
+  const pins = 'PocketKernel: `' + identity.pocketkernel_sha + '`\nMiddlewareAuth: `' + identity.middlewareauth_sha + '`';
+  assert.doesNotThrow(() => assertPinnedDependencies(identity, pins));
+  assert.throws(() => assertPinnedDependencies({ ...identity, pocketkernel_sha: 'f'.repeat(40) }, pins), /pin mismatch/);
+  assert.throws(() => assertPinnedDependencies(identity, ''), /pin mismatch/);
 });

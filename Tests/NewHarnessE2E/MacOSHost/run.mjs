@@ -1,10 +1,13 @@
+import { createHelperLauncher, cleanupManagedHelpers } from './managed-helpers.mjs';
+import { helperPaths } from './supervisor.mjs';
+import { exportGitSnapshot } from '../git-snapshot.mjs';
 import { createServer } from 'node:http';
 import { runAndCapture } from '../deadline-process.mjs';
 import { runWithinDeadline, requireProcessListing } from '../deadline-sync.mjs';
 import { createServer as createNetServer } from 'node:net';
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { chmod, cp, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,8 +33,9 @@ await mkdir(path.dirname(resultBundle), { recursive: true });
 const kernelRoot = process.env.POCKETKERNEL_NH00_ROOT || path.resolve(root, '../pocketkernel-nh00');
 const middlewareRoot = process.env.MIDDLEWAREAUTH_NHTEST_ROOT || path.resolve(root, '../middlewareAuth');
 const tempHome = await mkdtemp(path.join(os.tmpdir(), 'pocketwiki-legacy00-macos-'));
-const kernelBinary = path.join(tempHome, 'pocketkernel');
-const middlewareBinary = path.join(tempHome, 'middleware-codex-oauth');
+const supervised = Boolean(process.env.NH_MAC_HELPER_DIR);
+const helpers = helperPaths(process.env.NH_MAC_HELPER_DIR || tempHome);
+const [{ binary: kernelBinary, launcher: kernelLauncher }, { binary: middlewareBinary, launcher: middlewareLauncher }] = helpers;
 const providerRequests = [];
 const provider = createServer(async (request, response) => {
   const chunks = [];
@@ -62,6 +66,10 @@ const provider = createServer(async (request, response) => {
 let output = '';
 let status = 2;
 try {
+  if (!supervised) {
+    await createHelperLauncher(kernelLauncher, kernelBinary, helpers[0].ledger);
+    await createHelperLauncher(middlewareLauncher, middlewareBinary, helpers[1].ledger);
+  }
   const pinned = await readFile(path.join(root, 'docs/rfcs/new-harness/nhtest-base-shas.md'), 'utf8');
   const kernelSHA = pinned.match(/PocketKernel: \x60([a-f0-9]{40})\x60/)?.[1];
   const middlewareSHA = pinned.match(/MiddlewareAuth: \x60([a-f0-9]{40})\x60/)?.[1];
@@ -70,8 +78,8 @@ try {
   }
   const kernelSource = path.join(tempHome, 'sources', 'pocketkernel');
   const middlewareSource = path.join(tempHome, 'sources', 'middlewareauth');
-  await exportCleanSnapshot(kernelRoot, kernelSource);
-  await exportCleanSnapshot(middlewareRoot, middlewareSource);
+  await exportGitSnapshot(kernelRoot, kernelSHA, kernelSource);
+  await exportGitSnapshot(middlewareRoot, middlewareSHA, middlewareSource);
   const built = await buildHelpers({ kernelRoot: kernelSource, middlewareRoot: middlewareSource, kernelBinary, middlewareBinary, tempHome });
   if (built.status !== 0) {
     output += built.output;
@@ -96,8 +104,8 @@ try {
     NH_TEST_MIDDLEWARE_URL: middlewareURL,
     NH_TEST_KERNEL_URL: kernelURL,
     NH_TEST_POCKETWIKI_PORT: String(pocketWikiPort),
-    POCKETWIKI_POCKETKERNEL_BINARY: kernelBinary,
-    POCKETWIKI_MIDDLEWARE_AUTH_BINARY: middlewareBinary,
+    POCKETWIKI_POCKETKERNEL_BINARY: kernelLauncher,
+    POCKETWIKI_MIDDLEWARE_AUTH_BINARY: middlewareLauncher,
     POCKETWIKI_NODE_BINARY: process.execPath,
     MIDDLEWAREAUTH_BASE_URL: middlewareURL,
     POCKETKERNEL_MIDDLEWAREAUTH_BASE_URL: middlewareURL,
@@ -127,8 +135,8 @@ try {
     `NH_TEST_MIDDLEWARE_URL=${middlewareURL}`,
     `NH_TEST_KERNEL_URL=${kernelURL}`,
     `NH_TEST_POCKETWIKI_PORT=${pocketWikiPort}`,
-    `POCKETWIKI_POCKETKERNEL_BINARY=${kernelBinary}`,
-    `POCKETWIKI_MIDDLEWARE_AUTH_BINARY=${middlewareBinary}`,
+    `POCKETWIKI_POCKETKERNEL_BINARY=${kernelLauncher}`,
+    `POCKETWIKI_MIDDLEWARE_AUTH_BINARY=${middlewareLauncher}`,
     `POCKETWIKI_NODE_BINARY=${process.execPath}`
   ];
   const buildArgs = [...args];
@@ -165,6 +173,7 @@ try {
   output += '\nHost failure: ' + error.message + '\n';
   status = error.message.startsWith('não foi possível compilar') ? 2 : 1;
 } finally {
+  try { await cleanupManagedHelpers(helpers); } catch (error) { status = 1; output += '\nFAIL: helper cleanup: ' + error.message + '\n'; }
   if (provider.listening) await new Promise((resolve) => provider.close(resolve));
   output = redactSummary(output);
   await writeFile(logPath, output, 'utf8');
@@ -191,23 +200,7 @@ function gitSHA(repository) {
   return result.stdout.trim();
 }
 
-async function exportCleanSnapshot(repository, destination) {
-  const status = spawnSync('git', ['-C', repository, 'status', '--porcelain=v1', '-z', '--untracked-files=all'], { encoding: 'utf8' });
-  if (status.status !== 0) throw new Error('não foi possível verificar o checkout helper: ' + repository);
-  const untracked = new Set();
-  for (const record of status.stdout.split('\0').filter(Boolean)) {
-    if (record.startsWith('?? ')) untracked.add(record.slice(3));
-    else throw new Error('arquivos rastreados alterados no helper: ' + repository);
-  }
-  await cp(repository, destination, { recursive: true, filter(source) {
-    const relative = path.relative(repository, source);
-    if (!relative || relative === '.') return true;
-    const segments = relative.split(path.sep);
-    if (segments.includes('.git') || segments.includes('bin') || segments.includes('node_modules') || segments.includes('.build') || segments.includes('target')) return false;
-    if (segments.some((segment) => segment === '.env' || segment.startsWith('.env.'))) return false;
-    return ![...untracked].some((entry) => relative === entry || relative.startsWith(entry + path.sep));
-  } });
-}
+
 
 async function makeWritable(target) {
   let info;

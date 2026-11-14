@@ -2,7 +2,7 @@
 
 ## Pin ativo para E0
 
-- PocketKernel: `ece7ed7439d552315a87b99ef94bd9fb85786cab` (merge da PR #14).
+- PocketKernel: `582e216c13feb7485fa9620d9543b272ec3794b5` (pin E1, runtime integrado).
 
 O runner e os hosts leem a primeira ocorrência de `PocketKernel` neste arquivo; o workflow E0 também fixa e verifica esse mesmo SHA. O pin ativo de MiddlewareAuth continua sendo o registrado abaixo.
 

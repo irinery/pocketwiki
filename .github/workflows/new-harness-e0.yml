@@ -29,7 +29,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: irinery/pocketkernel
-          ref: ece7ed7439d552315a87b99ef94bd9fb85786cab
+          ref: 582e216c13feb7485fa9620d9543b272ec3794b5
           path: .build/dependencies/pocketkernel
           ssh-key: ${{ secrets.POCKETKERNEL_DEPLOY_KEY }}
           persist-credentials: false
@@ -61,7 +61,7 @@ jobs:
           command -v ps
           command -v jq
           git rev-parse HEAD
-          test "$(git -C "$POCKETKERNEL_NH00_ROOT" rev-parse HEAD)" = ece7ed7439d552315a87b99ef94bd9fb85786cab
+          test "$(git -C "$POCKETKERNEL_NH00_ROOT" rev-parse HEAD)" = 582e216c13feb7485fa9620d9543b272ec3794b5
           test "$(git -C "$MIDDLEWAREAUTH_NHTEST_ROOT" rev-parse HEAD)" = 04f44f62126c785f7b28718d2eff837c28cb65df
 
       - name: Install Node dependencies
@@ -106,7 +106,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: irinery/pocketkernel
-          ref: ece7ed7439d552315a87b99ef94bd9fb85786cab
+          ref: 582e216c13feb7485fa9620d9543b272ec3794b5
           path: .build/dependencies/pocketkernel
           ssh-key: ${{ secrets.POCKETKERNEL_DEPLOY_KEY }}
           persist-credentials: false
@@ -139,7 +139,7 @@ jobs:
           swift --version
           xcodebuild -version
           git rev-parse HEAD
-          test "$(git -C "$POCKETKERNEL_NH00_ROOT" rev-parse HEAD)" = ece7ed7439d552315a87b99ef94bd9fb85786cab
+          test "$(git -C "$POCKETKERNEL_NH00_ROOT" rev-parse HEAD)" = 582e216c13feb7485fa9620d9543b272ec3794b5
           test "$(git -C "$MIDDLEWAREAUTH_NHTEST_ROOT" rev-parse HEAD)" = 04f44f62126c785f7b28718d2eff837c28cb65df
 
       - name: Run all E0 shards

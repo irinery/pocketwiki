@@ -1,5 +1,8 @@
+import { DEFAULT_FIXTURE_SEED } from '../Harness/runtime/fixture-identities.mjs';
+import { superviseMacHost } from './MacOSHost/supervisor.mjs';
+import { exportGitSnapshot } from './git-snapshot.mjs';
 import { existsSync } from 'node:fs';
-import { chmod, cp, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { runWithinDeadline, requireProcessListing } from './deadline-sync.mjs';
@@ -19,15 +22,19 @@ let exitCode = 0;
 let tempHome;
 
 try {
+  // Invalidate previous output before any preflight can fail.
+  await rm(path.join(reportDir, reportName), { force: true });
+  await rm(path.join(reportDir, stage.toLowerCase() + '-' + surface), { recursive: true, force: true });
   requireProcessListing();
   const kernelRoot = process.env.POCKETKERNEL_NH00_ROOT || path.resolve(root, '../pocketkernel-nh00');
   const middlewareRoot = process.env.MIDDLEWAREAUTH_NHTEST_ROOT || path.resolve(root, '../middlewareAuth');
   const targetSHA = gitSHA(root);
   const identity = await targetIdentity(root, kernelRoot, middlewareRoot, targetSHA);
   const baseSHAs = parsePinnedSHAs(await readFile(path.join(root, 'docs/rfcs/new-harness/nhtest-base-shas.md'), 'utf8'));
+  if (identity.pocketkernel_sha !== baseSHAs.pocketkernel || identity.middlewareauth_sha !== baseSHAs.middlewareauth) throw configError('SHA de dependência diferente do pin ativo');
   const matrix = JSON.parse(await readFile(matrixPath, 'utf8'));
   const selected = selectedPairs(stageNumber, surface, matrix);
-  const unsupported = selected.filter(({ scenario }) => scenario.id !== 'CONTRACT-00' && scenario.id !== 'LEGACY-00');
+  const unsupported = selected.filter(({ scenario }) => !['CONTRACT-00', 'LEGACY-00', 'SERVICE-0002', 'UI-0002'].includes(scenario.id));
   if (unsupported.length) throw configError('faltam dependências/handlers dos cenários: ' + unsupported.map(({ scenario }) => scenario.id).join(', '));
 
   await mkdir(reportDir, { recursive: true });
@@ -38,12 +45,14 @@ try {
   const cases = [];
   for (const pair of selected) {
     // macOS launcher enforces 180s on XCTest after its build preparation.
-    const scenarioTimeout = pair.surface === 'macos' ? 20 * 60_000 : 180_000;
+    const scenarioTimeout = pair.surface === 'macos' ? 30 * 60_000 : 180_000;
     const deadline = Date.now() + scenarioTimeout;
     const id = pair.scenario.id;
     const result = id === 'CONTRACT-00'
       ? await runContract(artifactDir, tempHome, baseSHAs, deadline, targetSHA)
-      : await runLegacy(pair.surface, artifactDir, tempHome, deadline, targetSHA);
+      : id === 'LEGACY-00' ? await runLegacy(pair.surface, artifactDir, tempHome, deadline, targetSHA)
+      : id === 'SERVICE-0002' ? await runRuntimeService(artifactDir, tempHome, targetSHA, baseSHAs)
+      : await runRuntimeUI(pair.surface, artifactDir, tempHome, targetSHA);
     cases.push({ id, surface: pair.surface, status: result.ok ? 'passed' : 'failed', artifact_paths: result.artifacts });
     if (!result.ok) exitCode = Math.max(exitCode, result.exitCode || 1);
     if (result.configurationError) exitCode = 2;
@@ -65,7 +74,7 @@ try {
     version: '0.2.0',
     stage,
     ...identity,
-    seed: 20261102,
+    seed: DEFAULT_FIXTURE_SEED,
     auth_mode: 'host_local',
     cases,
     exit_code: exitCode
@@ -162,12 +171,67 @@ async function runContract(artifactDir, tempHome, shas, deadline, targetSHA) {
   return { ok: passed, exitCode: passed ? 0 : 1, artifacts };
 }
 
+async function runRuntimeService(artifactDir, tempHome, targetSHA, shas) {
+  const source = await cloneGitSnapshot(root, targetSHA, path.join(tempHome, 'sources/pocketwiki-runtime'));
+  const kernelRoot = process.env.POCKETKERNEL_NH00_ROOT || path.resolve(root, '../pocketkernel-nh00');
+  const kernelSource = await exportGitSnapshot(kernelRoot, shas.pocketkernel, path.join(tempHome, 'sources/pocketkernel-runtime'));
+  const kernel = path.join(tempHome, 'runtime-kernel');
+  const swift = path.join(tempHome, 'runtime-swift');
+  const env = isolatedEnvironment(tempHome);
+  const logName = 'service-0002.log';
+  const artifacts = [path.posix.join(path.basename(artifactDir), logName)];
+  const evidence = path.join(artifactDir, 'service-0002-receipts-events.json');
+  let log = '';
+  const commands = [
+    ['go', ['build', '-trimpath', '-o', kernel, './cmd/pocketkernel'], kernelSource],
+    ['swiftc', ['-swift-version', '6', 'Sources/PocketWikiMac/Models/Harness/HarnessOperationRegistry.swift', 'Sources/PocketWikiMac/Models/Harness/HarnessV1.swift', 'Sources/PocketWikiMac/Services/Harness/Runtime/RuntimeTransport.swift', 'Sources/PocketWikiMac/Services/Harness/Runtime/RuntimeProjection.swift', 'Tests/Harness/runtime/SwiftKernelIntegration.swift', '-o', swift], source],
+    [process.execPath, ['Tests/Harness/runtime/kernel-integration.mjs'], source]
+  ];
+  for (let i = 0; i < commands.length; i++) {
+    const [binary, argv, cwd] = commands[i];
+    const timeout = i < 2 ? 15 * 60_000 : 180_000;
+    const result = await runWithinDeadline(binary, argv, { cwd, env: { ...env, RUNTIME_KERNEL_BINARY: kernel, RUNTIME_SWIFT_BINARY: swift, RUNTIME_EVIDENCE_PATH: evidence, RUNTIME_FIXTURE_SEED: String(DEFAULT_FIXTURE_SEED) }, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }, Date.now() + timeout, timeout);
+    log += '$ ' + path.basename(binary) + ' ' + argv.join(' ') + '\nexit=' + result.status + '\n' + (result.stdout || '') + '\n' + (result.stderr || result.error?.message || '') + '\n';
+    if (result.status !== 0) {
+      await writeFile(path.join(artifactDir, logName), redact(log));
+      return { ok: false, exitCode: i < 2 ? 2 : 1, configurationError: i < 2, artifacts };
+    }
+  }
+  await writeFile(path.join(artifactDir, logName), redact(log));
+  if (!existsSync(evidence)) return { ok: false, exitCode: 1, artifacts };
+  artifacts.push(path.posix.join(path.basename(artifactDir), path.basename(evidence)));
+  return { ok: true, artifacts };
+}
+
+async function runRuntimeUI(surface, artifactDir, tempHome, targetSHA) {
+  const source = await cloneGitSnapshot(root, targetSHA, path.join(tempHome, 'sources/pocketwiki-ui-' + surface));
+  const host = path.join(source, 'Tests/HarnessUI/runtime/run-host.mjs');
+  if (!existsSync(host)) return { ok: false, exitCode: 2, configurationError: true, artifacts: [] };
+  const output = path.join(artifactDir, 'ui-0002-' + surface);
+  await mkdir(output, { recursive: true });
+  const launch = surface === 'macos' ? superviseMacHost : runWithinDeadline;
+  const timeout = surface === 'macos' ? 60 * 60_000 : 20 * 60_000;
+  const result = await launch(process.execPath, [host, '--surface', surface, '--report-dir', output], {
+    cwd: source, env: { ...isolatedEnvironment(tempHome), POCKETKERNEL_NH00_ROOT: process.env.POCKETKERNEL_NH00_ROOT || path.resolve(root, '../pocketkernel-nh00'), MIDDLEWAREAUTH_NHTEST_ROOT: process.env.MIDDLEWAREAUTH_NHTEST_ROOT || path.resolve(root, '../middlewareAuth') }, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024
+  }, Date.now() + timeout, timeout);
+  const log = 'ui-0002-' + surface + '.log';
+  await writeFile(path.join(artifactDir, log), redact((result.stdout || '') + '\n' + (result.stderr || result.error?.message || '')));
+  const evidence = await listArtifactPaths(output);
+  // The host contract requires a machine-readable manifest proving all four UI cases.
+  let manifest;
+  try { manifest = JSON.parse(await readFile(path.join(output, 'result.json'), 'utf8')); } catch {}
+  const required = ['02-01', '02-02', '02-03', '02-04'];
+  const valid = manifest && Array.isArray(manifest.cases) && manifest.cases.length === 4 && required.every(id => manifest.cases.some(c => c.id === id && ['passed', 'failed'].includes(c.status))) && evidence.some(name => name !== 'result.json');
+  const passed = valid && manifest.cases.every(c => c.status === 'passed');
+  return { ok: result.status === 0 && passed, exitCode: result.status === 2 || !valid ? 2 : 1, configurationError: result.status === 2 || !valid, artifacts: [path.posix.join(path.basename(artifactDir), log), ...evidence.map(name => path.posix.join(path.basename(artifactDir), 'ui-0002-' + surface, name))] };
+}
+
 async function runLegacy(surface, artifactDir, tempHome, deadline, targetSHA) {
   if (surface === 'macos') {
     const resultBundle = path.join(artifactDir, 'legacy-macos.xcresult');
     const macSource = await cloneGitSnapshot(root, targetSHA, path.join(tempHome, 'sources/pocketwiki-macos'));
     const hostScript = path.join(macSource, 'Tests/NewHarnessE2E/MacOSHost/run.mjs');
-    const result = await runWithinDeadline(process.execPath, [hostScript, '--result-bundle-path', resultBundle], {
+    const result = await superviseMacHost(process.execPath, [hostScript, '--result-bundle-path', resultBundle], {
       cwd: macSource,
       env: {
         ...isolatedEnvironment(tempHome),
@@ -177,7 +241,7 @@ async function runLegacy(surface, artifactDir, tempHome, deadline, targetSHA) {
       },
       encoding: 'utf8',
       maxBuffer: 8 * 1024 * 1024
-    }, deadline, 20 * 60_000);
+    }, deadline, 30 * 60_000);
     const body = '$ node Tests/NewHarnessE2E/MacOSHost/run.mjs --result-bundle-path <report-dir>/legacy-macos.xcresult\nexit=' + String(result.status) +
       '\n--- stdout ---\n' + redact(result.stdout || '') + '\n--- stderr ---\n' + redact(result.stderr || result.error?.message || '');
     const logName = 'legacy-macos.log';
@@ -290,25 +354,7 @@ function gitSHA(cwd) {
   if (result.status !== 0) throw configError('checkout git ausente: ' + cwd);
   return result.stdout.trim();
 }
-async function exportGitSnapshot(repository, sha, destination) {
-  const status = spawnSync('git', ['-C', repository, 'status', '--porcelain=v1', '-z', '--untracked-files=all'], { encoding: 'utf8' });
-  if (status.status !== 0) throw configError('não foi possível verificar o checkout pinado de ' + repository);
-  const untracked = new Set();
-  for (const record of status.stdout.split('\0').filter(Boolean)) {
-    if (record.startsWith('?? ')) untracked.add(record.slice(3));
-    else throw configError('arquivos rastreados alterados em ' + repository + '; build pinado recusado');
-  }
-  await cp(repository, destination, { recursive: true, filter(source) {
-    const relative = path.relative(repository, source);
-    if (relative === '' || relative === '.') return true;
-    const segments = relative.split(path.sep);
-    if (segments.includes('.git') || segments.includes('node_modules') || segments.includes('bin') || segments.includes('.build') || segments.includes('target')) return false;
-    if (segments.some((segment) => segment === '.env' || segment.startsWith('.env.'))) return false;
-    if ([...untracked].some((entry) => relative === entry || relative.startsWith(entry + path.sep))) return false;
-    return true;
-  } });
-  return destination;
-}
+
 async function cloneGitSnapshot(repository, sha, destination) {
   await mkdir(path.dirname(destination), { recursive: true });
   const clone = spawnSync('git', ['clone', '--shared', '--no-checkout', repository, destination], { encoding: 'utf8', timeout: 30_000 });
