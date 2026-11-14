@@ -29,7 +29,7 @@ try {
   const kernelRoot = process.env.POCKETKERNEL_NH00_ROOT || path.resolve(root, '../pocketkernel-nh00');
   const middlewareRoot = process.env.MIDDLEWAREAUTH_NHTEST_ROOT || path.resolve(root, '../middlewareAuth');
   const targetSHA = gitSHA(root);
-  const identity = await targetIdentity(root, kernelRoot, middlewareRoot, targetSHA);
+  const identity = await targetIdentity(root, kernelRoot, middlewareRoot, targetSHA, stage);
   const baseSHAs = parsePinnedSHAs(await readFile(path.join(root, 'docs/rfcs/new-harness/nhtest-base-shas.md'), 'utf8'));
   if (identity.pocketkernel_sha !== baseSHAs.pocketkernel || identity.middlewareauth_sha !== baseSHAs.middlewareauth) throw configError('SHA de dependência diferente do pin ativo');
   const matrix = JSON.parse(await readFile(matrixPath, 'utf8'));
@@ -68,7 +68,7 @@ try {
   await writeFile(path.join(artifactDir, junitName), junit);
   for (const item of cases) item.artifact_paths.push(path.posix.join(path.basename(artifactDir), junitName));
 
-  const finalIdentity = await targetIdentity(root, kernelRoot, middlewareRoot, targetSHA);
+  const finalIdentity = await targetIdentity(root, kernelRoot, middlewareRoot, targetSHA, stage);
   assertSameIdentity(identity, finalIdentity);
   const report = {
     version: '0.2.0',

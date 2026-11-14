@@ -105,7 +105,7 @@ export function assertSameIdentity(expected, actual) {
 }
 
 // Identity is computed from clean checkouts, including the exact files consumed by the runner.
-export async function targetIdentity(wiki, kernel, middleware, expectedSHA) {
+export async function targetIdentity(wiki, kernel, middleware, expectedSHA, stage) {
   function checkedSHA(repo, label) {
     assertTrackedFlags(repo);
     const run = (...args) => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' }).trim();
@@ -120,24 +120,42 @@ export async function targetIdentity(wiki, kernel, middleware, expectedSHA) {
     middlewareauth_sha: checkedSHA(middleware, 'MiddlewareAuth')
   };
   if (identity.pocketwiki_sha !== expectedSHA) throw new Error('target SHA differs from PocketWiki checkout');
-  const files = [
-    'src/harness/contracts/corpus-v1.json',
-    'src/harness/contracts/operation-registry.json',
-    'Tests/Harness/nh00-acceptance-regressions.json',
-    'docs/rfcs/new-harness/manifest.json'
-  ];
-  const hash = createHash('sha256');
-  for (const file of files) {
-    hash.update(file + '\0');
-    hash.update(await readFile(path.join(wiki, file)));
-    hash.update('\n');
-  }
-  identity.fixture_sha256 = hash.digest('hex');
+  identity.fixture_sha256 = await fixtureDigest(wiki, stage);
   for (const [field, file] of [
     ['schema_sha256', 'src/harness/contracts/harness-v1.schema.json'],
     ['matrix_sha256', 'docs/rfcs/new-harness/matriz-verificacao.json']
   ]) identity[field] = createHash('sha256').update(await readFile(path.join(wiki, file))).digest('hex');
   return identity;
+}
+
+// Versioned, cumulative fixture manifest. Length framing prevents path/content ambiguity.
+export async function fixtureDigest(wiki, stage) {
+  const stageNumber = parseStage(stage);
+  const manifest = JSON.parse(await readFile(path.join(wiki, 'docs/rfcs/new-harness/fixture-hashes-v1.json'), 'utf8'));
+  if (!manifest || manifest.version !== 1 || !manifest.stages || typeof manifest.stages !== 'object' || Array.isArray(manifest.stages)) throw new Error('invalid fixture manifest');
+  const stages = Object.keys(manifest.stages);
+  if (!stages.includes('E0') || !stages.includes('E1') || stages.some(key => !/^E[0-6]$/.test(key))) throw new Error('invalid fixture manifest stages');
+  const all = new Set(), selected = [];
+  for (const key of stages.sort((a, b) => parseStage(a) - parseStage(b))) {
+    if (!Array.isArray(manifest.stages[key]) || manifest.stages[key].length === 0) throw new Error('empty fixture manifest stage: ' + key);
+    for (const file of manifest.stages[key]) {
+      if (!isSafeRelativePath(file) || all.has(file)) throw new Error('invalid or duplicate fixture path: ' + String(file));
+      all.add(file);
+      if (parseStage(key) <= stageNumber) selected.push(file);
+    }
+  }
+  selected.sort((a, b) => Buffer.compare(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8')));
+  const hash = createHash('sha256');
+  hash.update('pocketwiki-fixtures\0v1\0' + stage + '\0');
+  const frame = bytes => { const size = Buffer.alloc(8); size.writeBigUInt64BE(BigInt(bytes.length)); hash.update(size); hash.update(bytes); };
+  const root = await realpath(wiki);
+  for (const file of selected) {
+    const candidate = path.join(root, file);
+    const info = await lstat(candidate), resolved = await realpath(candidate);
+    if (!info.isFile() || info.isSymbolicLink() || !resolved.startsWith(root + path.sep)) throw new Error('fixture must be a regular file inside checkout: ' + file);
+    frame(Buffer.from(file, 'utf8')); frame(await readFile(candidate));
+  }
+  return hash.digest('hex');
 }
 
 function isSafeRelativePath(value) {
@@ -183,7 +201,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     const wiki = path.resolve(here, '../..');
     const kernel = process.env.POCKETKERNEL_NH00_ROOT || path.resolve(wiki, '../pocketkernel-nh00');
     const middleware = process.env.MIDDLEWAREAUTH_NHTEST_ROOT || path.resolve(wiki, '../middlewareAuth');
-    const target = await targetIdentity(wiki, kernel, middleware, args[3]);
+    const target = await targetIdentity(wiki, kernel, middleware, args[3], args[1]);
     assertPinnedDependencies(target, await readFile(path.join(wiki, 'docs/rfcs/new-harness/nhtest-base-shas.md'), 'utf8'));
     const report = await aggregateReportFiles(args[1], args.slice(5), target);
     process.stdout.write(JSON.stringify(report, null, 2) + '\n');
