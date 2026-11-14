@@ -63,6 +63,9 @@ final class RuntimeUISession: ObservableObject {
                     guard let self, !Task.isCancelled else { return }
                     self.available = false
                     Task { await self.reconnect() }
+                } catch RuntimeTransport.Failure.incompatible {
+                    guard let self, !Task.isCancelled else { return }
+                    self.available = false; self.error = "ERR_INCOMPATIBLE"
                 } catch {
                     guard let self, !Task.isCancelled else { return }
                     self.available = false; self.error = "ERR_INVALID"
