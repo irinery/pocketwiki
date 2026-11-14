@@ -31,6 +31,7 @@ const seed = Number(process.env.NH_TEST_SEED ?? '20261102');
 const fixtureScope = replay ? 'replay' : incompatible ? 'incompatible' : pauseEffect ? 'accepted' : legacy ? 'legacy' : 'connect';
 const fixtureID = label => fixtureUUID(seed, `${macos ? 'macos' : 'web'}/${fixtureScope}/${label}`);
 const principalId = fixtureID('principal'), environmentId = fixtureID('environment'), threadId = fixtureID('thread');
+const commandIds = Array.from({ length: 16 }, (_, index) => fixtureID(`ui-command-${index}`));
 const audience = 'pocketkernel.harness.v1';
 const schemaSHA256 = createHash('sha256').update(await readFile('src/harness/contracts/harness-v1.schema.json')).digest('hex');
 const buildResult = await build({ entryPoints: ['Tests/HarnessUI/runtime/web/main.mjs'], bundle: true, format: 'esm', platform: 'browser', inject: ['Tests/HarnessUI/runtime/web/buffer-shim.mjs'], write: false });
@@ -97,7 +98,7 @@ try {
   server.listen(0,'127.0.0.1'); await once(server,'listening');
   if (macos) {
     const configPath = path.join(tmp, 'native-config.json');
-    await writeFile(configPath, JSON.stringify({ baseURL: `http://127.0.0.1:${server.address().port}`, bearer, environmentID: environmentId, threadID: threadId, schemaSHA256, schemaPath: path.resolve('src/harness/contracts/harness-v1.schema.json'), commandID: fixtureID('ui-command'), observeFrames: replay ? '1' : '0' }), { mode: 0o600 });
+    await writeFile(configPath, JSON.stringify({ baseURL: `http://127.0.0.1:${server.address().port}`, bearer, environmentID: environmentId, threadID: threadId, schemaSHA256, schemaPath: path.resolve('src/harness/contracts/harness-v1.schema.json'), commandIDs: commandIds.join(','), commandID: commandIds[0], seedCommandID: fixtureID('seed-command'), observeFrames: replay ? '1' : '0' }), { mode: 0o600 });
     const scenario = replay ? 'replay' : incompatible ? 'incompatible' : pauseEffect ? 'accepted' : 'connect';
     const resultPath = path.join(tmp, `runtime-${scenario}.xcresult`);
     const test = spawn('xcodebuild', ['-resultBundlePath', resultPath, '-project', 'Tests/HarnessUI/runtime/macos/PocketWikiRuntimeUIHost.xcodeproj', '-scheme', 'PocketWikiRuntimeUIHost', '-destination', 'platform=macOS,arch=arm64', '-derivedDataPath', process.env.RUNTIME_DERIVED_DATA, 'test-without-building', 'CODE_SIGNING_ALLOWED=NO', '-quiet'], { env: { ...process.env, NH_RUNTIME_CONFIG_PATH: configPath, NH_RUNTIME_SCENARIO: scenario }, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -129,7 +130,7 @@ try {
     const original = window.runtime.client.applyEvent.bind(window.runtime.client);
     window.runtime.client.applyEvent = async (...args) => { await original(...args); window.seen.push(args[0].seq); window.views.push({ lastSeq: window.runtime.client.state.lastSeq, receipts: window.runtime.client.state.receipts.length }); if (wake && window.seen.length >= wake.count) { wake.resolve(); wake = null; } };
     try { await window.runtime.panel.open(); } catch (error) { if (!config.legacy) throw error; }
-  }, { bearer, environmentId, threadId, schemaSHA256, commandId: fixtureID('ui-command'), legacy });
+  }, { bearer, environmentId, threadId, schemaSHA256, commandIds, legacy });
   if (replay) {
     await page.evaluate(() => window.waitSeen(2));
     assert.deepEqual(await page.evaluate(() => window.seen.slice(0, 2)), [8, 9]);
@@ -153,12 +154,22 @@ try {
     assert.deepEqual(await page.evaluate(() => window.views.slice(0, 5).map(view => view.lastSeq)), [9, 9, 10, 11, 12]);
     assert.equal(await page.evaluate(() => window.views[1].receipts), 1);
     assert.equal(await page.evaluate(() => window.views[3].receipts), 2);
+    const ids = await page.evaluate(() => window.runtime.client.state.receipts.map(receipt => receipt.command_id));
+    assert.ok(ids.includes(fixtureID('seed-command')) && ids.includes(commandIds[0]));
+    await page.evaluate(() => window.waitSeen(11));
+    await page.getByLabel('Texto do comando durável').fill('segunda intenção');
+    await page.getByRole('button', {name:'Enviar comando'}).click();
+    await page.evaluate(() => window.waitSeen(14));
+    const finalIDs = await page.evaluate(() => window.runtime.client.state.receipts.map(receipt => receipt.command_id));
+    assert.ok(finalIDs.includes(commandIds[0]) && finalIDs.includes(commandIds[1]));
+    assert.notEqual(commandIds[0], commandIds[1]);
   } else if (incompatible) {
     await page.getByRole('status').getByText('ERR_INCOMPATIBLE').waitFor({timeout:30000});
     assert.equal(await page.evaluate(() => window.runtime.client.state.lastSeq), 0);
   } else if (pauseEffect) {
     await page.getByText(/Aceito/).waitFor({timeout:30000});
     assert.equal(await page.locator('[data-completed="true"]').count(), 0);
+    assert.ok((await page.locator('[aria-label="Recibos do runtime"]').innerText()).includes(commandIds[0]));
     await page.evaluate(() => fetch('/release-stream', { method: 'POST' }));
   } else {
     await page.getByText(/Concluído/).waitFor({timeout:30000});

@@ -14,8 +14,15 @@ struct RuntimeHostApp: App {
               let environmentText = config["environmentID"], let environment = UUID(uuidString: environmentText),
               let threadText = config["threadID"], let thread = UUID(uuidString: threadText),
               let schemaPath = config["schemaPath"], let schemaData = try? Data(contentsOf: URL(fileURLWithPath: schemaPath)),
-              let hash = config["schemaSHA256"], let transport = try? RuntimeTransport(baseURL: url, bearer: bearer),
-              let session = try? RuntimeUISession(transport: transport, environmentID: environment, threadID: thread, schemaHash: hash, schemaData: schemaData, newCommandID: { config["commandID"].flatMap(UUID.init(uuidString:)) ?? UUID() }) else { fatalError("Invalid runtime host configuration") }
+              let hash = config["schemaSHA256"], let transport = try? RuntimeTransport(baseURL: url, bearer: bearer) else { fatalError("Invalid runtime host configuration") }
+        let commandIDs = (config["commandIDs"] ?? "").split(separator: ",").compactMap { UUID(uuidString: String($0)) }
+        var nextCommand = 0
+        guard let session = try? RuntimeUISession(transport: transport, environmentID: environment, threadID: thread, schemaHash: hash, schemaData: schemaData, newCommandID: {
+            if commandIDs.isEmpty { return UUID() }
+            precondition(nextCommand < commandIDs.count, "IDs de fixture esgotados")
+            defer { nextCommand += 1 }
+            return commandIDs[nextCommand]
+        }) else { fatalError("Invalid runtime host configuration") }
         if config["observeFrames"] == "1" {
             session.onFrame = { seq, cursor, receiptCount in
                 DistributedNotificationCenter.default().post(name: Notification.Name("com.pocketwiki.RuntimeUIFrame"), object: nil, userInfo: ["seq": seq, "cursor": cursor, "receiptCount": receiptCount])
