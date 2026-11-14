@@ -81,6 +81,12 @@ try {
       const code = await run(process.execPath, ['Tests/HarnessUI/runtime/web-smoke.mjs'], { env: { ...env, [flag]: '1' } });
       const row = cases.find(item => item.id === id); row.status = code === 0 ? 'passed' : 'failed'; row.detail = code === 0 ? (id === '02-01' ? 'Kernel: B=9, replay 8/9/10/11/12; B=10/9/10/11 apenas em testes unitários JS e Swift' : 'validado') : `XCTest falhou: exit ${code}`;
     }
+    // This host enforces separate build and 180s XCTest deadlines internally.
+    const resultPath = path.join(temp, 'legacy-macos.xcresult');
+    const legacyCode = await run(process.execPath, ['Tests/NewHarnessE2E/MacOSHost/run.mjs', '--result-bundle-path', resultPath], { env: { ...process.env, NH_RUNTIME_LEGACY_UI: '1' }, timeoutMS: 30 * 60_000 });
+    try { log += await readFile(path.join(temp, 'legacy-macos.log'), 'utf8'); } catch {}
+    const legacyRow = cases.find(item => item.id === '02-02');
+    legacyRow.status = legacyCode === 0 ? 'passed' : 'failed'; legacyRow.detail = legacyCode === 0 ? 'slot e chat legado no mesmo app pela bridge validados' : `host legado falhou: exit ${legacyCode}`;
   }
   status = cases.every(row => row.status === 'passed') ? 0 : 1;
 } catch (error) { log += `erro: ${error.message}\n`; }
