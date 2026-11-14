@@ -5,3 +5,7 @@ export function assertRuntimeProof({ marker, nonce, summary }) {
     throw new Error('prova do slot runtime ausente ou XCTest incompleto');
   }
 }
+
+export function runtimeProofExitCode(status, required, verified) {
+  return required && status === 0 && !verified ? 1 : status;
+}

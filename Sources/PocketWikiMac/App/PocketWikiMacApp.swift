@@ -119,6 +119,6 @@ private struct NHRuntimeLegacySlot: View {
         }
         _session = StateObject(wrappedValue: session)
     }
-    var body: some View { RuntimePanel(session: session).frame(height: 180) }
+    var body: some View { RuntimePanel(session: session).frame(height: 180).accessibilityElement(children: .contain).accessibilityIdentifier("runtime-test-slot") }
 }
 #endif

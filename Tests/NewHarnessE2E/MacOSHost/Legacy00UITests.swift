@@ -92,7 +92,7 @@ final class Legacy00UITests: XCTestCase {
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20), "O app legado macOS real não iniciou")
         if ProcessInfo.processInfo.environment["NH_RUNTIME_LEGACY_UI"] == "1" {
             let detail = app.staticTexts["runtime-status-detail"]
-            guard detail.waitForExistence(timeout: 30), detail.label.contains("Execução durável indisponível") else { XCTFail("slot runtime não confirmou fallback"); return }
+            guard detail.waitForExistence(timeout: 30), app.staticTexts["Execução durável indisponível"].waitForExistence(timeout: 10) else { XCTFail("slot runtime não confirmou fallback"); return }
             let runtimeSubmit = app.buttons["runtime-submit"]
             guard runtimeSubmit.waitForExistence(timeout: 10), !runtimeSubmit.isEnabled else { XCTFail("controle runtime deve estar desabilitado"); return }
             let finished = expectation(description: "real legacy capability response")
@@ -103,6 +103,12 @@ final class Legacy00UITests: XCTestCase {
             }.resume()
             wait(for: [finished], timeout: 10)
             guard status == 404 else { XCTFail("capability do Kernel legado não retornou 404"); return }
+            let slot = app.descendants(matching: .any).matching(identifier: "runtime-test-slot").firstMatch
+            guard slot.waitForExistence(timeout: 10) else { XCTFail("slot runtime não encontrado"); return }
+            let attachment = XCTAttachment(screenshot: slot.screenshot())
+            attachment.name = "nh-runtime-fallback"
+            attachment.lifetime = .keepAlways
+            add(attachment)
         }
         selectFixtureWiki(in: app)
         openFixturePage(in: app)

@@ -1,7 +1,8 @@
-import { assertRuntimeProof } from './runtime-proof.mjs';
+import { runtimeScreenshotPayload, sanitizeRuntimeScreenshot } from './runtime-screenshot.mjs';
+import { assertRuntimeProof, runtimeProofExitCode } from './runtime-proof.mjs';
 import { createHelperLauncher, cleanupManagedHelpers } from './managed-helpers.mjs';
 import { helperPaths } from './supervisor.mjs';
-import { exportGitSnapshot } from '../git-snapshot.mjs';
+import { assertTrackedFlags, exportGitSnapshot } from '../git-snapshot.mjs';
 import { createServer } from 'node:http';
 import { runAndCapture } from '../deadline-process.mjs';
 import { runWithinDeadline, requireProcessListing } from '../deadline-sync.mjs';
@@ -19,7 +20,9 @@ const resultBundle = parseFlag(process.argv.slice(2), '--result-bundle-path');
 const logPath = resultBundle.replace(/\.xcresult$/, '') + '.log';
 const runtimeHook = process.env.NH_RUNTIME_LEGACY_UI === '1';
 const proofOutput = resultBundle + '.runtime-proof.json';
+const screenshotOutput = resultBundle + '.runtime-fallback.png';
 await rm(proofOutput, { force: true });
+await rm(screenshotOutput, { force: true });
 try { requireProcessListing(); } catch (error) { reportConfigFailure(error.message); }
 const explicitDeveloperDir = process.env.POCKETWIKI_XCODE_DEVELOPER_DIR || process.env.DEVELOPER_DIR;
 const selected = explicitDeveloperDir
@@ -70,6 +73,7 @@ const provider = createServer(async (request, response) => {
 let output = '';
 let status = 2;
 let runtimeProofVerified = false;
+let runtimeScreenshot;
 const proofNonce = process.env.NH_RUNTIME_PROOF_NONCE || '';
 const proofSHA = process.env.NH_RUNTIME_PROOF_SHA || '';
 const proofMarker = path.join(tempHome, 'runtime-xctest-proof');
@@ -79,7 +83,8 @@ try {
     await createHelperLauncher(middlewareLauncher, middlewareBinary, helpers[1].ledger);
   }
   if (runtimeHook) {
-    if (!/^[a-f0-9]{32,128}$/.test(proofNonce) || !/^[a-f0-9]{40}$/.test(proofSHA) || gitSHA(root) !== proofSHA) throw Object.assign(new Error('runtime proof nonce/SHA inválido'), { exitCode: 2 });
+    if (!/^[a-f0-9]{32,128}$/.test(proofNonce)) throw Object.assign(new Error('runtime proof nonce inválido'), { exitCode: 2 });
+    assertWikiProofIdentity(root, proofSHA);
     for (const file of ['Sources/PocketWikiMac/Views/Harness/Runtime/RuntimePanel.swift', 'Sources/PocketWikiMac/Views/Harness/Runtime/RuntimeUISession.swift']) {
       if (!existsSync(path.join(root, file))) throw Object.assign(new Error('fontes do slot runtime indisponíveis: ' + file), { exitCode: 2 });
     }
@@ -179,6 +184,7 @@ try {
       if (runtimeHook && status === 0) {
         const marker = await readFile(proofMarker, 'utf8').catch(() => '');
         assertRuntimeProof({ marker, nonce: proofNonce, summary: parsedSummary });
+        runtimeScreenshot = await extractRuntimeScreenshot(resultBundle, tempHome, developerDir);
         runtimeProofVerified = true;
       }
       await writeFile(resultBundle + '.summary.json', safeSummary + '\n', { mode: 0o600 });
@@ -196,9 +202,16 @@ try {
 } finally {
   try { await cleanupManagedHelpers(helpers); } catch (error) { status = 1; output += '\nFAIL: helper cleanup: ' + error.message + '\n'; }
   if (provider.listening) await new Promise((resolve) => provider.close(resolve));
+  if (runtimeHook && status === 0) {
+    try { assertWikiProofIdentity(root, proofSHA); } catch (error) { status = 1; output += '\nFAIL: identidade do checkout mudou durante teste.\n'; }
+  }
+  const checkedStatus = runtimeProofExitCode(status, runtimeHook, runtimeProofVerified);
+  if (checkedStatus !== status) output += '\nFAIL: prova runtime ou xcresult ausente.\n';
+  status = checkedStatus;
   if (runtimeHook && status === 0 && runtimeProofVerified) {
+    await writeFile(screenshotOutput, runtimeScreenshot, { mode: 0o600 });
     await writeFile(proofOutput, JSON.stringify({ nonce: proofNonce, pocketwiki_sha: proofSHA, runtime_fallback_verified: true, legacy_capability_status: 404, skipped_tests: 0 }, null, 2) + '\n', { mode: 0o600 });
-  } else { await rm(proofOutput, { force: true }); }
+  } else { await rm(proofOutput, { force: true }); await rm(screenshotOutput, { force: true }); }
   output = redactSummary(output);
   await writeFile(logPath, output, 'utf8');
   process.stdout.write(output);
@@ -206,6 +219,26 @@ try {
   await rm(tempHome, { recursive: true, force: true });
 }
 process.exit(status);
+
+function assertWikiProofIdentity(wiki, expectedSHA) {
+  if (!/^[a-f0-9]{40}$/.test(expectedSHA) || gitSHA(wiki) !== expectedSHA) throw Object.assign(new Error('runtime proof SHA inválido'), { exitCode: 2 });
+  assertTrackedFlags(wiki);
+  const status = spawnSync('git', ['-C', wiki, 'status', '--porcelain=v1', '--untracked-files=no'], { encoding: 'utf8' });
+  if (status.status !== 0 || status.stdout.trim()) throw Object.assign(new Error('PocketWiki checkout alterado'), { exitCode: 2 });
+}
+
+async function extractRuntimeScreenshot(bundle, tempHome, developerDir) {
+  const toolEnv = { ...process.env, DEVELOPER_DIR: developerDir };
+  const activity = spawnSync('xcrun', ['xcresulttool', 'get', 'test-results', 'activities', '--test-id', 'Legacy00UITests/testLegacy00UsesRealAppBridgeAndRestoresAfterRestart()', '--path', bundle, '--compact'], { env: toolEnv, encoding: 'utf8', timeout: 30_000, maxBuffer: 8 * 1024 * 1024 });
+  if (activity.status !== 0) throw new Error('falha ao localizar screenshot do slot fixture');
+  const payload = runtimeScreenshotPayload(JSON.parse(activity.stdout));
+  const file = path.join(tempHome, 'runtime-fallback-selected.png');
+  const extracted = spawnSync('xcrun', ['xcresulttool', 'export', 'object', '--legacy', '--type', 'file', '--id', payload, '--path', bundle, '--output-path', file], { env: toolEnv, encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024 });
+  if (extracted.status !== 0) throw new Error('falha ao extrair screenshot do slot fixture');
+  const info = await lstat(file);
+  if (!info.isFile() || info.isSymbolicLink()) throw new Error('screenshot do slot inválido');
+  return sanitizeRuntimeScreenshot(await readFile(file));
+}
 
 async function buildHelpers({ kernelRoot, middlewareRoot, kernelBinary, middlewareBinary, tempHome }) {
   const common = { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 };
