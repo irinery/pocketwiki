@@ -17,16 +17,17 @@ final class RuntimeUITests: XCTestCase {
         app.launchEnvironment["NH_RUNTIME_CONFIG_PATH"] = config; app.launch()
         XCTAssertTrue(app.staticTexts["Runtime conectado"].waitForExistence(timeout: 30))
         let submit = app.buttons["runtime-submit"]
-        if replay { wait(for: [replayed!], timeout: 30); XCTAssertEqual(frames.prefix(2).map(\.0), [8, 9]); XCTAssertEqual(frames.prefix(2).map(\.1), [9, 9]); XCTAssertEqual(frames.prefix(2).map(\.2), [1, 1]); XCTAssertTrue(app.staticTexts["1 recibo"].exists); XCTAssertTrue(app.staticTexts[try XCTUnwrap(configuration["seedCommandID"])].exists) }
+        func receiptIsVisible(_ id: String) -> Bool { app.descendants(matching: .any).matching(identifier: "runtime-receipt-" + id).firstMatch.exists }
+        if replay { wait(for: [replayed!], timeout: 30); XCTAssertEqual(frames.prefix(2).map(\.0), [8, 9]); XCTAssertEqual(frames.prefix(2).map(\.1), [9, 9]); XCTAssertEqual(frames.prefix(2).map(\.2), [1, 1]); XCTAssertTrue(app.staticTexts["1 recibo"].exists); XCTAssertTrue(receiptIsVisible(try XCTUnwrap(configuration["seedCommandID"]))) }
         switch env["NH_RUNTIME_SCENARIO"] {
         case "accepted", "incompatible", "replay":
             let input = app.textFields["Texto do comando durável"]
             XCTAssertTrue(input.waitForExistence(timeout: 10)); app.activate(); input.click(); input.typeText("efeito real macOS")
             XCTAssertTrue(submit.waitForExistence(timeout: 10)); XCTAssertTrue(submit.isEnabled); submit.click()
             if env["NH_RUNTIME_SCENARIO"] == "accepted" {
-                XCTAssertTrue(app.staticTexts["Aceito"].waitForExistence(timeout: 30)); XCTAssertFalse(app.staticTexts["Concluído"].exists); XCTAssertTrue(app.staticTexts[try XCTUnwrap(configuration["commandID"])].exists)
+                XCTAssertTrue(app.staticTexts["Aceito"].waitForExistence(timeout: 30)); XCTAssertFalse(app.staticTexts["Concluído"].exists); XCTAssertTrue(receiptIsVisible(try XCTUnwrap(configuration["commandID"])))
             } else if replay {
-                wait(for: [advanced!], timeout: 30); XCTAssertEqual(frames.prefix(5).map(\.0), [8, 9, 10, 11, 12]); XCTAssertEqual(frames.prefix(5).map(\.1), [9, 9, 10, 11, 12]); XCTAssertEqual(frames.prefix(5).map(\.2), [1, 1, 1, 2, 2]); XCTAssertTrue(app.staticTexts["2 recibos"].waitForExistence(timeout: 10)); XCTAssertTrue(app.staticTexts[try XCTUnwrap(configuration["seedCommandID"])].exists); XCTAssertTrue(app.staticTexts[try XCTUnwrap(configuration["commandID"])].exists)
+                wait(for: [advanced!], timeout: 30); XCTAssertEqual(frames.prefix(5).map(\.0), [8, 9, 10, 11, 12]); XCTAssertEqual(frames.prefix(5).map(\.1), [9, 9, 10, 11, 12]); XCTAssertEqual(frames.prefix(5).map(\.2), [1, 1, 1, 2, 2]); XCTAssertTrue(app.staticTexts["2 recibos"].waitForExistence(timeout: 10)); XCTAssertTrue(receiptIsVisible(try XCTUnwrap(configuration["seedCommandID"]))); XCTAssertTrue(receiptIsVisible(try XCTUnwrap(configuration["commandID"])))
             } else {
                 XCTAssertTrue(app.staticTexts["ERR_INCOMPATIBLE"].waitForExistence(timeout: 30)); XCTAssertTrue(app.staticTexts["Revisão 0 · evento 0"].exists)
             }
