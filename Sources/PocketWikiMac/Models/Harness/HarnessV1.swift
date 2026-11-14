@@ -4,7 +4,7 @@ import CoreFoundation
 enum HarnessV1 {
     static let protocolMajor = 1
 
-    enum ModuleID: String, Codable, CaseIterable {
+    enum ModuleID: String, Codable, CaseIterable, Sendable {
         case runtime, providers, threads, composer, permissions, workspaces
         case checkpoints, terminal, environments
         case orchestratorMcp = "orchestrator-mcp"
@@ -57,7 +57,7 @@ enum HarnessV1 {
     }
 
     struct StreamEnvelope<Payload: Codable & Equatable>: Codable, Equatable {
-        enum Delivery: String, Codable { case inline, reference }
+        enum Delivery: String, Codable, Sendable { case inline, reference }
 
         let protocolMajor: Int
         let eventID: UUID
@@ -420,3 +420,5 @@ enum HarnessV1 {
         return text == value
     }
 }
+
+extension HarnessV1.StreamEnvelope: Sendable where Payload: Sendable {}

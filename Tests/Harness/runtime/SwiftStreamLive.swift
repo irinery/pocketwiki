@@ -4,17 +4,25 @@ private struct RuntimeEvent: Codable, Equatable, Sendable { let entity_type: Str
 private struct Receipt: Decodable { let revision: Int }
 private struct Snapshot: Decodable { let module: String }
 
+private actor EnvelopeCollector {
+    private var envelopes: [HarnessV1.StreamEnvelope<RuntimeEvent>] = []
+
+    func append(_ envelope: HarnessV1.StreamEnvelope<RuntimeEvent>) { envelopes.append(envelope) }
+    func sequences() -> [Int] { envelopes.map(\.seq) }
+}
+
 @main struct Main {
     static func main() async throws {
         let thread = UUID(uuidString: "11111111-1111-4111-8111-111111111111")!
         let schemaData = try Data(contentsOf: URL(fileURLWithPath: "src/harness/contracts/harness-v1.schema.json"))
         let client = try RuntimeTransport(baseURL: URL(string: CommandLine.arguments[1])!, bearer: "test-secret")
         let stream = try client.stream(environmentID: thread, threadID: thread, afterSeq: 3, payloadType: RuntimeEvent.self, schemaData: schemaData)
-        var seen = [Int]()
+        let collector = EnvelopeCollector()
         for try await event in stream {
             guard event.payload?.change == "delete" else { throw RuntimeTransport.Failure.invalidResponse }
-            seen.append(event.seq)
+            await collector.append(event)
         }
+        let seen = await collector.sequences()
         guard seen == [4] else { throw RuntimeTransport.Failure.invalidResponse }
         do {
             let bad = try client.stream(environmentID: thread, threadID: thread, afterSeq: 3, payloadType: RuntimeEvent.self, schemaData: schemaData)
