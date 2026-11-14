@@ -19,6 +19,9 @@ let exitCode = 0;
 let tempHome;
 
 try {
+  // Invalidate previous output before any preflight can fail.
+  await rm(path.join(reportDir, reportName), { force: true });
+  await rm(path.join(reportDir, stage.toLowerCase() + '-' + surface), { recursive: true, force: true });
   requireProcessListing();
   const kernelRoot = process.env.POCKETKERNEL_NH00_ROOT || path.resolve(root, '../pocketkernel-nh00');
   const middlewareRoot = process.env.MIDDLEWAREAUTH_NHTEST_ROOT || path.resolve(root, '../middlewareAuth');
@@ -34,7 +37,6 @@ try {
   await mkdir(reportDir, { recursive: true });
   tempHome = await mkdtemp(path.join(os.tmpdir(), 'nh-test-runtime-'));
   const artifactDir = path.join(reportDir, stage.toLowerCase() + '-' + surface);
-  await rm(artifactDir, { recursive: true, force: true });
   await mkdir(artifactDir, { recursive: true });
 
   const cases = [];
