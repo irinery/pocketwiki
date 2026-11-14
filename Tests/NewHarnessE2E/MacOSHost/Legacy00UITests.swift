@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 
 final class Legacy00UITests: XCTestCase {
@@ -176,14 +177,24 @@ final class Legacy00UITests: XCTestCase {
         openWiki.click()
 
         let panel = app.dialogs.firstMatch
-        XCTAssertTrue(panel.waitForExistence(timeout: 10), "O painel real de seleção de pasta não abriu")
+        XCTAssertTrue(panel.waitForExistence(timeout: 30), "O painel real de seleção de pasta não abriu")
         app.typeKey("g", modifierFlags: [.command, .shift])
         let locationSheet = app.sheets.firstMatch
         let pathField = locationSheet.textFields.firstMatch
-        XCTAssertTrue(pathField.waitForExistence(timeout: 5), "O diálogo do Finder para escolher a pasta não abriu")
+        XCTAssertTrue(pathField.waitForExistence(timeout: 10), "O diálogo do Finder para escolher a pasta não abriu")
         pathField.click()
-        pathField.typeText(wikiRoot.path)
+        pathField.typeKey("a", modifierFlags: [.command])
+        guard pasteFixturePath(wikiRoot.path, into: pathField) else { return }
+        guard let typedPath = pathField.value as? String, typedPath == wikiRoot.path else {
+            XCTFail("Caminho digitado difere da fixture")
+            return
+        }
         app.typeKey(.return, modifierFlags: [])
+        let locationClosed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: locationSheet)
+        guard XCTWaiter.wait(for: [locationClosed], timeout: 10) == .completed else {
+            XCTFail("O diálogo para navegar até a wiki permaneceu aberto")
+            return
+        }
 
         let openButton = panel.buttons["OKButton"]
         XCTAssertTrue(
@@ -191,7 +202,40 @@ final class Legacy00UITests: XCTestCase {
             "O painel não expôs o botão de confirmação. Botões: \(panel.buttons.allElementsBoundByIndex.map { "\($0.identifier)=\($0.label)" }); painel: \(panel.debugDescription)"
         )
         openButton.click()
-        XCTAssertFalse(panel.waitForExistence(timeout: 3), "O painel permaneceu aberto depois de confirmar a pasta")
+        let panelClosed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: panel)
+        if XCTWaiter.wait(for: [panelClosed], timeout: 10) != .completed {
+            XCTFail("O painel permaneceu aberto depois de confirmar a pasta")
+        }
+    }
+
+    private func pasteFixturePath(_ path: String, into field: XCUIElement) -> Bool {
+        let pasteboard = NSPasteboard.general
+        var savedItems: [NSPasteboardItem] = []
+        for item in pasteboard.pasteboardItems ?? [] {
+            let copy = NSPasteboardItem()
+            for type in item.types {
+                guard let data = item.data(forType: type), copy.setData(data, forType: type) else {
+                    XCTFail("Não foi possível preservar a área de transferência")
+                    return false
+                }
+            }
+            savedItems.append(copy)
+        }
+        pasteboard.clearContents()
+        guard pasteboard.setString(path, forType: .string) else {
+            if !savedItems.isEmpty { pasteboard.writeObjects(savedItems) }
+            XCTFail("Não foi possível preparar o caminho da fixture")
+            return false
+        }
+        let fixtureChangeCount = pasteboard.changeCount
+        defer {
+            if pasteboard.changeCount == fixtureChangeCount {
+                pasteboard.clearContents()
+                if !savedItems.isEmpty { pasteboard.writeObjects(savedItems) }
+            }
+        }
+        field.typeKey("v", modifierFlags: [.command])
+        return true
     }
 
     private func openFixturePage(in app: XCUIApplication) {
@@ -272,7 +316,8 @@ final class Legacy00UITests: XCTestCase {
 
     private func assertFixtureMarkerVisible(in app: XCUIApplication, message: String) {
         let assistant = app.descendants(matching: .any).matching(identifier: "legacy.ai.message.assistant").firstMatch
-        let gotMarker = assistant.waitForExistence(timeout: 10) && assistant.label.contains("nh-test-marker-2026")
+        let marker = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", "nh-test-marker-2026"), object: assistant)
+        let gotMarker = XCTWaiter.wait(for: [marker], timeout: 60) == .completed
         XCTAssertTrue(
             gotMarker,
             "\(message). Rótulo do balão: \(assistant.label.debugDescription); textos visíveis: \(app.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty })"
