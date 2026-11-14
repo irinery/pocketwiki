@@ -43,6 +43,11 @@ import Foundation
         do { try p5.appendPage(page("cursor"), requestedCursor: "cursor"); fatalError("repeated cursor accepted") } catch RuntimeProjection.Failure.invalidPage { }
         var wrongEnvironment = event; wrongEnvironment["environment_id"] = id2
         do { try p3.bufferEvent(encoded(wrongEnvironment), resolvedPayload: payloadData); fatalError("wrong environment accepted") } catch RuntimeProjection.Failure.invalidEvent { }
+        let p7 = try RuntimeProjection(schema: schema, environmentID: uid, threadID: uid, pageSize: 1, confirmedRevision: 0)
+        try p7.appendPage(page(nil), requestedCursor: nil)
+        let updatedReceipt: [String: Any] = ["entity_type": "RuntimeReceipt", "entity_key": "\"\(id)\"", "change": "upsert", "value": ["command_id": id, "receipt_id": id, "payload_sha256": String(repeating: "a", count: 64), "revision": 2, "state": "succeeded"]]
+        try p7.bufferEvent(eventData, resolvedPayload: encoded(updatedReceipt))
+        guard try p7.finish().revision == 2 else { fatalError("event revision not reflected") }
         let p6 = try RuntimeProjection(schema: schema, environmentID: uid, threadID: uid, pageSize: 1, confirmedRevision: 0)
         try p6.appendPage(page(nil), requestedCursor: nil)
         try p6.bufferEvent(eventData, resolvedPayload: payloadData)

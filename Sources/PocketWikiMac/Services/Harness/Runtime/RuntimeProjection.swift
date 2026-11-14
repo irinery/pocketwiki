@@ -31,6 +31,13 @@ final class RuntimeProjection {
     private var seenSequences: [Int: String] = [:]
     private var cursors = Set<String>()
 
+    private static func canonicalUUID(_ value: Any?) -> Bool {
+        guard let value = value as? String else { return false }
+        return value.range(of: "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", options: .regularExpression) != nil
+    }
+    private static func optionalUUID(_ value: Any?) -> Bool {
+        value == nil || value is NSNull || canonicalUUID(value)
+    }
     init(schema: [String: Any], environmentID: UUID, threadID: UUID, pageSize: Int, confirmedRevision: Int, confirmedSeq: Int = 0) throws {
         guard (1...100).contains(pageSize), confirmedRevision >= 0, confirmedSeq >= 0 else { throw Failure.invalidPage }
         self.schema = schema; self.environmentID = environmentID.uuidString.lowercased(); self.threadID = threadID.uuidString.lowercased()
@@ -41,7 +48,7 @@ final class RuntimeProjection {
               let page = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               HarnessV1.validateCorpusValue(page, schemaName: "snapshotEnvelope", document: schema),
               page["module"] as? String == "runtime", let body = page["data"] as? [String: Any],
-              let id = body["snapshot_id"] as? String, let rev = body["revision"] as? Int, rev >= 0, rev <= 9_007_199_254_740_991,
+              let id = body["snapshot_id"] as? String, Self.canonicalUUID(id), let rev = body["revision"] as? Int, rev >= 0, rev <= 9_007_199_254_740_991,
               let seq = body["as_of_seq"] as? Int, seq >= 0, seq <= 9_007_199_254_740_991,
               let rs = body["receipts"] as? [[String: Any]], let es = body["effects"] as? [[String: Any]], rs.count + es.count <= pageSize else { throw Failure.invalidPage }
         guard rev >= confirmedRevision else { throw Failure.stale }
@@ -50,12 +57,14 @@ final class RuntimeProjection {
         if let cursor, (cursor.utf8.count > 512 || !cursors.insert(cursor).inserted) { throw Failure.invalidPage }
         var newReceipts = receipts, newEffects = effects
         for item in rs {
-            guard let key = item["command_id"] as? String, newReceipts[key] == nil,
+            guard let key = item["command_id"] as? String, Self.canonicalUUID(key), Self.canonicalUUID(item["receipt_id"]),
+                  Self.optionalUUID(item["effect_id"]), Self.optionalUUID(item["result_ref"]), newReceipts[key] == nil,
                   let itemRevision = item["revision"] as? Int, itemRevision >= 0, itemRevision <= rev else { throw Failure.invalidPage }
             newReceipts[key] = item
         }
         for item in es {
-            guard let key = item["effect_id"] as? String, newEffects[key] == nil else { throw Failure.invalidPage }
+            guard let key = item["effect_id"] as? String, Self.canonicalUUID(key), Self.canonicalUUID(item["command_id"]),
+                  Self.optionalUUID(item["result_ref"]), newEffects[key] == nil else { throw Failure.invalidPage }
             newEffects[key] = item
         }
         snapshotID = id; revision = rev; boundary = seq; receipts = newReceipts; effects = newEffects
@@ -68,7 +77,7 @@ final class RuntimeProjection {
               HarnessV1.validateCorpusValue(event, schemaName: "streamEnvelope", document: schema),
               event["environment_id"] as? String == environmentID, event["thread_id"] as? String == threadID,
               event["module"] as? String == "runtime",
-              let id = event["event_id"] as? String, let seq = event["seq"] as? Int else { throw Failure.invalidEvent }
+              let id = event["event_id"] as? String, Self.canonicalUUID(id), let seq = event["seq"] as? Int else { throw Failure.invalidEvent }
         let payload: [String: Any]
         if event["delivery"] as? String == "inline", resolvedPayload == nil, let inline = event["payload"] as? [String: Any] { payload = inline }
         else if event["delivery"] as? String == "reference", let resolvedPayload,
@@ -85,11 +94,12 @@ final class RuntimeProjection {
         guard complete, let id = snapshotID else { throw Failure.incomplete }
         guard (events.last?.0 ?? boundary) >= confirmedSeq else { throw Failure.stale }
         var rs = receipts, es = effects
+        var latestRevision = revision
         for (_, _, payload) in events {
             guard let type = payload["entity_type"] as? String, let entityKey = payload["entity_key"] as? String,
                   let change = payload["change"] as? String,
                   let keyData = entityKey.data(using: .utf8), let key = try? JSONSerialization.jsonObject(with: keyData, options: .fragmentsAllowed) as? String,
-                  entityKey == "\"\(key)\"", UUID(uuidString: key) != nil, key == key.lowercased() else { throw Failure.invalidEvent }
+                  entityKey == "\"\(key)\"", Self.canonicalUUID(key) else { throw Failure.invalidEvent }
             if type == "RuntimeEvent" {
                 if change == "upsert" {
                     guard let value = payload["value"] as? [String: Any], value["event_id"] as? String == key,
@@ -101,11 +111,16 @@ final class RuntimeProjection {
             let value = payload["value"] as? [String: Any]
             if change == "upsert" {
                 guard let value, value[type == "RuntimeReceipt" ? "command_id" : "effect_id"] as? String == key else { throw Failure.invalidEvent }
-                if type == "RuntimeReceipt" { rs[key] = value } else { es[key] = value }
+                if type == "RuntimeReceipt" {
+                    guard let newRevision = value["revision"] as? Int, newRevision >= 0, newRevision <= 9_007_199_254_740_991,
+                          newRevision >= (rs[key]?["revision"] as? Int ?? 0) else { throw Failure.invalidEvent }
+                    latestRevision = max(latestRevision, newRevision)
+                    rs[key] = value
+                } else { es[key] = value }
             } else if change == "delete" {
                 if type == "RuntimeReceipt" { rs.removeValue(forKey: key) } else { es.removeValue(forKey: key) }
             } else { throw Failure.invalidEvent }
         }
-        return View(snapshotID: id, revision: revision, asOfSeq: boundary, lastSeq: events.last?.0 ?? boundary, receipts: rs, effects: es)
+        return View(snapshotID: id, revision: latestRevision, asOfSeq: boundary, lastSeq: events.last?.0 ?? boundary, receipts: rs, effects: es)
     }
 }
