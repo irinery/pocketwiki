@@ -23,7 +23,7 @@ test('owned helper cleanup covers success, failure and timeout teardown', async 
     await ready;
     const deadline = Date.now() + 2000;
     while (!(await readFile(ledger, 'utf8')).trim() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
-    assert.equal((await readFile(ledger, 'utf8')).trim(), String(child.pid));
+    assert.match((await readFile(ledger, 'utf8')).trim(), new RegExp('^' + child.pid + '\\|'));
     try { if (phase !== 'success') throw new Error(phase); } catch (error) { assert.equal(error.message, phase); }
     finally { await cleanupManagedHelpers([{ ledger, binary, launcher }]); }
     await exited;
@@ -34,7 +34,9 @@ test('owned helper cleanup covers success, failure and timeout teardown', async 
 test('cleanup refuses PID reuse or unrelated executable', async t => {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'nh-helper-identity-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
-  const ledger = path.join(dir, 'pids'); await writeFile(ledger, String(process.pid) + '\n');
+  const ledger = path.join(dir, 'pids'); const { spawnSync } = await import('node:child_process');
+  const started = spawnSync('ps', ['-p', String(process.pid), '-o', 'lstart='], { env: { ...process.env, LC_ALL: 'C' }, encoding: 'utf8' }).stdout.trim();
+  await writeFile(ledger, String(process.pid) + '|' + started + '\n');
   await assert.rejects(cleanupManagedHelpers([{ ledger, binary: path.join(dir, 'other') }]), /identity changed/);
 });
 
@@ -54,8 +56,32 @@ test('timeout of a detached scenario still cleans its recorded helper', async t 
   const result = await runWithinDeadline(process.execPath, ['-e', script, launcher], { env: process.env, encoding: 'utf8' }, Date.now() + 800, 800);
   assert.equal(result.status, null);
   assert.equal(result.error?.code, 'ETIMEDOUT');
-  const pid = Number((await readFile(ledger, 'utf8')).trim());
+  const pid = Number((await readFile(ledger, 'utf8')).trim().split('|')[0]);
   assert.ok(pid > 0);
   await cleanupManagedHelpers([{ ledger, binary, launcher }]);
   assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+});
+
+
+test('cleanup continues after bad records and terminates the next owned helper', async t => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'nh-helper-continue-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const binary = path.join(dir, 'helper'), launcher = path.join(dir, 'launcher'), ledger = path.join(dir, 'pids');
+  await copyFile('/bin/sleep', binary); await createHelperLauncher(launcher, binary, ledger);
+  const child = spawn(launcher, ['60'], { stdio: 'ignore' });
+  const exited = new Promise(resolve => child.once('exit', resolve));
+  const deadline = Date.now() + 3000;
+  while (!(await readFile(ledger, 'utf8')).trim() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
+  const good = await readFile(ledger, 'utf8'); assert.ok(good);
+  await writeFile(ledger, 'invalid\n' + good);
+  await assert.rejects(cleanupManagedHelpers([{ ledger, binary, launcher }]), /invalid helper PID/);
+  await exited; assert.notEqual(child.signalCode, null);
+});
+
+test('cleanup rejects a PID whose recorded start time differs', async t => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'nh-helper-start-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const ledger = path.join(dir, 'pids');
+  await writeFile(ledger, String(process.pid) + '|Mon Jan  1 00:00:00 1900\n');
+  await assert.rejects(cleanupManagedHelpers([{ ledger, binary: process.execPath }]), /start time changed/);
 });

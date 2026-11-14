@@ -4,10 +4,14 @@ import { readFile, writeFile } from 'node:fs/promises';
 const quote = text => "'" + text.replaceAll("'", "'\\''") + "'";
 export async function createHelperLauncher(launcher, binary, ledger) {
   await writeFile(ledger, '', { mode: 0o600, flag: 'wx' });
-  await writeFile(launcher, '#!/bin/sh\nprintf "%s\\n" "$$" >> ' + quote(ledger) + ' || exit 1\nexec ' + quote(binary) + ' "$@"\n', { mode: 0o700 });
+  await writeFile(launcher, '#!/bin/sh\nstarted=$(LC_ALL=C ps -p "$$" -o lstart=) || exit 1\n[ -n "$started" ] || exit 1\nprintf "%s|%s\\n" "$$" "$started" >> ' + quote(ledger) + ' || exit 1\nexec ' + quote(binary) + ' "$@"\n', { mode: 0o700 });
 }
 
-function executable(pid, launcher) {
+function executable(pid, launcher, started) {
+  const start = spawnSync('ps', ['-p', String(pid), '-o', 'lstart='], { env: { ...process.env, LC_ALL: 'C' }, encoding: 'utf8', timeout: 5000 });
+  if (start.status === 1 && !start.stdout.trim()) return null;
+  if (start.status !== 0) throw new Error('cannot verify helper start time: ' + pid);
+  if (start.stdout.trim() !== started) throw new Error('helper PID start time changed: ' + pid);
   const result = spawnSync('ps', ['-p', String(pid), '-o', 'stat=,comm='], { encoding: 'utf8', timeout: 5000 });
   if (result.status === 1 && !result.stdout.trim()) return null;
   if (result.status !== 0) throw new Error('cannot verify helper process ' + pid);
@@ -23,21 +27,24 @@ function executable(pid, launcher) {
 }
 
 export async function cleanupManagedHelpers(entries) {
+  const errors = [];
   for (const { ledger, binary, launcher } of entries) {
     let records;
     try { records = (await readFile(ledger, 'utf8')).split('\n').filter(Boolean); }
-    catch (error) { throw new Error('helper PID ledger unavailable: ' + error.message); }
+    catch (error) { errors.push('helper PID ledger unavailable: ' + error.message); continue; }
     for (const record of new Set(records)) {
-      if (!/^[1-9][0-9]*$/.test(record)) throw new Error('invalid helper PID record');
-      const pid = Number(record);
-      let current = executable(pid, launcher);
+      try {
+      const match = /^([1-9][0-9]*)\|(.+)$/.exec(record);
+      if (!match) throw new Error('invalid helper PID record');
+      const pid = Number(match[1]), started = match[2].trim();
+      let current = executable(pid, launcher, started);
       if (!current) continue;
       if (current !== binary && current !== launcher) throw new Error('helper PID identity changed: ' + pid);
       try { process.kill(pid, 'SIGTERM'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
       const deadline = Date.now() + 2000;
       do {
         await new Promise(resolve => setTimeout(resolve, 50));
-        current = executable(pid, launcher);
+        current = executable(pid, launcher, started);
         if (!current) break;
         if (current !== binary && current !== launcher) throw new Error('helper PID identity changed: ' + pid);
       } while (Date.now() < deadline);
@@ -46,12 +53,14 @@ export async function cleanupManagedHelpers(entries) {
         const killDeadline = Date.now() + 2000;
         do {
           await new Promise(resolve => setTimeout(resolve, 50));
-          current = executable(pid, launcher);
+          current = executable(pid, launcher, started);
           if (!current) break;
           if (current !== binary && current !== launcher) throw new Error('helper PID identity changed: ' + pid);
         } while (Date.now() < killDeadline);
         if (current) throw new Error('helper did not terminate: ' + pid);
       }
+      } catch (error) { errors.push(error.message); }
     }
   }
+  if (errors.length) throw new Error(errors.join('; '));
 }
