@@ -10,7 +10,7 @@ if (!['web', 'macos'].includes(surface) || !reportDir) { console.error('usage: r
 await mkdir(reportDir, { recursive: true });
 const temp = await mkdtemp(path.join(os.tmpdir(), 'runtime-ui-host-'));
 const cases = ['02-01', '02-02', '02-03', '02-04'].map(id => ({ id, status: 'failed', detail: 'cenário não concluído' }));
-let log = '', status = 1;
+let log = '', status = 1, generatedProject;
 async function run(program, argv, options = {}) {
   return new Promise((resolve, reject) => {
     const { timeoutMS, ...spawnOptions } = options;
@@ -69,6 +69,8 @@ try {
   } else {
     const project = 'Tests/HarnessUI/runtime/macos/PocketWikiRuntimeUIHost.xcodeproj';
     const derived = path.join(temp, 'derived');
+    try { await access(project); throw new Error('projeto XCTest gerado já existe'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    generatedProject = project;
     if (await run('xcodegen', ['generate', '--spec', 'Tests/HarnessUI/runtime/macos/project.yml'], { timeoutMS: 600000 })) throw new Error('xcodegen falhou');
     if (await run('xcodebuild', ['-project', project, '-scheme', 'PocketWikiRuntimeUIHost', '-destination', 'platform=macOS,arch=arm64', '-derivedDataPath', derived, 'build-for-testing', 'CODE_SIGNING_ALLOWED=NO', '-quiet'], { timeoutMS: 600000 })) throw new Error('build XCTest falhou');
     const env = { ...process.env, RUNTIME_KERNEL_BINARY: kernel, RUNTIME_MACOS: '1', RUNTIME_DERIVED_DATA: derived };
@@ -76,13 +78,13 @@ try {
       const code = await run(process.execPath, ['Tests/HarnessUI/runtime/web-smoke.mjs'], { env: { ...env, [flag]: '1' } });
       const row = cases.find(item => item.id === id); row.status = code === 0 ? 'passed' : 'failed'; row.detail = code === 0 ? (id === '02-01' ? 'Kernel: B=9, replay 8/9/10/11/12; B=10/9/10/11 apenas em testes unitários JS e Swift' : 'validado') : `XCTest falhou: exit ${code}`;
     }
-    await rm(project, { recursive: true, force: true });
   }
   status = cases.every(row => row.status === 'passed') ? 0 : 1;
 } catch (error) { log += `erro: ${error.message}\n`; }
 finally {
   await writeFile(path.join(reportDir, 'result.json'), JSON.stringify({ surface, cases }, null, 2) + '\n');
   await writeFile(path.join(reportDir, 'host.log'), log);
+  if (generatedProject) await rm(generatedProject, { recursive: true, force: true });
   await rm(temp, { recursive: true, force: true });
 }
 process.exitCode = status;
