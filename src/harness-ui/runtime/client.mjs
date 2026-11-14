@@ -13,7 +13,7 @@ export class RuntimeClient {
       await this.transport.capabilities({ environmentId: this.environmentId, schemaSHA256: this.schemaSHA256 });
       await this.reconnect();
     } catch (error) {
-      this.publish({ available: false, error: error.status === 404 || error.status === 405 ? 'LEGACY_SERVER' : error.code || 'ERR_UNAVAILABLE' });
+      this.publish({ available: false, error: error.status === 404 || error.status === 405 || /^Kernel HTTP (404|405)$/.test(error.message) ? 'LEGACY_SERVER' : error.code || 'ERR_UNAVAILABLE' });
       throw error;
     }
   }
@@ -64,7 +64,9 @@ export class RuntimeClient {
     const command = { protocol_major: 1, command_id: commandId, environment_id: this.environmentId, expected_revision: this.state.revision, operation: 'runtime.dispatch', input: { command_id: commandId, thread_id: this.threadId, expected_revision: this.state.revision, operation: 'submit', text } };
     const receipt = await this.transport.dispatch(command);
     // An acknowledgement is provisional, never an indication of effect completion.
-    this.publish({ receipts: [...this.state.receipts.filter(item => item.command_id !== commandId), receipt] });
+    if (!this.state.receipts.some(item => item.command_id === commandId)) {
+      this.publish({ receipts: [...this.state.receipts, receipt] });
+    }
     return receipt;
   }
 }
