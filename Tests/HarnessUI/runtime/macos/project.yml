@@ -1,0 +1,49 @@
+name: PocketWikiRuntimeUIHost
+options:
+  bundleIdPrefix: com.pocketwiki
+  deploymentTarget:
+    macOS: "14.0"
+targets:
+  PocketWikiRuntimeUIHost:
+    type: application
+    platform: macOS
+    sources:
+      - path: ../../../../Sources/PocketWikiMac/Models/Harness/HarnessV1.swift
+      - path: ../../../../Sources/PocketWikiMac/Models/Harness/HarnessOperationRegistry.swift
+      - path: ../../../../Sources/PocketWikiMac/Services/Harness/Runtime/RuntimeTransport.swift
+      - path: ../../../../Sources/PocketWikiMac/Services/Harness/Runtime/RuntimeProjection.swift
+      - path: ../../../../Sources/PocketWikiMac/Views/Harness/Runtime
+      - path: RuntimeHost.swift
+    settings:
+      base:
+        CODE_SIGNING_ALLOWED: NO
+        GENERATE_INFOPLIST_FILE: YES
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        PRODUCT_BUNDLE_IDENTIFIER: com.pocketwiki.RuntimeUIHost
+        SWIFT_VERSION: "6.0"
+  PocketWikiRuntimeUIHostTests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - path: RuntimeUITests.swift
+    dependencies:
+      - target: PocketWikiRuntimeUIHost
+    settings:
+      base:
+        CODE_SIGNING_ALLOWED: NO
+        GENERATE_INFOPLIST_FILE: YES
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        PRODUCT_BUNDLE_IDENTIFIER: com.pocketwiki.RuntimeUIHostTests
+        TEST_TARGET_NAME: PocketWikiRuntimeUIHost
+        SWIFT_VERSION: "5.0"
+schemes:
+  PocketWikiRuntimeUIHost:
+    build:
+      targets:
+        PocketWikiRuntimeUIHost: all
+        PocketWikiRuntimeUIHostTests: [test]
+    test:
+      targets:
+        - PocketWikiRuntimeUIHostTests
+      environmentVariables:
+        NH_RUNTIME_CONFIG_PATH: '$(NH_RUNTIME_CONFIG_PATH)'

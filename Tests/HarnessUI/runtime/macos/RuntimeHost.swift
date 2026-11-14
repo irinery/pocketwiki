@@ -5,7 +5,10 @@ import SwiftUI
 struct RuntimeHostApp: App {
     @StateObject private var session: RuntimeUISession
     init() {
-        guard let line = readLine(), let data = line.data(using: .utf8),
+        let data: Data?
+        if let path = ProcessInfo.processInfo.environment["NH_RUNTIME_CONFIG_PATH"] { data = try? Data(contentsOf: URL(fileURLWithPath: path)) }
+        else { data = readLine()?.data(using: .utf8) }
+        guard let data,
               let config = try? JSONSerialization.jsonObject(with: data) as? [String: String],
               let urlText = config["baseURL"], let url = URL(string: urlText), let bearer = config["bearer"],
               let environmentText = config["environmentID"], let environment = UUID(uuidString: environmentText),
