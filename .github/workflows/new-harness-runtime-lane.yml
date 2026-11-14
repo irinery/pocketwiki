@@ -1,0 +1,39 @@
+name: New Harness runtime lane
+
+on:
+  pull_request:
+    paths:
+      - 'Sources/PocketWikiMac/Models/Harness/**'
+      - 'Sources/PocketWikiMac/Services/Harness/Runtime/**'
+      - 'Tests/Harness/runtime/**'
+      - 'src/harness/contracts/**'
+      - 'src/harness/runtime/**'
+      - '.github/workflows/new-harness-runtime-lane.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-transport:
+    name: Runtime transport and projection (Node and Swift)
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+      - name: Select Swift toolchain
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+          git rev-parse HEAD
+          node --version
+          swift --version
+      - name: Test runtime lane
+        run: node --test Tests/Harness/runtime/*.test.mjs
