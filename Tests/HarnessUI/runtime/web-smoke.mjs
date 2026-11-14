@@ -3,6 +3,7 @@ import { once } from 'node:events';
 import { createHash } from 'node:crypto';
 import { fixtureUUID } from './fixture-ids.mjs';
 import { requireRuntimeScreenshot } from './runtime-proof.mjs';
+import { sanitizeRuntimeScreenshot } from '../../NewHarnessE2E/MacOSHost/runtime-screenshot.mjs';
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createInterface } from 'node:readline';
@@ -116,8 +117,8 @@ try {
       const files = await readdir(attachments);
       const screenshot = files.find(file => file.toLowerCase().endsWith('.png'));
       if (!screenshot) throw new Error('captura de teste nativo ausente');
-      const screenshotBytes = await readFile(path.join(attachments, screenshot));
-      requireRuntimeScreenshot(screenshotBytes); // Fail closed until metadata has been stripped.
+      const screenshotBytes = sanitizeRuntimeScreenshot(await readFile(path.join(attachments, screenshot)), { maxWidth: 4096, maxHeight: 2048 });
+      requireRuntimeScreenshot(screenshotBytes, { maxHeight: 2048 });
       await writeFile(path.join(process.env.RUNTIME_ARTIFACT_DIR, `runtime-${scenario}.png`), screenshotBytes, { mode: 0o600 });
       }
     }
