@@ -34,6 +34,10 @@ export class RuntimeProjection {
     if (d.next_cursor != null) this.cursors.add(d.next_cursor);
   }
   bufferEvent(event, resolvedPayload) {
+    try { return this.bufferEventChecked(event, resolvedPayload); }
+    catch (error) { this.invalid = true; throw error; }
+  }
+  bufferEventChecked(event, resolvedPayload) {
     if (event?.protocol_major !== 1) throw fail('ERR_INCOMPATIBLE', 'Versão do stream incompatível');
     if (!this.started || !valid('streamEnvelope', event) || event.environment_id !== this.environmentId || event.thread_id !== this.threadId || event.module !== 'runtime') throw fail('ERR_INVALID', 'Evento inválido');
     const payload = event.delivery === 'inline' && resolvedPayload === undefined ? event.payload : event.delivery === 'reference' ? resolvedPayload : undefined;
@@ -51,7 +55,7 @@ export class RuntimeProjection {
     this.events.push({ seq: event.seq, payload: clone(payload) });
   }
   finish() {
-    if (!this.complete) throw fail('ERR_INVALID', 'Snapshot incompleto');
+    if (this.invalid || !this.complete) throw fail('ERR_INVALID', 'Snapshot incompleto ou inválido');
     const lastSeq = this.events.at(-1)?.seq ?? this.boundary;
     if (lastSeq < this.confirmedSeq) throw fail('ERR_INVALID', 'Snapshot desatualizado');
     const receipts = new Map(this.receipts), effects = new Map(this.effects);

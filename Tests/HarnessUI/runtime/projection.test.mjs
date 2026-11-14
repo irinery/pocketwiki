@@ -13,10 +13,17 @@ test('replay ignora boundary e aplica seguinte uma vez', () => {
 test('versão incompatível não publica alteração', () => {
   const p = new RuntimeProjection({ environmentId: id, threadId: id }); p.appendPage(page);
   assert.throws(() => p.bufferEvent({ ...event(11), protocol_major: 2 }), { code: 'ERR_INCOMPATIBLE' });
-  assert.equal(p.finish().lastSeq, 10); assert.equal(p.finish().effects.size, 0);
+  assert.throws(() => p.finish(), { code: 'ERR_INVALID' });
 });
 
 test('ack aceito não é apresentado como concluído', async () => {
   const { receiptPresentation } = await import('../../../src/harness-ui/runtime/presentation.mjs');
   assert.deepEqual(receiptPresentation({ command_id: id, state: 'accepted' }), { commandId: id, label: 'Aceito', completed: false });
+});
+
+ test('overflow invalida toda a montagem', () => {
+  const p = new RuntimeProjection({ environmentId: id, threadId: id }); p.appendPage(page);
+  p.bytes = 4_194_304;
+  assert.throws(() => p.bufferEvent(event(11)), { code: 'ERR_INVALID' });
+  assert.throws(() => p.finish(), { code: 'ERR_INVALID' });
 });
