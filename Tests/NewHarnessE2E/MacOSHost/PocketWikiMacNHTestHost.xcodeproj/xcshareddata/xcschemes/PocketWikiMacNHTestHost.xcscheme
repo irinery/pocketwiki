@@ -69,6 +69,26 @@
       </CommandLineArguments>
       <EnvironmentVariables>
          <EnvironmentVariable
+            key = "NH_RUNTIME_LEGACY_UI"
+            value = "$(NH_RUNTIME_LEGACY_UI)"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "NH_RUNTIME_PROOF_PATH"
+            value = "$(NH_RUNTIME_PROOF_PATH)"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "NH_RUNTIME_PROOF_NONCE"
+            value = "$(NH_RUNTIME_PROOF_NONCE)"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "NH_RUNTIME_SCHEMA_PATH"
+            value = "$(NH_RUNTIME_SCHEMA_PATH)"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
             key = "NH_TEST_FIXTURE_PROVIDER_URL"
             value = "$(NH_TEST_FIXTURE_PROVIDER_URL)"
             isEnabled = "YES">

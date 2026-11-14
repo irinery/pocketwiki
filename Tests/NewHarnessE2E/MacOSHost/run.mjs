@@ -1,3 +1,4 @@
+import { assertRuntimeProof } from './runtime-proof.mjs';
 import { createHelperLauncher, cleanupManagedHelpers } from './managed-helpers.mjs';
 import { helperPaths } from './supervisor.mjs';
 import { exportGitSnapshot } from '../git-snapshot.mjs';
@@ -16,6 +17,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const project = path.join(root, 'Tests/NewHarnessE2E/MacOSHost/PocketWikiMacNHTestHost.xcodeproj');
 const resultBundle = parseFlag(process.argv.slice(2), '--result-bundle-path');
 const logPath = resultBundle.replace(/\.xcresult$/, '') + '.log';
+const runtimeHook = process.env.NH_RUNTIME_LEGACY_UI === '1';
+const proofOutput = resultBundle + '.runtime-proof.json';
+await rm(proofOutput, { force: true });
 try { requireProcessListing(); } catch (error) { reportConfigFailure(error.message); }
 const explicitDeveloperDir = process.env.POCKETWIKI_XCODE_DEVELOPER_DIR || process.env.DEVELOPER_DIR;
 const selected = explicitDeveloperDir
@@ -65,10 +69,20 @@ const provider = createServer(async (request, response) => {
 });
 let output = '';
 let status = 2;
+let runtimeProofVerified = false;
+const proofNonce = process.env.NH_RUNTIME_PROOF_NONCE || '';
+const proofSHA = process.env.NH_RUNTIME_PROOF_SHA || '';
+const proofMarker = path.join(tempHome, 'runtime-xctest-proof');
 try {
   if (!supervised) {
     await createHelperLauncher(kernelLauncher, kernelBinary, helpers[0].ledger);
     await createHelperLauncher(middlewareLauncher, middlewareBinary, helpers[1].ledger);
+  }
+  if (runtimeHook) {
+    if (!/^[a-f0-9]{32,128}$/.test(proofNonce) || !/^[a-f0-9]{40}$/.test(proofSHA) || gitSHA(root) !== proofSHA) throw Object.assign(new Error('runtime proof nonce/SHA inválido'), { exitCode: 2 });
+    for (const file of ['Sources/PocketWikiMac/Views/Harness/Runtime/RuntimePanel.swift', 'Sources/PocketWikiMac/Views/Harness/Runtime/RuntimeUISession.swift']) {
+      if (!existsSync(path.join(root, file))) throw Object.assign(new Error('fontes do slot runtime indisponíveis: ' + file), { exitCode: 2 });
+    }
   }
   const pinned = await readFile(path.join(root, 'docs/rfcs/new-harness/nhtest-base-shas.md'), 'utf8');
   const kernelSHA = pinned.match(/PocketKernel: \x60([a-f0-9]{40})\x60/)?.[1];
@@ -103,6 +117,7 @@ try {
     NH_TEST_FIXTURE_PROVIDER_URL: providerURL,
     NH_TEST_MIDDLEWARE_URL: middlewareURL,
     NH_TEST_KERNEL_URL: kernelURL,
+    ...(runtimeHook ? { NH_RUNTIME_LEGACY_UI: '1', NH_RUNTIME_SCHEMA_PATH: path.join(root, 'src/harness/contracts/harness-v1.schema.json'), NH_RUNTIME_PROOF_PATH: proofMarker, NH_RUNTIME_PROOF_NONCE: proofNonce } : {}),
     NH_TEST_POCKETWIKI_PORT: String(pocketWikiPort),
     POCKETWIKI_POCKETKERNEL_BINARY: kernelLauncher,
     POCKETWIKI_MIDDLEWARE_AUTH_BINARY: middlewareLauncher,
@@ -134,6 +149,7 @@ try {
     `NH_TEST_FIXTURE_PROVIDER_URL=${providerURL}`,
     `NH_TEST_MIDDLEWARE_URL=${middlewareURL}`,
     `NH_TEST_KERNEL_URL=${kernelURL}`,
+    ...(runtimeHook ? ['OTHER_SWIFT_FLAGS=$(inherited) -D NH_RUNTIME_TEST_HOOK', 'NH_RUNTIME_LEGACY_UI=1', `NH_RUNTIME_SCHEMA_PATH=${path.join(root, 'src/harness/contracts/harness-v1.schema.json')}`, `NH_RUNTIME_PROOF_PATH=${proofMarker}`, `NH_RUNTIME_PROOF_NONCE=${proofNonce}`] : ['EXCLUDED_SOURCE_FILE_NAMES=RuntimePanel.swift RuntimeUISession.swift RuntimeProjection.swift RuntimeTransport.swift']),
     `NH_TEST_POCKETWIKI_PORT=${pocketWikiPort}`,
     `POCKETWIKI_POCKETKERNEL_BINARY=${kernelLauncher}`,
     `POCKETWIKI_MIDDLEWARE_AUTH_BINARY=${middlewareLauncher}`,
@@ -159,7 +175,12 @@ try {
     try {
       if (summary.status !== 0) throw new Error(summary.stderr || summary.error?.message || 'xcresulttool falhou');
       const safeSummary = redactSummary(summary.stdout);
-      JSON.parse(safeSummary);
+      const parsedSummary = JSON.parse(safeSummary);
+      if (runtimeHook && status === 0) {
+        const marker = await readFile(proofMarker, 'utf8').catch(() => '');
+        assertRuntimeProof({ marker, nonce: proofNonce, summary: parsedSummary });
+        runtimeProofVerified = true;
+      }
       await writeFile(resultBundle + '.summary.json', safeSummary + '\n', { mode: 0o600 });
     } catch (error) {
       status = status === 0 ? 1 : status;
@@ -171,10 +192,13 @@ try {
   }
 } catch (error) {
   output += '\nHost failure: ' + error.message + '\n';
-  status = error.message.startsWith('não foi possível compilar') ? 2 : 1;
+  status = error.exitCode || (error.message.startsWith('não foi possível compilar') ? 2 : 1);
 } finally {
   try { await cleanupManagedHelpers(helpers); } catch (error) { status = 1; output += '\nFAIL: helper cleanup: ' + error.message + '\n'; }
   if (provider.listening) await new Promise((resolve) => provider.close(resolve));
+  if (runtimeHook && status === 0 && runtimeProofVerified) {
+    await writeFile(proofOutput, JSON.stringify({ nonce: proofNonce, pocketwiki_sha: proofSHA, runtime_fallback_verified: true, legacy_capability_status: 404, skipped_tests: 0 }, null, 2) + '\n', { mode: 0o600 });
+  } else { await rm(proofOutput, { force: true }); }
   output = redactSummary(output);
   await writeFile(logPath, output, 'utf8');
   process.stdout.write(output);

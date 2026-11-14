@@ -82,9 +82,28 @@ final class Legacy00UITests: XCTestCase {
             "POCKETWIKI_CONVERSATION_STORE_PATH": memoryStoreRoot.path
         ]
 
+        if ProcessInfo.processInfo.environment["NH_RUNTIME_LEGACY_UI"] == "1" {
+            appLaunchEnvironment["NH_RUNTIME_LEGACY_UI"] = "1"
+            appLaunchEnvironment["NH_TEST_KERNEL_URL"] = kernelURL
+            appLaunchEnvironment["NH_RUNTIME_SCHEMA_PATH"] = try XCTUnwrap(ProcessInfo.processInfo.environment["NH_RUNTIME_SCHEMA_PATH"])
+        }
         app.launchEnvironment = appLaunchEnvironment
         app.launch()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 20), "O app legado macOS real não iniciou")
+        if ProcessInfo.processInfo.environment["NH_RUNTIME_LEGACY_UI"] == "1" {
+            let detail = app.staticTexts["runtime-status-detail"]
+            guard detail.waitForExistence(timeout: 30), detail.label.contains("Execução durável indisponível") else { XCTFail("slot runtime não confirmou fallback"); return }
+            let runtimeSubmit = app.buttons["runtime-submit"]
+            guard runtimeSubmit.waitForExistence(timeout: 10), !runtimeSubmit.isEnabled else { XCTFail("controle runtime deve estar desabilitado"); return }
+            let finished = expectation(description: "real legacy capability response")
+            var status: Int?
+            URLSession.shared.dataTask(with: URL(string: kernelURL + "/v1/harness/capabilities")!) { _, response, _ in
+                status = (response as? HTTPURLResponse)?.statusCode
+                finished.fulfill()
+            }.resume()
+            wait(for: [finished], timeout: 10)
+            guard status == 404 else { XCTFail("capability do Kernel legado não retornou 404"); return }
+        }
         selectFixtureWiki(in: app)
         openFixturePage(in: app)
         assertReaderShowsFixtureTitle(in: app)
@@ -128,6 +147,11 @@ final class Legacy00UITests: XCTestCase {
             "visible=\(app.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty })"
         )
         assertFixtureMarkerVisible(in: app, message: "A resposta restaurada perdeu o conteúdo fixture")
+        if ProcessInfo.processInfo.environment["NH_RUNTIME_LEGACY_UI"] == "1" {
+            let nonce = try XCTUnwrap(ProcessInfo.processInfo.environment["NH_RUNTIME_PROOF_NONCE"])
+            let marker = try XCTUnwrap(ProcessInfo.processInfo.environment["NH_RUNTIME_PROOF_PATH"])
+            try Data(nonce.utf8).write(to: URL(fileURLWithPath: marker), options: .atomic)
+        }
     }
 
     private func conversationStoreDiagnostic() -> String {
