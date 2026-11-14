@@ -10842,7 +10842,14 @@
           "type": "boolean"
         },
         "result_ref": {
-          "$ref": "#/$defs/uuid"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       }
     }

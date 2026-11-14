@@ -135,7 +135,7 @@ for (const [name, target, valid, value] of [
   ['DISPATCH-REJECT-HTTP', 'runtimeDispatchResult', false, http],
   ['LEGACY-REJECT-HTTP', 'commandReceipt', false, http],
   ['HTTP-EXTRA', 'httpCommandReceipt', false, { ...http, extra: true }],
-  ['HTTP-NULL-RESULT', 'httpCommandReceipt', false, { ...http, result_ref: null }],
+  ['HTTP-NULL-RESULT', 'httpCommandReceipt', true, { ...http, result_ref: null }],
   ['HTTP-BAD-DUPLICATE', 'httpCommandReceipt', false, { ...http, duplicate: 0 }],
   ['HTTP-BAD-STATE', 'httpCommandReceipt', false, { ...http, state: 'duplicate' }],
 ]) slots.push(slot(`${prefix}E1-${name}`, target, valid, value));

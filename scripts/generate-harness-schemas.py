@@ -289,7 +289,7 @@ def main():
             "revision": {"type": "integer", "minimum": 0},
             "state": {"enum": ["accepted", "pending", "succeeded", "failed", "uncertain"]},
             "duplicate": {"type": "boolean"},
-            "result_ref": {"$ref": "#/$defs/uuid"},
+            "result_ref": {"anyOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
         },
     }
     registry, input_schemas = operation_inputs()
