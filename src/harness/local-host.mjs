@@ -25,6 +25,10 @@ export class LocalCredentialHost {
     this.#now = now;
   }
 
+  // Delivery must resolve only after the trusted receiver confirms receipt,
+  // not merely after enqueueing bytes. That receiver must wait for bootstrap
+  // success before use. ERR_ACTIVATION_UNKNOWN is internal: Kernel may have
+  // activated the bearer despite a failed response; do not expose it on wire.
   async bootstrap(requestedScopes, { threadId, aggregateId } = {}) {
     const requested = normalizeScopes(requestedScopes);
     const scopes = requested.filter((scope) => this.#grantedScopes.has(scope));
@@ -45,16 +49,16 @@ export class LocalCredentialHost {
       expires_at_ms: expiresAtMS
     });
     const verifier = Object.freeze({ token_sha256: tokenHash, ...metadata, revoked: false });
-    await this.#persistVerifier(verifier);
-    this.#verifiers.set(tokenHash, verifier);
+    // A partial delivery can expose the bearer even when delivery rejects.
+    // Never install an active verifier until delivery has completed.
+    await this.#deliverBearer(Object.freeze({ bearer, metadata }));
     try {
-      await this.#deliverBearer(Object.freeze({ bearer, metadata }));
-    } catch (error) {
-      const revoked = Object.freeze({ ...verifier, revoked: true });
-      await this.#persistVerifier(revoked);
-      this.#verifiers.set(tokenHash, revoked);
-      throw error;
+      await this.#persistVerifier(verifier);
+    } catch (cause) {
+      // A lost acknowledgement does not tell us whether Kernel committed it.
+      throw Object.assign(new Error('Kernel credential activation outcome is unknown', { cause }), { code: 'ERR_ACTIVATION_UNKNOWN' });
     }
+    this.#verifiers.set(tokenHash, verifier);
     return metadata;
   }
 
@@ -90,8 +94,8 @@ export class LocalCredentialHost {
     const verifier = this.#verifiers.get(hash);
     if (!verifier) return false;
     const revoked = Object.freeze({ ...verifier, revoked: true });
-    await this.#persistVerifier(revoked);
     this.#verifiers.set(hash, revoked);
+    await this.#persistVerifier(revoked);
     return true;
   }
 }
