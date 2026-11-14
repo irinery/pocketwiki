@@ -167,7 +167,7 @@ test('E1 requires all six cumulative pairs and rejects missing or duplicate E1 c
   input[0].cases.push({ id: 'SERVICE-0002', surface: 'service', status: 'passed', artifact_paths: ['service/runtime.log'] });
   input[1].cases.push({ id: 'UI-0002', surface: 'web', status: 'passed', artifact_paths: ['web/runtime.log'] });
   input[2].cases.push({ id: 'UI-0002', surface: 'macos', status: 'passed', artifact_paths: ['macos/runtime.log'] });
-  assert.equal(aggregateReports('E1', input, matrix).cases.length, 6);
+  assert.throws(() => aggregateReports('E1', input, matrix), /requires integrated RFC 0002 replay at boundary 10/);
   const missing = structuredClone(input); missing[2].cases.pop();
   assert.throws(() => aggregateReports('E1', missing, matrix), /missing required.*UI-0002\/macos/);
   const duplicate = structuredClone(input); duplicate[0].cases.push(structuredClone(duplicate[0].cases[1]));

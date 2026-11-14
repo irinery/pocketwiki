@@ -82,6 +82,10 @@ export function aggregateReports(stage, reports, matrix) {
 
   const missing = [...expected.keys()].filter((key) => !actual.has(key));
   if (missing.length) throw new Error('missing required scenario/surface pairs: ' + missing.join(', '));
+  // Remove only alongside an integrated B=10 scenario and validated evidence.
+  if ([...actual.keys()].some(key => key.startsWith('UI-0002/'))) {
+    throw new Error('UI-0002 requires integrated RFC 0002 replay at boundary 10');
+  }
   return {
     version: '0.2.0',
     stage,

@@ -76,8 +76,8 @@ try {
     for (const [id, flag, detail] of scenarios) {
       const code = await run(process.execPath, ['Tests/HarnessUI/runtime/web-smoke.mjs'], { env: { ...baseEnv, [flag]: '1' } });
       const row = cases.find(item => item.id === id);
-      row.status = code === 0 ? 'passed' : 'failed';
-      row.detail = code === 0 ? detail || 'validado' : `host falhou: exit ${code}`;
+      row.status = code === 0 && id !== '02-01' ? 'passed' : 'failed';
+      row.detail = code === 0 ? (id === '02-01' ? detail + '; RFC exige B=10 integrado, ainda não comprovado' : detail || 'validado') : `host falhou: exit ${code}`;
     }
     const bundle = path.join(temp, 'runtime-bundle.js');
     if (await run('npx', ['esbuild', 'Tests/HarnessUI/runtime/web/main.mjs', '--bundle', '--format=esm', '--platform=browser', '--inject:Tests/HarnessUI/runtime/web/buffer-shim.mjs', `--outfile=${bundle}`], { timeoutMS: 600000 })) throw new Error('bundle runtime falhou');
@@ -101,7 +101,7 @@ try {
     const env = { ...process.env, RUNTIME_KERNEL_BINARY: kernel, RUNTIME_MACOS: '1', RUNTIME_DERIVED_DATA: derived, RUNTIME_ARTIFACT_DIR: reportDir, NH_TEST_SEED: String(seed), NH_TEST_SEED: String(seed) };
     for (const [id, flag] of [['02-01', 'RUNTIME_REPLAY'], ['02-03', 'RUNTIME_PAUSE_EFFECT'], ['02-04', 'RUNTIME_INCOMPATIBLE']]) {
       const code = await run(process.execPath, ['Tests/HarnessUI/runtime/web-smoke.mjs'], { env: { ...env, [flag]: '1' } });
-      const row = cases.find(item => item.id === id); row.status = code === 0 ? 'passed' : 'failed'; row.detail = code === 0 ? (id === '02-01' ? 'Kernel: B=9, replay 8/9/10/11/12; B=10/9/10/11 apenas em testes unitários JS e Swift' : 'validado') : `XCTest falhou: exit ${code}`;
+      const row = cases.find(item => item.id === id); row.status = code === 0 && id !== '02-01' ? 'passed' : 'failed'; row.detail = code === 0 ? (id === '02-01' ? 'Kernel: B=9, replay 8/9/10/11/12; B=10/9/10/11 apenas em testes unitários JS e Swift; RFC exige B=10 integrado, ainda não comprovado' : 'validado') : `XCTest falhou: exit ${code}`;
     }
     // This host enforces separate build and 180s XCTest deadlines internally.
     const resultPath = path.join(temp, 'legacy-macos.xcresult');
