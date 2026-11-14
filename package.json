@@ -15,7 +15,7 @@
     "test:nh00-bootstrap": "sh scripts/test-nh00-bootstrap-integration.sh",
     "test:nh00-chromium": "sh scripts/test-nh00-chromium.sh",
     "generate:harness-contracts": "node scripts/generate-harness-registry.mjs && python3 scripts/generate-harness-schemas.py && node scripts/generate-nh00-structural-corpus.mjs && node scripts/generate-harness-operation-corpus.mjs && node scripts/generate-nh00-coverage-matrix.mjs",
-    "test": "npm run test:solutions && npm run test:mcp && npm run test:graph-view && npm run test:excalidraw-desktop && npm run test:memory",
+    "test": "npm run test:solutions && npm run test:mcp && npm run test:graph-view && npm run test:excalidraw-desktop && npm run test:memory && npm run test:legacy-web-start",
     "test:memory": "node --test src/memory/*.test.mjs",
     "test:memory:swift": "sh scripts/test-pocket-memory-swift.sh",
     "test:solutions": "node --test src/solutions/*.test.mjs",
@@ -25,7 +25,10 @@
     "start": "node server.mjs",
     "start:lan80": "POCKETWIKI_PORT=80 node server.mjs",
     "generate:nh00-matrix": "node scripts/generate-nh00-coverage-matrix.mjs",
-    "test:new-harness-rig": "node --test Tests/NewHarnessE2E/*.test.mjs"
+    "test:new-harness-rig": "node --test Tests/NewHarnessE2E/*.test.mjs",
+    "prestart": "npm run build:legacy-web-assets",
+    "prestart:lan80": "npm run build:legacy-web-assets",
+    "test:legacy-web-start": "node --test scripts/test-legacy-web-start.mjs"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.1",
