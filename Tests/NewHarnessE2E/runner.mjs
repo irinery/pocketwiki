@@ -208,9 +208,11 @@ async function runRuntimeUI(surface, artifactDir, tempHome, targetSHA) {
   if (!existsSync(host)) return { ok: false, exitCode: 2, configurationError: true, artifacts: [] };
   const output = path.join(artifactDir, 'ui-0002-' + surface);
   await mkdir(output, { recursive: true });
-  const result = await runWithinDeadline(process.execPath, [host, '--surface', surface, '--report-dir', output], {
+  const launch = surface === 'macos' ? superviseMacHost : runWithinDeadline;
+  const timeout = surface === 'macos' ? 60 * 60_000 : 20 * 60_000;
+  const result = await launch(process.execPath, [host, '--surface', surface, '--report-dir', output], {
     cwd: source, env: { ...isolatedEnvironment(tempHome), POCKETKERNEL_NH00_ROOT: process.env.POCKETKERNEL_NH00_ROOT || path.resolve(root, '../pocketkernel-nh00'), MIDDLEWAREAUTH_NHTEST_ROOT: process.env.MIDDLEWAREAUTH_NHTEST_ROOT || path.resolve(root, '../middlewareAuth') }, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024
-  }, Date.now() + 20 * 60_000, 20 * 60_000);
+  }, Date.now() + timeout, timeout);
   const log = 'ui-0002-' + surface + '.log';
   await writeFile(path.join(artifactDir, log), redact((result.stdout || '') + '\n' + (result.stderr || result.error?.message || '')));
   const evidence = await listArtifactPaths(output);

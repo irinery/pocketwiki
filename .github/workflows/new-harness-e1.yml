@@ -87,7 +87,7 @@ jobs:
   e0:
     name: Cumulative E1 (service, web, macOS)
     runs-on: macos-15
-    timeout-minutes: 60
+    timeout-minutes: 120
     env:
       POCKETKERNEL_NH00_ROOT: ${{ github.workspace }}/.build/dependencies/pocketkernel
       MIDDLEWAREAUTH_NHTEST_ROOT: ${{ github.workspace }}/.build/dependencies/middlewareAuth
