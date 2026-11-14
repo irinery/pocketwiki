@@ -15,3 +15,13 @@ test('reconexão falha desabilita UI', async () => {
   const client = new RuntimeClient({ transport: { async snapshot() { throw new Error('secret'); } }, environmentId: id, threadId: id }); client.state.available = true;
   await assert.rejects(client.reconnect()); assert.equal(client.state.available, false); assert.equal(client.state.error, 'ERR_UNAVAILABLE');
 });
+test('validação local não deixa intenção pendente', async () => {
+  const client = new RuntimeClient({ transport: {}, environmentId: id, threadId: id }); client.state.available = true;
+  await assert.rejects(client.submit('', id), { code: 'ERR_INVALID' }); assert.equal(client.pendingCommandId, undefined);
+});
+test('receipt consultado antigo não substitui evento mais novo', async () => {
+  const transport = { async receipt(commandId) { return { command_id: commandId, revision: 1, state: 'accepted' }; } };
+  const client = new RuntimeClient({ transport, environmentId: id, threadId: id }); client.pendingCommandId = id;
+  client.state.receipts = [{ command_id: id, revision: 3, state: 'succeeded' }];
+  await client.resolvePending(); assert.equal(client.state.receipts[0].state, 'succeeded');
+});
