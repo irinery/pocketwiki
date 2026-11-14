@@ -34,6 +34,7 @@ try {
   await mkdir(reportDir, { recursive: true });
   tempHome = await mkdtemp(path.join(os.tmpdir(), 'nh-test-runtime-'));
   const artifactDir = path.join(reportDir, stage.toLowerCase() + '-' + surface);
+  await rm(artifactDir, { recursive: true, force: true });
   await mkdir(artifactDir, { recursive: true });
 
   const cases = [];
@@ -213,8 +214,9 @@ async function runRuntimeUI(surface, artifactDir, tempHome, targetSHA) {
   let manifest;
   try { manifest = JSON.parse(await readFile(path.join(output, 'result.json'), 'utf8')); } catch {}
   const required = ['02-01', '02-02', '02-03', '02-04'];
-  const valid = manifest && Array.isArray(manifest.cases) && manifest.cases.length === 4 && required.every(id => manifest.cases.some(c => c.id === id && c.status === 'passed')) && evidence.some(name => name !== 'result.json');
-  return { ok: result.status === 0 && valid, exitCode: result.status === 2 || !valid ? 2 : 1, configurationError: result.status === 2 || !valid, artifacts: [path.posix.join(path.basename(artifactDir), log), ...evidence.map(name => path.posix.join(path.basename(artifactDir), 'ui-0002-' + surface, name))] };
+  const valid = manifest && Array.isArray(manifest.cases) && manifest.cases.length === 4 && required.every(id => manifest.cases.some(c => c.id === id && ['passed', 'failed'].includes(c.status))) && evidence.some(name => name !== 'result.json');
+  const passed = valid && manifest.cases.every(c => c.status === 'passed');
+  return { ok: result.status === 0 && passed, exitCode: result.status === 2 || !valid ? 2 : 1, configurationError: result.status === 2 || !valid, artifacts: [path.posix.join(path.basename(artifactDir), log), ...evidence.map(name => path.posix.join(path.basename(artifactDir), 'ui-0002-' + surface, name))] };
 }
 
 async function runLegacy(surface, artifactDir, tempHome, deadline, targetSHA) {
