@@ -13,6 +13,7 @@ const canonical = value => {
 // publishes finish(), so a bad page or event cannot partially update the UI.
 export class RuntimeProjection {
   constructor({ environmentId, threadId, pageSize = 100, confirmedRevision = 0, confirmedSeq = 0 }) {
+    if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100 || !Number.isSafeInteger(confirmedRevision) || confirmedRevision < 0 || !Number.isSafeInteger(confirmedSeq) || confirmedSeq < 0) throw fail('ERR_INVALID', 'Parâmetros de projeção inválidos');
     Object.assign(this, { environmentId, threadId, pageSize, confirmedRevision, confirmedSeq });
     this.receipts = new Map(); this.effects = new Map(); this.events = [];
     this.cursors = new Set(); this.seen = new Map(); this.sequences = new Map(); this.bytes = 0;
@@ -23,7 +24,7 @@ export class RuntimeProjection {
   }
   appendPageChecked(page, requestedCursor) {
     const d = page?.data;
-    if (this.complete || !valid('snapshotEnvelope', page) || page.module !== 'runtime' ||
+    if (new TextEncoder().encode(JSON.stringify(page)).length > 4_194_304 || this.complete || !valid('snapshotEnvelope', page) || page.module !== 'runtime' ||
         (!this.started ? requestedCursor != null : requestedCursor !== this.nextCursor || requestedCursor == null) ||
         d.receipts.length + d.effects.length > this.pageSize || d.revision < this.confirmedRevision ||
         (this.started && (d.snapshot_id !== this.snapshotId || d.revision !== this.revision || d.as_of_seq !== this.boundary)) ||
