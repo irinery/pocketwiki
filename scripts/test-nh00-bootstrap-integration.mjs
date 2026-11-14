@@ -27,6 +27,7 @@ const audience = 'pocketkernel.harness';
 const children = [];
 const kernelLogBuffers = [];
 let hostWorker;
+let secondHost;
 let proxy;
 const proxySockets = new Set();
 
@@ -66,7 +67,7 @@ try {
   await rename(`${socketPath}.offline`, socketPath);
 
   // Relay the activation to the real Kernel, then drop its response. This
-  // demonstrates the unavoidable ambiguity when the commit ACK is lost.
+  // closes the owner after the activation ACK is lost.
   const proxyPath = path.join(temp, 'drop-ack.sock');
   proxy = net.createServer((client) => {
     const upstream = net.connect(socketPath);
@@ -82,13 +83,14 @@ try {
   await withTimeout(new Promise((resolve, reject) => { proxy.once('error', reject); proxy.listen(proxyPath, resolve); }), 'proxy startup');
   const unknown = await issue({ principalId: ids.principal, environmentId: ids.environment, audience, aggregateId: ids.aggregate, socketPath: proxyPath });
   assert.equal(unknown.error, 'ERR_ACTIVATION_UNKNOWN');
-  await assertRequest(kernel.http, unknown.bearer, ids.aggregate, 'read', 200);
+  await waitUntilDenied(kernel.http, unknown.bearer);
+  await assertRequest(kernel.http, unknown.bearer, ids.aggregate, 'read', 403);
   await new Promise((resolve) => proxy.close(resolve));
   proxy = undefined;
 
   const restart = await issue({ principalId: ids.principal, environmentId: ids.environment, audience, aggregateId: ids.aggregate });
   const restartBearer = restart.bearer;
-  await assert.equal(await effectCount(kernel.http), 2, 'all denials occur before the test effect');
+  await assert.equal(await effectCount(kernel.http), 1, 'all denials occur before the test effect');
 
   const disk = await readFile(storePath, 'utf8');
   const logs = `${hostWorker.logs.join('')}\n${kernelLogBuffers.flat().join('')}`;
@@ -97,6 +99,18 @@ try {
     assert.ok(!logs.includes(token), 'bearer must not appear in process logs');
   }
   assert.ok(disk.includes('token_sha256'));
+
+  secondHost = await startHostWorker();
+  const second = await issue({ principalId: ids.principal, environmentId: ids.environment, audience, aggregateId: ids.aggregate }, secondHost);
+  await assertRequest(kernel.http, second.bearer, ids.aggregate, 'read', 200);
+  // The Kernel and second host stay alive; kill only the first host.
+  const exited = once(hostWorker.child, 'exit');
+  hostWorker.child.kill('SIGKILL');
+  await withTimeout(exited, 'host termination');
+  await waitUntilDenied(kernel.http, restartBearer);
+  await assertRequest(kernel.http, restartBearer, ids.aggregate, 'read', 403);
+  await assertRequest(kernel.http, second.bearer, ids.aggregate, 'read', 200);
+  assert.equal(await effectCount(kernel.http), 3, 'denials have no effect and other host remains active');
 
   await stopKernel(kernel);
   kernel = await startKernel();
@@ -107,13 +121,14 @@ try {
   for (const socket of proxySockets) socket.destroy();
   if (proxy?.listening) await new Promise((resolve) => proxy.close(resolve));
   if (hostWorker) await terminate(hostWorker.child);
+  if (secondHost) await terminate(secondHost.child);
   for (const child of children) await stopKernel({ child });
   await rm(temp, { recursive: true, force: true });
 }
 
-async function issue(config) {
+async function issue(config, worker = hostWorker) {
   const hostId = `host-${Math.random()}`;
-  const result = await hostWorker.call({
+  const result = await worker.call({
     method: 'issue', id: hostId,
     config: {
       socketPath: config.socketPath ?? socketPath, principalId: config.principalId, environmentId: config.environmentId,
@@ -124,6 +139,17 @@ async function issue(config) {
     }
   });
   return { ...result, hostId };
+}
+
+async function waitUntilDenied(base, bearer) {
+  const deadline = Date.now() + 3000;
+  do {
+    const response = await fetch(`${base}/test/auth/${ids.aggregate}/read`, { method: 'POST', headers: { authorization: `Bearer ${bearer}` }, signal: AbortSignal.timeout(1000) });
+    if (response.status === 403) return;
+    assert.equal(response.status, 204);
+    await delay(10);
+  } while (Date.now() < deadline);
+  throw new Error('Kernel did not observe owner closure before deadline');
 }
 
 async function startHostWorker() {

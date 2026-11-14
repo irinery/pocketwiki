@@ -30,7 +30,7 @@ process.on('message', async (message) => {
               if (error) { clearTimeout(timer); deliveries.delete(message.id); reject(error); }
             });
           });
-          if (config.disconnectBeforeDeliveryFailure) await rename(config.socketPath, `${config.socketPath}.offline`);
+          if (config.disconnectBeforeDeliveryFailure) { kernel.close(); await rename(config.socketPath, `${config.socketPath}.offline`); }
           if (config.failDelivery) throw new Error('injected private process channel failure');
         },
         now: config.nowMS === undefined ? () => Date.now() : () => config.nowMS

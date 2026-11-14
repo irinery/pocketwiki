@@ -3,6 +3,9 @@ import http from 'node:http';
 /** Trusted PocketWiki-to-Kernel control channel, backed by a private Unix socket. */
 export class KernelLocalBootstrapClient {
   #socketPath;
+  #agent = new http.Agent({ keepAlive: true, maxSockets: 1 });
+  #socket;
+  #closed = false;
 
   constructor({ socketPath }) {
     if (typeof socketPath !== 'string' || !socketPath) throw new TypeError('Kernel bootstrap socket path is required');
@@ -18,25 +21,51 @@ export class KernelLocalBootstrapClient {
     return this.#post('/v1/verifiers', { verifier: normalizeVerifier(verifier) });
   }
 
+  close() {
+    this.#closed = true;
+    this.#agent.destroy();
+  }
+
   async #post(path, payload) {
+    if (this.#closed) throw new Error('Kernel bootstrap session closed');
     const body = JSON.stringify(payload);
+    try {
     const result = await new Promise((resolve, reject) => {
+      let timer;
+      const done = (error, status) => {
+        clearTimeout(timer);
+        if (error) reject(error); else resolve(status);
+      };
       const request = http.request({
         socketPath: this.#socketPath,
-        agent: false,
+        agent: this.#agent,
         path,
         method: 'POST',
         headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) },
         timeout: 2000
       }, (response) => {
         response.resume();
-        response.on('end', () => resolve(response.statusCode));
+        response.on('end', () => done(null, response.statusCode));
+        response.on('aborted', () => done(new Error('Kernel bootstrap response aborted')));
+        response.on('error', (error) => done(error));
+      });
+      request.on('socket', (socket) => {
+        if (this.#socket && this.#socket !== socket) { this.close(); request.destroy(new Error('Kernel bootstrap session replaced')); return; }
+        if (!this.#socket) {
+          this.#socket = socket;
+          socket.once('close', () => { this.#closed = true; this.#agent.destroy(); });
+        }
       });
       request.on('timeout', () => request.destroy(new Error('Kernel bootstrap timeout')));
-      request.on('error', reject);
+      request.on('error', (error) => done(error));
+      timer = setTimeout(() => request.destroy(new Error('Kernel bootstrap deadline exceeded')), 2000);
       request.end(body);
     });
     if (result !== 204) throw Object.assign(new Error('Kernel rejected private bootstrap metadata'), { code: 'ERR_FORBIDDEN' });
+    } catch (error) {
+      this.close();
+      throw error;
+    }
   }
 }
 
