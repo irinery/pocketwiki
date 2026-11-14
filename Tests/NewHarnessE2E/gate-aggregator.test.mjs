@@ -136,6 +136,14 @@ test('target identity hashes real checkout files and rejects wrong or dirty chec
   const actual = await targetIdentity(...repos, sha);
   assert.equal(actual.pocketwiki_sha, sha);
   assert.match(actual.fixture_sha256, /^[a-f0-9]{64}$/);
+  execFileSync('git', ['-C', repos[0], 'update-index', '--skip-worktree', files[0]]);
+  await writeFile(path.join(repos[0], files[0]), 'hidden change');
+  await assert.rejects(() => targetIdentity(...repos, sha), /skip-worktree/);
+  execFileSync('git', ['-C', repos[0], 'update-index', '--no-skip-worktree', files[0]]);
+  execFileSync('git', ['-C', repos[0], 'restore', '--', files[0]]);
+  execFileSync('git', ['-C', repos[0], 'update-index', '--assume-unchanged', files[0]]);
+  await assert.rejects(() => targetIdentity(...repos, sha), /assume-unchanged/);
+  execFileSync('git', ['-C', repos[0], 'update-index', '--no-assume-unchanged', files[0]]);
   await assert.rejects(() => targetIdentity(...repos, 'f'.repeat(40)), /target SHA differs/);
   await writeFile(path.join(repos[0], files[0]), 'changed');
   await assert.rejects(() => targetIdentity(...repos, sha), /modified tracked files/);

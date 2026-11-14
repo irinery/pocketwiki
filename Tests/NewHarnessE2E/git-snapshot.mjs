@@ -2,9 +2,16 @@ import { spawnSync } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 
+export function assertTrackedFlags(repository) {
+  const flags = spawnSync('git', ['-C', repository, 'ls-files', '-v', '-z'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  if (flags.status !== 0) throw new Error('cannot inspect tracked file flags: ' + repository);
+  if (flags.stdout.split('\0').some(record => record && (record[0] === 'S' || /^[a-z]$/.test(record[0])))) throw new Error('skip-worktree or assume-unchanged tracked file: ' + repository);
+}
+
 // Build only files in the immutable tree, never ignored or untracked worktree files.
 export async function exportGitSnapshot(repository, sha, destination) {
   if (!/^[a-f0-9]{40}$/.test(sha)) throw new Error('invalid pinned SHA');
+  assertTrackedFlags(repository);
   const head = spawnSync('git', ['-C', repository, 'rev-parse', 'HEAD'], { encoding: 'utf8' });
   const status = spawnSync('git', ['-C', repository, 'status', '--porcelain=v1', '--untracked-files=no'], { encoding: 'utf8' });
   if (head.status !== 0 || head.stdout.trim() !== sha || status.status !== 0 || status.stdout.trim()) throw new Error('pinned checkout differs or has tracked modifications: ' + repository);
