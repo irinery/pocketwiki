@@ -60,5 +60,21 @@ private struct Snapshot: Decodable { let module: String }
         _ = try await client.receipt(commandID: thread, environmentID: thread)
         do { _ = try await client.receipt(commandID: thread, environmentID: thread); throw RuntimeTransport.Failure.invalidArgument }
         catch RuntimeTransport.Failure.invalidResponse { }
+        let boundary = try client.stream(environmentID: thread, threadID: thread, afterSeq: 3, payloadType: RuntimeEvent.self, schemaData: schemaData)
+        var boundaryCount = 0
+        for try await _ in boundary { boundaryCount += 1 }
+        guard boundaryCount == 1 else { throw RuntimeTransport.Failure.invalidResponse }
+        do {
+            let oversize = try client.stream(environmentID: thread, threadID: thread, afterSeq: 3, payloadType: RuntimeEvent.self, schemaData: schemaData)
+            for try await _ in oversize { throw RuntimeTransport.Failure.invalidArgument }
+            throw RuntimeTransport.Failure.invalidArgument
+        } catch RuntimeTransport.Failure.invalidResponse { }
+        let replay = try client.stream(environmentID: thread, threadID: thread, afterSeq: 3, payloadType: RuntimeEvent.self, schemaData: schemaData)
+        var replaySeq: [Int] = []
+        for try await event in replay { replaySeq.append(event.seq) }
+        guard replaySeq == [2, 3, 4, 4] else { throw RuntimeTransport.Failure.invalidResponse }
+        let quick = try RuntimeTransport(baseURL: URL(string: CommandLine.arguments[1])!, bearer: "test-secret", requestTimeout: 0.25)
+        do { _ = try await quick.capabilities(environmentID: thread, schemaSHA256: hash); throw RuntimeTransport.Failure.invalidArgument }
+        catch let error as URLError where error.code == .timedOut { }
     }
 }

@@ -73,7 +73,7 @@ final class RuntimeProjection {
     }
     /// Eventos são validados antes de entrar no buffer; referência deve ser resolvida pelo transporte antes desta chamada.
     func bufferEvent(_ data: Data, resolvedPayload: Data? = nil) throws {
-        guard started, eventBytes + data.count + (resolvedPayload?.count ?? 0) <= 4_194_304 else { throw Failure.overflow }
+        guard started, data.count + (resolvedPayload?.count ?? 0) <= 4_194_304 else { throw Failure.overflow }
         guard let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               HarnessV1.validateCorpusValue(event, schemaName: "streamEnvelope", document: schema),
               event["environment_id"] as? String == environmentID, event["thread_id"] as? String == threadID,
@@ -89,6 +89,7 @@ final class RuntimeProjection {
         if let previous = seenEvents[id] { if previous.0 == seq && previous.1 == data && previous.2 == resolvedPayload { return }; throw Failure.invalidEvent }
         if let previous = seenSequences[seq] { if previous == id { return }; throw Failure.invalidEvent }
         guard seq > (events.last?.0 ?? boundary) else { throw Failure.invalidEvent }
+        guard eventBytes + data.count + (resolvedPayload?.count ?? 0) <= 4_194_304 else { throw Failure.overflow }
         events.append((seq, id, payload)); seenEvents[id] = (seq, data, resolvedPayload); seenSequences[seq] = id; eventBytes += data.count + (resolvedPayload?.count ?? 0)
     }
     func finish() throws -> View {

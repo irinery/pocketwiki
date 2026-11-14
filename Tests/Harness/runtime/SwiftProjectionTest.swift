@@ -48,6 +48,15 @@ import Foundation
         let updatedReceipt: [String: Any] = ["entity_type": "RuntimeReceipt", "entity_key": "\"\(id)\"", "change": "upsert", "value": ["command_id": id, "receipt_id": id, "payload_sha256": String(repeating: "a", count: 64), "revision": 2, "state": "succeeded"]]
         try p7.bufferEvent(eventData, resolvedPayload: encoded(updatedReceipt))
         guard try p7.finish().revision == 2 else { fatalError("event revision not reflected") }
+        let budget = try RuntimeProjection(schema: schema, environmentID: uid, threadID: uid, pageSize: 1, confirmedRevision: 0)
+        try budget.appendPage(page(nil), requestedCursor: nil)
+        var almostFull = eventData
+        almostFull.append(Data(repeating: 32, count: 4_194_304 - eventData.count - payloadData.count - 100))
+        try budget.bufferEvent(almostFull, resolvedPayload: payloadData)
+        try budget.bufferEvent(almostFull, resolvedPayload: payloadData)
+        guard try budget.finish().appliedEventCount == 1 else { fatalError("duplicate counted twice") }
+        var nextEvent = event; nextEvent["event_id"] = id; nextEvent["seq"] = 4
+        do { try budget.bufferEvent(encoded(nextEvent), resolvedPayload: payloadData); fatalError("overflow accepted") } catch RuntimeProjection.Failure.overflow { }
         let p6 = try RuntimeProjection(schema: schema, environmentID: uid, threadID: uid, pageSize: 1, confirmedRevision: 0)
         try p6.appendPage(page(nil), requestedCursor: nil)
         try p6.bufferEvent(eventData, resolvedPayload: payloadData)

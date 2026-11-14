@@ -20,21 +20,33 @@ struct RuntimeTransport {
     private let baseURL: URL
     private let bearer: String
     private let session: URLSession
+    private let commandSession: URLSession
+    private let streamSession: URLSession
     private let redirectBlocker: RuntimeRedirectBlocker
 
-    init(baseURL: URL, bearer: String) throws {
+    init(baseURL: URL, bearer: String, requestTimeout: TimeInterval = 30, commandTimeout: TimeInterval = 5) throws {
         let c = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
         let loopback = ["localhost", "127.0.0.1", "::1", "[::1]"].contains(c?.host ?? "")
         guard let c, (c.scheme == "https" || (c.scheme == "http" && loopback)), c.user == nil, c.password == nil,
               (c.path.isEmpty || c.path == "/"), c.query == nil, c.fragment == nil,
-              !bearer.isEmpty, !bearer.contains("\n"), !bearer.contains("\r") else { throw Failure.invalidURL }
+              !bearer.isEmpty, !bearer.contains("\n"), !bearer.contains("\r"), requestTimeout > 0, requestTimeout <= 30,
+              commandTimeout > 0, commandTimeout <= 5 else { throw Failure.invalidURL }
         let blocker = RuntimeRedirectBlocker()
         self.baseURL = baseURL; self.bearer = bearer; self.redirectBlocker = blocker
         let configuration = URLSessionConfiguration.ephemeral
         configuration.httpShouldSetCookies = false
         configuration.httpCookieStorage = nil
         configuration.urlCache = nil
+        configuration.timeoutIntervalForRequest = requestTimeout
+        configuration.timeoutIntervalForResource = requestTimeout
         self.session = URLSession(configuration: configuration, delegate: blocker, delegateQueue: nil)
+        let commandConfiguration = configuration.copy() as! URLSessionConfiguration
+        commandConfiguration.timeoutIntervalForRequest = commandTimeout
+        commandConfiguration.timeoutIntervalForResource = commandTimeout
+        self.commandSession = URLSession(configuration: commandConfiguration, delegate: blocker, delegateQueue: nil)
+        let streamConfiguration = configuration.copy() as! URLSessionConfiguration
+        streamConfiguration.timeoutIntervalForResource = 604_800
+        self.streamSession = URLSession(configuration: streamConfiguration, delegate: blocker, delegateQueue: nil)
     }
 
     struct Capabilities: Decodable {
@@ -180,7 +192,7 @@ struct RuntimeTransport {
         request.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         request.setValue(String(afterSeq), forHTTPHeaderField: "Last-Event-ID")
-        let session = self.session
+        let session = self.streamSession
         let streamRequest = request
         return AsyncThrowingStream(bufferingPolicy: .bufferingOldest(16)) { continuation in
             let task = Task {
@@ -199,18 +211,18 @@ struct RuntimeTransport {
                     }
                     guard http.value(forHTTPHeaderField: "Content-Type")?.lowercased().hasPrefix("text/event-stream") == true else { throw Failure.invalidResponse }
                     var line = Data(), dataLines: [String] = []
-                    var eventID: String?, frameSize = 0, previousSeq = afterSeq
+                    var eventID: String?, frameSize = 0
                     for try await byte in bytes {
                         try Task.checkCancellation()
                         frameSize += 1
-                        guard frameSize <= 278_528 else { throw Failure.invalidResponse }
+                        guard frameSize <= 262_144 else { throw Failure.invalidResponse }
                         if byte != 10 { line.append(byte); continue }
                         if line.last == 13 { line.removeLast() }
                         guard let text = String(data: line, encoding: .utf8) else { throw Failure.invalidResponse }
                         line.removeAll(keepingCapacity: true)
                         if text.isEmpty {
                             if !dataLines.isEmpty {
-                                guard let eventID, let seq = Int(eventID), eventID == String(seq), seq > previousSeq,
+                                guard let eventID, let seq = Int(eventID), eventID == String(seq), seq >= 0,
                                       let data = dataLines.joined(separator: "\n").data(using: .utf8),
                                       let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                                       HarnessV1.validateCorpusValue(object, schemaName: "streamEnvelope", document: schema),
@@ -222,7 +234,6 @@ struct RuntimeTransport {
                                       envelope.environmentID == environmentID, envelope.threadID == threadID, envelope.module == .runtime, envelope.seq == seq else { throw Failure.invalidResponse }
                                 try envelope.validate()
                                 if let payload = object["payload"], try JSONSerialization.data(withJSONObject: payload).count > 262_144 { throw Failure.invalidResponse }
-                                previousSeq = seq
                                 if case .dropped = continuation.yield(envelope) { throw Failure.invalidResponse }
                             }
                             dataLines.removeAll(keepingCapacity: true); eventID = nil; frameSize = 0
@@ -264,7 +275,8 @@ struct RuntimeTransport {
         req.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         if body != nil { req.setValue("application/json", forHTTPHeaderField: "Content-Type") }
-        let (bytes, response) = try await session.bytes(for: req)
+        let activeSession = path == "/v1/harness/commands" ? commandSession : session
+        let (bytes, response) = try await activeSession.bytes(for: req)
         guard let http = response as? HTTPURLResponse else { throw Failure.invalidResponse }
         var data = Data()
         let limit = (200...299).contains(http.statusCode) ? 4_194_304 : 4096

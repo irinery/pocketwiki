@@ -47,7 +47,7 @@ async function run() {
   const wrongBearer = await issue(other);
   let client = new RuntimeTransport({ baseURL: base, bearer, fetchImpl: deadlineFetch });
   const wrongClient = new RuntimeTransport({ baseURL: base, bearer: wrongBearer, fetchImpl: deadlineFetch });
-  const capabilities = await client.capabilities();
+  const capabilities = await client.capabilities({ environmentId: environment, schemaSHA256: schemaHash });
   assert.equal(capabilities.environment_id, environment);
   assert.equal(capabilities.schema_sha256, schemaHash);
   const deniedCommand = command(randomUUID(), 0, 'sem acesso');
@@ -77,7 +77,7 @@ async function run() {
   const first = receipts.find(receipt => !receipt.duplicate);
   assert.equal(first.command_id, firstID);
   await waitForEffect(events, firstID);
-  const firstReceipt = await client.receipt(firstID);
+  const firstReceipt = await client.receipt(firstID, { environmentId: environment });
   assert.equal(firstReceipt.state, 'succeeded');
   assert.ok(firstReceipt.result_ref);
   const typedResult = await client.result(firstReceipt.result_ref);
@@ -88,10 +88,10 @@ async function run() {
   await terminate(running.child);
   running = await startKernel(); base = running.base;
   const staleClient = new RuntimeTransport({ baseURL: base, bearer, fetchImpl: deadlineFetch });
-  await assert.rejects(staleClient.receipt(firstID), error => error.code === 'ERR_FORBIDDEN');
+  await assert.rejects(staleClient.receipt(firstID, { environmentId: environment }), error => error.code === 'ERR_FORBIDDEN');
   bearer = await issue(principal);
   client = new RuntimeTransport({ baseURL: base, bearer, fetchImpl: deadlineFetch });
-  const reopenedReceipt = await client.receipt(firstID);
+  const reopenedReceipt = await client.receipt(firstID, { environmentId: environment });
   assert.equal(reopenedReceipt.receipt_id, first.receipt_id);
   assert.equal(reopenedReceipt.state, 'succeeded');
   assert.equal(reopenedReceipt.revision, firstReceipt.revision);
@@ -145,7 +145,7 @@ async function run() {
   assert.equal(running.drainedCount, 0, 'recovery não pode repetir efeito no drain inicial');
   bearer = await issue(principal);
   client = new RuntimeTransport({ baseURL: base, bearer, fetchImpl: deadlineFetch });
-  const uncertain = await client.receipt(crashID);
+  const uncertain = await client.receipt(crashID, { environmentId: environment });
   assert.equal(uncertain.state, 'uncertain');
   streamAbort = new AbortController();
   const recoveredStream = await client.stream(thread, beforeCrash.data.as_of_seq, { signal: streamAbort.signal });

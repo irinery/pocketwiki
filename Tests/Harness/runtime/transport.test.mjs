@@ -36,3 +36,37 @@ test('snapshot e stream usam rotas R1 e recusam parâmetros inválidos', async (
     assert.deepEqual(urls, [`/v1/harness/threads/${id}/snapshot?module=runtime&page_size=2&cursor=opaque`, `/v1/harness/streams/thread/${id}?after_seq=3&modules=runtime`]);
   } finally { server.close(); }
 });
+
+test('rejeita identidade, versão, schema, união e respostas grandes ou lentas', async () => {
+  const other = '22222222-2222-4222-8222-222222222222';
+  const hash = 'a'.repeat(64);
+  let calls = 0;
+  const server = http.createServer((req, res) => {
+    calls++; req.resume();
+    res.setHeader('content-type', 'application/json');
+    const receipt = { command_id: id, receipt_id: id, environment_id: id, revision: 1, state: 'accepted', duplicate: false };
+    if (calls === 1 || calls === 2) return res.end(JSON.stringify({ protocol_major: calls === 1 ? 2 : 1, protocol_minor: 0, schema_sha256: calls === 2 ? 'b'.repeat(64) : hash, environment_id: id, operations: ['runtime.dispatch'] }));
+    if (calls === 3) return res.end(JSON.stringify({ ...receipt, command_id: other }));
+    if (calls === 4) return res.end(JSON.stringify({ ...receipt, environment_id: other }));
+    if (calls === 5) return res.end(JSON.stringify({ receipt_id: id, revision: 1, state: 'accepted', extra: true }));
+    if (calls === 6) return res.end(JSON.stringify({ events: [{ event_id: id, thread_id: other, seq: 1, kind: 'effect_started' }], next_seq: 1 }));
+    if (calls === 7) return res.end(Buffer.alloc(4 * 1024 * 1024 + 1, 32));
+    if (calls === 8) { res.writeHead(200); res.write('{'); return; }
+    // O nono request não recebe headers: o deadline da mutação deve encerrar a espera.
+  });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  try {
+    const client = new RuntimeTransport({ baseURL: `http://127.0.0.1:${server.address().port}`, bearer: 'secret', timeoutMS: 5000, commandTimeoutMS: 1000 });
+    await assert.rejects(client.capabilities({ environmentId: id, schemaSHA256: hash }), /capabilities/);
+    await assert.rejects(client.capabilities({ environmentId: id, schemaSHA256: hash }), /capabilities/);
+    await assert.rejects(client.dispatch(command), /dispatch response/);
+    await assert.rejects(client.receipt(id, { environmentId: id }), /receipt response/);
+    await assert.rejects(client.result(id), /result response/);
+    await assert.rejects(client.query('runtime.events', { thread_id: id, after_seq: 0, limit: 1 }), /events query/);
+    await assert.rejects(client.snapshot(id), /exceeds limit/);
+    const quick = new RuntimeTransport({ baseURL: `http://127.0.0.1:${server.address().port}`, bearer: 'secret', timeoutMS: 250, commandTimeoutMS: 250 });
+    await assert.rejects(quick.snapshot(id), /deadline/);
+    await assert.rejects(quick.dispatch(command), /deadline/);
+    assert.equal(calls, 9);
+  } finally { server.closeAllConnections(); server.close(); }
+});
