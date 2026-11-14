@@ -36,6 +36,7 @@ final class RuntimeUISession: ObservableObject {
     private let schema: [String: Any]
     private var projection: RuntimeProjection?
     private var streamTask: Task<Void, Never>?
+    var onFrame: ((Int, Int) -> Void)?
 
     init(transport: RuntimeTransport, environmentID: UUID, threadID: UUID, schemaHash: String, schemaData: Data) throws {
         guard let schema = try JSONSerialization.jsonObject(with: schemaData) as? [String: Any] else { throw RuntimeTransport.Failure.invalidArgument }
@@ -89,6 +90,7 @@ final class RuntimeUISession: ObservableObject {
         guard let projection else { throw RuntimeTransport.Failure.invalidResponse }
         try projection.bufferEvent(JSONSerialization.data(withJSONObject: object), resolvedPayload: payload)
         publish(try projection.finish())
+        onFrame?(frame.seq, lastSeq)
     }
     func submit() async {
         guard available, pending == nil, !draft.isEmpty, draft.utf8.count <= 32768 else { return }

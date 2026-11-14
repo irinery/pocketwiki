@@ -10,7 +10,7 @@ struct RuntimePanel: View {
                 Button("Reconectar") { Task { await session.reconnect() } }
             }
             if let error = session.error { Text(error).accessibilityIdentifier("runtime-status-detail") }
-            else if session.available { Text("Revisão \(session.revision) · evento \(session.lastSeq)") }
+            if session.available || session.error == "ERR_INCOMPATIBLE" { Text("Revisão \(session.revision) · evento \(session.lastSeq)") }
             TextField("Novo comando", text: $session.draft)
                 .accessibilityLabel("Texto do comando durável")
                 .disabled(!session.available || session.pending != nil)
@@ -25,6 +25,6 @@ struct RuntimePanel: View {
                 HStack { Text(receipt.label); Spacer(); Text(receipt.id).font(.caption.monospaced()) }
                     .accessibilityIdentifier("runtime-receipt-\(receipt.id)")
             }.accessibilityLabel("Recibos do runtime")
-        }.padding().task { await session.open() }.accessibilityIdentifier("runtime-panel")
+        }.padding().task { await session.open() }
     }
 }

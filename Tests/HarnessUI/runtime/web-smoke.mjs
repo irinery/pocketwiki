@@ -3,7 +3,7 @@ import { once } from 'node:events';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
-import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
@@ -20,6 +20,7 @@ const pauseEffect = process.env.RUNTIME_PAUSE_EFFECT === '1';
 const incompatible = process.env.RUNTIME_INCOMPATIBLE === '1';
 const replay = process.env.RUNTIME_REPLAY === '1';
 const legacy = process.env.RUNTIME_LEGACY === '1';
+const macos = process.env.RUNTIME_MACOS === '1';
 let releaseStream;
 if (!binary) throw new Error('RUNTIME_KERNEL_BINARY obrigatório');
 const tmp = await mkdtemp(path.join(os.tmpdir(), 'e1-ui-')); const socketPath = path.join(tmp, 'boot.sock');
@@ -89,6 +90,16 @@ try {
     upstream.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end(); }); req.pipe(upstream); res.on('close', () => upstream.destroy());
   });
   server.listen(0,'127.0.0.1'); await once(server,'listening');
+  if (macos) {
+    const configPath = path.join(tmp, 'native-config.json');
+    await writeFile(configPath, JSON.stringify({ baseURL: `http://127.0.0.1:${server.address().port}`, bearer, environmentID: environmentId, threadID: threadId, schemaSHA256, schemaPath: path.resolve('src/harness/contracts/harness-v1.schema.json'), observeFrames: replay ? '1' : '0' }), { mode: 0o600 });
+    const scenario = replay ? 'replay' : incompatible ? 'incompatible' : pauseEffect ? 'accepted' : 'connect';
+    const test = spawn('xcodebuild', ['-project', 'Tests/HarnessUI/runtime/macos/PocketWikiRuntimeUIHost.xcodeproj', '-scheme', 'PocketWikiRuntimeUIHost', '-destination', 'platform=macOS,arch=arm64', '-derivedDataPath', process.env.RUNTIME_DERIVED_DATA, 'test-without-building', 'CODE_SIGNING_ALLOWED=NO', '-quiet'], { env: { ...process.env, NH_RUNTIME_CONFIG_PATH: configPath, NH_RUNTIME_SCENARIO: scenario }, stdio: ['ignore', 'pipe', 'pipe'] });
+    let output = ''; for (const stream of [test.stdout, test.stderr]) stream.on('data', chunk => { output = (output + chunk.toString()).slice(-12000); });
+    const [code] = await once(test, 'exit');
+    if (code !== 0) throw new Error(`XCTest falhou (${code}): ${output}`);
+    console.log(`macOS XCTest: ${scenario} validado`);
+  } else {
   browser = await chromium.launch({headless:true}); const page = await browser.newPage();
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
   await page.evaluate(async config => {
@@ -136,6 +147,7 @@ try {
   }
   await page.evaluate(() => window.runtime.client.close());
   if (!legacy) console.log(replay ? 'Chromium: snapshot real 9 ignorou replay 8/9 e aplicou 10/11/12' : incompatible ? 'Chromium: versão incompatível recusada sem aplicar frame' : pauseEffect ? 'Chromium: receipt aceito antes da confirmação do efeito' : 'Chromium: bootstrap scoped, painel, dispatch e efeito real verificados');
+  }
 } finally {
   await browser?.close(); if (server) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   bootstrap?.close(); if (legacyChild && legacyChild.exitCode === null) { const exited = once(legacyChild, 'exit'); legacyChild.kill('SIGTERM'); await exited; }

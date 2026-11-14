@@ -16,6 +16,11 @@ struct RuntimeHostApp: App {
               let schemaPath = config["schemaPath"], let schemaData = try? Data(contentsOf: URL(fileURLWithPath: schemaPath)),
               let hash = config["schemaSHA256"], let transport = try? RuntimeTransport(baseURL: url, bearer: bearer),
               let session = try? RuntimeUISession(transport: transport, environmentID: environment, threadID: thread, schemaHash: hash, schemaData: schemaData) else { fatalError("Invalid runtime host configuration") }
+        if config["observeFrames"] == "1" {
+            session.onFrame = { seq, cursor in
+                DistributedNotificationCenter.default().post(name: Notification.Name("com.pocketwiki.RuntimeUIFrame"), object: nil, userInfo: ["seq": seq, "cursor": cursor])
+            }
+        }
         _session = StateObject(wrappedValue: session)
     }
     var body: some Scene {

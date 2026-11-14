@@ -47,3 +47,4 @@ schemes:
         - PocketWikiRuntimeUIHostTests
       environmentVariables:
         NH_RUNTIME_CONFIG_PATH: '$(NH_RUNTIME_CONFIG_PATH)'
+        NH_RUNTIME_SCENARIO: '$(NH_RUNTIME_SCENARIO)'
