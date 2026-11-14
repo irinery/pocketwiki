@@ -1,5 +1,7 @@
 # New Harness — evolução da aba IA
 
+> A situação posterior à revisão documental está em [status de integração E0](status-integracao-e0.md).
+
 Draft 0.2.0 · 2026-11-01 · [Milestone New Harness.](https://github.com/irinery/pocketwiki/milestone/1)
 
 Proposta de transformar a aba IA em superfície de agentes e conhecimento: runtime durável no PocketKernel, memória/evidência no PocketWiki e autenticação no MiddlewareAuth. A referência é o [t3code na revisão 5732bbee](https://github.com/pingdotgg/t3code/tree/5732bbee397f0a2b0e61d0c2e432f01dca6df3dc), sem incorporar seu código neste pacote.

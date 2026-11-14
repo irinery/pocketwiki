@@ -1,5 +1,8 @@
 # New Harness — revisão e testes determinísticos
 
+> **Atualização de acompanhamento (14/11/2026):** a revisão abaixo registra a decisão documental de 0.2.0 no momento em que foi escrita. Para a situação posterior de E0, consulte [status de integração E0](status-integracao-e0.md).
+
+
 Draft 0.2.0 · 2026-11-01. Os runners e testes abaixo são entregas futuras. Esta revisão documental não declara nenhum gate de implementação aprovado.
 
 ## Calendário executável

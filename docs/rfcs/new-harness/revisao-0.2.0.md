@@ -1,5 +1,8 @@
 # Segunda revisão — New Harness 0.2.0
 
+> **Atualização de acompanhamento (14/11/2026):** a revisão abaixo registra a decisão documental de 0.2.0 no momento em que foi escrita. Para a situação posterior de E0, consulte [status de integração E0](status-integracao-e0.md).
+
+
 2026-11-01 · PR #45 · revisão documental sobre a proposta; sem implementação das etapas.
 
 Resultado: os sete apontamentos foram tratados. A proposta pode iniciar E0, na ordem NH-00 → NH-TEST. Isso não aprova o gate E0, não libera E1 e não habilita harness.v1 em produção. Todas as issues de implementação e gates permanecem abertas. Os drafts continuam Draft 0.2.0; COMPLETO descreve a especificação proposta.

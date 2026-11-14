@@ -1,5 +1,8 @@
 # New Harness — incrementos e worktrees para GPT-6-Luna
 
+> **Atualização de acompanhamento (14/11/2026):** a revisão abaixo registra a decisão documental de 0.2.0 no momento em que foi escrita. Para a situação posterior de E0, consulte [status de integração E0](status-integracao-e0.md).
+
+
 Estado: Draft · versão 0.2.0. Plano de implementação futura; nenhuma worktree de implementação nem execução de agente foi iniciada por este pacote documental. Usar GPT-6-Luna como solicitado; o identificador de execução é resolvido no catálogo da ferramenta usada, sem inventar um slug de API.
 
 ## Independência verificável
