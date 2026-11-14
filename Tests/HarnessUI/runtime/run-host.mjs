@@ -123,6 +123,11 @@ try {
       requireRuntimeProof(proof, { nonce: proofNonce, pocketwikiSHA: wikiHead.trim() });
       await writeFile(path.join(reportDir, 'legacy-macos.runtime-proof.json'), JSON.stringify(proof, null, 2) + '\n', { mode: 0o600 });
     } catch { legacyCode = null; log += 'Prova válida do hook nativo ausente.\n'; }
+    try {
+      const screenshot = await readFile(resultPath + '.runtime-fallback.png');
+      if (screenshot.length < 24 || screenshot.length > 10 * 1024 * 1024 || !screenshot.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) throw new Error('PNG inválido');
+      await writeFile(path.join(reportDir, 'legacy-macos.runtime-fallback.png'), screenshot, { mode: 0o600 });
+    } catch { legacyCode = null; log += 'Captura sanitizada do slot nativo ausente.\n'; }
     const legacyRow = cases.find(item => item.id === '02-02');
     legacyRow.status = legacyCode === 0 ? 'passed' : 'failed'; legacyRow.detail = legacyCode === 0 ? 'slot e chat legado no mesmo app pela bridge validados' : `host legado falhou: exit ${legacyCode}`;
   }
