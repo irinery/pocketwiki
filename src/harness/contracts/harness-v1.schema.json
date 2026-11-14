@@ -10800,6 +10800,58 @@
           "$ref": "#/$defs/sha256"
         }
       }
+    },
+    "runtimeDispatchResult": {
+      "$ref": "#/$defs/commandReceipt"
+    },
+    "httpCommandReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "command_id",
+        "receipt_id",
+        "environment_id",
+        "revision",
+        "state",
+        "duplicate"
+      ],
+      "properties": {
+        "command_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "receipt_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "environment_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "state": {
+          "enum": [
+            "accepted",
+            "pending",
+            "succeeded",
+            "failed",
+            "uncertain"
+          ]
+        },
+        "duplicate": {
+          "type": "boolean"
+        },
+        "result_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
     }
   },
   "$comment": "Entity, snapshot and operation input schemas generated from NH RFC-0002–0016 phase-01 YAML. runtime.dispatch input command_id and expected_revision must equal the envelope fields, per R1.",
