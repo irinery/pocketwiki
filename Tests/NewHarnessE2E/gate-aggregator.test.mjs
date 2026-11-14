@@ -1,10 +1,11 @@
 import test from 'node:test';
+import { execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import matrix from '../../docs/rfcs/new-harness/matriz-verificacao.json' with { type: 'json' };
-import { aggregateReportFiles, aggregateReports } from './gate-aggregator.mjs';
+import { aggregateReportFiles, aggregateReports, targetIdentity, assertSameIdentity } from './gate-aggregator.mjs';
 
 const sha1 = 'a'.repeat(40);
 const sha256 = 'b'.repeat(64);
@@ -84,13 +85,19 @@ test('file aggregator requires real artifacts contained in each report directory
     await writeFile(reportPath, JSON.stringify(report));
     files.push(reportPath);
   }
-  assert.equal((await aggregateReportFiles('E0', files)).gate_passed, true);
+  assert.equal((await aggregateReportFiles('E0', files, identity)).gate_passed, true);
+  await assert.rejects(() => aggregateReportFiles('E0', files), /target build identity/);
+  for (const field of ['pocketwiki_sha', 'pocketkernel_sha', 'middlewareauth_sha', 'schema_sha256', 'fixture_sha256', 'matrix_sha256']) {
+    const target = { ...identity, [field]: 'f'.repeat(identity[field].length) };
+    await assert.rejects(() => aggregateReportFiles('E0', files, target), new RegExp('target build mismatch: ' + field));
+  }
+
 
   const missing = path.join(path.dirname(files[0]), 'missing.json');
   const missingReport = reports()[0];
   missingReport.cases[0].artifact_paths = ['artifacts/missing.txt'];
   await writeFile(missing, JSON.stringify(missingReport));
-  await assert.rejects(() => aggregateReportFiles('E0', [missing, ...files.slice(1)]), /artifact does not exist/);
+  await assert.rejects(() => aggregateReportFiles('E0', [missing, ...files.slice(1)], identity), /artifact does not exist/);
 
   const outside = path.join(root, 'outside.txt');
   await writeFile(outside, 'must not be accepted');
@@ -100,5 +107,43 @@ test('file aggregator requires real artifacts contained in each report directory
   linkedReport.cases[0].artifact_paths = ['artifacts/outside.txt'];
   const linkedPath = path.join(path.dirname(files[0]), 'linked.json');
   await writeFile(linkedPath, JSON.stringify(linkedReport));
-  await assert.rejects(() => aggregateReportFiles('E0', [linkedPath, ...files.slice(1)]), /artifact must be a regular file inside/);
+  await assert.rejects(() => aggregateReportFiles('E0', [linkedPath, ...files.slice(1)], identity), /artifact must be a regular file inside/);
+});
+
+test('target identity hashes real checkout files and rejects wrong or dirty checkouts', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'nh-target-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const repos = ['wiki', 'kernel', 'middleware'].map((name) => path.join(root, name));
+  for (const repo of repos) {
+    await mkdir(repo);
+    execFileSync('git', ['init', '-q', repo]);
+    await writeFile(path.join(repo, 'tracked'), path.basename(repo));
+  }
+  const files = [
+    'src/harness/contracts/corpus-v1.json', 'src/harness/contracts/operation-registry.json',
+    'Tests/Harness/nh00-acceptance-regressions.json', 'docs/rfcs/new-harness/manifest.json',
+    'src/harness/contracts/harness-v1.schema.json', 'docs/rfcs/new-harness/matriz-verificacao.json'
+  ];
+  for (const file of files) {
+    await mkdir(path.dirname(path.join(repos[0], file)), { recursive: true });
+    await writeFile(path.join(repos[0], file), file);
+  }
+  for (const repo of repos) {
+    execFileSync('git', ['-C', repo, 'add', '.']);
+    execFileSync('git', ['-C', repo, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'fixture']);
+  }
+  const sha = execFileSync('git', ['-C', repos[0], 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+  const actual = await targetIdentity(...repos, sha);
+  assert.equal(actual.pocketwiki_sha, sha);
+  assert.match(actual.fixture_sha256, /^[a-f0-9]{64}$/);
+  await assert.rejects(() => targetIdentity(...repos, 'f'.repeat(40)), /target SHA differs/);
+  await writeFile(path.join(repos[0], files[0]), 'changed');
+  await assert.rejects(() => targetIdentity(...repos, sha), /modified tracked files/);
+  execFileSync('git', ['-C', repos[0], 'add', '.']);
+  execFileSync('git', ['-C', repos[0], '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'changed during execution']);
+  const changedSHA = execFileSync('git', ['-C', repos[0], 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+  await assert.rejects(() => targetIdentity(...repos, sha), /target SHA differs/);
+  const changed = await targetIdentity(...repos, changedSHA);
+  assert.throws(() => assertSameIdentity(actual, changed), /target build mismatch/);
+
 });

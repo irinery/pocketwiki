@@ -1,22 +1,14 @@
-import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { chmod, cp, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
+import { runWithinDeadline } from './deadline-sync.mjs';
+import { targetIdentity, assertSameIdentity } from './gate-aggregator.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const baseSHAs = parsePinnedSHAs(await readFile(path.join(root, 'docs/rfcs/new-harness/nhtest-base-shas.md'), 'utf8'));
 const matrixPath = path.join(root, 'docs/rfcs/new-harness/matriz-verificacao.json');
-const schemaPath = path.join(root, 'src/harness/contracts/harness-v1.schema.json');
-const matrix = JSON.parse(await readFile(matrixPath, 'utf8'));
-const fixturePaths = [
-  'src/harness/contracts/corpus-v1.json',
-  'src/harness/contracts/operation-registry.json',
-  'Tests/Harness/nh00-acceptance-regressions.json',
-  'docs/rfcs/new-harness/manifest.json'
-];
 const args = parseArgs(process.argv.slice(2));
 const stage = args.stage;
 const surface = args.surface;
@@ -27,6 +19,12 @@ let exitCode = 0;
 let tempHome;
 
 try {
+  const kernelRoot = process.env.POCKETKERNEL_NH00_ROOT || path.resolve(root, '../pocketkernel-nh00');
+  const middlewareRoot = process.env.MIDDLEWAREAUTH_NHTEST_ROOT || path.resolve(root, '../middlewareAuth');
+  const targetSHA = gitSHA(root);
+  const identity = await targetIdentity(root, kernelRoot, middlewareRoot, targetSHA);
+  const baseSHAs = parsePinnedSHAs(await readFile(path.join(root, 'docs/rfcs/new-harness/nhtest-base-shas.md'), 'utf8'));
+  const matrix = JSON.parse(await readFile(matrixPath, 'utf8'));
   const selected = selectedPairs(stageNumber, surface, matrix);
   const unsupported = selected.filter(({ scenario }) => scenario.id !== 'CONTRACT-00' && scenario.id !== 'LEGACY-00');
   if (unsupported.length) throw configError('faltam dependências/handlers dos cenários: ' + unsupported.map(({ scenario }) => scenario.id).join(', '));
@@ -38,12 +36,13 @@ try {
 
   const cases = [];
   for (const pair of selected) {
-    const scenarioTimeout = pair.surface === 'web' ? 180_000 : 15 * 60_000;
+    // macOS launcher enforces 180s on XCTest after its build preparation.
+    const scenarioTimeout = pair.surface === 'macos' ? 20 * 60_000 : 180_000;
     const deadline = Date.now() + scenarioTimeout;
     const id = pair.scenario.id;
     const result = id === 'CONTRACT-00'
-      ? await runContract(artifactDir, tempHome, baseSHAs, deadline)
-      : await runLegacy(pair.surface, artifactDir, tempHome, deadline);
+      ? await runContract(artifactDir, tempHome, baseSHAs, deadline, targetSHA)
+      : await runLegacy(pair.surface, artifactDir, tempHome, deadline, targetSHA);
     cases.push({ id, surface: pair.surface, status: result.ok ? 'passed' : 'failed', artifact_paths: result.artifacts });
     if (!result.ok) exitCode = Math.max(exitCode, result.exitCode || 1);
     if (result.configurationError) exitCode = 2;
@@ -59,23 +58,12 @@ try {
   await writeFile(path.join(artifactDir, junitName), junit);
   for (const item of cases) item.artifact_paths.push(path.posix.join(path.basename(artifactDir), junitName));
 
-  const pocketwikiSHA = gitSHA(root);
-  const pocketkernelSHA = gitSHA(process.env.POCKETKERNEL_NH00_ROOT || path.resolve(root, '../pocketkernel-nh00'));
-  const middlewareSHA = gitSHA(process.env.MIDDLEWAREAUTH_NHTEST_ROOT || path.resolve(root, '../middlewareAuth'));
-  ensureCleanTree(root, 'PocketWiki');
-  ensureCleanTree(process.env.POCKETKERNEL_NH00_ROOT || path.resolve(root, '../pocketkernel-nh00'), 'PocketKernel');
-  const fixtureHash = await hashFiles(fixturePaths);
-  const matrixHash = await sha256File(matrixPath);
-  const schemaHash = await sha256File(schemaPath);
+  const finalIdentity = await targetIdentity(root, kernelRoot, middlewareRoot, targetSHA);
+  assertSameIdentity(identity, finalIdentity);
   const report = {
     version: '0.2.0',
     stage,
-    pocketwiki_sha: pocketwikiSHA,
-    pocketkernel_sha: pocketkernelSHA,
-    middlewareauth_sha: middlewareSHA,
-    schema_sha256: schemaHash,
-    fixture_sha256: fixtureHash,
-    matrix_sha256: matrixHash,
+    ...identity,
     seed: 20261102,
     auth_mode: 'host_local',
     cases,
@@ -115,10 +103,9 @@ function selectedPairs(stageNumber, requestedSurface, matrix) {
     .flatMap((scenario) => scenario.surfaces.filter((item) => surfaces.includes(item)).map((item) => ({ scenario, surface: item })));
 }
 
-async function runContract(artifactDir, tempHome, shas, deadline) {
+async function runContract(artifactDir, tempHome, shas, deadline, targetSHA) {
   ensureCleanTree(root, 'PocketWiki');
-  const pocketwikiSHA = gitSHA(root);
-  const pocketwikiSource = await cloneGitSnapshot(root, pocketwikiSHA, path.join(tempHome, 'sources/pocketwiki'));
+  const pocketwikiSource = await cloneGitSnapshot(root, targetSHA, path.join(tempHome, 'sources/pocketwiki'));
   const kernelRoot = process.env.POCKETKERNEL_NH00_ROOT || path.resolve(root, '../pocketkernel-nh00');
   const middlewareRoot = process.env.MIDDLEWAREAUTH_NHTEST_ROOT || path.resolve(root, '../middlewareAuth');
   if (gitSHA(kernelRoot) !== shas.pocketkernel || gitSHA(middlewareRoot) !== shas.middlewareauth) {
@@ -144,15 +131,19 @@ async function runContract(artifactDir, tempHome, shas, deadline) {
   ];
   const artifacts = [];
   let passed = true;
+  let regressionDeadline;
   for (let index = 0; index < commands.length; index += 1) {
     const [binary, commandArgs, cwd, overrides = {}] = commands[index];
     const logName = 'contract-' + String(index + 1).padStart(2, '0') + '.log';
-    const result = runWithinDeadline(binary, commandArgs, {
+    // Full CI and cross-build are mandatory gate checks with a separate bounded budget.
+    if (index === 7) regressionDeadline = Date.now() + 15 * 60_000;
+    const commandDeadline = index === 0 ? Date.now() + 15 * 60_000 : (index >= 7 ? regressionDeadline : deadline);
+    const result = await runWithinDeadline(binary, commandArgs, {
       cwd,
       env: { ...env, ...overrides, NH_BUILD_DIR: path.join(tempHome, 'kernel-builds') },
       encoding: 'utf8',
       maxBuffer: 32 * 1024 * 1024
-    }, deadline, 15 * 60_000);
+    }, commandDeadline, 15 * 60_000);
     const status = result.status === 0 ? 'PASS' : 'FAIL';
     const body = '$ ' + binary + ' ' + commandArgs.join(' ') + '\nexit=' + String(result.status) +
       '\n--- stdout ---\n' + (result.stdout || '') + '\n--- stderr ---\n' + (result.stderr || result.error?.message || '');
@@ -161,6 +152,8 @@ async function runContract(artifactDir, tempHome, shas, deadline) {
     console.log(status + ' CONTRACT-00 ' + binary + ' ' + commandArgs.join(' ') + ' exit=' + String(result.status));
     if (result.status !== 0) passed = false;
     if (binary === 'npm' && commandArgs[0] === 'ci') {
+      // Dependency installation is preparation, not part of CONTRACT-00 execution.
+      deadline = Date.now() + 180_000;
       const restore = spawnSync('git', ['restore', '--', 'node_modules/.package-lock.json'], { cwd: pocketwikiSource, encoding: 'utf8' });
       if (restore.status !== 0) passed = false;
     }
@@ -168,12 +161,13 @@ async function runContract(artifactDir, tempHome, shas, deadline) {
   return { ok: passed, exitCode: passed ? 0 : 1, artifacts };
 }
 
-async function runLegacy(surface, artifactDir, tempHome, deadline) {
+async function runLegacy(surface, artifactDir, tempHome, deadline, targetSHA) {
   if (surface === 'macos') {
     const resultBundle = path.join(artifactDir, 'legacy-macos.xcresult');
-    const hostScript = path.join(root, 'Tests/NewHarnessE2E/MacOSHost/run.mjs');
-    const result = runWithinDeadline(process.execPath, [hostScript, '--result-bundle-path', resultBundle], {
-      cwd: root,
+    const macSource = await cloneGitSnapshot(root, targetSHA, path.join(tempHome, 'sources/pocketwiki-macos'));
+    const hostScript = path.join(macSource, 'Tests/NewHarnessE2E/MacOSHost/run.mjs');
+    const result = await runWithinDeadline(process.execPath, [hostScript, '--result-bundle-path', resultBundle], {
+      cwd: macSource,
       env: {
         ...isolatedEnvironment(tempHome),
         POCKETWIKI_XCODE_DEVELOPER_DIR: process.env.POCKETWIKI_XCODE_DEVELOPER_DIR || '',
@@ -182,7 +176,7 @@ async function runLegacy(surface, artifactDir, tempHome, deadline) {
       },
       encoding: 'utf8',
       maxBuffer: 8 * 1024 * 1024
-    }, deadline, 15 * 60_000);
+    }, deadline, 20 * 60_000);
     const body = '$ node Tests/NewHarnessE2E/MacOSHost/run.mjs --result-bundle-path <report-dir>/legacy-macos.xcresult\nexit=' + String(result.status) +
       '\n--- stdout ---\n' + redact(result.stdout || '') + '\n--- stderr ---\n' + redact(result.stderr || result.error?.message || '');
     const logName = 'legacy-macos.log';
@@ -198,45 +192,46 @@ async function runLegacy(surface, artifactDir, tempHome, deadline) {
       ]
     };
   }
-  const pocketwikiSHA = gitSHA(root);
-  const webSource = await cloneGitSnapshot(root, pocketwikiSHA, path.join(tempHome, 'sources/pocketwiki-web'));
+  const webSource = await cloneGitSnapshot(root, targetSHA, path.join(tempHome, 'sources/pocketwiki-web'));
   const env = isolatedEnvironment(tempHome);
   const npmCache = path.join(tempHome, 'npm-cache-web');
-  const install = runWithinDeadline('npm', ['ci', '--include=dev', '--userconfig=/dev/null', '--cache', npmCache], {
+  const preparationDeadline = Date.now() + 15 * 60_000;
+  const install = await runWithinDeadline('npm', ['ci', '--include=dev', '--userconfig=/dev/null', '--cache', npmCache], {
     cwd: webSource,
     env,
     encoding: 'utf8',
     maxBuffer: 16 * 1024 * 1024
-  }, deadline, 180_000);
+  }, preparationDeadline, 15 * 60_000);
   if (install.status !== 0) {
     const logName = 'legacy-web.log';
     await writeFile(path.join(artifactDir, logName), '$ npm ci --include=dev --userconfig=/dev/null --cache <isolated-cache>\nexit=' + String(install.status) +
       '\n--- stdout ---\n' + redact(install.stdout || '') + '\n--- stderr ---\n' + redact(install.stderr || install.error?.message || '') + '\n');
     return { ok: false, exitCode: 2, configurationError: true, artifacts: [path.join(path.basename(artifactDir), logName)] };
   }
-  const vendorBuild = runWithinDeadline('npm', ['run', 'build:legacy-web-assets'], {
+  const vendorBuild = await runWithinDeadline('npm', ['run', 'build:legacy-web-assets'], {
     cwd: webSource,
     env,
     encoding: 'utf8',
     maxBuffer: 4 * 1024 * 1024
-  }, deadline, 30_000);
+  }, preparationDeadline, 15 * 60_000);
   if (vendorBuild.status !== 0) {
     console.error('LEGACY-00/web local vendor build failed: ' + (vendorBuild.stderr || vendorBuild.error?.message || 'unknown error'));
     return { ok: false, exitCode: 2, configurationError: true, artifacts: [] };
   }
   const browserPath = path.join(tempHome, 'playwright-browsers');
-  const browserInstall = runWithinDeadline('npx', ['playwright', 'install', 'chromium'], {
+  const browserInstall = await runWithinDeadline('npx', ['playwright', 'install', 'chromium'], {
     cwd: webSource,
     env: { ...isolatedEnvironment(tempHome), PLAYWRIGHT_BROWSERS_PATH: browserPath },
     encoding: 'utf8',
     maxBuffer: 8 * 1024 * 1024
-  }, deadline);
+  }, preparationDeadline, 15 * 60_000);
   if (browserInstall.status !== 0) {
     console.error('LEGACY-00/web Chromium installation failed: ' + (browserInstall.stderr || browserInstall.error?.message || 'unknown error'));
     return { ok: false, exitCode: 2, configurationError: true, artifacts: [] };
   }
+  deadline = Date.now() + 180_000;
   const logName = 'legacy-web.log';
-  const result = runWithinDeadline(process.execPath, [path.join(webSource, 'Tests/NewHarnessE2E/legacy-web-host.mjs')], {
+  const result = await runWithinDeadline(process.execPath, [path.join(webSource, 'Tests/NewHarnessE2E/legacy-web-host.mjs')], {
     cwd: webSource,
     env: {
       ...env,
@@ -331,20 +326,5 @@ function parsePinnedSHAs(text) {
   if (!pocketkernel || !middleware) throw configError('registro de bases NH-TEST incompleto');
   return { pocketkernel: pocketkernel[1], middlewareauth: middleware[1] };
 }
-async function hashFiles(files) {
-  const hash = createHash('sha256');
-  for (const relative of files) {
-    hash.update(relative + '\0');
-    hash.update(await readFile(path.join(root, relative)));
-    hash.update('\n');
-  }
-  return hash.digest('hex');
-}
-async function sha256File(file) { return createHash('sha256').update(await readFile(file)).digest('hex'); }
 function configError(message) { return Object.assign(new Error(message), { exitCode: 2 }); }
-function runWithinDeadline(binary, args, options, deadline, cap = 180_000) {
-  const timeLeft = Math.min(cap, deadline - Date.now());
-  if (timeLeft <= 0) return { status: null, error: new Error('global 180s scenario deadline exceeded') };
-  return spawnSync(binary, args, { ...options, timeout: timeLeft });
-}
 function xmlEscape(value) { return String(value).replace(/[<>&"']/g, (character) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[character]); }

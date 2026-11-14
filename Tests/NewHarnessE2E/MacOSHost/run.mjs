@@ -1,6 +1,8 @@
 import { createServer } from 'node:http';
+import { runAndCapture } from '../deadline-process.mjs';
+import { runWithinDeadline } from '../deadline-sync.mjs';
 import { createServer as createNetServer } from 'node:net';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { chmod, cp, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -69,7 +71,7 @@ try {
   const middlewareSource = path.join(tempHome, 'sources', 'middlewareauth');
   await exportCleanSnapshot(kernelRoot, kernelSource);
   await exportCleanSnapshot(middlewareRoot, middlewareSource);
-  const built = buildHelpers({ kernelRoot: kernelSource, middlewareRoot: middlewareSource, kernelBinary, middlewareBinary, tempHome });
+  const built = await buildHelpers({ kernelRoot: kernelSource, middlewareRoot: middlewareSource, kernelBinary, middlewareBinary, tempHome });
   if (built.status !== 0) {
     output += built.output;
     throw new Error('não foi possível compilar PocketKernel/MiddlewareAuth reais no diretório temporário');
@@ -101,22 +103,23 @@ try {
     LMSTUDIO_BASE_URL: providerURL,
     MCP_LMSTUDIO_MODEL: 'nh-test-model'
   };
-  const destinations = spawnSync(xcodebuild, ['-showdestinations', '-project', project, '-scheme', 'PocketWikiMacNHTestHost'], {
+  const destinations = await runWithinDeadline(xcodebuild, ['-showdestinations', '-project', project, '-scheme', 'PocketWikiMacNHTestHost'], {
     cwd: root,
     env,
     encoding: 'utf8',
     maxBuffer: 8 * 1024 * 1024
-  });
+  }, Date.now() + 60_000);
   output += '--- xcodebuild -showdestinations ---\n' + (destinations.stdout || '') + (destinations.stderr || '');
   if (destinations.status !== 0) throw new Error('xcodebuild não conseguiu listar os destinos macOS disponíveis');
   const macDestination = [...(destinations.stdout || '').matchAll(/\{[^{}]*platform:macOS, arch:([^,}]+), id:([^,}]+), name:([^}]+)\}/g)]
     .find((match) => match[3].trim() === 'My Mac');
   if (!macDestination) throw new Error('Xcode não anunciou o destino My Mac arm64 para este scheme');
   const args = [
-    'test', '-project', project,
+    'test-without-building', '-project', project,
     '-scheme', 'PocketWikiMacNHTestHost',
     '-destination', 'id=' + macDestination[2].trim(),
     '-disableAutomaticPackageResolution',
+    '-derivedDataPath', path.join(tempHome, 'derived-data'),
     '-clonedSourcePackagesDirPath', path.join(tempHome, 'swift-packages'),
     '-resultBundlePath', resultBundle,
     `NH_TEST_FIXTURE_PROVIDER_URL=${providerURL}`,
@@ -127,7 +130,14 @@ try {
     `POCKETWIKI_MIDDLEWARE_AUTH_BINARY=${middlewareBinary}`,
     `POCKETWIKI_NODE_BINARY=${process.execPath}`
   ];
-  const run = await runAndCapture(xcodebuild, args, root, env);
+  const buildArgs = [...args];
+  buildArgs[0] = 'build-for-testing';
+  const resultIndex = buildArgs.indexOf('-resultBundlePath');
+  buildArgs.splice(resultIndex, 2);
+  const build = await runAndCapture(xcodebuild, buildArgs, root, env, 12 * 60_000);
+  output += '--- build-for-testing ---\n' + build.output;
+  if (build.status !== 0) throw new Error('xcodebuild build-for-testing falhou ou excedeu o prazo');
+  const run = await runAndCapture(xcodebuild, args, root, env, 180_000);
   output += run.output;
   status = run.status;
   if (status === 0 && !providerRequests.some((item) => item.prompt_contains_wiki_marker && item.authorized && item.model === 'nh-test-model')) {
@@ -163,12 +173,13 @@ try {
 }
 process.exit(status);
 
-function buildHelpers({ kernelRoot, middlewareRoot, kernelBinary, middlewareBinary, tempHome }) {
+async function buildHelpers({ kernelRoot, middlewareRoot, kernelBinary, middlewareBinary, tempHome }) {
   const common = { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 };
   const env = { ...process.env, HOME: tempHome, CGO_ENABLED: '0', GOCACHE: path.join(tempHome, 'go-cache'), GOPATH: path.join(tempHome, 'go') };
-  const kernel = spawnSync('go', ['build', '-mod=readonly', '-o', kernelBinary, './cmd/pocketkernel'], { ...common, cwd: kernelRoot, env });
+  const deadline = Date.now() + 12 * 60_000;
+  const kernel = await runWithinDeadline('go', ['build', '-mod=readonly', '-o', kernelBinary, './cmd/pocketkernel'], { ...common, cwd: kernelRoot, env }, deadline, 12 * 60_000);
   if (kernel.status !== 0) return { status: kernel.status ?? 2, output: '--- go build PocketKernel ---\n' + (kernel.stdout || '') + (kernel.stderr || kernel.error?.message || '') };
-  const middleware = spawnSync('go', ['build', '-mod=readonly', '-o', middlewareBinary, './cmd/middleware-codex-oauth'], { ...common, cwd: middlewareRoot, env });
+  const middleware = await runWithinDeadline('go', ['build', '-mod=readonly', '-o', middlewareBinary, './cmd/middleware-codex-oauth'], { ...common, cwd: middlewareRoot, env }, deadline, 12 * 60_000);
   if (middleware.status !== 0) return { status: middleware.status ?? 2, output: '--- go build MiddlewareAuth ---\n' + (middleware.stdout || '') + (middleware.stderr || middleware.error?.message || '') };
   return { status: 0, output: '' };
 }
@@ -203,17 +214,6 @@ async function makeWritable(target) {
   if (info.isSymbolicLink()) return;
   await chmod(target, info.isDirectory() ? 0o700 : 0o600);
   if (info.isDirectory()) for (const entry of await readdir(target)) await makeWritable(path.join(target, entry));
-}
-
-function runAndCapture(command, args, cwd, env) {
-  return new Promise((resolve) => {
-    const child = spawn(command, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
-    let output = '';
-    child.stdout.setEncoding('utf8').on('data', (chunk) => { output += chunk; });
-    child.stderr.setEncoding('utf8').on('data', (chunk) => { output += chunk; });
-    child.once('error', (error) => resolve({ status: 2, output: 'Falha ao iniciar xcodebuild: ' + error.message + '\n' }));
-    child.once('exit', (code, signal) => resolve({ status: code ?? 2, output: output + (signal ? '\nxcodebuild signal: ' + signal + '\n' : '') }));
-  });
 }
 
 async function availableLoopbackURL() {

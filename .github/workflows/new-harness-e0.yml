@@ -72,6 +72,7 @@ jobs:
         if: success()
         run: >-
           node Tests/NewHarnessE2E/gate-aggregator.mjs --stage E0
+          --target-sha "$(git rev-parse HEAD)"
           --reports "$RUNNER_TEMP/nh-test-e0/e0-all.json"
           > "$RUNNER_TEMP/nh-test-e0/gate.json"
 
