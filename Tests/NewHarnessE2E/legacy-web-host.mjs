@@ -142,6 +142,7 @@ try {
     await page.evaluate(async () => {
       const slot = document.createElement('main');
       slot.id = 'runtime-slot';
+      slot.style.padding = '8px';
       document.querySelector('#panel-ai .scroll').prepend(slot);
       const { mount } = await import('/nh-runtime-bundle.js');
       window.nhRuntime = mount({ bearer: 'fixture', environmentId: '11111111-1111-4111-8111-111111111111', threadId: '22222222-2222-4222-8222-222222222222', schemaSHA256: '0'.repeat(64) });
