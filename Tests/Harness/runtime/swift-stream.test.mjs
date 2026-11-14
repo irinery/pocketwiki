@@ -18,6 +18,10 @@ test('Swift SSE autentica, valida envelope e propaga erro do Kernel via HTTP rea
   let commandBody = '';
   const server = http.createServer((req, res) => {
     calls++; requests.push({ url: req.url, auth: req.headers.authorization, last: req.headers['last-event-id'] });
+    if (calls === 13 || calls === 14) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ receipt_id: id, revision: 1, state: calls === 13 ? 'accepted' : 'invented' })); return; }
+    if (calls === 15 || calls === 16) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ command_id: id, receipt_id: id, environment_id: id, revision: 1, state: 'succeeded', duplicate: calls === 15 ? false : 'false', result_ref: null })); return; }
+    if (calls === 11 || calls === 12) { req.resume(); res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ events: [{ event_id: id, thread_id: calls === 11 ? id : '22222222-2222-4222-8222-222222222222', seq: 1, kind: 'effect_started' }], next_seq: 1 })); return; }
+    if (calls === 9 || calls === 10) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ protocol_major: 1, protocol_minor: 0, schema_sha256: (calls === 9 ? 'a' : 'b').repeat(64), environment_id: id, operations: ['runtime.dispatch'] })); return; }
     if (calls === 7 || calls === 8) { res.writeHead(200, { 'Content-Type': 'application/json' }); const data = { snapshot_id: id, revision: 1, as_of_seq: 2, receipts: [], effects: [] }; if (calls === 8) data.next_cursor = null; res.end(JSON.stringify({ module: 'runtime', data })); return; }
     if (calls === 5 || calls === 6) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(calls === 5 ? { entity_type: 'EffectRecord', entity_key: JSON.stringify(id), change: 'delete' } : { unexpected: true })); return; }
     if (calls === 4) { req.on('data', chunk => commandBody += chunk); req.on('end', () => { res.writeHead(202, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ command_id: id, receipt_id: id, environment_id: id, revision: 1, state: 'accepted', duplicate: false })); }); return; }
@@ -33,11 +37,15 @@ test('Swift SSE autentica, valida envelope e propaga erro do Kernel via HTTP rea
     let stderr = ''; child.stderr.on('data', data => stderr += data);
     const [exit] = await once(child, 'exit');
     assert.equal(exit, 0, stderr);
-    assert.equal(calls, 8);
+    assert.equal(calls, 16);
     assert.deepEqual(requests.slice(0, 3), Array.from({ length: 3 }, () => ({ url: `/v1/harness/streams/thread/${id}?after_seq=3&modules=runtime`, auth: 'Bearer test-secret', last: '3' })));
     assert.equal(requests[3].url, '/v1/harness/commands');
     for (const request of requests.slice(4, 6)) assert.deepEqual(request, { url: `/v1/harness/payloads/${id}`, auth: 'Bearer test-secret', last: undefined });
-    for (const request of requests.slice(6)) assert.deepEqual(request, { url: `/v1/harness/threads/${id}/snapshot?module=runtime&page_size=1`, auth: 'Bearer test-secret', last: undefined });
+    for (const request of requests.slice(6, 8)) assert.deepEqual(request, { url: `/v1/harness/threads/${id}/snapshot?module=runtime&page_size=1`, auth: 'Bearer test-secret', last: undefined });
+    for (const request of requests.slice(8, 10)) assert.deepEqual(request, { url: '/v1/harness/capabilities', auth: 'Bearer test-secret', last: undefined });
+    for (const request of requests.slice(10, 12)) assert.deepEqual(request, { url: '/v1/harness/query/runtime.events', auth: 'Bearer test-secret', last: undefined });
+    for (const request of requests.slice(12, 14)) assert.deepEqual(request, { url: `/v1/harness/results/${id}`, auth: 'Bearer test-secret', last: undefined });
+    for (const request of requests.slice(14)) assert.deepEqual(request, { url: `/v1/harness/receipts/${id}`, auth: 'Bearer test-secret', last: undefined });
     assert.deepEqual(JSON.parse(commandBody), { protocol_major: 1, command_id: id, environment_id: id, expected_revision: 0, operation: 'runtime.dispatch', input: { command_id: id, thread_id: id, expected_revision: 0, operation: 'submit', text: 'Olá' } });
   } finally { server.close(); await rm(dir, { recursive: true, force: true }); }
 });

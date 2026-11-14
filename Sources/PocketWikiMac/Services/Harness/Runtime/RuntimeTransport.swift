@@ -33,7 +33,23 @@ struct RuntimeTransport {
         self.session = URLSession(configuration: .ephemeral, delegate: blocker, delegateQueue: nil)
     }
 
-    func capabilities<T: Decodable>() async throws -> T { try await get("/v1/harness/capabilities") }
+    struct Capabilities: Decodable {
+        let protocolMajor: Int
+        let protocolMinor: Int
+        let schemaSHA256: String
+        let environmentID: UUID
+        let operations: [String]
+        enum CodingKeys: String, CodingKey {
+            case operations
+            case protocolMajor = "protocol_major", protocolMinor = "protocol_minor"
+            case schemaSHA256 = "schema_sha256", environmentID = "environment_id"
+        }
+    }
+    func capabilities(environmentID: UUID, schemaSHA256: String) async throws -> Capabilities {
+        let value: Capabilities = try await request("/v1/harness/capabilities", validateCapabilities: true)
+        guard value.environmentID == environmentID, value.schemaSHA256 == schemaSHA256 else { throw Failure.invalidResponse }
+        return value
+    }
     struct HTTPReceipt: Decodable {
         let commandID: UUID
         let receiptID: UUID
@@ -86,9 +102,43 @@ struct RuntimeTransport {
         guard receipt.commandID == command.commandID, receipt.environmentID == command.environmentID else { throw Failure.invalidResponse }
         return receipt
     }
-    func query<Input: Encodable, Result: Decodable>(_ operation: String, input: Input) async throws -> Result {
-        guard ["runtime.receipt", "runtime.events"].contains(operation) else { throw Failure.invalidArgument }
-        return try await request("/v1/harness/query/\(operation)", method: "POST", body: JSONEncoder().encode(input))
+    struct DispatchResult: Decodable {
+        let receiptID: UUID
+        let revision: Int
+        let state: String
+        enum CodingKeys: String, CodingKey { case revision, state; case receiptID = "receipt_id" }
+    }
+    func result(ref: UUID, schema: [String: Any]) async throws -> DispatchResult {
+        try await request("/v1/harness/results/\(ref.uuidString.lowercased())", resultSchema: schema)
+    }
+    struct ReceiptResult: Decodable {
+        let receiptID: UUID
+        let revision: Int
+        let state: String
+        enum CodingKeys: String, CodingKey { case revision, state; case receiptID = "receipt_id" }
+    }
+    struct RuntimeEvent: Decodable {
+        let eventID: UUID
+        let threadID: UUID
+        let seq: Int
+        let kind: String
+        let effectID: UUID?
+        enum CodingKeys: String, CodingKey { case seq, kind; case eventID = "event_id", threadID = "thread_id", effectID = "effect_id" }
+    }
+    struct EventsResult: Decodable { let events: [RuntimeEvent]; let next_seq: Int }
+    func queryReceipt(commandID: UUID) async throws -> ReceiptResult {
+        let body = try JSONSerialization.data(withJSONObject: ["command_id": commandID.uuidString.lowercased()])
+        return try await request("/v1/harness/query/runtime.receipt", method: "POST", body: body, queryOperation: "runtime.receipt")
+    }
+    func queryEvents(threadID: UUID, afterSeq: Int, limit: Int, schema: [String: Any]) async throws -> EventsResult {
+        guard afterSeq >= 0, afterSeq <= 9_007_199_254_740_991, (1...100).contains(limit) else { throw Failure.invalidArgument }
+        let body = try JSONSerialization.data(withJSONObject: ["thread_id": threadID.uuidString.lowercased(), "after_seq": afterSeq, "limit": limit])
+        let result: EventsResult = try await request("/v1/harness/query/runtime.events", method: "POST", body: body, snapshotSchema: nil, queryOperation: "runtime.events", querySchema: schema)
+        guard result.events.count <= limit, result.events.allSatisfy({ $0.threadID == threadID && $0.seq > afterSeq }),
+              result.events.map(\.seq) == result.events.map(\.seq).sorted(),
+              Set(result.events.map(\.seq)).count == result.events.count,
+              result.next_seq >= (result.events.last?.seq ?? afterSeq) else { throw Failure.invalidResponse }
+        return result
     }
     /// Busca referência autenticada sem alocar mais de 4 MiB e valida o payload de runtime E0.
     func payload(ref: UUID, schema: [String: Any]) async throws -> Data {
@@ -184,7 +234,7 @@ struct RuntimeTransport {
         }
     }
     private func get<T: Decodable>(_ path: String) async throws -> T { try await request(path) }
-    private func request<T: Decodable>(_ path: String, method: String = "GET", query: [URLQueryItem] = [], body: Data? = nil, snapshotSchema: [String: Any]? = nil, pageSize: Int = 100, validateReceipt: Bool = false) async throws -> T {
+    private func request<T: Decodable>(_ path: String, method: String = "GET", query: [URLQueryItem] = [], body: Data? = nil, snapshotSchema: [String: Any]? = nil, pageSize: Int = 100, validateReceipt: Bool = false, validateCapabilities: Bool = false, queryOperation: String? = nil, querySchema: [String: Any]? = nil, resultSchema: [String: Any]? = nil) async throws -> T {
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else { throw Failure.invalidURL }
         components.path = path; if !query.isEmpty { components.queryItems = query }
         guard let url = components.url else { throw Failure.invalidURL }
@@ -201,6 +251,37 @@ struct RuntimeTransport {
         if !(200...299).contains(http.statusCode) {
             guard let remote = try? JSONDecoder().decode(HarnessV1.Error.self, from: data) else { throw Failure.invalidResponse }
             throw Failure.remote(status: http.statusCode, error: remote)
+        }
+        if let resultSchema {
+            guard let raw = try? JSONSerialization.jsonObject(with: data),
+                  HarnessV1.validateCorpusValue(raw, schemaName: "commandReceipt", document: resultSchema) else { throw Failure.invalidResponse }
+        }
+        if let queryOperation {
+            guard let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw Failure.invalidResponse }
+            if queryOperation == "runtime.receipt" {
+                guard Set(raw.keys) == Set(["receipt_id", "revision", "state"]),
+                      let result = try? JSONDecoder().decode(ReceiptResult.self, from: data), result.revision >= 0,
+                      result.revision <= 9_007_199_254_740_991,
+                      ["accepted", "pending", "succeeded", "failed", "uncertain"].contains(result.state) else { throw Failure.invalidResponse }
+            } else {
+                guard let querySchema, Set(raw.keys) == Set(["events", "next_seq"]),
+                      let events = raw["events"] as? [Any], events.count <= 100,
+                      events.allSatisfy({ HarnessV1.validateCorpusValue($0, schemaName: "RuntimeEvent", document: querySchema) }),
+                      let result = try? JSONDecoder().decode(EventsResult.self, from: data), result.next_seq >= 0,
+                      result.next_seq <= 9_007_199_254_740_991,
+                      result.events.allSatisfy({ $0.seq >= 0 && $0.seq <= 9_007_199_254_740_991 }) else { throw Failure.invalidResponse }
+            }
+        }
+        if validateCapabilities {
+            guard let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  Set(raw.keys) == Set(["protocol_major", "protocol_minor", "schema_sha256", "environment_id", "operations"]),
+                  let value = try? JSONDecoder().decode(Capabilities.self, from: data),
+                  value.protocolMajor == 1, value.protocolMinor == 0,
+                  value.schemaSHA256.utf8.count == 64,
+                  value.schemaSHA256.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }),
+                  let environment = raw["environment_id"] as? String, environment == environment.lowercased(), UUID(uuidString: environment) != nil,
+                  value.operations.count <= 100, Set(value.operations).count == value.operations.count,
+                  value.operations.allSatisfy({ HarnessOperationRegistry.entries[$0] != nil }) else { throw Failure.invalidResponse }
         }
         if validateReceipt {
             guard let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any],

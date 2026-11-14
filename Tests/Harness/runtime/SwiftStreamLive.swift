@@ -45,5 +45,20 @@ private struct Snapshot: Decodable { let module: String }
         guard snapshot.module == "runtime" else { throw RuntimeTransport.Failure.invalidResponse }
         do { let _: Snapshot = try await client.snapshot(threadID: thread, pageSize: 1, schema: schema); throw RuntimeTransport.Failure.invalidArgument }
         catch RuntimeTransport.Failure.invalidResponse { }
+        let hash = String(repeating: "a", count: 64)
+        _ = try await client.capabilities(environmentID: thread, schemaSHA256: hash)
+        do { _ = try await client.capabilities(environmentID: thread, schemaSHA256: hash); throw RuntimeTransport.Failure.invalidArgument }
+        catch RuntimeTransport.Failure.invalidResponse { }
+        let events = try await client.queryEvents(threadID: thread, afterSeq: 0, limit: 1, schema: schema)
+        guard events.events.count == 1 else { throw RuntimeTransport.Failure.invalidResponse }
+        do { _ = try await client.queryEvents(threadID: thread, afterSeq: 0, limit: 1, schema: schema); throw RuntimeTransport.Failure.invalidArgument }
+        catch RuntimeTransport.Failure.invalidResponse { }
+        let result = try await client.result(ref: thread, schema: schema)
+        guard result.state == "accepted" else { throw RuntimeTransport.Failure.invalidResponse }
+        do { _ = try await client.result(ref: thread, schema: schema); throw RuntimeTransport.Failure.invalidArgument }
+        catch RuntimeTransport.Failure.invalidResponse { }
+        _ = try await client.receipt(commandID: thread, environmentID: thread)
+        do { _ = try await client.receipt(commandID: thread, environmentID: thread); throw RuntimeTransport.Failure.invalidArgument }
+        catch RuntimeTransport.Failure.invalidResponse { }
     }
 }
