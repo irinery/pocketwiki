@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
+import { fixtureUUID, parseFixtureSeed } from './fixture-identities.mjs';
 import http from 'node:http';
 import { createInterface } from 'node:readline';
 import path from 'node:path';
@@ -11,6 +12,8 @@ import { RuntimeTransport } from '../../../src/harness/runtime/transport.mjs';
 import { validateAgainst } from '../../../src/harness/contracts/validate.mjs';
 import { spawnBeforeDeadline } from './spawn-before-deadline.mjs';
 
+const fixtureSeed = parseFixtureSeed(process.env.RUNTIME_FIXTURE_SEED);
+const id = label => fixtureUUID(fixtureSeed, label);
 const kernel = process.env.RUNTIME_KERNEL_BINARY;
 const swiftClient = process.env.RUNTIME_SWIFT_BINARY;
 assert.ok(kernel && swiftClient, 'RUNTIME_KERNEL_BINARY e RUNTIME_SWIFT_BINARY são obrigatórios');
@@ -20,7 +23,7 @@ const dir = await Promise.race([mkdtemp(path.join('/tmp', 'rt-e1-')), deadlineFa
 const socketPath = path.join(dir, 'boot.sock');
 const dbPath = path.join(dir, 'runtime.db');
 const ioPath = path.join(dir, 'io');
-const principal = randomUUID(), environment = randomUUID(), thread = randomUUID(), other = randomUUID();
+const principal = id('principal'), environment = id('environment'), thread = id('thread'), other = id('other-principal');
 const audience = 'pocketkernel.harness.v1';
 const schemaHash = createHash('sha256').update(await Promise.race([readFile('src/harness/contracts/harness-v1.schema.json'), deadlineFailure])).digest('hex');
 const children = [], bootstrapClients = [];
@@ -50,7 +53,7 @@ async function run() {
   const capabilities = await client.capabilities({ environmentId: environment, schemaSHA256: schemaHash });
   assert.equal(capabilities.environment_id, environment);
   assert.equal(capabilities.schema_sha256, schemaHash);
-  const deniedCommand = command(randomUUID(), 0, 'sem acesso');
+  const deniedCommand = command(id('denied-command'), 0, 'sem acesso');
   await assert.rejects(wrongClient.dispatch(deniedCommand), error => error.code === 'ERR_FORBIDDEN');
   const deniedEvents = await client.query('runtime.events', { thread_id: thread, after_seq: 0, limit: 100 });
   assert.deepEqual(deniedEvents.events, [], 'negação não pode gravar evento');
@@ -60,7 +63,7 @@ async function run() {
   streamAbort = new AbortController();
   const response = await client.stream(thread, initial.data.as_of_seq, { signal: streamAbort.signal });
   let events = streamEvents(response, streamAbort.signal)[Symbol.asyncIterator]();
-  const firstID = randomUUID(), firstCommand = command(firstID, initial.data.revision, 'efeito real 1');
+  const firstID = id('first-command'), firstCommand = command(firstID, initial.data.revision, 'efeito real 1');
   let arrivals = 0, release;
   const readyTogether = new Promise(resolve => { release = resolve; });
   const concurrentFetch = async (url, options) => {
@@ -101,7 +104,7 @@ async function run() {
   const reopenedStream = await client.stream(thread, page1.data.as_of_seq, { signal: streamAbort.signal });
   events = streamEvents(reopenedStream, streamAbort.signal)[Symbol.asyncIterator]();
   assert.ok(page1.data.next_cursor, 'duas entidades exigem paginação');
-  const secondID = randomUUID();
+  const secondID = id('second-command');
   const swift = await startSwift(base, bearer, firstID, secondID);
   const second = await client.dispatch(command(secondID, page1.data.revision, 'efeito real 2'));
   assert.equal(second.duplicate, false);
@@ -127,7 +130,7 @@ async function run() {
   bearer = await issue(principal);
   client = new RuntimeTransport({ baseURL: base, bearer, fetchImpl: deadlineFetch });
   const beforeCrash = await client.snapshot(thread, { pageSize: 100 });
-  const crashID = randomUUID();
+  const crashID = id('crash-command');
   await client.dispatch(command(crashID, beforeCrash.data.revision, 'efeito interrompido'));
   const interruptedEffect = await running.barrier;
   const effectPath = path.join(ioPath, 'effects', `${interruptedEffect}.json`);
@@ -164,7 +167,7 @@ async function run() {
     const pick = (value, keys) => Object.fromEntries(keys.filter(key => value[key] !== undefined).map(key => [key, value[key]]));
     const receipt = value => pick(value, ['command_id', 'receipt_id', 'payload_sha256', 'revision', 'effect_id', 'state', 'result_ref']);
     const event = value => pick(value, ['event_id', 'thread_id', 'seq', 'kind', 'effect_id']);
-    await writeFile(process.env.RUNTIME_EVIDENCE_PATH, JSON.stringify({ receipts: [firstReceipt, reopenedReceipt, uncertain].map(receipt), events_before_crash: eventsBeforeCrash.events.map(event), events_after_recovery: recoveredEvents.events.map(event) }, null, 2) + '\n');
+    await writeFile(process.env.RUNTIME_EVIDENCE_PATH, JSON.stringify({ seed: fixtureSeed, receipts: [firstReceipt, reopenedReceipt, uncertain].map(receipt), events_before_crash: eventsBeforeCrash.events.map(event), events_after_recovery: recoveredEvents.events.map(event) }, null, 2) + '\n');
   }
   console.log('Kernel real: bootstrap E0, autorização, dispatch, recuperação, efeito, receipt, snapshot MVCC, SSE e clientes JS/Swift verificados');
 }

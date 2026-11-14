@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
+import { readFileSync, readlinkSync, realpathSync } from 'node:fs';
 
 const quote = text => "'" + text.replaceAll("'", "'\\''") + "'";
 export async function createHelperLauncher(launcher, binary, ledger) {
@@ -18,12 +19,45 @@ function executable(pid, launcher, started) {
   const match = /^\s*(\S+)\s+(.+?)\s*$/.exec(result.stdout);
   if (!match) throw new Error('invalid process listing for helper ' + pid);
   if (match[1].startsWith('Z')) return null;
+  // Linux ps `comm` exposes a truncated task name, not an executable path.
+  if (process.platform === 'linux') return inspectLinuxExecutable(pid, launcher);
   if (match[2] === '/bin/sh' && launcher) {
     const args = spawnSync('ps', ['-p', String(pid), '-o', 'args='], { encoding: 'utf8', timeout: 5000 });
     if (args.status !== 0) throw new Error('cannot verify helper launcher ' + pid);
     if (args.stdout.trim() === '/bin/sh ' + launcher || args.stdout.trim().startsWith('/bin/sh ' + launcher + ' ')) return launcher;
   }
   return match[2];
+}
+
+// Treat a disappearing proc entry as stopped only after rechecking process state.
+export function inspectLinuxExecutable(pid, launcher, dependencies = {}) {
+  const readlink = dependencies.readlink || readlinkSync;
+  const readFile = dependencies.readFile || readFileSync;
+  const realpath = dependencies.realpath || realpathSync;
+  const ps = dependencies.ps || spawnSync;
+  function stoppedAfterENOENT(error) {
+    if (error.code !== 'ENOENT') return false;
+    const state = ps('ps', ['-p', String(pid), '-o', 'stat='], { encoding: 'utf8', timeout: 5000 });
+    if (state.status === 1 && !state.stdout?.trim()) return true;
+    if (state.status !== 0 || !state.stdout?.trim()) throw new Error('cannot recheck helper process: ' + pid);
+    return state.stdout.trim().startsWith('Z');
+  }
+  let actual;
+  try { actual = readlink(`/proc/${pid}/exe`); }
+  catch (error) {
+    if (stoppedAfterENOENT(error)) return null;
+    throw new Error('cannot inspect helper executable: ' + pid, { cause: error });
+  }
+  if (launcher) {
+    let argv;
+    try { argv = readFile(`/proc/${pid}/cmdline`).toString().split('\0'); }
+    catch (error) {
+      if (stoppedAfterENOENT(error)) return null;
+      throw new Error('cannot inspect helper arguments: ' + pid, { cause: error });
+    }
+    if (argv[0] === '/bin/sh' && argv[1] === launcher && actual === realpath('/bin/sh')) return launcher;
+  }
+  return actual;
 }
 
 export async function cleanupManagedHelpers(entries) {
@@ -39,14 +73,18 @@ export async function cleanupManagedHelpers(entries) {
       const pid = Number(match[1]), started = match[2].trim();
       let current = executable(pid, launcher, started);
       if (!current) continue;
-      if (current !== binary && current !== launcher) throw new Error('helper PID identity changed: ' + pid);
+      let expectedBinary = binary;
+      if (process.platform === 'linux') {
+        try { expectedBinary = realpathSync(binary); } catch { throw new Error('helper PID identity changed: ' + pid); }
+      }
+      if (current !== expectedBinary && current !== launcher) throw new Error('helper PID identity changed: ' + pid);
       try { process.kill(pid, 'SIGTERM'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
       const deadline = Date.now() + 2000;
       do {
         await new Promise(resolve => setTimeout(resolve, 50));
         current = executable(pid, launcher, started);
         if (!current) break;
-        if (current !== binary && current !== launcher) throw new Error('helper PID identity changed: ' + pid);
+        if (current !== expectedBinary && current !== launcher) throw new Error('helper PID identity changed: ' + pid);
       } while (Date.now() < deadline);
       if (current) {
         try { process.kill(pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
@@ -55,7 +93,7 @@ export async function cleanupManagedHelpers(entries) {
           await new Promise(resolve => setTimeout(resolve, 50));
           current = executable(pid, launcher, started);
           if (!current) break;
-          if (current !== binary && current !== launcher) throw new Error('helper PID identity changed: ' + pid);
+          if (current !== expectedBinary && current !== launcher) throw new Error('helper PID identity changed: ' + pid);
         } while (Date.now() < killDeadline);
         if (current) throw new Error('helper did not terminate: ' + pid);
       }

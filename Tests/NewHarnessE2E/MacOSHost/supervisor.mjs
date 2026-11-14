@@ -24,7 +24,9 @@ export async function superviseMacHost(command, args, options, deadline, cap = 3
     catch (error) {
       result ||= { status: null };
       result.status = null;
-      result.error = new Error('supervisor helper cleanup failed: ' + error.message);
+      const primary = result.error;
+      result.error = new Error('supervisor helper cleanup failed: ' + error.message, { cause: primary });
+      if (primary?.code) result.error.code = primary.code;
     }
     if (!result?.error?.message?.startsWith('supervisor helper cleanup failed:')) await rm(directory, { recursive: true, force: true });
   }
