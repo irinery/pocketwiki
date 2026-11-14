@@ -15,7 +15,11 @@ export function requireProcessListing(env = process.env) {
 
 // Run each command in its own process group so timeout kills the complete tree.
 export function runWithinDeadline(binary, args, options, deadline, cap = 180_000) {
-  try { requireProcessListing(options.env || process.env); } catch (error) {
+  try {
+    // killProcessTree invokes ps using this process's environment.
+    requireProcessListing(process.env);
+    requireProcessListing(options.env || process.env);
+  } catch (error) {
     return Promise.resolve({ status: null, error });
   }
   const timeLeft = Math.min(cap, deadline - Date.now());

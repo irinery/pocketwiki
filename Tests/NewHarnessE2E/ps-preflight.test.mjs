@@ -42,3 +42,30 @@ test('ps reporting success without a usable process table is rejected', async (t
   await writeFile(path.join(tmp, 'ps'), '#!/bin/sh\nprintf "not a process table\\n"\n', { mode: 0o755 });
   assert.throws(() => requireProcessListing({ ...process.env, PATH: tmp }), /ps indisponível/);
 });
+
+test('parent PATH without ps cannot be bypassed by child PATH with ps', async (t) => {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), 'nh-ps-parent-'));
+  t.after(() => rm(tmp, { recursive: true, force: true }));
+  const marker = path.join(tmp, 'workload-started');
+  const modulePath = path.join(root, 'Tests/NewHarnessE2E');
+  const childPs = spawnSync('ps', ['-axo', 'pid=,ppid='], { env: { ...process.env, PATH: '/usr/bin:/bin' }, encoding: 'utf8' });
+  assert.equal(childPs.status, 0, 'test requires ps in the child PATH');
+  const code = `
+    import { pathToFileURL } from 'node:url';
+    const directory = process.argv[1];
+    const { runWithinDeadline } = await import(pathToFileURL(directory + '/deadline-sync.mjs'));
+    const { runAndCapture } = await import(pathToFileURL(directory + '/deadline-process.mjs'));
+    const marker = process.argv[2];
+    const env = { ...process.env, PATH: '/usr/bin:/bin' };
+    const program = 'require("node:fs").writeFileSync(' + JSON.stringify(marker) + ', "started")';
+    const a = await runWithinDeadline(process.execPath, ['-e', program], { env }, Date.now() + 5000);
+    const b = await runAndCapture(process.execPath, ['-e', program], process.cwd(), env, 5000);
+    if (a.error?.exitCode !== 2 || b.status !== 2) process.exit(1);
+    process.exit(2);
+  `;
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', code, modulePath, marker], {
+    env: { ...process.env, PATH: tmp }, encoding: 'utf8', timeout: 10000
+  });
+  assert.equal(result.status, 2, result.stderr);
+  await assert.rejects(access(marker), { code: 'ENOENT' });
+});
