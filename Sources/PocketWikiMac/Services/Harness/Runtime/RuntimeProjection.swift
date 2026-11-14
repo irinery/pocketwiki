@@ -31,7 +31,7 @@ final class RuntimeProjection {
     private var eventBytes = 0
     // Reiniciar por snapshot quando a janela encher preserva detecção exata de conflitos.
     static let maxTrackedEvents = 4096
-    private var invalidated = false
+    private var invalidation: Failure?
     private var seenEvents: [String: (Int, SHA256.Digest, SHA256.Digest?)] = [:]
     private var lastAppliedSeq = 0
     private var appliedEventCount = 0
@@ -79,10 +79,15 @@ final class RuntimeProjection {
     }
     /// Eventos são validados antes de entrar no buffer; referência deve ser resolvida pelo transporte antes desta chamada.
     func bufferEvent(_ data: Data, resolvedPayload: Data? = nil) throws {
-        guard !invalidated else { throw Failure.overflow }
-        guard started, data.count + (resolvedPayload?.count ?? 0) <= 4_194_304 else {
-            invalidated = true; throw Failure.overflow
+        if let invalidation { throw invalidation }
+        do { try bufferValidatedEvent(data, resolvedPayload: resolvedPayload) }
+        catch {
+            invalidation = (error as? Failure) ?? .invalidEvent
+            throw error
         }
+    }
+    private func bufferValidatedEvent(_ data: Data, resolvedPayload: Data?) throws {
+        guard started, data.count + (resolvedPayload?.count ?? 0) <= 4_194_304 else { throw Failure.overflow }
         guard let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               HarnessV1.validateCorpusValue(event, schemaName: "streamEnvelope", document: schema),
               event["environment_id"] as? String == environmentID, event["thread_id"] as? String == threadID,
@@ -106,12 +111,12 @@ final class RuntimeProjection {
         guard seq > (events.last?.0 ?? max(boundary, lastAppliedSeq)) else { throw Failure.invalidEvent }
         guard seenEvents.count < Self.maxTrackedEvents,
               eventBytes + data.count + (resolvedPayload?.count ?? 0) <= 4_194_304 else {
-            invalidated = true; throw Failure.overflow
+            throw Failure.overflow
         }
         events.append((seq, id, payload)); seenEvents[id] = (seq, digest, payloadDigest); seenSequences[seq] = id; eventBytes += data.count + (resolvedPayload?.count ?? 0)
     }
     func finish() throws -> View {
-        guard !invalidated else { throw Failure.overflow }
+        if let invalidation { throw invalidation }
         guard complete, let id = snapshotID else { throw Failure.incomplete }
         guard (events.last?.0 ?? max(boundary, lastAppliedSeq)) >= confirmedSeq else { throw Failure.stale }
         var rs = receipts, es = effects

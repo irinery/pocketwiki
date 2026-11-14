@@ -70,6 +70,7 @@ import Foundation
         let reorderedPayload = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted])
         try compact.bufferEvent(reordered, resolvedPayload: reorderedPayload)
         do { try compact.bufferEvent(reordered, resolvedPayload: encoded(wrong)); fatalError("changed replay accepted") } catch RuntimeProjection.Failure.invalidEvent { }
+        do { _ = try compact.finish(); fatalError("conflicted projection published") } catch RuntimeProjection.Failure.invalidEvent { }
         let longStream = try RuntimeProjection(schema: schema, environmentID: uid, threadID: uid, pageSize: 1, confirmedRevision: 0)
         try longStream.appendPage(page(nil), requestedCursor: nil)
         for n in 3..<53 {
@@ -107,5 +108,11 @@ import Foundation
         try p6.appendPage(page(nil), requestedCursor: nil)
         try p6.bufferEvent(eventData, resolvedPayload: payloadData)
         do { try p6.bufferEvent(eventData, resolvedPayload: encoded(wrong)); fatalError("changed payload accepted as duplicate") } catch RuntimeProjection.Failure.invalidEvent { }
+        do { _ = try p6.finish(); fatalError("conflict published prefix") } catch RuntimeProjection.Failure.invalidEvent { }
+        let malformed = try RuntimeProjection(schema: schema, environmentID: uid, threadID: uid, pageSize: 1, confirmedRevision: 0)
+        try malformed.appendPage(page(nil), requestedCursor: nil)
+        try malformed.bufferEvent(eventData, resolvedPayload: payloadData)
+        do { try malformed.bufferEvent(Data("not json".utf8)); fatalError("invalid event accepted") } catch RuntimeProjection.Failure.invalidEvent { }
+        do { _ = try malformed.finish(); fatalError("invalid event published prefix") } catch RuntimeProjection.Failure.invalidEvent { }
     }
 }
