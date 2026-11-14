@@ -142,6 +142,7 @@ try {
     await page.evaluate(async () => {
       const slot = document.createElement('main');
       slot.id = 'runtime-slot';
+      slot.style.padding = '8px';
       document.querySelector('#panel-ai .scroll').prepend(slot);
       const { mount } = await import('/nh-runtime-bundle.js');
       window.nhRuntime = mount({ bearer: 'fixture', environmentId: '11111111-1111-4111-8111-111111111111', threadId: '22222222-2222-4222-8222-222222222222', schemaSHA256: '0'.repeat(64) });
@@ -152,6 +153,7 @@ try {
     await page.getByRole('status').filter({ hasText: /Execução durável indisponível/ }).waitFor({ state: 'visible' });
     assert(await page.getByRole('button', { name: 'Enviar comando' }).isDisabled(), 'runtime command must remain disabled on the legacy Kernel');
     assert(runtimeLegacyCapabilityStatus === 404, 'legacy Kernel must return a real capability 404');
+    await page.locator('#runtime-slot').screenshot({ path: path.join(artifactDir, 'legacy-web-runtime-fallback.png') });
   }
   await page.locator('.ai-side-toggle[data-ai-side="llm"]').click();
   await page.locator('#ai-method').selectOption('lmstudio');
