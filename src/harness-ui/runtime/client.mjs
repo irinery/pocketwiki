@@ -1,4 +1,5 @@
 import { RuntimeProjection } from './projection.mjs';
+import { runtimeFrames } from './sse.mjs';
 
 // The host owns transport and credentials; this client only holds UI state.
 export class RuntimeClient {
@@ -17,14 +18,29 @@ export class RuntimeClient {
     }
   }
   async reconnect() {
+    this.streamAbort?.abort();
     const p = new RuntimeProjection({ environmentId: this.environmentId, threadId: this.threadId, confirmedRevision: this.state.revision, confirmedSeq: this.state.lastSeq });
     let cursor;
     do {
       const page = await this.transport.snapshot(this.threadId, { cursor });
       p.appendPage(page, cursor); cursor = page.data.next_cursor;
     } while (cursor != null);
-    this.projection = p; this.publishView(p.finish());
+    const view = p.finish();
+    const abort = new AbortController(); this.streamAbort = abort;
+    const response = await this.transport.stream(this.threadId, view.lastSeq, { signal: abort.signal });
+    this.projection = p; this.publishView(view);
+    this.streamTask = this.consume(response, abort);
   }
+  async consume(response, abort) {
+    try {
+      for await (const event of runtimeFrames(response)) await this.applyEvent(event);
+      if (!abort.signal.aborted) this.publish({ available: false, error: 'ERR_UNAVAILABLE' });
+    } catch (error) {
+      if (!abort.signal.aborted) this.publish({ available: false, error: error.code || 'ERR_INVALID' });
+    }
+  }
+  close() { this.streamAbort?.abort(); }
+
   publishView(view) {
     this.publish({ available: true, error: null, revision: view.revision, lastSeq: view.lastSeq, receipts: [...view.receipts.values()] });
   }
