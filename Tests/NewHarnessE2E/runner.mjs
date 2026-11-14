@@ -25,9 +25,10 @@ try {
   const targetSHA = gitSHA(root);
   const identity = await targetIdentity(root, kernelRoot, middlewareRoot, targetSHA);
   const baseSHAs = parsePinnedSHAs(await readFile(path.join(root, 'docs/rfcs/new-harness/nhtest-base-shas.md'), 'utf8'));
+  if (identity.pocketkernel_sha !== baseSHAs.pocketkernel || identity.middlewareauth_sha !== baseSHAs.middlewareauth) throw configError('SHA de dependência diferente do pin ativo');
   const matrix = JSON.parse(await readFile(matrixPath, 'utf8'));
   const selected = selectedPairs(stageNumber, surface, matrix);
-  const unsupported = selected.filter(({ scenario }) => scenario.id !== 'CONTRACT-00' && scenario.id !== 'LEGACY-00');
+  const unsupported = selected.filter(({ scenario }) => !['CONTRACT-00', 'LEGACY-00', 'SERVICE-0002', 'UI-0002'].includes(scenario.id));
   if (unsupported.length) throw configError('faltam dependências/handlers dos cenários: ' + unsupported.map(({ scenario }) => scenario.id).join(', '));
 
   await mkdir(reportDir, { recursive: true });
@@ -43,7 +44,9 @@ try {
     const id = pair.scenario.id;
     const result = id === 'CONTRACT-00'
       ? await runContract(artifactDir, tempHome, baseSHAs, deadline, targetSHA)
-      : await runLegacy(pair.surface, artifactDir, tempHome, deadline, targetSHA);
+      : id === 'LEGACY-00' ? await runLegacy(pair.surface, artifactDir, tempHome, deadline, targetSHA)
+      : id === 'SERVICE-0002' ? await runRuntimeService(artifactDir, tempHome, targetSHA, baseSHAs)
+      : await runRuntimeUI(pair.surface, artifactDir, tempHome, targetSHA);
     cases.push({ id, surface: pair.surface, status: result.ok ? 'passed' : 'failed', artifact_paths: result.artifacts });
     if (!result.ok) exitCode = Math.max(exitCode, result.exitCode || 1);
     if (result.configurationError) exitCode = 2;
@@ -160,6 +163,55 @@ async function runContract(artifactDir, tempHome, shas, deadline, targetSHA) {
     }
   }
   return { ok: passed, exitCode: passed ? 0 : 1, artifacts };
+}
+
+async function runRuntimeService(artifactDir, tempHome, targetSHA, shas) {
+  const source = await cloneGitSnapshot(root, targetSHA, path.join(tempHome, 'sources/pocketwiki-runtime'));
+  const kernelRoot = process.env.POCKETKERNEL_NH00_ROOT || path.resolve(root, '../pocketkernel-nh00');
+  const kernelSource = await exportGitSnapshot(kernelRoot, shas.pocketkernel, path.join(tempHome, 'sources/pocketkernel-runtime'));
+  const kernel = path.join(tempHome, 'runtime-kernel');
+  const swift = path.join(tempHome, 'runtime-swift');
+  const env = isolatedEnvironment(tempHome);
+  const logName = 'service-0002.log';
+  const artifacts = [path.posix.join(path.basename(artifactDir), logName)];
+  let log = '';
+  const commands = [
+    ['go', ['build', '-trimpath', '-o', kernel, './cmd/pocketkernel'], kernelSource],
+    ['swiftc', ['-swift-version', '6', 'Sources/PocketWikiMac/Models/Harness/HarnessOperationRegistry.swift', 'Sources/PocketWikiMac/Models/Harness/HarnessV1.swift', 'Sources/PocketWikiMac/Services/Harness/Runtime/RuntimeTransport.swift', 'Sources/PocketWikiMac/Services/Harness/Runtime/RuntimeProjection.swift', 'Tests/Harness/runtime/SwiftKernelIntegration.swift', '-o', swift], source],
+    [process.execPath, ['Tests/Harness/runtime/kernel-integration.mjs'], source]
+  ];
+  for (let i = 0; i < commands.length; i++) {
+    const [binary, argv, cwd] = commands[i];
+    const timeout = i < 2 ? 15 * 60_000 : 180_000;
+    const result = await runWithinDeadline(binary, argv, { cwd, env: { ...env, RUNTIME_KERNEL_BINARY: kernel, RUNTIME_SWIFT_BINARY: swift }, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }, Date.now() + timeout, timeout);
+    log += '$ ' + path.basename(binary) + ' ' + argv.join(' ') + '\nexit=' + result.status + '\n' + (result.stdout || '') + '\n' + (result.stderr || result.error?.message || '') + '\n';
+    if (result.status !== 0) {
+      await writeFile(path.join(artifactDir, logName), redact(log));
+      return { ok: false, exitCode: i < 2 ? 2 : 1, configurationError: i < 2, artifacts };
+    }
+  }
+  await writeFile(path.join(artifactDir, logName), redact(log));
+  return { ok: true, artifacts };
+}
+
+async function runRuntimeUI(surface, artifactDir, tempHome, targetSHA) {
+  const source = await cloneGitSnapshot(root, targetSHA, path.join(tempHome, 'sources/pocketwiki-ui-' + surface));
+  const host = path.join(source, 'Tests/HarnessUI/runtime/run-host.mjs');
+  if (!existsSync(host)) return { ok: false, exitCode: 2, configurationError: true, artifacts: [] };
+  const output = path.join(artifactDir, 'ui-0002-' + surface);
+  await mkdir(output, { recursive: true });
+  const result = await runWithinDeadline(process.execPath, [host, '--surface', surface, '--report-dir', output], {
+    cwd: source, env: { ...isolatedEnvironment(tempHome), POCKETKERNEL_NH00_ROOT: process.env.POCKETKERNEL_NH00_ROOT || path.resolve(root, '../pocketkernel-nh00'), MIDDLEWAREAUTH_NHTEST_ROOT: process.env.MIDDLEWAREAUTH_NHTEST_ROOT || path.resolve(root, '../middlewareAuth') }, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024
+  }, Date.now() + 20 * 60_000, 20 * 60_000);
+  const log = 'ui-0002-' + surface + '.log';
+  await writeFile(path.join(artifactDir, log), redact((result.stdout || '') + '\n' + (result.stderr || result.error?.message || '')));
+  const evidence = await listArtifactPaths(output);
+  // The host contract requires a machine-readable manifest proving all four UI cases.
+  let manifest;
+  try { manifest = JSON.parse(await readFile(path.join(output, 'result.json'), 'utf8')); } catch {}
+  const required = ['02-01', '02-02', '02-03', '02-04'];
+  const valid = manifest && Array.isArray(manifest.cases) && manifest.cases.length === 4 && required.every(id => manifest.cases.some(c => c.id === id && c.status === 'passed')) && evidence.some(name => name !== 'result.json');
+  return { ok: result.status === 0 && valid, exitCode: result.status === 2 || !valid ? 2 : 1, configurationError: result.status === 2 || !valid, artifacts: [path.posix.join(path.basename(artifactDir), log), ...evidence.map(name => path.posix.join(path.basename(artifactDir), 'ui-0002-' + surface, name))] };
 }
 
 async function runLegacy(surface, artifactDir, tempHome, deadline, targetSHA) {

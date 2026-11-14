@@ -90,6 +90,13 @@ export function aggregateReports(stage, reports, matrix) {
   };
 }
 
+export function assertPinnedDependencies(identity, text) {
+  for (const [label, field] of [['PocketKernel', 'pocketkernel_sha'], ['MiddlewareAuth', 'middlewareauth_sha']]) {
+    const match = text.match(new RegExp(label + ': `([a-f0-9]{40})`'));
+    if (!match || identity[field] !== match[1]) throw new Error('dependency pin mismatch: ' + label);
+  }
+}
+
 export function assertSameIdentity(expected, actual) {
   for (const field of [...hashFields, ...digestFields]) {
     if (expected[field] !== actual[field]) throw new Error('target build mismatch: ' + field);
@@ -175,6 +182,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     const kernel = process.env.POCKETKERNEL_NH00_ROOT || path.resolve(wiki, '../pocketkernel-nh00');
     const middleware = process.env.MIDDLEWAREAUTH_NHTEST_ROOT || path.resolve(wiki, '../middlewareAuth');
     const target = await targetIdentity(wiki, kernel, middleware, args[3]);
+    assertPinnedDependencies(target, await readFile(path.join(wiki, 'docs/rfcs/new-harness/nhtest-base-shas.md'), 'utf8'));
     const report = await aggregateReportFiles(args[1], args.slice(5), target);
     process.stdout.write(JSON.stringify(report, null, 2) + '\n');
   } catch (error) {
