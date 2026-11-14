@@ -19,6 +19,14 @@ export class RuntimeClient {
   }
   async reconnect() {
     this.streamAbort?.abort();
+    this.publish({ available: false });
+    try { return await this.reconnectChecked(); }
+    catch (error) {
+      this.publish({ available: false, error: error.code || 'ERR_UNAVAILABLE' });
+      throw error;
+    }
+  }
+  async reconnectChecked() {
     const p = new RuntimeProjection({ environmentId: this.environmentId, threadId: this.threadId, confirmedRevision: this.state.revision, confirmedSeq: this.state.lastSeq });
     let cursor;
     do {
