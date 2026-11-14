@@ -27,6 +27,8 @@ const audience = 'pocketkernel.harness';
 const children = [];
 const kernelLogBuffers = [];
 let hostWorker;
+let proxy;
+const proxySockets = new Set();
 
 try {
   let kernel = await startKernel();
@@ -66,18 +68,23 @@ try {
   // Relay the activation to the real Kernel, then drop its response. This
   // demonstrates the unavoidable ambiguity when the commit ACK is lost.
   const proxyPath = path.join(temp, 'drop-ack.sock');
-  const proxy = net.createServer((client) => {
+  proxy = net.createServer((client) => {
     const upstream = net.connect(socketPath);
+    for (const socket of [client, upstream]) {
+      proxySockets.add(socket);
+      socket.once('close', () => proxySockets.delete(socket));
+    }
     client.pipe(upstream);
     upstream.once('data', () => { client.destroy(); upstream.destroy(); });
     upstream.on('error', () => client.destroy());
     client.on('error', () => upstream.destroy());
   });
-  await new Promise((resolve) => proxy.listen(proxyPath, resolve));
+  await withTimeout(new Promise((resolve, reject) => { proxy.once('error', reject); proxy.listen(proxyPath, resolve); }), 'proxy startup');
   const unknown = await issue({ principalId: ids.principal, environmentId: ids.environment, audience, aggregateId: ids.aggregate, socketPath: proxyPath });
   assert.equal(unknown.error, 'ERR_ACTIVATION_UNKNOWN');
   await assertRequest(kernel.http, unknown.bearer, ids.aggregate, 'read', 200);
   await new Promise((resolve) => proxy.close(resolve));
+  proxy = undefined;
 
   const restart = await issue({ principalId: ids.principal, environmentId: ids.environment, audience, aggregateId: ids.aggregate });
   const restartBearer = restart.bearer;
@@ -85,7 +92,7 @@ try {
 
   const disk = await readFile(storePath, 'utf8');
   const logs = `${hostWorker.logs.join('')}\n${kernelLogBuffers.flat().join('')}`;
-  for (const token of [validBearer, otherPrincipal.bearer, otherEnvironment.bearer, otherAudience.bearer, expired.bearer, failedDelivery.bearer, restartBearer]) {
+  for (const token of [validBearer, otherPrincipal.bearer, otherEnvironment.bearer, otherAudience.bearer, expired.bearer, failedDelivery.bearer, disconnected.bearer, unknown.bearer, restartBearer]) {
     assert.ok(!disk.includes(token), 'bearer must not persist');
     assert.ok(!logs.includes(token), 'bearer must not appear in process logs');
   }
@@ -97,6 +104,8 @@ try {
   assert.equal(await effectCount(kernel.http), 0, 'Kernel restart invalidates prior local credentials');
   console.log('AC-05 process integration passed: scoped allow, principal/environment/audience/scope/aggregate/expiry/revoke/delivery/restart denials before effect; store contains hashes only');
 } finally {
+  for (const socket of proxySockets) socket.destroy();
+  if (proxy?.listening) await new Promise((resolve) => proxy.close(resolve));
   if (hostWorker) await terminate(hostWorker.child);
   for (const child of children) await stopKernel({ child });
   await rm(temp, { recursive: true, force: true });
@@ -119,6 +128,7 @@ async function issue(config) {
 
 async function startHostWorker() {
   const worker = fork(fileURLToPath(new URL('./nh00-local-host-worker.mjs', import.meta.url)), [], { stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
+  children.push(worker);
   const logs = [];
   worker.stdout.on('data', (chunk) => logs.push(chunk.toString()));
   worker.stderr.on('data', (chunk) => logs.push(chunk.toString()));
@@ -127,23 +137,27 @@ async function startHostWorker() {
     if (message.type === 'ready') return;
     const entry = pending.get(message.id);
     if (!entry) return;
-    if (message.type === 'bearer') entry.bearer = message.bearer;
+    if (message.type === 'bearer') {
+      entry.bearer = message.bearer;
+      worker.send({ id: message.id, method: 'deliveryAck' });
+    }
     if (message.type === 'complete') {
       pending.delete(message.id);
       entry.resolve({ ...message, bearer: entry.bearer });
     }
   });
-  await new Promise((resolve, reject) => {
+  await withTimeout(new Promise((resolve, reject) => {
     worker.once('message', (message) => message.type === 'ready' ? resolve() : reject(new Error('Host worker did not become ready')));
     worker.once('error', reject);
-  });
+  }), 'host worker startup');
   return {
     child: worker,
     logs,
     call(message) {
       const id = message.id ?? `command-${Math.random()}`;
       return new Promise((resolve, reject) => {
-        pending.set(id, { resolve, reject, bearer: undefined });
+        const timer = setTimeout(() => { pending.delete(id); reject(new Error('Host worker request timed out')); }, 5000);
+        pending.set(id, { resolve: (value) => { clearTimeout(timer); resolve(value); }, reject, bearer: undefined });
         worker.send({ ...message, id });
       });
     }
@@ -158,7 +172,7 @@ async function startKernel() {
   const lines = createInterface({ input: child.stdout });
   lines.on('line', (line) => logs.push(`${line}\n`));
   child.stderr.on('data', (chunk) => logs.push(chunk.toString()));
-  const ready = await new Promise((resolve, reject) => {
+  const ready = await withTimeout(new Promise((resolve, reject) => {
     const onExit = (code) => reject(new Error(`Kernel probe exited before ready (${code})`));
     child.once('exit', onExit);
     lines.on('line', (line) => {
@@ -167,7 +181,7 @@ async function startKernel() {
       resolve(JSON.parse(line.slice(6)));
     });
     child.once('error', reject);
-  });
+  }), 'Kernel startup');
   return { child, lines, logs, http: ready.http };
 }
 
@@ -183,6 +197,7 @@ async function assertRequest(base, bearer, aggregate, scope, status) {
   const response = await fetch(url, {
     method: 'POST',
     headers: bearer ? { authorization: `Bearer ${bearer}` } : {},
+    signal: AbortSignal.timeout(5000),
     body: ''
   });
   assert.equal(response.status, status, `probe ${scope} expected HTTP ${status}`);
@@ -190,7 +205,7 @@ async function assertRequest(base, bearer, aggregate, scope, status) {
 }
 
 async function effectCount(base) {
-  const response = await fetch(`${base}/test/effects`);
+  const response = await fetch(`${base}/test/effects`, { signal: AbortSignal.timeout(5000) });
   assert.equal(response.status, 200);
   return (await response.json()).effect_count;
 }
@@ -205,3 +220,12 @@ async function terminate(child) {
 }
 
 function delay(milliseconds) { return new Promise((resolve) => setTimeout(resolve, milliseconds)); }
+
+async function withTimeout(promise, operation) {
+  let timer;
+  try {
+    return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`${operation} timed out`)), 5000); })]);
+  } finally {
+    clearTimeout(timer);
+  }
+}

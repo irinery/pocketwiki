@@ -3,9 +3,14 @@ import { LocalCredentialHost } from '../src/harness/local-host.mjs';
 import { rename } from 'node:fs/promises';
 
 const hosts = new Map();
+const deliveries = new Map();
 
 process.on('message', async (message) => {
   if (!message || typeof message.id !== 'string') return;
+  if (message.method === 'deliveryAck') {
+    deliveries.get(message.id)?.();
+    return;
+  }
   try {
     if (message.method === 'issue') {
       const config = message.config;
@@ -18,7 +23,13 @@ process.on('message', async (message) => {
         grantedScopes: config.grantedScopes,
         persistVerifier: (verifier) => kernel.persistVerifier(verifier),
         deliverBearer: async ({ bearer }) => {
-          process.send({ id: message.id, type: 'bearer', bearer });
+          await new Promise((resolve, reject) => {
+            const timer = setTimeout(() => { deliveries.delete(message.id); reject(new Error('delivery ACK timed out')); }, 3000);
+            deliveries.set(message.id, () => { clearTimeout(timer); deliveries.delete(message.id); resolve(); });
+            process.send({ id: message.id, type: 'bearer', bearer }, (error) => {
+              if (error) { clearTimeout(timer); deliveries.delete(message.id); reject(error); }
+            });
+          });
           if (config.disconnectBeforeDeliveryFailure) await rename(config.socketPath, `${config.socketPath}.offline`);
           if (config.failDelivery) throw new Error('injected private process channel failure');
         },

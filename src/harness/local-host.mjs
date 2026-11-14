@@ -25,9 +25,10 @@ export class LocalCredentialHost {
     this.#now = now;
   }
 
-  // Delivery must hand the bearer to a trusted receiver that waits for this
-  // method to succeed before using it. ERR_ACTIVATION_UNKNOWN means Kernel
-  // may have activated the delivered bearer despite the failed response.
+  // Delivery must resolve only after the trusted receiver confirms receipt,
+  // not merely after enqueueing bytes. That receiver must wait for bootstrap
+  // success before use. ERR_ACTIVATION_UNKNOWN is internal: Kernel may have
+  // activated the bearer despite a failed response; do not expose it on wire.
   async bootstrap(requestedScopes, { threadId, aggregateId } = {}) {
     const requested = normalizeScopes(requestedScopes);
     const scopes = requested.filter((scope) => this.#grantedScopes.has(scope));
