@@ -8,6 +8,7 @@ test('deadline terminates a running process and reports failure', async () => {
   const result = await runAndCapture(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], process.cwd(), process.env, 100);
   assert.equal(result.status, 1);
   assert.match(result.output, /deadline exceeded/);
+  assert.doesNotMatch(result.output, /cleanup failed/);
 });
 
 test('process failure is preserved and successful execution passes', async () => {
@@ -23,6 +24,7 @@ test('synchronous shard deadline fails on timeout and expired deadline', async (
   const timeout = await runWithinDeadline(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {}, Date.now() + 100);
   assert.equal(timeout.status, null);
   assert.equal(timeout.error.code, 'ETIMEDOUT');
+  assert.doesNotMatch(timeout.error.message, /cleanup failed/);
   const expired = await runWithinDeadline(process.execPath, ['-e', 'process.exit(0)'], {}, Date.now() - 1);
   assert.equal(expired.status, null);
   assert.match(expired.error.message, /deadline exceeded/);
@@ -32,35 +34,37 @@ test('hard deadline kills a child that ignores SIGTERM and its descendant', asyn
   const { runWithinDeadline } = await import('./deadline-sync.mjs');
   const source = `const { spawn } = require('node:child_process');
     process.on('SIGTERM', () => {});
-    const child = spawn(process.execPath, ['-e', "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)"]);
+    const child = spawn(process.execPath, ['-e', "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)"], { stdio: ['ignore', 1, 2] });
     console.log(child.pid); setInterval(() => {}, 1000);`;
   const start = Date.now();
   const result = await runWithinDeadline(process.execPath, ['-e', source], {}, Date.now() + 500);
   assert.equal(result.error.code, 'ETIMEDOUT');
+  assert.doesNotMatch(result.error.message, /cleanup failed/);
   assert.ok(Date.now() - start < 5000);
   const pid = Number(result.stdout.trim());
   assert.ok(pid > 0);
-  await assertStopped(pid);
+  // The descendant holds the inherited output pipe, so close proves it exited.
 });
 
 test('deadline kills detached nested process groups', async () => {
   const { runWithinDeadline } = await import('./deadline-sync.mjs');
   const nested = `const { spawn } = require('node:child_process');
-    const p = spawn(process.execPath, ['-e', "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)"], { detached: true, stdio: 'ignore' });
+    const p = spawn(process.execPath, ['-e', "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)"], { detached: true, stdio: ['ignore', 1, 2] });
     console.log(p.pid); setInterval(() => {}, 1000);`;
   const result = await runWithinDeadline(process.execPath, ['-e', nested], {}, Date.now() + 500);
   assert.equal(result.error.code, 'ETIMEDOUT');
+  assert.doesNotMatch(result.error.message, /cleanup failed/);
   const pid = Number(result.stdout.trim());
   assert.ok(pid > 0);
-  await assertStopped(pid);
+  // The descendant holds the inherited output pipe, so close proves it exited.
 });
 
 test('cleanup rescans after discovering a detached child', async () => {
   const { killProcessTree } = await import('./deadline-sync.mjs');
   const nested = `const { spawn } = require('node:child_process');
-    const source = "const {spawn}=require('node:child_process'); const p=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{detached:true,stdio:'ignore'}); console.log(p.pid); setInterval(()=>{},1000)";
-    const p = spawn(process.execPath, ['-e', source], { detached: true });
-    p.stdout.on('data', data => console.log(p.pid + ' ' + data.toString().trim())); setInterval(() => {}, 1000);`;
+    const source = "const {spawn}=require('node:child_process'); const p=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{detached:true,stdio:['ignore',1,2]}); console.log(process.pid+' '+p.pid); setInterval(()=>{},1000)";
+    spawn(process.execPath, ['-e', source], { detached: true, stdio: ['ignore', 1, 2] });
+    setInterval(() => {}, 1000);`;
   const root = spawn(process.execPath, ['-e', nested], { detached: true });
   const [chunk] = await once(root.stdout, 'data');
   const [childPID, grandchildPID] = String(chunk).trim().split(/\s+/).map(Number);
@@ -76,20 +80,8 @@ test('cleanup rescans after discovering a detached child', async () => {
   });
   await closed;
   assert.ok(scans >= 2);
-  for (const pid of [childPID, grandchildPID]) await assertStopped(pid);
+  // Both descendants hold root's output pipe; its close is their exit event.
 });
-
-async function assertStopped(pid) {
-  const deadline = Date.now() + 2000;
-  while (Date.now() < deadline) {
-    const result = spawnSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' });
-    if (result.status === 1 && !result.stdout.trim()) return;
-    assert.equal(result.status, 0, 'ps failed while checking process state');
-    if (result.stdout.trim().startsWith('Z')) return;
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-  assert.fail('process ' + pid + ' is still running after cleanup');
-}
 
 test('cleanup reports failure if process enumeration fails', async () => {
   const { killProcessTree } = await import('./deadline-sync.mjs');
@@ -97,5 +89,20 @@ test('cleanup reports failure if process enumeration fails', async () => {
   const closed = once(child, 'close');
   assert.throws(() => killProcessTree(child.pid, () => ({ status: 1, stdout: '' })), /process listing failed/);
   await closed;
-  await assertStopped(child.pid);
+  // close is emitted after the direct child is reaped.
+});
+
+test('failed enumeration does not hang on a detached survivor holding pipes', async () => {
+  const { runWithinDeadline } = await import('./deadline-sync.mjs');
+  const source = `const {spawn}=require('node:child_process'); const p=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{detached:true,stdio:['ignore',1,2]}); console.log(p.pid); setInterval(()=>{},1000)`;
+  const result = await runWithinDeadline(process.execPath, ['-e', source], { snapshotProcesses: () => ({ status: 1, stdout: '' }) }, Date.now() + 300);
+  const pid = Number(result.stdout.trim());
+  try {
+    assert.ok(pid > 0);
+    assert.match(result.error.message, /cleanup failed/);
+    assert.equal(result.status, null);
+  } finally {
+    try { process.kill(-pid, 'SIGKILL'); } catch {}
+    try { process.kill(pid, 'SIGKILL'); } catch {}
+  }
 });

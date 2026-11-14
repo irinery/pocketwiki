@@ -5,16 +5,20 @@ export function runWithinDeadline(binary, args, options, deadline, cap = 180_000
   const timeLeft = Math.min(cap, deadline - Date.now());
   if (timeLeft <= 0) return Promise.resolve({ status: null, error: new Error('global scenario deadline exceeded') });
   return new Promise((resolve) => {
-    const child = spawn(binary, args, { ...options, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const { snapshotProcesses, ...spawnOptions } = options;
+    const child = spawn(binary, args, { ...spawnOptions, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
     let error;
     let exceeded = false;
     const limit = options.maxBuffer || 10 * 1024 * 1024;
     function kill() {
-      try { killProcessTree(child.pid); } catch (cleanupError) {
+      try { killProcessTree(child.pid, snapshotProcesses); } catch (cleanupError) {
         error = new Error('deadline exceeded; cleanup failed: ' + cleanupError.message);
         error.code = 'ETIMEDOUT';
+        // A detached survivor may retain the pipes forever; never wait for it.
+        child.stdout.destroy();
+        child.stderr.destroy();
       }
     }
     const timer = setTimeout(() => {
