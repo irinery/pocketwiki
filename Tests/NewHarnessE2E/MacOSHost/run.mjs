@@ -1,10 +1,11 @@
+import { exportGitSnapshot } from '../git-snapshot.mjs';
 import { createServer } from 'node:http';
 import { runAndCapture } from '../deadline-process.mjs';
 import { runWithinDeadline, requireProcessListing } from '../deadline-sync.mjs';
 import { createServer as createNetServer } from 'node:net';
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { chmod, cp, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -70,8 +71,8 @@ try {
   }
   const kernelSource = path.join(tempHome, 'sources', 'pocketkernel');
   const middlewareSource = path.join(tempHome, 'sources', 'middlewareauth');
-  await exportCleanSnapshot(kernelRoot, kernelSource);
-  await exportCleanSnapshot(middlewareRoot, middlewareSource);
+  await exportGitSnapshot(kernelRoot, kernelSHA, kernelSource);
+  await exportGitSnapshot(middlewareRoot, middlewareSHA, middlewareSource);
   const built = await buildHelpers({ kernelRoot: kernelSource, middlewareRoot: middlewareSource, kernelBinary, middlewareBinary, tempHome });
   if (built.status !== 0) {
     output += built.output;
@@ -191,23 +192,7 @@ function gitSHA(repository) {
   return result.stdout.trim();
 }
 
-async function exportCleanSnapshot(repository, destination) {
-  const status = spawnSync('git', ['-C', repository, 'status', '--porcelain=v1', '-z', '--untracked-files=all'], { encoding: 'utf8' });
-  if (status.status !== 0) throw new Error('não foi possível verificar o checkout helper: ' + repository);
-  const untracked = new Set();
-  for (const record of status.stdout.split('\0').filter(Boolean)) {
-    if (record.startsWith('?? ')) untracked.add(record.slice(3));
-    else throw new Error('arquivos rastreados alterados no helper: ' + repository);
-  }
-  await cp(repository, destination, { recursive: true, filter(source) {
-    const relative = path.relative(repository, source);
-    if (!relative || relative === '.') return true;
-    const segments = relative.split(path.sep);
-    if (segments.includes('.git') || segments.includes('bin') || segments.includes('node_modules') || segments.includes('.build') || segments.includes('target')) return false;
-    if (segments.some((segment) => segment === '.env' || segment.startsWith('.env.'))) return false;
-    return ![...untracked].some((entry) => relative === entry || relative.startsWith(entry + path.sep));
-  } });
-}
+
 
 async function makeWritable(target) {
   let info;
