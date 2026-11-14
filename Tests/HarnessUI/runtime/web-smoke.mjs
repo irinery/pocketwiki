@@ -170,6 +170,7 @@ try {
     await page.getByText(/Aceito/).waitFor({timeout:30000});
     assert.equal(await page.locator('[data-completed="true"]').count(), 0);
     assert.ok((await page.locator('[aria-label="Recibos do runtime"]').innerText()).includes(commandIds[0]));
+    if (process.env.RUNTIME_ARTIFACT_DIR) await page.locator('#runtime-slot').screenshot({ path: path.join(process.env.RUNTIME_ARTIFACT_DIR, 'runtime-accepted-before-release.png') });
     await page.evaluate(() => fetch('/release-stream', { method: 'POST' }));
   } else {
     await page.getByText(/Concluído/).waitFor({timeout:30000});

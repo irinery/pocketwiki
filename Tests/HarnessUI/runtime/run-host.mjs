@@ -85,7 +85,7 @@ try {
     const legacyCode = await run(process.execPath, ['Tests/NewHarnessE2E/legacy-web-host.mjs'], { env: { ...process.env, NH_RUNTIME_UI_BUNDLE: bundle, NH_TEST_ARTIFACT_DIR: legacyArtifacts } });
     if (legacyCode === 0) {
       const destination = path.join(reportDir, 'legacy-web'); await mkdir(destination, { recursive: true });
-      for (const file of ['legacy-web.png', 'legacy-web-trace.zip', 'legacy-web-evidence.json', 'legacy-web-process.log']) await copyFile(path.join(legacyArtifacts, file), path.join(destination, file));
+      for (const file of ['legacy-web.png', 'legacy-web-runtime-fallback.png', 'legacy-web-trace.zip', 'legacy-web-evidence.json', 'legacy-web-process.log']) await copyFile(path.join(legacyArtifacts, file), path.join(destination, file));
     }
     const legacyRow = cases.find(item => item.id === '02-02');
     legacyRow.status = legacyCode === 0 ? 'passed' : 'failed'; legacyRow.detail = legacyCode === 0 ? 'slot e chat legado pela bridge validados' : `host legado falhou: exit ${legacyCode}`;
