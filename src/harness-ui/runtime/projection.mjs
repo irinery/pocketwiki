@@ -16,7 +16,7 @@ export class RuntimeProjection {
     if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100 || !Number.isSafeInteger(confirmedRevision) || confirmedRevision < 0 || !Number.isSafeInteger(confirmedSeq) || confirmedSeq < 0) throw fail('ERR_INVALID', 'Parâmetros de projeção inválidos');
     Object.assign(this, { environmentId, threadId, pageSize, confirmedRevision, confirmedSeq });
     this.receipts = new Map(); this.effects = new Map(); this.events = [];
-    this.cursors = new Set(); this.seen = new Map(); this.sequences = new Map(); this.bytes = 0;
+    this.cursors = new Set(); this.seen = new Map(); this.sequences = new Map(); this.bytes = 0; this.dedupBytes = 0;
   }
   appendPage(page, requestedCursor) {
     try { return this.appendPageChecked(page, requestedCursor); }
@@ -60,8 +60,8 @@ export class RuntimeProjection {
     }
     if (this.sequences.has(event.seq) || event.seq <= (this.events.at(-1)?.seq ?? this.boundary)) throw fail('ERR_INVALID', 'Sequência inválida');
     const size = new TextEncoder().encode(fingerprint).length;
-    if (this.bytes + size > 4_194_304) throw fail('ERR_INVALID', 'Buffer excedido');
-    this.bytes += size; this.seen.set(event.event_id, fingerprint); this.sequences.set(event.seq, event.event_id);
+    if (this.bytes + size > 4_194_304 || this.dedupBytes + size > 4_194_304 || this.seen.size >= 4096) throw fail('ERR_RESYNC_REQUIRED', 'Projeção precisa de novo snapshot');
+    this.bytes += size; this.dedupBytes += size; this.seen.set(event.event_id, fingerprint); this.sequences.set(event.seq, event.event_id);
     this.events.push({ seq: event.seq, payload: clone(payload) });
   }
   finish() {
@@ -92,7 +92,7 @@ export class RuntimeProjection {
     // Once published, the confirmed cursor subsumes its events. Keep only
     // materialized entities; replay at or before the cursor is ignored.
     this.receipts = receipts; this.effects = effects; this.revision = revision; this.boundary = lastSeq;
-    this.events = []; this.seen.clear(); this.sequences.clear(); this.bytes = 0;
+    this.events = []; this.bytes = 0;
     return { snapshotId: this.snapshotId, revision, asOfSeq: this.asOfSeq, lastSeq, receipts: new Map(receipts), effects: new Map(effects) };
   }
 }

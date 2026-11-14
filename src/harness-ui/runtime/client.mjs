@@ -48,7 +48,9 @@ export class RuntimeClient {
       }
       if (!abort.signal.aborted) this.publish({ available: false, error: 'ERR_UNAVAILABLE' });
     } catch (error) {
-      if (!abort.signal.aborted) this.publish({ available: false, error: error.code || 'ERR_INVALID' });
+      if (!abort.signal.aborted && error.code === 'ERR_RESYNC_REQUIRED') {
+        try { await this.reconnect(); } catch {}
+      } else if (!abort.signal.aborted) this.publish({ available: false, error: error.code || 'ERR_INVALID' });
     }
   }
   close() { this.streamAbort?.abort(); }

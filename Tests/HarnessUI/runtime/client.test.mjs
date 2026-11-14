@@ -35,3 +35,12 @@ test('404 legado com corpo não-harness mantém fallback', async () => {
   const client = new RuntimeClient({ transport: { async capabilities() { throw new Error('Invalid Kernel error (HTTP 404)'); } }, environmentId: id, threadId: id });
   await assert.rejects(client.open()); assert.equal(client.state.error, 'LEGACY_SERVER'); assert.equal(client.state.available, false);
 });
+test('limite de deduplicação inicia resnapshot sem espera', async () => {
+  const client = new RuntimeClient({ transport: {}, environmentId: id, threadId: id });
+  let reconnected = false;
+  client.applyEvent = async () => { throw Object.assign(new Error('limite'), { code: 'ERR_RESYNC_REQUIRED' }); };
+  client.reconnect = async () => { reconnected = true; };
+  const bytes = new TextEncoder().encode('id: 11\ndata: {"seq":11}\n\n');
+  const response = new Response(new ReadableStream({ start(controller) { controller.enqueue(bytes); controller.close(); } }));
+  await client.consume(response, new AbortController()); assert.equal(reconnected, true);
+});

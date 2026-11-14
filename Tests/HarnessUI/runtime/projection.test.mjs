@@ -24,7 +24,7 @@ test('ack aceito não é apresentado como concluído', async () => {
  test('overflow invalida toda a montagem', () => {
   const p = new RuntimeProjection({ environmentId: id, threadId: id }); p.appendPage(page);
   p.bytes = 4_194_304;
-  assert.throws(() => p.bufferEvent(event(11)), { code: 'ERR_INVALID' });
+  assert.throws(() => p.bufferEvent(event(11)), { code: 'ERR_RESYNC_REQUIRED' });
   assert.throws(() => p.finish(), { code: 'ERR_INVALID' });
 });
 
@@ -36,13 +36,19 @@ test('mesmo event_id com conteúdo diferente invalida montagem', () => {
   assert.throws(() => p.finish(), { code: 'ERR_INVALID' });
 });
 
-test('stream longo descarta buffer já publicado e mantém dedup', () => {
+test('dedup continua após publicação e limite exige novo snapshot', () => {
   const p = new RuntimeProjection({ environmentId: id, threadId: id }); p.appendPage(page); p.finish();
-  for (let seq = 11; seq < 6011; seq++) {
-    const e = event(seq); p.bufferEvent(e); p.finish(); p.bufferEvent(e);
+  for (let seq = 11; seq < 4107; seq++) {
+    const e = event(seq); e.event_id = `33333333-3333-4333-8333-${String(seq).padStart(12, '0')}`;
+    p.bufferEvent(e); p.finish(); p.bufferEvent(e);
     assert.equal(p.bytes, 0);
   }
-  assert.equal(p.finish().lastSeq, 6010);
+  const conflict = event(4107); conflict.event_id = `33333333-3333-4333-8333-${String(11).padStart(12, '0')}`;
+  assert.throws(() => p.bufferEvent(conflict), { code: 'ERR_INVALID' });
+  const next = new RuntimeProjection({ environmentId: id, threadId: id }); next.appendPage(page); next.finish();
+  next.seen = new Map(Array.from({ length: 4096 }, (_, n) => [String(n), 'x']));
+  assert.throws(() => next.bufferEvent(event(11)), { code: 'ERR_RESYNC_REQUIRED' });
+  assert.throws(() => next.finish(), { code: 'ERR_INVALID' });
 });
 
  test('página inválida invalida a montagem inteira', () => {
