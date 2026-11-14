@@ -1,3 +1,4 @@
+import { spawnSync as inspectProcess } from 'node:child_process';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -15,5 +16,6 @@ test('supervisor cleans reparented helper after host timeout SIGKILL', async t =
   assert.equal(result.status, null);
   assert.equal(result.error?.code, 'ETIMEDOUT');
   const pid = Number(await readFile(pidFile, 'utf8')); assert.ok(pid > 0);
-  assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+  const status = inspectProcess('ps', ['-p', String(pid), '-o', 'stat='], { encoding: 'utf8' });
+  assert.ok(status.status === 1 || (status.status === 0 && status.stdout.trim().startsWith('Z')), 'helper must be gone or a non-running zombie');
 });

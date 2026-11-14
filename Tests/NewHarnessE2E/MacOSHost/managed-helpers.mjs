@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
+import { readFileSync, readlinkSync, realpathSync } from 'node:fs';
 
 const quote = text => "'" + text.replaceAll("'", "'\\''") + "'";
 export async function createHelperLauncher(launcher, binary, ledger) {
@@ -18,6 +19,20 @@ function executable(pid, launcher, started) {
   const match = /^\s*(\S+)\s+(.+?)\s*$/.exec(result.stdout);
   if (!match) throw new Error('invalid process listing for helper ' + pid);
   if (match[1].startsWith('Z')) return null;
+  // Linux ps `comm` exposes a truncated task name, not an executable path.
+  if (process.platform === 'linux') {
+    let actual;
+    try { actual = readlinkSync(`/proc/${pid}/exe`); }
+    catch (error) {
+      if (error.code === 'ENOENT' && spawnSync('ps', ['-p', String(pid)], { stdio: 'ignore' }).status === 1) return null;
+      throw new Error('cannot inspect helper executable: ' + pid);
+    }
+    if (launcher) {
+      const argv = readFileSync(`/proc/${pid}/cmdline`).toString().split('\0');
+      if (argv[0] === '/bin/sh' && argv[1] === launcher && actual === realpathSync('/bin/sh')) return launcher;
+    }
+    return actual;
+  }
   if (match[2] === '/bin/sh' && launcher) {
     const args = spawnSync('ps', ['-p', String(pid), '-o', 'args='], { encoding: 'utf8', timeout: 5000 });
     if (args.status !== 0) throw new Error('cannot verify helper launcher ' + pid);
