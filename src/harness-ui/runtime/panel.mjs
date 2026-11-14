@@ -7,12 +7,13 @@ export function mountRuntimePanel(root, client) {
   const input = document.createElement('textarea'); input.setAttribute('aria-label', 'Texto do comando durável');
   const submit = document.createElement('button'); submit.textContent = 'Enviar comando';
   const resolve = document.createElement('button'); resolve.type = 'button'; resolve.textContent = 'Consultar comando pendente';
+  const retry = document.createElement('button'); retry.type = 'button'; retry.textContent = 'Repetir comando pendente';
   const receipts = document.createElement('ul'); receipts.setAttribute('aria-label', 'Recibos do runtime');
-  form.append(input, submit); root.replaceChildren(status, form, resolve, receipts);
+  form.append(input, submit); root.replaceChildren(status, form, resolve, retry, receipts);
   function render(state) {
     status.textContent = state.error === 'LEGACY_SERVER' ? 'Execução durável indisponível. O chat legado continua disponível.' : state.error ? state.error : state.available ? `Revisão ${state.revision} · evento ${state.lastSeq}` : 'Conectando';
     submit.disabled = !state.available || !!state.pendingCommandId;
-    resolve.hidden = !state.pendingCommandId;
+    resolve.hidden = !state.pendingCommandId; retry.hidden = !state.pendingCommandId;
     input.disabled = !!state.pendingCommandId;
     receipts.replaceChildren(...state.receipts.map(receipt => {
       const { commandId, label, completed } = receiptPresentation(receipt);
@@ -20,6 +21,10 @@ export function mountRuntimePanel(root, client) {
     }));
   }
   client.onChange = render; render(client.state);
+  retry.addEventListener('click', async () => {
+    try { await client.retryPending(); }
+    catch { status.textContent = 'Não foi possível repetir o comando pendente.'; }
+  });
   resolve.addEventListener('click', async () => {
     try { await client.resolvePending(); }
     catch { status.textContent = 'Não foi possível consultar o comando pendente.'; }

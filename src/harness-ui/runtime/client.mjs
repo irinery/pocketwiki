@@ -72,17 +72,17 @@ export class RuntimeClient {
     if (!this.state.available || this.pendingCommandId) throw Object.assign(new Error('Runtime indisponível ou comando pendente'), { code: 'ERR_UNAVAILABLE' });
     const command = { protocol_major: 1, command_id: commandId, environment_id: this.environmentId, expected_revision: this.state.revision, operation: 'runtime.dispatch', input: { command_id: commandId, thread_id: this.threadId, expected_revision: this.state.revision, operation: 'submit', text } };
     if (!validateAgainst('command', command).valid) throw Object.assign(new Error('Comando inválido'), { code: 'ERR_INVALID' });
-    this.pendingCommandId = commandId;
+    this.pendingCommandId = commandId; this.pendingCommand = command;
     this.publish({ pendingCommandId: commandId });
     let receipt;
     try { receipt = await this.transport.dispatch(command); }
     catch (error) {
       if (error.status >= 400 && error.status < 500 && error.status !== 408 && error.status !== 429) {
-        this.pendingCommandId = undefined; this.publish({ pendingCommandId: undefined });
+        this.pendingCommandId = undefined; this.pendingCommand = undefined; this.publish({ pendingCommandId: undefined });
       } else this.publish({ error: 'ERR_RECEIPT_PENDING' });
       throw error;
     }
-    this.pendingCommandId = undefined;
+    this.pendingCommandId = undefined; this.pendingCommand = undefined;
     this.publish({ pendingCommandId: undefined });
     // An acknowledgement is provisional, never an indication of effect completion.
     if (!this.state.receipts.some(item => item.command_id === commandId)) {
@@ -90,10 +90,18 @@ export class RuntimeClient {
     }
     return receipt;
   }
+  async retryPending() {
+    if (!this.pendingCommand) return;
+    const receipt = await this.transport.dispatch(this.pendingCommand);
+    this.pendingCommandId = undefined; this.pendingCommand = undefined;
+    const existing = this.state.receipts.find(item => item.command_id === receipt.command_id);
+    this.publish({ pendingCommandId: undefined, error: null, receipts: [...this.state.receipts.filter(item => item.command_id !== receipt.command_id), existing && existing.revision >= receipt.revision ? existing : receipt] });
+    return receipt;
+  }
   async resolvePending() {
     if (!this.pendingCommandId) return;
     const receipt = await this.transport.receipt(this.pendingCommandId, { environmentId: this.environmentId });
-    this.pendingCommandId = undefined;
+    this.pendingCommandId = undefined; this.pendingCommand = undefined;
     const existing = this.state.receipts.find(item => item.command_id === receipt.command_id);
     const value = existing && existing.revision >= receipt.revision ? existing : receipt;
     this.publish({ pendingCommandId: undefined, error: null, receipts: [...this.state.receipts.filter(item => item.command_id !== receipt.command_id), value] });

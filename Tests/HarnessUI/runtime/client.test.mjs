@@ -25,3 +25,9 @@ test('receipt consultado antigo não substitui evento mais novo', async () => {
   client.state.receipts = [{ command_id: id, revision: 3, state: 'succeeded' }];
   await client.resolvePending(); assert.equal(client.state.receipts[0].state, 'succeeded');
 });
+test('repetição após falha ambígua usa o mesmo envelope', async () => {
+  const calls = []; const transport = { async dispatch(command) { calls.push(structuredClone(command)); if (calls.length === 1) throw new Error('timeout'); return { command_id: command.command_id, revision: 1, state: 'accepted' }; } };
+  const client = new RuntimeClient({ transport, environmentId: id, threadId: id }); client.state.available = true;
+  await assert.rejects(client.submit('oi', id)); await client.retryPending();
+  assert.deepEqual(calls[0], calls[1]); assert.equal(client.pendingCommandId, undefined);
+});
