@@ -37,3 +37,50 @@ jobs:
           swift --version
       - name: Test runtime lane
         run: node --test Tests/Harness/runtime/*.test.mjs
+
+  real-kernel:
+    name: Runtime clients against real Kernel
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - name: Checkout PocketWiki PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Checkout pinned PocketKernel
+        uses: actions/checkout@v4
+        with:
+          repository: irinery/pocketkernel
+          ref: ee4428ece80b8be4b0ff4d91efa684df0d99ae4d
+          path: .build/dependencies/pocketkernel
+          ssh-key: ${{ secrets.POCKETKERNEL_DEPLOY_KEY }}
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.26.0
+          cache: false
+      - name: Verify pinned sources and toolchain
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+          test "$(git -C .build/dependencies/pocketkernel rev-parse HEAD)" = ee4428ece80b8be4b0ff4d91efa684df0d99ae4d
+          git rev-parse HEAD
+          node --version
+          go version
+          swift --version
+      - name: Build real Kernel and Swift client
+        env:
+          CGO_ENABLED: '0'
+        run: |
+          (cd .build/dependencies/pocketkernel && go build -trimpath -o "$RUNNER_TEMP/runtime-kernel" ./cmd/pocketkernel)
+          swiftc -swift-version 6 Sources/PocketWikiMac/Models/Harness/HarnessOperationRegistry.swift Sources/PocketWikiMac/Models/Harness/HarnessV1.swift Sources/PocketWikiMac/Services/Harness/Runtime/RuntimeTransport.swift Tests/Harness/runtime/SwiftKernelIntegration.swift -o "$RUNNER_TEMP/runtime-swift"
+      - name: Exercise real bootstrap, ledger and SSE
+        env:
+          RUNTIME_KERNEL_BINARY: ${{ runner.temp }}/runtime-kernel
+          RUNTIME_SWIFT_BINARY: ${{ runner.temp }}/runtime-swift
+        run: node Tests/Harness/runtime/kernel-integration.mjs
