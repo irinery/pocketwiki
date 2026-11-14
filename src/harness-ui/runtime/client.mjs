@@ -60,13 +60,26 @@ export class RuntimeClient {
     }
   }
   async submit(text, commandId = crypto.randomUUID()) {
-    if (!this.state.available) throw Object.assign(new Error('Runtime indisponível'), { code: 'ERR_UNAVAILABLE' });
+    if (!this.state.available || this.pendingCommandId) throw Object.assign(new Error('Runtime indisponível ou comando pendente'), { code: 'ERR_UNAVAILABLE' });
     const command = { protocol_major: 1, command_id: commandId, environment_id: this.environmentId, expected_revision: this.state.revision, operation: 'runtime.dispatch', input: { command_id: commandId, thread_id: this.threadId, expected_revision: this.state.revision, operation: 'submit', text } };
-    const receipt = await this.transport.dispatch(command);
+    this.pendingCommandId = commandId;
+    this.publish({ pendingCommandId: commandId });
+    let receipt;
+    try { receipt = await this.transport.dispatch(command); }
+    catch (error) { this.publish({ error: 'ERR_RECEIPT_PENDING' }); throw error; }
+    this.pendingCommandId = undefined;
+    this.publish({ pendingCommandId: undefined });
     // An acknowledgement is provisional, never an indication of effect completion.
     if (!this.state.receipts.some(item => item.command_id === commandId)) {
       this.publish({ receipts: [...this.state.receipts, receipt] });
     }
+    return receipt;
+  }
+  async resolvePending() {
+    if (!this.pendingCommandId) return;
+    const receipt = await this.transport.receipt(this.pendingCommandId, { environmentId: this.environmentId });
+    this.pendingCommandId = undefined;
+    this.publish({ pendingCommandId: undefined, error: null, receipts: [...this.state.receipts.filter(item => item.command_id !== receipt.command_id), receipt] });
     return receipt;
   }
 }
