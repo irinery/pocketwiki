@@ -34,5 +34,18 @@ import Foundation
         let p3 = try RuntimeProjection(schema: schema, environmentID: uid, threadID: uid, pageSize: 1, confirmedRevision: 0)
         try p3.appendPage(page(nil), requestedCursor: nil)
         do { try p3.bufferEvent(eventData); fatalError("unresolved reference accepted") } catch RuntimeProjection.Failure.invalidEvent { }
+        do { try p3.bufferEvent(Data(repeating: 65, count: 4_194_305)); fatalError("overflow accepted") } catch RuntimeProjection.Failure.overflow { }
+        let p4 = try RuntimeProjection(schema: schema, environmentID: uid, threadID: uid, pageSize: 1, confirmedRevision: 0, confirmedSeq: 4)
+        try p4.appendPage(page(nil), requestedCursor: nil)
+        do { _ = try p4.finish(); fatalError("older sequence accepted") } catch RuntimeProjection.Failure.stale { }
+        let p5 = try RuntimeProjection(schema: schema, environmentID: uid, threadID: uid, pageSize: 1, confirmedRevision: 0)
+        try p5.appendPage(page("cursor"), requestedCursor: nil)
+        do { try p5.appendPage(page("cursor"), requestedCursor: "cursor"); fatalError("repeated cursor accepted") } catch RuntimeProjection.Failure.invalidPage { }
+        var wrongEnvironment = event; wrongEnvironment["environment_id"] = id2
+        do { try p3.bufferEvent(encoded(wrongEnvironment), resolvedPayload: payloadData); fatalError("wrong environment accepted") } catch RuntimeProjection.Failure.invalidEvent { }
+        let p6 = try RuntimeProjection(schema: schema, environmentID: uid, threadID: uid, pageSize: 1, confirmedRevision: 0)
+        try p6.appendPage(page(nil), requestedCursor: nil)
+        try p6.bufferEvent(eventData, resolvedPayload: payloadData)
+        do { try p6.bufferEvent(eventData, resolvedPayload: encoded(wrong)); fatalError("changed payload accepted as duplicate") } catch RuntimeProjection.Failure.invalidEvent { }
     }
 }
