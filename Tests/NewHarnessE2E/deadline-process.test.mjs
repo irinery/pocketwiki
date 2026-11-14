@@ -40,7 +40,7 @@ test('hard deadline kills a child that ignores SIGTERM and its descendant', asyn
   assert.ok(Date.now() - start < 5000);
   const pid = Number(result.stdout.trim());
   assert.ok(pid > 0);
-  assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+  await assertStopped(pid);
 });
 
 test('deadline kills detached nested process groups', async () => {
@@ -52,7 +52,7 @@ test('deadline kills detached nested process groups', async () => {
   assert.equal(result.error.code, 'ETIMEDOUT');
   const pid = Number(result.stdout.trim());
   assert.ok(pid > 0);
-  assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+  await assertStopped(pid);
 });
 
 test('cleanup rescans after discovering a detached child', async () => {
@@ -76,5 +76,26 @@ test('cleanup rescans after discovering a detached child', async () => {
   });
   await closed;
   assert.ok(scans >= 2);
-  for (const pid of [childPID, grandchildPID]) assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+  for (const pid of [childPID, grandchildPID]) await assertStopped(pid);
+});
+
+async function assertStopped(pid) {
+  const deadline = Date.now() + 2000;
+  while (Date.now() < deadline) {
+    const result = spawnSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' });
+    if (result.status === 1 && !result.stdout.trim()) return;
+    assert.equal(result.status, 0, 'ps failed while checking process state');
+    if (result.stdout.trim().startsWith('Z')) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.fail('process ' + pid + ' is still running after cleanup');
+}
+
+test('cleanup reports failure if process enumeration fails', async () => {
+  const { killProcessTree } = await import('./deadline-sync.mjs');
+  const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { detached: true });
+  const closed = once(child, 'close');
+  assert.throws(() => killProcessTree(child.pid, () => ({ status: 1, stdout: '' })), /process listing failed/);
+  await closed;
+  await assertStopped(child.pid);
 });

@@ -9,7 +9,7 @@ export function runAndCapture(command, args, cwd, env, timeout) {
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
-      killProcessTree(child.pid);
+      try { killProcessTree(child.pid); } catch (error) { output += '\nFAIL: cleanup failed: ' + error.message + '\n'; }
     }, timeout);
     child.stdout.setEncoding('utf8').on('data', (chunk) => { output += chunk; });
     child.stderr.setEncoding('utf8').on('data', (chunk) => { output += chunk; });

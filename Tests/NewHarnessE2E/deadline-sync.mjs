@@ -12,7 +12,10 @@ export function runWithinDeadline(binary, args, options, deadline, cap = 180_000
     let exceeded = false;
     const limit = options.maxBuffer || 10 * 1024 * 1024;
     function kill() {
-      killProcessTree(child.pid);
+      try { killProcessTree(child.pid); } catch (cleanupError) {
+        error = new Error('deadline exceeded; cleanup failed: ' + cleanupError.message);
+        error.code = 'ETIMEDOUT';
+      }
     }
     const timer = setTimeout(() => {
       exceeded = true;
@@ -45,8 +48,13 @@ export function killProcessTree(rootPID, snapshotProcesses = () => spawnSync('ps
     frozen.add(pid);
   };
   stop(rootPID);
+  let snapshotFailure;
   for (;;) {
     const snapshot = snapshotProcesses();
+    if (snapshot.status !== 0 || !snapshot.stdout?.trim()) {
+      snapshotFailure = new Error('process listing failed during cleanup');
+      break;
+    }
     const children = new Map();
     for (const line of (snapshot.stdout || '').split('\n')) {
       const match = /^\s*(\d+)\s+(\d+)\s*$/.exec(line);
@@ -69,4 +77,5 @@ export function killProcessTree(rootPID, snapshotProcesses = () => spawnSync('ps
     try { process.kill(-pid, 'SIGKILL'); } catch {}
     try { process.kill(pid, 'SIGKILL'); } catch {}
   }
+  if (snapshotFailure) throw snapshotFailure;
 }
