@@ -1,9 +1,10 @@
+import { exportGitSnapshot } from './git-snapshot.mjs';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { watch } from 'node:fs';
 import { createServer } from 'node:http';
 import { createInterface } from 'node:readline';
-import { chmod, cp, lstat, mkdtemp, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdtemp, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -461,25 +462,7 @@ function runChecked(binary, args, cwd, env) {
   const result = spawnSync(binary, args, { cwd, env, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, timeout: 180_000 });
   if (result.status !== 0) throw new Error(binary + ' ' + args.join(' ') + ' failed (' + result.status + '): ' + (result.stderr || result.error?.message || ''));
 }
-async function exportGitSnapshot(repository, sha, destination) {
-  const status = spawnSync('git', ['-C', repository, 'status', '--porcelain=v1', '-z', '--untracked-files=all'], { encoding: 'utf8' });
-  if (status.status !== 0) throw new Error('cannot verify pinned source status: ' + repository);
-  const untracked = new Set();
-  for (const record of status.stdout.split('\0').filter(Boolean)) {
-    if (record.startsWith('?? ')) untracked.add(record.slice(3));
-    else throw new Error('tracked source files are dirty in ' + repository + '; refusing a non-pinned build');
-  }
-  await cp(repository, destination, { recursive: true, filter(source) {
-    const relative = path.relative(repository, source);
-    if (relative === '' || relative === '.') return true;
-    const segments = relative.split(path.sep);
-    if (segments.includes('.git') || segments.includes('node_modules') || segments.includes('bin') || segments.includes('.build') || segments.includes('target')) return false;
-    if (segments.some((segment) => segment === '.env' || segment.startsWith('.env.'))) return false;
-    if ([...untracked].some((entry) => relative === entry || relative.startsWith(entry + path.sep))) return false;
-    return true;
-  } });
-  return destination;
-}
+
 function listenEphemeral(server) {
   return new Promise((resolve, reject) => {
     server.once('error', reject);

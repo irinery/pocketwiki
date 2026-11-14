@@ -1,5 +1,6 @@
+import { exportGitSnapshot } from './git-snapshot.mjs';
 import { existsSync } from 'node:fs';
-import { chmod, cp, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { runWithinDeadline, requireProcessListing } from './deadline-sync.mjs';
@@ -349,25 +350,7 @@ function gitSHA(cwd) {
   if (result.status !== 0) throw configError('checkout git ausente: ' + cwd);
   return result.stdout.trim();
 }
-async function exportGitSnapshot(repository, sha, destination) {
-  const status = spawnSync('git', ['-C', repository, 'status', '--porcelain=v1', '-z', '--untracked-files=all'], { encoding: 'utf8' });
-  if (status.status !== 0) throw configError('não foi possível verificar o checkout pinado de ' + repository);
-  const untracked = new Set();
-  for (const record of status.stdout.split('\0').filter(Boolean)) {
-    if (record.startsWith('?? ')) untracked.add(record.slice(3));
-    else throw configError('arquivos rastreados alterados em ' + repository + '; build pinado recusado');
-  }
-  await cp(repository, destination, { recursive: true, filter(source) {
-    const relative = path.relative(repository, source);
-    if (relative === '' || relative === '.') return true;
-    const segments = relative.split(path.sep);
-    if (segments.includes('.git') || segments.includes('node_modules') || segments.includes('bin') || segments.includes('.build') || segments.includes('target')) return false;
-    if (segments.some((segment) => segment === '.env' || segment.startsWith('.env.'))) return false;
-    if ([...untracked].some((entry) => relative === entry || relative.startsWith(entry + path.sep))) return false;
-    return true;
-  } });
-  return destination;
-}
+
 async function cloneGitSnapshot(repository, sha, destination) {
   await mkdir(path.dirname(destination), { recursive: true });
   const clone = spawnSync('git', ['clone', '--shared', '--no-checkout', repository, destination], { encoding: 'utf8', timeout: 30_000 });
