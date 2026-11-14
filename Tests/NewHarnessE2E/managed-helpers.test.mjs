@@ -20,6 +20,7 @@ test('owned helper cleanup covers success, failure and timeout teardown', async 
       watcher.on('error', reject);
     });
     const child = spawn(launcher, ['60'], { stdio: 'ignore' });
+    t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL'); });
     const exited = new Promise(resolve => child.once('exit', resolve));
     await ready;
     const deadline = Date.now() + 2000;
@@ -50,8 +51,8 @@ test('cleanup fails closed if PID ledger disappears', async () => {
 test('timeout of a detached scenario still cleans its recorded helper', async t => {
   const { runWithinDeadline } = await import('./deadline-sync.mjs');
   const dir = await mkdtemp(path.join(os.tmpdir(), 'nh-helper-timeout-'));
-  t.after(() => rm(dir, { recursive: true, force: true }));
   const binary = path.join(dir, 'helper'), launcher = path.join(dir, 'launcher'), ledger = path.join(dir, 'pids');
+  t.after(async () => { try { await cleanupManagedHelpers([{ ledger, binary, launcher }]); } finally { await rm(dir, { recursive: true, force: true }); } });
   await copyFile('/bin/sleep', binary);
   await createHelperLauncher(launcher, binary, ledger);
   const script = "const {spawn}=require('node:child_process'); const c=spawn(process.argv[1],['60'],{detached:true,stdio:'ignore'}); c.unref(); setTimeout(()=>{},60000);";
@@ -72,6 +73,7 @@ test('cleanup continues after bad records and terminates the next owned helper',
   const binary = path.join(dir, 'helper'), launcher = path.join(dir, 'launcher'), ledger = path.join(dir, 'pids');
   await copyFile('/bin/sleep', binary); await createHelperLauncher(launcher, binary, ledger);
   const child = spawn(launcher, ['60'], { stdio: 'ignore' });
+  t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL'); });
   const exited = new Promise(resolve => child.once('exit', resolve));
   const deadline = Date.now() + 3000;
   while (!(await readFile(ledger, 'utf8')).trim() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
@@ -95,11 +97,12 @@ test('same executable basename in a different directory is not owned', async t =
   t.after(() => rm(dir, { recursive: true, force: true }));
   const ownDir = path.join(dir, 'a'), otherDir = path.join(dir, 'b');
   await mkdir(ownDir); await mkdir(otherDir);
-  const own = path.join(ownDir, 'identical-long-helper-name'), other = path.join(otherDir, 'identical-long-helper-name');
+  const own = path.join(ownDir, 'identical long helper name longer than comm'), other = path.join(otherDir, 'identical long helper name longer than comm');
   await copyFile('/bin/sleep', own); await copyFile('/bin/sleep', other);
   const ledger = path.join(dir, 'pids'), launcher = path.join(dir, 'launcher');
   await createHelperLauncher(launcher, own, ledger);
   const child = spawn(launcher, ['60'], { stdio: 'ignore' });
+  t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL'); });
   const exited = new Promise(resolve => child.once('exit', resolve));
   const deadline = Date.now() + 3000;
   while (!(await readFile(ledger, 'utf8')).trim() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
@@ -113,5 +116,23 @@ test('same executable basename in a different directory is not owned', async t =
     await assert.rejects(cleanupManagedHelpers([{ ledger, binary: other, launcher }]), /identity changed/);
     assert.equal(child.exitCode, null);
   } finally { await cleanupManagedHelpers([{ ledger, binary: own, launcher }]); }
+  await exited; assert.notEqual(child.signalCode, null);
+});
+
+
+test('cleanup identifies the shell launcher before exec', async t => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'nh launcher window '));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const binary = path.join(dir, 'helper with spaces'), launcher = path.join(dir, 'launcher with spaces'), ledger = path.join(dir, 'pids');
+  await copyFile('/bin/sleep', binary); await createHelperLauncher(launcher, binary, ledger);
+  const script = await readFile(launcher, 'utf8');
+  await writeFile(launcher, script.replace('exec ', 'read hold\nexec '));
+  const child = spawn(launcher, ['60'], { stdio: ['pipe', 'ignore', 'ignore'] });
+  t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL'); });
+  const exited = new Promise(resolve => child.once('exit', resolve));
+  const deadline = Date.now() + 3000;
+  while (!(await readFile(ledger, 'utf8')).trim() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
+  assert.ok((await readFile(ledger, 'utf8')).trim());
+  await cleanupManagedHelpers([{ ledger, binary, launcher }]);
   await exited; assert.notEqual(child.signalCode, null);
 });

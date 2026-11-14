@@ -54,14 +54,18 @@ export async function cleanupManagedHelpers(entries) {
       const pid = Number(match[1]), started = match[2].trim();
       let current = executable(pid, launcher, started);
       if (!current) continue;
-      if (current !== binary && current !== launcher) throw new Error('helper PID identity changed: ' + pid);
+      let expectedBinary = binary;
+      if (process.platform === 'linux') {
+        try { expectedBinary = realpathSync(binary); } catch { throw new Error('helper PID identity changed: ' + pid); }
+      }
+      if (current !== expectedBinary && current !== launcher) throw new Error('helper PID identity changed: ' + pid);
       try { process.kill(pid, 'SIGTERM'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
       const deadline = Date.now() + 2000;
       do {
         await new Promise(resolve => setTimeout(resolve, 50));
         current = executable(pid, launcher, started);
         if (!current) break;
-        if (current !== binary && current !== launcher) throw new Error('helper PID identity changed: ' + pid);
+        if (current !== expectedBinary && current !== launcher) throw new Error('helper PID identity changed: ' + pid);
       } while (Date.now() < deadline);
       if (current) {
         try { process.kill(pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
@@ -70,7 +74,7 @@ export async function cleanupManagedHelpers(entries) {
           await new Promise(resolve => setTimeout(resolve, 50));
           current = executable(pid, launcher, started);
           if (!current) break;
-          if (current !== binary && current !== launcher) throw new Error('helper PID identity changed: ' + pid);
+          if (current !== expectedBinary && current !== launcher) throw new Error('helper PID identity changed: ' + pid);
         } while (Date.now() < killDeadline);
         if (current) throw new Error('helper did not terminate: ' + pid);
       }
