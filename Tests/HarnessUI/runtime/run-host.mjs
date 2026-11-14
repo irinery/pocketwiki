@@ -1,6 +1,7 @@
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
+import { requireRuntimeProof } from './runtime-proof.mjs';
 import { superviseMacHost } from '../../NewHarnessE2E/MacOSHost/supervisor.mjs';
 import { assertTrackedFlags } from '../../NewHarnessE2E/git-snapshot.mjs';
 import { access, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -105,7 +106,8 @@ try {
     // This host enforces separate build and 180s XCTest deadlines internally.
     const resultPath = path.join(temp, 'legacy-macos.xcresult');
     const legacyArgs = ['Tests/NewHarnessE2E/MacOSHost/run.mjs', '--result-bundle-path', resultPath];
-    const legacyEnv = { ...process.env, NH_RUNTIME_LEGACY_UI: '1' };
+    const proofNonce = randomBytes(16).toString('hex');
+    const legacyEnv = { ...process.env, NH_RUNTIME_LEGACY_UI: '1', NH_RUNTIME_PROOF_NONCE: proofNonce, NH_RUNTIME_PROOF_SHA: wikiHead.trim() };
     let legacyCode;
     if (process.env.NH_MAC_HELPER_DIR) {
       legacyCode = await run(process.execPath, legacyArgs, { env: legacyEnv, timeoutMS: 30 * 60_000 });
@@ -116,6 +118,11 @@ try {
     }
     try { log += await readFile(path.join(temp, 'legacy-macos.log'), 'utf8'); } catch {}
     try { await writeFile(path.join(reportDir, 'legacy-macos.summary.json'), await readFile(resultPath + '.summary.json'), { mode: 0o600 }); } catch { legacyCode = null; log += 'Resumo sanitizado legado ausente.\n'; }
+    try {
+      const proof = JSON.parse(await readFile(resultPath + '.runtime-proof.json', 'utf8'));
+      requireRuntimeProof(proof, { nonce: proofNonce, pocketwikiSHA: wikiHead.trim() });
+      await writeFile(path.join(reportDir, 'legacy-macos.runtime-proof.json'), JSON.stringify(proof, null, 2) + '\n', { mode: 0o600 });
+    } catch { legacyCode = null; log += 'Prova válida do hook nativo ausente.\n'; }
     const legacyRow = cases.find(item => item.id === '02-02');
     legacyRow.status = legacyCode === 0 ? 'passed' : 'failed'; legacyRow.detail = legacyCode === 0 ? 'slot e chat legado no mesmo app pela bridge validados' : `host legado falhou: exit ${legacyCode}`;
   }
