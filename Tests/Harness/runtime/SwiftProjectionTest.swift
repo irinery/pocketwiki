@@ -34,7 +34,10 @@ import Foundation
         let p3 = try RuntimeProjection(schema: schema, environmentID: uid, threadID: uid, pageSize: 1, confirmedRevision: 0)
         try p3.appendPage(page(nil), requestedCursor: nil)
         do { try p3.bufferEvent(eventData); fatalError("unresolved reference accepted") } catch RuntimeProjection.Failure.invalidEvent { }
-        do { try p3.bufferEvent(Data(repeating: 65, count: 4_194_305)); fatalError("overflow accepted") } catch RuntimeProjection.Failure.overflow { }
+        let oversize = try RuntimeProjection(schema: schema, environmentID: uid, threadID: uid, pageSize: 1, confirmedRevision: 0)
+        try oversize.appendPage(page(nil), requestedCursor: nil)
+        do { try oversize.bufferEvent(Data(repeating: 65, count: 4_194_305)); fatalError("overflow accepted") } catch RuntimeProjection.Failure.overflow { }
+        do { _ = try oversize.finish(); fatalError("overflowed projection published") } catch RuntimeProjection.Failure.overflow { }
         let p4 = try RuntimeProjection(schema: schema, environmentID: uid, threadID: uid, pageSize: 1, confirmedRevision: 0, confirmedSeq: 4)
         try p4.appendPage(page(nil), requestedCursor: nil)
         do { _ = try p4.finish(); fatalError("older sequence accepted") } catch RuntimeProjection.Failure.stale { }
@@ -54,12 +57,62 @@ import Foundation
         almostFull.append(Data(repeating: 32, count: 4_194_304 - eventData.count - payloadData.count - 100))
         try budget.bufferEvent(almostFull, resolvedPayload: payloadData)
         try budget.bufferEvent(almostFull, resolvedPayload: payloadData)
-        guard try budget.finish().appliedEventCount == 1 else { fatalError("duplicate counted twice") }
         var nextEvent = event; nextEvent["event_id"] = id; nextEvent["seq"] = 4
         do { try budget.bufferEvent(encoded(nextEvent), resolvedPayload: payloadData); fatalError("overflow accepted") } catch RuntimeProjection.Failure.overflow { }
+        do { _ = try budget.finish(); fatalError("overflow published prefix") } catch RuntimeProjection.Failure.overflow { }
+        let compact = try RuntimeProjection(schema: schema, environmentID: uid, threadID: uid, pageSize: 1, confirmedRevision: 0)
+        try compact.appendPage(page(nil), requestedCursor: nil)
+        try compact.bufferEvent(almostFull, resolvedPayload: payloadData)
+        guard try compact.finish().appliedEventCount == 1 else { fatalError("duplicate counted twice") }
+        try compact.bufferEvent(encoded(nextEvent), resolvedPayload: payloadData)
+        guard try compact.finish().lastSeq == 4 else { fatalError("budget not released") }
+        let reordered = try JSONSerialization.data(withJSONObject: event, options: [.prettyPrinted])
+        let reorderedPayload = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted])
+        try compact.bufferEvent(reordered, resolvedPayload: reorderedPayload)
+        do { try compact.bufferEvent(reordered, resolvedPayload: encoded(wrong)); fatalError("changed replay accepted") } catch RuntimeProjection.Failure.invalidEvent { }
+        do { _ = try compact.finish(); fatalError("conflicted projection published") } catch RuntimeProjection.Failure.invalidEvent { }
+        let longStream = try RuntimeProjection(schema: schema, environmentID: uid, threadID: uid, pageSize: 1, confirmedRevision: 0)
+        try longStream.appendPage(page(nil), requestedCursor: nil)
+        for n in 3..<53 {
+            var item = event
+            item["event_id"] = String(format: "%08x-1111-4111-8111-111111111111", n)
+            item["seq"] = n
+            var data = try encoded(item)
+            data.append(Data(repeating: 32, count: 100_000))
+            try longStream.bufferEvent(data, resolvedPayload: payloadData)
+            let v = try longStream.finish()
+            guard v.lastSeq == n, v.appliedEventCount == n - 2, v.effects[id2] != nil else { fatalError("long stream lost state") }
+        }
+        // Caller reinicia a montagem no limite de dedup e continua sem perder o estado externo.
+        var current = try RuntimeProjection(schema: schema, environmentID: uid, threadID: uid, pageSize: 1, confirmedRevision: 0)
+        try current.appendPage(page(nil), requestedCursor: nil)
+        var resyncs = 0
+        for n in 3..<(RuntimeProjection.maxTrackedEvents + 10) {
+            var item = event
+            item["event_id"] = String(format: "%08x-1111-4111-8111-111111111111", n)
+            item["seq"] = n
+            let data = try encoded(item)
+            do { try current.bufferEvent(data, resolvedPayload: payloadData) }
+            catch RuntimeProjection.Failure.overflow {
+                do { _ = try current.finish(); fatalError("invalidated projection published") } catch RuntimeProjection.Failure.overflow { }
+                resyncs += 1
+                current = try RuntimeProjection(schema: schema, environmentID: uid, threadID: uid, pageSize: 1, confirmedRevision: 0, confirmedSeq: n - 1)
+                let snapshot: [String: Any] = ["module": "runtime", "data": ["snapshot_id": id, "revision": 1, "as_of_seq": n - 1, "receipts": [], "effects": []]]
+                try current.appendPage(encoded(snapshot), requestedCursor: nil)
+                try current.bufferEvent(data, resolvedPayload: payloadData)
+            }
+            guard try current.finish().lastSeq == n else { fatalError("resync lost sequence") }
+        }
+        guard resyncs == 1 else { fatalError("dedup limit did not trigger resync") }
         let p6 = try RuntimeProjection(schema: schema, environmentID: uid, threadID: uid, pageSize: 1, confirmedRevision: 0)
         try p6.appendPage(page(nil), requestedCursor: nil)
         try p6.bufferEvent(eventData, resolvedPayload: payloadData)
         do { try p6.bufferEvent(eventData, resolvedPayload: encoded(wrong)); fatalError("changed payload accepted as duplicate") } catch RuntimeProjection.Failure.invalidEvent { }
+        do { _ = try p6.finish(); fatalError("conflict published prefix") } catch RuntimeProjection.Failure.invalidEvent { }
+        let malformed = try RuntimeProjection(schema: schema, environmentID: uid, threadID: uid, pageSize: 1, confirmedRevision: 0)
+        try malformed.appendPage(page(nil), requestedCursor: nil)
+        try malformed.bufferEvent(eventData, resolvedPayload: payloadData)
+        do { try malformed.bufferEvent(Data("not json".utf8)); fatalError("invalid event accepted") } catch RuntimeProjection.Failure.invalidEvent { }
+        do { _ = try malformed.finish(); fatalError("invalid event published prefix") } catch RuntimeProjection.Failure.invalidEvent { }
     }
 }

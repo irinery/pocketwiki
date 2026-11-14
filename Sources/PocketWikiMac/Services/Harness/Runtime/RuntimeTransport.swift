@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
@@ -12,8 +13,13 @@ private final class RuntimeRedirectBlocker: NSObject, URLSessionTaskDelegate, @u
 }
 
 struct RuntimeTransport {
-    enum Failure: Error {
-        case invalidURL, invalidArgument, invalidResponse
+    enum Failure: Error, LocalizedError {
+        case invalidURL, invalidArgument, invalidResponse, incompatible
+
+        var errorDescription: String? {
+            if case .incompatible = self { return "ERR_INCOMPATIBLE" }
+            return nil
+        }
         case remote(status: Int, error: HarnessV1.Error)
     }
 
@@ -224,8 +230,11 @@ struct RuntimeTransport {
                             if !dataLines.isEmpty {
                                 guard let eventID, let seq = Int(eventID), eventID == String(seq), seq >= 0,
                                       let data = dataLines.joined(separator: "\n").data(using: .utf8),
-                                      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                                      HarnessV1.validateCorpusValue(object, schemaName: "streamEnvelope", document: schema),
+                                      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw Failure.invalidResponse }
+                                if let major = object["protocol_major"] as? NSNumber,
+                                   CFGetTypeID(major) != CFBooleanGetTypeID(),
+                                   major.doubleValue == Double(major.int64Value), major.int64Value != 1 { throw Failure.incompatible }
+                                guard HarnessV1.validateCorpusValue(object, schemaName: "streamEnvelope", document: schema),
                                       Self.canonicalUUID(object["event_id"]), Self.canonicalUUID(object["environment_id"]),
                                       Self.canonicalUUID(object["thread_id"]),
                                       (object["payload_ref"] == nil || Self.canonicalUUID(object["payload_ref"])),
