@@ -1,5 +1,6 @@
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { superviseMacHost } from '../../NewHarnessE2E/MacOSHost/supervisor.mjs';
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -83,7 +84,16 @@ try {
     }
     // This host enforces separate build and 180s XCTest deadlines internally.
     const resultPath = path.join(temp, 'legacy-macos.xcresult');
-    const legacyCode = await run(process.execPath, ['Tests/NewHarnessE2E/MacOSHost/run.mjs', '--result-bundle-path', resultPath], { env: { ...process.env, NH_RUNTIME_LEGACY_UI: '1' }, timeoutMS: 30 * 60_000 });
+    const legacyArgs = ['Tests/NewHarnessE2E/MacOSHost/run.mjs', '--result-bundle-path', resultPath];
+    const legacyEnv = { ...process.env, NH_RUNTIME_LEGACY_UI: '1' };
+    let legacyCode;
+    if (process.env.NH_MAC_HELPER_DIR) {
+      legacyCode = await run(process.execPath, legacyArgs, { env: legacyEnv, timeoutMS: 30 * 60_000 });
+    } else {
+      const supervised = await superviseMacHost(process.execPath, legacyArgs, { cwd: process.cwd(), env: legacyEnv }, Date.now() + 30 * 60_000, 30 * 60_000);
+      log += `$ ${process.execPath} ${legacyArgs.join(' ')} (supervisionado)\n${supervised.stdout || ''}${supervised.stderr || ''}\n${supervised.error?.message || ''}\nexit=${supervised.status}\n`;
+      legacyCode = supervised.status;
+    }
     try { log += await readFile(path.join(temp, 'legacy-macos.log'), 'utf8'); } catch {}
     const legacyRow = cases.find(item => item.id === '02-02');
     legacyRow.status = legacyCode === 0 ? 'passed' : 'failed'; legacyRow.detail = legacyCode === 0 ? 'slot e chat legado no mesmo app pela bridge validados' : `host legado falhou: exit ${legacyCode}`;
