@@ -3,6 +3,8 @@ import { validateAgainst } from '../../harness/contracts/validate.mjs';
 const valid = (name, value) => validateAgainst(name, value).valid;
 const fail = (code, message) => Object.assign(new Error(message), { code });
 const clone = value => structuredClone(value);
+const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
+const optionalUUID = value => value == null || uuid(value);
 const canonical = value => {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
@@ -13,7 +15,7 @@ const canonical = value => {
 // publishes finish(), so a bad page or event cannot partially update the UI.
 export class RuntimeProjection {
   constructor({ environmentId, threadId, pageSize = 100, confirmedRevision = 0, confirmedSeq = 0 }) {
-    if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100 || !Number.isSafeInteger(confirmedRevision) || confirmedRevision < 0 || !Number.isSafeInteger(confirmedSeq) || confirmedSeq < 0) throw fail('ERR_INVALID', 'Parâmetros de projeção inválidos');
+    if (!uuid(environmentId) || !uuid(threadId) || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100 || !Number.isSafeInteger(confirmedRevision) || confirmedRevision < 0 || !Number.isSafeInteger(confirmedSeq) || confirmedSeq < 0) throw fail('ERR_INVALID', 'Parâmetros de projeção inválidos');
     Object.assign(this, { environmentId, threadId, pageSize, confirmedRevision, confirmedSeq });
     this.receipts = new Map(); this.effects = new Map(); this.events = [];
     this.cursors = new Set(); this.seen = new Map(); this.sequences = new Map(); this.bytes = 0; this.dedupBytes = 0;
@@ -26,16 +28,16 @@ export class RuntimeProjection {
     const d = page?.data;
     if (new TextEncoder().encode(JSON.stringify(page)).length > 4_194_304 || this.complete || !valid('snapshotEnvelope', page) || page.module !== 'runtime' ||
         (!this.started ? requestedCursor != null : requestedCursor !== this.nextCursor || requestedCursor == null) ||
-        d.receipts.length + d.effects.length > this.pageSize || d.revision < this.confirmedRevision ||
+        !uuid(d.snapshot_id) || d.receipts.length + d.effects.length > this.pageSize || d.revision < this.confirmedRevision ||
         (this.started && (d.snapshot_id !== this.snapshotId || d.revision !== this.revision || d.as_of_seq !== this.boundary)) ||
         (d.next_cursor != null && (new TextEncoder().encode(d.next_cursor).length > 512 || this.cursors.has(d.next_cursor)))) throw fail('ERR_INVALID', 'Snapshot inválido');
     const receipts = new Map(this.receipts), effects = new Map(this.effects);
     for (const item of d.receipts) {
-      if (receipts.has(item.command_id) || item.revision > d.revision) throw fail('ERR_INVALID', 'Receipt inválido');
+      if (!uuid(item.command_id) || !uuid(item.receipt_id) || !optionalUUID(item.effect_id) || !optionalUUID(item.result_ref) || receipts.has(item.command_id) || item.revision > d.revision) throw fail('ERR_INVALID', 'Receipt inválido');
       receipts.set(item.command_id, clone(item));
     }
     for (const item of d.effects) {
-      if (effects.has(item.effect_id)) throw fail('ERR_INVALID', 'Efeito duplicado');
+      if (!uuid(item.effect_id) || !uuid(item.command_id) || !optionalUUID(item.result_ref) || effects.has(item.effect_id)) throw fail('ERR_INVALID', 'Efeito duplicado');
       effects.set(item.effect_id, clone(item));
     }
     this.receipts = receipts; this.effects = effects; this.started = true;
@@ -49,7 +51,7 @@ export class RuntimeProjection {
   }
   bufferEventChecked(event, resolvedPayload) {
     if (event?.protocol_major !== 1) throw fail('ERR_INCOMPATIBLE', 'Versão do stream incompatível');
-    if (!this.started || !valid('streamEnvelope', event) || event.environment_id !== this.environmentId || event.thread_id !== this.threadId || event.module !== 'runtime') throw fail('ERR_INVALID', 'Evento inválido');
+    if (!this.started || !valid('streamEnvelope', event) || event.environment_id !== this.environmentId || event.thread_id !== this.threadId || event.module !== 'runtime' || !uuid(event.event_id) || !optionalUUID(event.payload_ref)) throw fail('ERR_INVALID', 'Evento inválido');
     const payload = event.delivery === 'inline' && resolvedPayload === undefined ? event.payload : event.delivery === 'reference' ? resolvedPayload : undefined;
     if (!valid('runtimeModuleEvent', payload)) throw fail('ERR_INVALID', 'Payload inválido');
     const fingerprint = canonical([event, payload]);
@@ -73,7 +75,7 @@ export class RuntimeProjection {
     let revision = this.revision;
     for (const { payload: p } of this.events) {
       let key; try { key = JSON.parse(p.entity_key); } catch { throw fail('ERR_INVALID', 'Chave inválida'); }
-      if (typeof key !== 'string' || JSON.stringify(key) !== p.entity_key) throw fail('ERR_INVALID', 'Chave inválida');
+      if (!uuid(key) || JSON.stringify(key) !== p.entity_key) throw fail('ERR_INVALID', 'Chave inválida');
       if (p.entity_type === 'RuntimeEvent') {
         if (p.change === 'upsert' && (p.value?.event_id !== key || p.value?.thread_id !== this.threadId)) throw fail('ERR_INVALID', 'Evento inconsistente');
         continue;

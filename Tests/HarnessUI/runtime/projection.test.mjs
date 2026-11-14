@@ -63,3 +63,9 @@ test('replay conflitante já publicado é recusado', () => {
   const other = new RuntimeProjection({ environmentId: id, threadId: id }); other.appendPage(page); other.bufferEvent(event(11)); other.finish();
   assert.throws(() => other.bufferEvent({ ...event(11), event_id: id }), { code: 'ERR_INVALID' });
 });
+test('recusa UUIDs não canônicos mesmo quando o schema aceita formato', () => {
+  const p = new RuntimeProjection({ environmentId: id, threadId: id });
+  const bad = structuredClone(page); bad.data.snapshot_id = 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA';
+  assert.throws(() => p.appendPage(bad), { code: 'ERR_INVALID' });
+  assert.throws(() => p.finish(), { code: 'ERR_INVALID' });
+});
