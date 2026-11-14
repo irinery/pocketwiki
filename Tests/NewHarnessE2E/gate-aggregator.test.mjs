@@ -84,13 +84,19 @@ test('file aggregator requires real artifacts contained in each report directory
     await writeFile(reportPath, JSON.stringify(report));
     files.push(reportPath);
   }
-  assert.equal((await aggregateReportFiles('E0', files)).gate_passed, true);
+  assert.equal((await aggregateReportFiles('E0', files, identity)).gate_passed, true);
+  await assert.rejects(() => aggregateReportFiles('E0', files), /target build identity/);
+  for (const field of ['pocketwiki_sha', 'pocketkernel_sha', 'middlewareauth_sha', 'schema_sha256', 'fixture_sha256', 'matrix_sha256']) {
+    const target = { ...identity, [field]: 'f'.repeat(identity[field].length) };
+    await assert.rejects(() => aggregateReportFiles('E0', files, target), new RegExp('target build mismatch: ' + field));
+  }
+
 
   const missing = path.join(path.dirname(files[0]), 'missing.json');
   const missingReport = reports()[0];
   missingReport.cases[0].artifact_paths = ['artifacts/missing.txt'];
   await writeFile(missing, JSON.stringify(missingReport));
-  await assert.rejects(() => aggregateReportFiles('E0', [missing, ...files.slice(1)]), /artifact does not exist/);
+  await assert.rejects(() => aggregateReportFiles('E0', [missing, ...files.slice(1)], identity), /artifact does not exist/);
 
   const outside = path.join(root, 'outside.txt');
   await writeFile(outside, 'must not be accepted');
@@ -100,5 +106,5 @@ test('file aggregator requires real artifacts contained in each report directory
   linkedReport.cases[0].artifact_paths = ['artifacts/outside.txt'];
   const linkedPath = path.join(path.dirname(files[0]), 'linked.json');
   await writeFile(linkedPath, JSON.stringify(linkedReport));
-  await assert.rejects(() => aggregateReportFiles('E0', [linkedPath, ...files.slice(1)]), /artifact must be a regular file inside/);
+  await assert.rejects(() => aggregateReportFiles('E0', [linkedPath, ...files.slice(1)], identity), /artifact must be a regular file inside/);
 });

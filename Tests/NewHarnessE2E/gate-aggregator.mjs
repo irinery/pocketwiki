@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { lstat, readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,7 +9,8 @@ const matrixPath = path.resolve(here, '../../docs/rfcs/new-harness/matriz-verifi
 const hashFields = ['pocketwiki_sha', 'pocketkernel_sha', 'middlewareauth_sha'];
 const digestFields = ['schema_sha256', 'fixture_sha256', 'matrix_sha256'];
 
-export async function aggregateReportFiles(stage, reportPaths) {
+export async function aggregateReportFiles(stage, reportPaths, target) {
+  if (!target) throw new Error('target build identity is required');
   const matrix = JSON.parse(await readFile(matrixPath, 'utf8'));
   const reports = await Promise.all(reportPaths.map(async (file) => {
     const reportPath = path.resolve(file);
@@ -15,7 +18,11 @@ export async function aggregateReportFiles(stage, reportPaths) {
     await verifyArtifacts(reportPath, report);
     return report;
   }));
-  return aggregateReports(stage, reports, matrix);
+  const result = aggregateReports(stage, reports, matrix);
+  for (const field of [...hashFields, ...digestFields]) {
+    if (result[field] !== target[field]) throw new Error('target build mismatch: ' + field);
+  }
+  return result;
 }
 
 export function aggregateReports(stage, reports, matrix) {
@@ -85,6 +92,41 @@ export function aggregateReports(stage, reports, matrix) {
   };
 }
 
+// Identity is computed from clean checkouts, including the exact files consumed by the runner.
+export async function targetIdentity(wiki, kernel, middleware, expectedSHA) {
+  function checkedSHA(repo, label) {
+    const run = (...args) => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' }).trim();
+    const sha = run('rev-parse', 'HEAD').toLowerCase();
+    if (run('status', '--porcelain=v1', '--untracked-files=no')) throw new Error(label + ' checkout has modified tracked files');
+    return sha;
+  }
+  if (!/^[a-f0-9]{40}$/.test(expectedSHA || '')) throw new Error('target SHA must be a full lowercase SHA');
+  const identity = {
+    pocketwiki_sha: checkedSHA(wiki, 'PocketWiki'),
+    pocketkernel_sha: checkedSHA(kernel, 'PocketKernel'),
+    middlewareauth_sha: checkedSHA(middleware, 'MiddlewareAuth')
+  };
+  if (identity.pocketwiki_sha !== expectedSHA) throw new Error('target SHA differs from PocketWiki checkout');
+  const files = [
+    'src/harness/contracts/corpus-v1.json',
+    'src/harness/contracts/operation-registry.json',
+    'Tests/Harness/nh00-acceptance-regressions.json',
+    'docs/rfcs/new-harness/manifest.json'
+  ];
+  const hash = createHash('sha256');
+  for (const file of files) {
+    hash.update(file + '\0');
+    hash.update(await readFile(path.join(wiki, file)));
+    hash.update('\n');
+  }
+  identity.fixture_sha256 = hash.digest('hex');
+  for (const [field, file] of [
+    ['schema_sha256', 'src/harness/contracts/harness-v1.schema.json'],
+    ['matrix_sha256', 'docs/rfcs/new-harness/matriz-verificacao.json']
+  ]) identity[field] = createHash('sha256').update(await readFile(path.join(wiki, file))).digest('hex');
+  return identity;
+}
+
 function isSafeRelativePath(value) {
   if (typeof value !== 'string' || value.length === 0 || value.includes('\\') || value.includes('\0')) return false;
   if (path.posix.isAbsolute(value) || path.win32.isAbsolute(value) || /^[a-zA-Z]:/.test(value)) return false;
@@ -124,8 +166,12 @@ function parseStage(stage) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const args = process.argv.slice(2);
-    if (args[0] !== '--stage' || args[2] !== '--reports' || args.length < 4) throw new Error('usage: node gate-aggregator.mjs --stage E0..E6 --reports report.json [report.json ...]');
-    const report = await aggregateReportFiles(args[1], args.slice(3));
+    if (args[0] !== '--stage' || args[2] !== '--target-sha' || args[4] !== '--reports' || args.length < 6) throw new Error('usage: node gate-aggregator.mjs --stage E0..E6 --target-sha SHA --reports report.json [report.json ...]');
+    const wiki = path.resolve(here, '../..');
+    const kernel = process.env.POCKETKERNEL_NH00_ROOT || path.resolve(wiki, '../pocketkernel-nh00');
+    const middleware = process.env.MIDDLEWAREAUTH_NHTEST_ROOT || path.resolve(wiki, '../middlewareAuth');
+    const target = await targetIdentity(wiki, kernel, middleware, args[3]);
+    const report = await aggregateReportFiles(args[1], args.slice(5), target);
     process.stdout.write(JSON.stringify(report, null, 2) + '\n');
   } catch (error) {
     process.stderr.write('gate rejected: ' + error.message + '\n');
