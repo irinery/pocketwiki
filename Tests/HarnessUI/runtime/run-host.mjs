@@ -1,4 +1,5 @@
-import { spawn } from 'node:child_process';
+import { spawn, execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -25,6 +26,8 @@ async function run(program, argv, options = {}) {
 try {
   const root = process.env.POCKETKERNEL_NH00_ROOT;
   if (!root) { status = 2; throw new Error('POCKETKERNEL_NH00_ROOT obrigatório'); }
+  const { stdout: head } = await promisify(execFile)('git', ['-C', root, 'rev-parse', 'HEAD']);
+  if (head.trim() !== '582e216c13feb7485fa9620d9543b272ec3794b5') throw new Error('HEAD do Kernel não corresponde ao pin E1');
   const snapshot = path.join(temp, 'kernel'); await mkdir(snapshot);
   const archive = path.join(temp, 'kernel.tar');
   if (await run('git', ['-C', root, 'archive', '--output', archive, '582e216c13feb7485fa9620d9543b272ec3794b5'])) throw new Error('snapshot Kernel indisponível');
