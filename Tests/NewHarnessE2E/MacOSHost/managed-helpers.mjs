@@ -20,25 +20,44 @@ function executable(pid, launcher, started) {
   if (!match) throw new Error('invalid process listing for helper ' + pid);
   if (match[1].startsWith('Z')) return null;
   // Linux ps `comm` exposes a truncated task name, not an executable path.
-  if (process.platform === 'linux') {
-    let actual;
-    try { actual = readlinkSync(`/proc/${pid}/exe`); }
-    catch (error) {
-      if (error.code === 'ENOENT' && spawnSync('ps', ['-p', String(pid)], { stdio: 'ignore' }).status === 1) return null;
-      throw new Error('cannot inspect helper executable: ' + pid);
-    }
-    if (launcher) {
-      const argv = readFileSync(`/proc/${pid}/cmdline`).toString().split('\0');
-      if (argv[0] === '/bin/sh' && argv[1] === launcher && actual === realpathSync('/bin/sh')) return launcher;
-    }
-    return actual;
-  }
+  if (process.platform === 'linux') return inspectLinuxExecutable(pid, launcher);
   if (match[2] === '/bin/sh' && launcher) {
     const args = spawnSync('ps', ['-p', String(pid), '-o', 'args='], { encoding: 'utf8', timeout: 5000 });
     if (args.status !== 0) throw new Error('cannot verify helper launcher ' + pid);
     if (args.stdout.trim() === '/bin/sh ' + launcher || args.stdout.trim().startsWith('/bin/sh ' + launcher + ' ')) return launcher;
   }
   return match[2];
+}
+
+// Treat a disappearing proc entry as stopped only after rechecking process state.
+export function inspectLinuxExecutable(pid, launcher, dependencies = {}) {
+  const readlink = dependencies.readlink || readlinkSync;
+  const readFile = dependencies.readFile || readFileSync;
+  const realpath = dependencies.realpath || realpathSync;
+  const ps = dependencies.ps || spawnSync;
+  function stoppedAfterENOENT(error) {
+    if (error.code !== 'ENOENT') return false;
+    const state = ps('ps', ['-p', String(pid), '-o', 'stat='], { encoding: 'utf8', timeout: 5000 });
+    if (state.status === 1 && !state.stdout?.trim()) return true;
+    if (state.status !== 0 || !state.stdout?.trim()) throw new Error('cannot recheck helper process: ' + pid);
+    return state.stdout.trim().startsWith('Z');
+  }
+  let actual;
+  try { actual = readlink(`/proc/${pid}/exe`); }
+  catch (error) {
+    if (stoppedAfterENOENT(error)) return null;
+    throw new Error('cannot inspect helper executable: ' + pid, { cause: error });
+  }
+  if (launcher) {
+    let argv;
+    try { argv = readFile(`/proc/${pid}/cmdline`).toString().split('\0'); }
+    catch (error) {
+      if (stoppedAfterENOENT(error)) return null;
+      throw new Error('cannot inspect helper arguments: ' + pid, { cause: error });
+    }
+    if (argv[0] === '/bin/sh' && argv[1] === launcher && actual === realpath('/bin/sh')) return launcher;
+  }
+  return actual;
 }
 
 export async function cleanupManagedHelpers(entries) {
