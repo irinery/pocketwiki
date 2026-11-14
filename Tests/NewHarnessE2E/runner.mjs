@@ -1,3 +1,4 @@
+import { isolatedEnvironment } from './isolated-environment.mjs';
 import { DEFAULT_FIXTURE_SEED } from '../Harness/runtime/fixture-identities.mjs';
 import { superviseMacHost } from './MacOSHost/supervisor.mjs';
 import { exportGitSnapshot } from './git-snapshot.mjs';
@@ -338,10 +339,6 @@ async function listArtifactPaths(directory, prefix = '') {
   return paths;
 }
 
-function isolatedEnvironment(home) {
-  // Keep Unix domain socket paths short for the local bootstrap integration.
-  return { PATH: process.env.PATH || '/usr/bin:/bin', HOME: home, TMPDIR: '/tmp', CI: '1', POCKETWIKI_SIGN_MODE: 'adhoc' };
-}
 function redact(value) {
   return String(value)
     .replace(/(authorization\s*:\s*bearer\s+)[^\s"']+/gi, '$1[REDACTED]')

@@ -20,6 +20,7 @@
       "Tests/NewHarnessE2E/fixture-identities.test.mjs",
       "Tests/NewHarnessE2E/gate-aggregator.test.mjs",
       "Tests/NewHarnessE2E/git-snapshot.test.mjs",
+      "Tests/NewHarnessE2E/isolated-environment.test.mjs",
       "Tests/NewHarnessE2E/linux-proc-race.test.mjs",
       "Tests/NewHarnessE2E/legacy-failure-screenshot.test.mjs",
       "Tests/NewHarnessE2E/mac-supervisor.test.mjs",
