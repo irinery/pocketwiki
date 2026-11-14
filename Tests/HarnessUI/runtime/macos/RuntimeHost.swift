@@ -15,10 +15,12 @@ struct RuntimeHostApp: App {
               let threadText = config["threadID"], let thread = UUID(uuidString: threadText),
               let schemaPath = config["schemaPath"], let schemaData = try? Data(contentsOf: URL(fileURLWithPath: schemaPath)),
               let hash = config["schemaSHA256"], let transport = try? RuntimeTransport(baseURL: url, bearer: bearer) else { fatalError("Invalid runtime host configuration") }
-        let commandIDs = (config["commandIDs"] ?? "").split(separator: ",").compactMap { UUID(uuidString: String($0)) }
+        guard let rawIDs = config["commandIDs"], !rawIDs.isEmpty else { fatalError("IDs de fixture ausentes") }
+        let parts = rawIDs.split(separator: ",", omittingEmptySubsequences: false)
+        let commandIDs = parts.compactMap { UUID(uuidString: String($0)) }
+        guard commandIDs.count == parts.count, Set(commandIDs).count == commandIDs.count else { fatalError("IDs de fixture inválidos") }
         var nextCommand = 0
         guard let session = try? RuntimeUISession(transport: transport, environmentID: environment, threadID: thread, schemaHash: hash, schemaData: schemaData, newCommandID: {
-            if commandIDs.isEmpty { return UUID() }
             precondition(nextCommand < commandIDs.count, "IDs de fixture esgotados")
             defer { nextCommand += 1 }
             return commandIDs[nextCommand]
