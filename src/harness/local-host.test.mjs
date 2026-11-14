@@ -76,3 +76,15 @@ test('activation failure reports an indeterminate outcome after delivery', async
   await assert.rejects(host.bootstrap(['read']), { code: 'ERR_ACTIVATION_UNKNOWN' });
   assert.throws(() => host.authenticate(bearer, { audience: 'pocketkernel.harness' }), { code: 'ERR_FORBIDDEN' });
 });
+
+test('local revocation denies even if the Kernel channel fails', async () => {
+  let bearer;
+  const host = new LocalCredentialHost({
+    principalId, environmentId, audience: 'pocketkernel.harness', grantedScopes: ['read'],
+    deliverBearer: async (delivery) => { bearer = delivery.bearer; },
+    persistVerifier: async (verifier) => { if (verifier.revoked) throw new Error('channel failed'); }
+  });
+  await host.bootstrap(['read']);
+  await assert.rejects(host.revoke(bearer), /channel failed/);
+  assert.throws(() => host.authenticate(bearer, { audience: 'pocketkernel.harness' }), { code: 'ERR_FORBIDDEN' });
+});

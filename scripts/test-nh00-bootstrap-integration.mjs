@@ -44,6 +44,10 @@ try {
   assert.match(validBearer, /^[A-Za-z0-9_-]{43}$/);
   await assertRequest(kernel.http, validBearer, ids.aggregate, 'read', 200);
 
+  const pendingDelivery = await issue({ principalId: ids.principal, environmentId: ids.environment, audience, aggregateId: ids.aggregate }, hostWorker,
+    async (bearer) => assertRequest(kernel.http, bearer, ids.aggregate, 'read', 403));
+  await assertRequest(kernel.http, pendingDelivery.bearer, ids.aggregate, 'read', 200);
+
   await assertRequest(kernel.http, '', ids.aggregate, 'read', 403);
   await assertRequest(kernel.http, validBearer, ids.aggregate, 'execute', 403);
   await assertRequest(kernel.http, validBearer, ids.otherAggregate, 'read', 403);
@@ -81,20 +85,21 @@ try {
     client.on('error', () => upstream.destroy());
   });
   await withTimeout(new Promise((resolve, reject) => { proxy.once('error', reject); proxy.listen(proxyPath, resolve); }), 'proxy startup');
-  const unknown = await issue({ principalId: ids.principal, environmentId: ids.environment, audience, aggregateId: ids.aggregate, socketPath: proxyPath });
+  const unknown = await issue({ principalId: ids.principal, environmentId: ids.environment, audience, aggregateId: ids.aggregate, socketPath: proxyPath }, hostWorker,
+    (bearer) => armClosure(kernel.http, bearer));
   assert.equal(unknown.error, 'ERR_ACTIVATION_UNKNOWN');
-  await waitUntilDenied(kernel.http, unknown.bearer);
+  await awaitClosure(kernel.http, unknown.bearer);
   await assertRequest(kernel.http, unknown.bearer, ids.aggregate, 'read', 403);
   await new Promise((resolve) => proxy.close(resolve));
   proxy = undefined;
 
   const restart = await issue({ principalId: ids.principal, environmentId: ids.environment, audience, aggregateId: ids.aggregate });
   const restartBearer = restart.bearer;
-  await assert.equal(await effectCount(kernel.http), 1, 'all denials occur before the test effect');
+  await assert.equal(await effectCount(kernel.http), 2, 'all denials occur before the test effect');
 
   const disk = await readFile(storePath, 'utf8');
   const logs = `${hostWorker.logs.join('')}\n${kernelLogBuffers.flat().join('')}`;
-  for (const token of [validBearer, otherPrincipal.bearer, otherEnvironment.bearer, otherAudience.bearer, expired.bearer, failedDelivery.bearer, disconnected.bearer, unknown.bearer, restartBearer]) {
+  for (const token of [validBearer, pendingDelivery.bearer, otherPrincipal.bearer, otherEnvironment.bearer, otherAudience.bearer, expired.bearer, failedDelivery.bearer, disconnected.bearer, unknown.bearer, restartBearer]) {
     assert.ok(!disk.includes(token), 'bearer must not persist');
     assert.ok(!logs.includes(token), 'bearer must not appear in process logs');
   }
@@ -104,13 +109,24 @@ try {
   const second = await issue({ principalId: ids.principal, environmentId: ids.environment, audience, aggregateId: ids.aggregate }, secondHost);
   await assertRequest(kernel.http, second.bearer, ids.aggregate, 'read', 200);
   // The Kernel and second host stay alive; kill only the first host.
+  await armClosure(kernel.http, restartBearer);
   const exited = once(hostWorker.child, 'exit');
   hostWorker.child.kill('SIGKILL');
   await withTimeout(exited, 'host termination');
-  await waitUntilDenied(kernel.http, restartBearer);
+  await awaitClosure(kernel.http, restartBearer);
   await assertRequest(kernel.http, restartBearer, ids.aggregate, 'read', 403);
   await assertRequest(kernel.http, second.bearer, ids.aggregate, 'read', 200);
-  assert.equal(await effectCount(kernel.http), 3, 'denials have no effect and other host remains active');
+  const restartedHost = await startHostWorker();
+  const fresh = await issue({ principalId: ids.principal, environmentId: ids.environment, audience, aggregateId: ids.aggregate }, restartedHost);
+  await assertRequest(kernel.http, restartBearer, ids.aggregate, 'read', 403);
+  await assertRequest(kernel.http, fresh.bearer, ids.aggregate, 'read', 200);
+  assert.equal(await effectCount(kernel.http), 5, 'denials have no effect and other hosts remain active');
+  const laterDisk = await readFile(storePath, 'utf8');
+  const laterLogs = `${secondHost.logs.join('')}\n${restartedHost.logs.join('')}\n${kernelLogBuffers.flat().join('')}`;
+  for (const token of [second.bearer, fresh.bearer]) {
+    assert.ok(!laterDisk.includes(token), 'bearer must not persist');
+    assert.ok(!laterLogs.includes(token), 'bearer must not appear in process logs');
+  }
 
   await stopKernel(kernel);
   kernel = await startKernel();
@@ -126,7 +142,7 @@ try {
   await rm(temp, { recursive: true, force: true });
 }
 
-async function issue(config, worker = hostWorker) {
+async function issue(config, worker = hostWorker, onBearer) {
   const hostId = `host-${Math.random()}`;
   const result = await worker.call({
     method: 'issue', id: hostId,
@@ -137,19 +153,18 @@ async function issue(config, worker = hostWorker) {
       nowMS: config.nowMS, failDelivery: Boolean(config.failDelivery), disconnectBeforeDeliveryFailure: Boolean(config.disconnectBeforeDeliveryFailure),
       ...(config.grantScopes ? { grant: { principal_id: config.principalId, environment_id: config.environmentId, audience: config.audience, aggregate_id: config.aggregateId, scopes: config.grantScopes } } : {})
     }
-  });
+  }, onBearer);
   return { ...result, hostId };
 }
 
-async function waitUntilDenied(base, bearer) {
-  const deadline = Date.now() + 3000;
-  do {
-    const response = await fetch(`${base}/test/auth/${ids.aggregate}/read`, { method: 'POST', headers: { authorization: `Bearer ${bearer}` }, signal: AbortSignal.timeout(1000) });
-    if (response.status === 403) return;
-    assert.equal(response.status, 204);
-    await delay(10);
-  } while (Date.now() < deadline);
-  throw new Error('Kernel did not observe owner closure before deadline');
+async function armClosure(base, bearer) {
+  const response = await fetch(`${base}/test/watch`, { method: 'POST', headers: { authorization: `Bearer ${bearer}` }, signal: AbortSignal.timeout(5000) });
+  assert.equal(response.status, 204);
+}
+
+async function awaitClosure(base, bearer) {
+  const response = await fetch(`${base}/test/closed`, { method: 'POST', headers: { authorization: `Bearer ${bearer}` }, signal: AbortSignal.timeout(5000) });
+  assert.equal(response.status, 204);
 }
 
 async function startHostWorker() {
@@ -165,7 +180,9 @@ async function startHostWorker() {
     if (!entry) return;
     if (message.type === 'bearer') {
       entry.bearer = message.bearer;
-      worker.send({ id: message.id, method: 'deliveryAck' });
+      Promise.resolve().then(() => entry.onBearer?.(message.bearer)).then(() => {
+        if (pending.has(message.id)) worker.send({ id: message.id, method: 'deliveryAck' });
+      }, (error) => { pending.delete(message.id); entry.reject(error); });
     }
     if (message.type === 'complete') {
       pending.delete(message.id);
@@ -179,11 +196,11 @@ async function startHostWorker() {
   return {
     child: worker,
     logs,
-    call(message) {
+    call(message, onBearer) {
       const id = message.id ?? `command-${Math.random()}`;
       return new Promise((resolve, reject) => {
         const timer = setTimeout(() => { pending.delete(id); reject(new Error('Host worker request timed out')); }, 5000);
-        pending.set(id, { resolve: (value) => { clearTimeout(timer); resolve(value); }, reject, bearer: undefined });
+        pending.set(id, { resolve: (value) => { clearTimeout(timer); resolve(value); }, reject: (error) => { clearTimeout(timer); reject(error); }, bearer: undefined, onBearer });
         worker.send({ ...message, id });
       });
     }

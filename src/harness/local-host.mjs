@@ -94,8 +94,8 @@ export class LocalCredentialHost {
     const verifier = this.#verifiers.get(hash);
     if (!verifier) return false;
     const revoked = Object.freeze({ ...verifier, revoked: true });
-    await this.#persistVerifier(revoked);
     this.#verifiers.set(hash, revoked);
+    await this.#persistVerifier(revoked);
     return true;
   }
 }
