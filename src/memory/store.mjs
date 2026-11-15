@@ -452,7 +452,7 @@ export class PocketMemoryStore {
     const prior = await readJSON(marker, null);
     const target = path.join(this.captureRoot, `session-${sessionID}.json`);
     const existing = await readJSON(target, null);
-    if (prior) return { mapped:true, session_id:sessionID };
+    if (prior && existing) return { mapped:true, session_id:sessionID };
     const events = Array.isArray(record.events) ? record.events : [];
     const imported = {
       schema_version:1,
