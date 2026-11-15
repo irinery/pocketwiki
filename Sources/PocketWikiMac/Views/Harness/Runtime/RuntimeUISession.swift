@@ -40,6 +40,12 @@ final class RuntimeUISession: ObservableObject {
     private var streamTask: Task<Void, Never>?
     private var generation = 0
     var onFrame: ((Int, Int, Int) -> Void)?
+    // Optional fixture observer receives the materialized projection before and after each frame.
+    var onProjectionFrame: ((Int, Int, Int, Int, Data, Data) -> Void)?
+    private func projectionContents(_ view: RuntimeProjection.View) throws -> Data {
+        let contents: [String: Any] = ["revision": view.revision, "lastSeq": view.lastSeq, "receipts": view.receipts, "effects": view.effects]
+        return try JSONSerialization.data(withJSONObject: contents, options: [.sortedKeys, .withoutEscapingSlashes])
+    }
 
     init(transport: RuntimeTransport, environmentID: UUID, threadID: UUID, schemaHash: String, schemaData: Data, newCommandID: @escaping () -> UUID = { UUID() }) throws {
         guard let schema = try JSONSerialization.jsonObject(with: schemaData) as? [String: Any] else { throw RuntimeTransport.Failure.invalidArgument }
@@ -96,8 +102,11 @@ final class RuntimeUISession: ObservableObject {
         if let ref = frame.payloadRef { object["payload_ref"] = ref.uuidString.lowercased(); payload = try await transport.payload(ref: ref, schema: try JSONSerialization.jsonObject(with: schemaData) as! [String: Any]) }
         try Task.checkCancellation()
         guard let projection else { throw RuntimeTransport.Failure.invalidResponse }
+        let before = try onProjectionFrame.map { _ in try projection.finish() }
         try projection.bufferEvent(JSONSerialization.data(withJSONObject: object), resolvedPayload: payload)
-        publish(try projection.finish())
+        let after = try projection.finish()
+        publish(after)
+        if let before, let observer = onProjectionFrame { observer(after.asOfSeq, frame.seq, before.lastSeq, after.lastSeq, try projectionContents(before), try projectionContents(after)) }
         onFrame?(frame.seq, lastSeq, receipts.count)
     }
     func submit() async {

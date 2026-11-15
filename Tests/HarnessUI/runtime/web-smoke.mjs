@@ -28,9 +28,17 @@ const legacy = process.env.RUNTIME_LEGACY === '1';
 const macos = process.env.RUNTIME_MACOS === '1';
 let releaseStream;
 if (!binary) throw new Error('RUNTIME_KERNEL_BINARY obrigatório');
+const replayNonce = process.env.NH_REPLAY_NONCE || '';
+if (replayNonce && !/^[a-f0-9]{32,128}$/.test(replayNonce)) throw new Error('nonce de replay inválido');
 const tmp = await mkdtemp(path.join(os.tmpdir(), 'e1-ui-')); const socketPath = path.join(tmp, 'boot.sock');
 const io = path.join(tmp, 'io'); await mkdir(io);
 const seed = Number(process.env.NH_TEST_SEED ?? '20261102');
+const canonical = value => value === null || typeof value !== 'object' ? JSON.stringify(value) : Array.isArray(value) ? `[${value.map(canonical).join(',')}]` : `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`;
+const stateHash = value => createHash('sha256').update(canonical(value)).digest('hex');
+const proofFrame = frame => {
+  const withoutCursor = ({ lastSeq, ...state }) => state;
+  return { ...frame, before: stateHash(frame.before_state), after: stateHash(frame.after_state), before_entities: stateHash(withoutCursor(frame.before_state)), after_entities: stateHash(withoutCursor(frame.after_state)) };
+};
 const fixtureScope = replay ? 'replay' : incompatible ? 'incompatible' : pauseEffect ? 'accepted' : legacy ? 'legacy' : 'connect';
 const fixtureID = label => fixtureUUID(seed, `${macos ? 'macos' : 'web'}/${fixtureScope}/${label}`);
 const principalId = fixtureID('principal'), environmentId = fixtureID('environment'), threadId = fixtureID('thread');
@@ -101,7 +109,7 @@ try {
   server.listen(0,'127.0.0.1'); await once(server,'listening');
   if (macos) {
     const configPath = path.join(tmp, 'native-config.json');
-    await writeFile(configPath, JSON.stringify({ baseURL: `http://127.0.0.1:${server.address().port}`, bearer, environmentID: environmentId, threadID: threadId, schemaSHA256, schemaPath: path.resolve('src/harness/contracts/harness-v1.schema.json'), commandIDs: commandIds.join(','), commandID: commandIds[0], seedCommandID: fixtureID('seed-command'), observeFrames: replay ? '1' : '0' }), { mode: 0o600 });
+    await writeFile(configPath, JSON.stringify({ baseURL: `http://127.0.0.1:${server.address().port}`, bearer, environmentID: environmentId, threadID: threadId, schemaSHA256, schemaPath: path.resolve('src/harness/contracts/harness-v1.schema.json'), commandIDs: commandIds.join(','), commandID: commandIds[0], seedCommandID: fixtureID('seed-command'), observeFrames: replay ? '1' : '0', replayNonce, replayProofPath: path.join(tmp, 'native-replay-observation.json') }), { mode: 0o600 });
     const scenario = replay ? 'replay' : incompatible ? 'incompatible' : pauseEffect ? 'accepted' : 'connect';
     const resultPath = path.join(tmp, `runtime-${scenario}.xcresult`);
     const test = spawn('xcodebuild', ['-resultBundlePath', resultPath, '-project', 'Tests/HarnessUI/runtime/macos/PocketWikiRuntimeUIHost.xcodeproj', '-scheme', 'PocketWikiRuntimeUIHost', '-destination', 'platform=macOS,arch=arm64', '-derivedDataPath', process.env.RUNTIME_DERIVED_DATA, 'test-without-building', 'CODE_SIGNING_ALLOWED=NO', '-quiet'], { env: { ...process.env, NH_RUNTIME_CONFIG_PATH: configPath, NH_RUNTIME_SCENARIO: scenario, NH_RUNTIME_TEST_FORCE_FAILURE: process.env.NH_RUNTIME_TEST_FORCE_FAILURE || '0' }, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -134,16 +142,23 @@ try {
       }
     }
     if (code !== 0) throw new Error(`XCTest falhou (${code}): ${output}`);
+    if (replay && replayNonce && process.env.RUNTIME_ARTIFACT_DIR) {
+      const proof = JSON.parse(await readFile(path.join(tmp, 'native-replay-observation.json'), 'utf8'));
+      if (proof.nonce !== replayNonce || proof.surface !== 'macos' || proof.boundary !== 9) throw new Error('observação de replay nativa inválida');
+      proof.frames = proof.frames.map(proofFrame);
+      await writeFile(path.join(process.env.RUNTIME_ARTIFACT_DIR, 'replay-proof.json'), JSON.stringify(proof, null, 2) + '\n', { mode: 0o600 });
+    }
     console.log(`macOS XCTest: ${scenario} validado`);
   } else {
   browser = await chromium.launch({headless:true}); page = await browser.newPage();
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
   await page.evaluate(async config => {
     const { mount } = await import('/bundle.js'); window.runtime = mount(config);
-    window.seen = []; window.views = []; let wake;
+    window.seen = []; window.views = []; window.projectionFrames = []; let wake;
     window.waitSeen = count => window.seen.length >= count ? Promise.resolve() : new Promise(resolve => { wake = { count, resolve }; });
     const original = window.runtime.client.applyEvent.bind(window.runtime.client);
-    window.runtime.client.applyEvent = async (...args) => { await original(...args); window.seen.push(args[0].seq); window.views.push({ lastSeq: window.runtime.client.state.lastSeq, receipts: window.runtime.client.state.receipts.length }); if (wake && window.seen.length >= wake.count) { wake.resolve(); wake = null; } };
+    const contents = p => ({ revision: p.revision, lastSeq: p.boundary, receipts: Object.fromEntries(p.receipts), effects: Object.fromEntries(p.effects) });
+    window.runtime.client.applyEvent = async (...args) => { const p = window.runtime.client.projection; const before = structuredClone(contents(p)); const snapshotBoundary = p.asOfSeq; await original(...args); const after = structuredClone(contents(p)); window.projectionFrames.push({ boundary: snapshotBoundary, seq: args[0].seq, before_cursor: before.lastSeq, after_cursor: after.lastSeq, before_state: before, after_state: after }); window.seen.push(args[0].seq); window.views.push({ lastSeq: window.runtime.client.state.lastSeq, receipts: window.runtime.client.state.receipts.length }); if (wake && window.seen.length >= wake.count) { wake.resolve(); wake = null; } };
   }, { bearer, environmentId, threadId, schemaSHA256, commandIds, legacy });
   // Start after credential injection so the mount arguments never enter the trace.
   await page.context().tracing.start({ screenshots: false, snapshots: true, sources: false });
@@ -172,6 +187,12 @@ try {
   if (replay) {
     await page.evaluate(() => window.waitSeen(5));
     assert.deepEqual(await page.evaluate(() => window.seen.slice(0, 5)), [8, 9, 10, 11, 12]);
+    if (replayNonce && process.env.RUNTIME_ARTIFACT_DIR) {
+      const frames = await page.evaluate(() => window.projectionFrames.slice(0, 5));
+      if (frames.some(frame => frame.boundary !== 9)) throw new Error('boundary observado diferente do snapshot real');
+      const proof = { version: 1, surface: 'web', level: 'integration', nonce: replayNonce, boundary: frames[0].boundary, frames: frames.map(({ boundary, ...frame }) => proofFrame(frame)) };
+      await writeFile(path.join(process.env.RUNTIME_ARTIFACT_DIR, 'replay-proof.json'), JSON.stringify(proof, null, 2) + '\n', { mode: 0o600 });
+    }
     assert.deepEqual(await page.evaluate(() => window.views.slice(0, 5).map(view => view.lastSeq)), [9, 9, 10, 11, 12]);
     assert.equal(await page.evaluate(() => window.views[1].receipts), 1);
     assert.equal(await page.evaluate(() => window.views[3].receipts), 2);

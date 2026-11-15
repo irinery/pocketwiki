@@ -18,8 +18,22 @@ final class RuntimeUITests: XCTestCase {
             self.add(attachment)
         }
         guard let config = env["NH_RUNTIME_CONFIG_PATH"], !config.isEmpty else { XCTFail("NH_RUNTIME_CONFIG_PATH ausente"); return }
+        let configuration = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: config))) as? [String: String])
         let replay = env["NH_RUNTIME_SCENARIO"] == "replay" && env["NH_RUNTIME_TEST_FORCE_FAILURE"] != "1"
         var frames: [(Int, Int, Int)] = []
+        var projectionFrames: [[String: Any]] = []
+        var observedBoundary: Int?
+        let projectionObserver = DistributedNotificationCenter.default().addObserver(forName: Notification.Name("com.pocketwiki.RuntimeProjectionFrame"), object: nil, queue: .main) { note in
+            guard let expectedNonce = configuration["replayNonce"], !expectedNonce.isEmpty, note.userInfo?["nonce"] as? String == expectedNonce,
+                  let boundary = note.userInfo?["boundary"] as? Int, let seq = note.userInfo?["seq"] as? Int,
+                  let before = note.userInfo?["before_state"] as? Data, let after = note.userInfo?["after_state"] as? Data,
+                  let beforeCursor = note.userInfo?["before_cursor"] as? Int, let afterCursor = note.userInfo?["after_cursor"] as? Int,
+                  let beforeState = try? JSONSerialization.jsonObject(with: before), let afterState = try? JSONSerialization.jsonObject(with: after) else { return }
+            if observedBoundary == nil { observedBoundary = boundary }
+            guard observedBoundary == boundary else { return }
+            projectionFrames.append(["seq": seq, "before_cursor": beforeCursor, "after_cursor": afterCursor, "before_state": beforeState, "after_state": afterState])
+        }
+        defer { DistributedNotificationCenter.default().removeObserver(projectionObserver) }
         let replayed = replay ? expectation(description: "replay 8/9") : nil
         let advanced = replay ? expectation(description: "eventos 10/11/12") : nil
         let observer = DistributedNotificationCenter.default().addObserver(forName: Notification.Name("com.pocketwiki.RuntimeUIFrame"), object: nil, queue: .main) { note in
@@ -27,7 +41,6 @@ final class RuntimeUITests: XCTestCase {
             frames.append((seq, cursor, count)); if frames.count == 2 { replayed?.fulfill() }; if frames.count == 5 { advanced?.fulfill() }
         }
         defer { DistributedNotificationCenter.default().removeObserver(observer) }
-        let configuration = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: config))) as? [String: String])
         app.launchEnvironment["NH_RUNTIME_CONFIG_PATH"] = config; app.launchArguments += ["-ApplePersistenceIgnoreState", "YES"]; app.launch()
         if env["NH_RUNTIME_TEST_FORCE_FAILURE"] == "1" {
             XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "runtime-test-slot").firstMatch.waitForExistence(timeout: 10))
@@ -45,7 +58,13 @@ final class RuntimeUITests: XCTestCase {
             if env["NH_RUNTIME_SCENARIO"] == "accepted" {
                 XCTAssertTrue(app.staticTexts["Aceito"].waitForExistence(timeout: 30)); XCTAssertFalse(app.staticTexts["Concluído"].exists); XCTAssertTrue(receiptIsVisible(try XCTUnwrap(configuration["commandID"])))
             } else if replay {
-                wait(for: [advanced!], timeout: 30); XCTAssertEqual(frames.prefix(5).map(\.0), [8, 9, 10, 11, 12]); XCTAssertEqual(frames.prefix(5).map(\.1), [9, 9, 10, 11, 12]); XCTAssertEqual(frames.prefix(5).map(\.2), [1, 1, 1, 2, 2]); XCTAssertTrue(app.staticTexts["2 recibos"].waitForExistence(timeout: 10)); XCTAssertTrue(receiptIsVisible(try XCTUnwrap(configuration["seedCommandID"]))); XCTAssertTrue(receiptIsVisible(try XCTUnwrap(configuration["commandID"])))
+                wait(for: [advanced!], timeout: 30)
+                if let nonce = configuration["replayNonce"], let proofPath = configuration["replayProofPath"], !nonce.isEmpty {
+                    XCTAssertEqual(projectionFrames.prefix(5).compactMap { $0["seq"] as? Int }, [8, 9, 10, 11, 12])
+                    let proof: [String: Any] = ["version": 1, "surface": "macos", "level": "integration", "nonce": nonce, "boundary": try XCTUnwrap(observedBoundary), "frames": Array(projectionFrames.prefix(5))]
+                    try JSONSerialization.data(withJSONObject: proof, options: [.sortedKeys]).write(to: URL(fileURLWithPath: proofPath), options: .atomic)
+                }
+                XCTAssertEqual(frames.prefix(5).map(\.0), [8, 9, 10, 11, 12]); XCTAssertEqual(frames.prefix(5).map(\.1), [9, 9, 10, 11, 12]); XCTAssertEqual(frames.prefix(5).map(\.2), [1, 1, 1, 2, 2]); XCTAssertTrue(app.staticTexts["2 recibos"].waitForExistence(timeout: 10)); XCTAssertTrue(receiptIsVisible(try XCTUnwrap(configuration["seedCommandID"]))); XCTAssertTrue(receiptIsVisible(try XCTUnwrap(configuration["commandID"])))
             } else {
                 XCTAssertTrue(app.staticTexts["ERR_INCOMPATIBLE"].waitForExistence(timeout: 30)); XCTAssertTrue(app.staticTexts["Revisão 0 · evento 0"].exists)
             }
