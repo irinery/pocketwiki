@@ -82,7 +82,7 @@ struct ComposerContextReference: Codable, Equatable, Identifiable {
         }
         if let relativePath {
             let bytes = Data(relativePath.utf8)
-            guard !bytes.isEmpty, bytes.count <= 4096, !relativePath.hasPrefix("/"), !relativePath.contains("\\"),
+            guard !bytes.isEmpty, bytes.count <= 4096, !relativePath.hasPrefix("/"), !relativePath.contains("\\"), !relativePath.contains("\0"),
                   !relativePath.split(separator: "/").contains("..") else {
                 throw ComposerStoreError.invalidReference
             }

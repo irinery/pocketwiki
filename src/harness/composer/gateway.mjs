@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { fstatSync } from 'node:fs';
-import { validateOperationInput } from '../contracts/validate.mjs';
-import { UUID, fail } from './service.mjs';
+import { validateAgainst, validateOperationInput } from '../contracts/validate.mjs';
+import { UUID, canonicalJSON, digest, fail, isPlainObject } from './service.mjs';
 
 const AUDIENCE = 'pocketwiki.context.v1';
 const boundPolicies = new WeakMap();
@@ -36,7 +36,8 @@ export class ComposerGateway {
   #service;
   #host;
   #policy;
-  constructor({ service, credentialHost, policy }) {
+  #verifyAccepted;
+  constructor({ service, credentialHost, policy, verifyAccepted = null }) {
     if (!service || typeof credentialHost?.authenticate !== 'function' || !(policy instanceof ComposerPolicy)) throw new TypeError('Composer service, credential host and policy are required');
     const existing = boundPolicies.get(service);
     if (existing && existing !== policy) throw new TypeError('Service is already bound to a different policy');
@@ -44,6 +45,8 @@ export class ComposerGateway {
     this.#service = service;
     this.#host = credentialHost;
     this.#policy = policy;
+    if (verifyAccepted !== null && typeof verifyAccepted !== 'function') throw new TypeError('Receipt verifier must be a function');
+    this.#verifyAccepted = verifyAccepted;
     service.rootHandleFor = (auth, root) => policy.rootHandle(auth, root);
   }
   #authenticate(bearer, thread_id) {
@@ -55,10 +58,20 @@ export class ComposerGateway {
     this.#policy.authorize(identity);
     return identity;
   }
-  // Kernel calls this only for an accepted and authorized command; it must
-  // compare-and-swap expected_revision and own the durable receipt/outbox.
-  async execute({ bearer, thread_id, command }) {
+  // verifyAccepted is a trusted Kernel port; it receives no client payload and
+  // returns authoritative receipt metadata for this identity and command ID.
+  async executeAccepted({ bearer, thread_id, command }) {
     const identity = this.#authenticate(bearer, thread_id);
+    if (!validateAgainst('command', command).valid || command.operation !== 'composer.prepare') fail('ERR_INVALID', 'Comando inválido.');
+    if (command.environment_id !== identity.environment_id || command.input.thread_id !== thread_id) fail('ERR_FORBIDDEN', 'Identidade do comando divergente.');
+    if (!this.#verifyAccepted) fail('ERR_UNAVAILABLE', 'Verificador de receipt indisponível.');
+    let receipt;
+    try {
+      receipt = await this.#verifyAccepted(Object.freeze({ principal_id: identity.principal_id, environment_id: identity.environment_id, thread_id, command_id: command.command_id }));
+    } catch { fail('ERR_UNAVAILABLE', 'Verificação de receipt indisponível.'); }
+    const fields = ['receipt_id', 'command_id', 'principal_id', 'environment_id', 'thread_id', 'operation', 'command_sha256', 'state'];
+    const expectedHash = digest(Buffer.from(canonicalJSON(command), 'utf8'));
+    if (!isPlainObject(receipt) || Object.keys(receipt).length !== fields.length || fields.some((field) => !Object.hasOwn(receipt, field)) || !UUID.test(receipt.receipt_id ?? '') || receipt.command_id !== command.command_id || receipt.principal_id !== identity.principal_id || receipt.environment_id !== identity.environment_id || receipt.thread_id !== thread_id || receipt.operation !== command.operation || receipt.command_sha256 !== expectedHash || !['accepted', 'pending'].includes(receipt.state)) fail('ERR_FORBIDDEN', 'Receipt não autoriza esta intenção.');
     return this.#service.executeCommand(identity, command);
   }
   // Picker methods are private host ports, not registered wire operations.

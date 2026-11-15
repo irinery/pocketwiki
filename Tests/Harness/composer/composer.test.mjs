@@ -8,6 +8,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { ComposerError, ComposerService } from '../../../src/harness/composer/index.mjs';
 import { ComposerProjection } from '../../../src/harness/composer/projection.mjs';
+import { canonicalJSON } from '../../../src/harness/composer/service.mjs';
 import { validateAgainst } from '../../../src/harness/contracts/validate.mjs';
 import { ComposerPolicy } from '../../../src/harness/composer/gateway.mjs';
 
@@ -394,12 +395,12 @@ test('host E1 autentica bearer e policy autoriza thread antes da mutação', asy
   const local = { bearer, thread_id: ids.thread, operation: 'composer.draft.save', input: { draft: input } };
   assert.equal((await gateway.callLocal(local)).revision, 1);
   const command = { protocol_major: 1, command_id: ids.command, environment_id: ids.environment, expected_revision: 0, operation: 'composer.draft.save', input: { draft: input } };
-  await assert.rejects(gateway.execute({ bearer, thread_id: ids.thread, command }), { code: 'ERR_INVALID' });
-  await assert.rejects(gateway.execute({ bearer: 'inválido', thread_id: ids.thread, command }), { code: 'ERR_FORBIDDEN' });
-  await assert.rejects(gateway.execute({ bearer, thread_id: ids.otherPrincipal, command }), { code: 'ERR_FORBIDDEN' });
+  await assert.rejects(gateway.executeAccepted({ bearer, thread_id: ids.thread, command }), { code: 'ERR_INVALID' });
+  await assert.rejects(gateway.executeAccepted({ bearer: 'inválido', thread_id: ids.thread, command }), { code: 'ERR_FORBIDDEN' });
+  await assert.rejects(gateway.executeAccepted({ bearer, thread_id: ids.otherPrincipal, command }), { code: 'ERR_FORBIDDEN' });
   const deniedService = new ComposerService({ dataDir: service.dataDir });
   const deniedGateway = new ComposerGateway({ service: deniedService, credentialHost: host, policy: new ComposerPolicy([]) });
-  await assert.rejects(deniedGateway.execute({ bearer, thread_id: ids.thread, command }), { code: 'ERR_FORBIDDEN' });
+  await assert.rejects(deniedGateway.executeAccepted({ bearer, thread_id: ids.thread, command }), { code: 'ERR_FORBIDDEN' });
   assert.equal(service.getDraft(auth(), ids.draft).revision, 1);
 });
 
@@ -678,13 +679,15 @@ test('pin e resolve usam serviço HTTP real com bearer delegado E1', async (t) =
   const host = new LocalCredentialHost({ principalId: ids.principal, environmentId: ids.environment, audience: 'pocketwiki.context.v1', grantedScopes: ['context.read', 'read'], deliverBearer: async (delivery) => { bearer = delivery.bearer; } });
   await host.bootstrap(['context.read'], { threadId: ids.thread });
   const { service, now } = await makeHarness(t);
-  const gateway = new ComposerGateway({ service, credentialHost: host, policy: new ComposerPolicy([{ principal_id: ids.principal, environment_id: ids.environment, thread_id: ids.thread, roots: [] }]) });
+  let accepted;
+  const gateway = new ComposerGateway({ service, credentialHost: host, policy: new ComposerPolicy([{ principal_id: ids.principal, environment_id: ids.environment, thread_id: ids.thread, roots: [] }]), verifyAccepted: async () => accepted });
   const local = (operation, input) => gateway.callLocal({ bearer, thread_id: ids.thread, operation, input });
   const staged = (await local('composer.stage', { thread_id: ids.thread, filename: 'permitido.txt', mime: 'text/plain', content_base64: Buffer.from('bytes estáveis').toString('base64') })).reference;
   const excluded = (await local('composer.stage', { thread_id: ids.thread, filename: 'removido.txt', mime: 'text/plain', content_base64: Buffer.from('excluído').toString('base64') })).reference;
   await local('composer.draft.save', { draft: { draft_id: ids.draft, thread_id: ids.thread, text: 'texto', references: [staged, excluded], revision: 0 } });
   const command = { protocol_major: 1, command_id: ids.command, environment_id: ids.environment, expected_revision: 0, operation: 'composer.prepare', input: { thread_id: ids.thread, draft_id: ids.draft, text: 'texto', references: [staged], context_budget_bytes: 1024 } };
-  const prepared = (await gateway.execute({ bearer, thread_id: ids.thread, command })).result;
+  accepted = { receipt_id: '77777777-7777-4777-8777-777777777777', command_id: ids.command, principal_id: ids.principal, environment_id: ids.environment, thread_id: ids.thread, operation: 'composer.prepare', command_sha256: hash(Buffer.from(canonicalJSON(command))), state: 'accepted' };
+  const prepared = (await gateway.executeAccepted({ bearer, thread_id: ids.thread, command })).result;
   const server = await startComposerHTTP({ gateway });
   t.after(() => new Promise((resolve) => server.close(resolve)));
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -817,4 +820,86 @@ test('stress nativo de lookup sob reparent não lê inode externo', async (t) =>
   if (code === 77) { t.skip('Primitiva beneath não disponível no SDK'); return; }
   assert.equal(code, 0, 'leitura do inode externo foi observada');
   assert.ok(Number(successfulReads.trim()) > 0, 'nenhuma leitura legítima concluída');
+});
+
+test('caminho com NUL é rejeitado antes do leitor nativo', async (t) => {
+  const f = fixture(t);
+  const root = path.join(f.root, 'wiki');
+  await mkdir(root);
+  grantRoot(t, f.service, root);
+  await rejectsCode(f.service.previewFile(auth(), { root, relative_path: 'p\u0000.md' }), 'ERR_INVALID');
+});
+
+test('HTTP resolve recusa credencial válida de outro principal autorizado na thread', async (t) => {
+  const { LocalCredentialHost } = await import('../../../src/harness/local-host.mjs');
+  const { ComposerGateway } = await import('../../../src/harness/composer/gateway.mjs');
+  const { startComposerHTTP } = await import('../../../src/harness/composer/http.mjs');
+  const f = fixture(t);
+  const identity = auth();
+  const preparedDraft = { draft_id: ids.draft, thread_id: ids.thread, text: 'privado', references: [], revision: 0 };
+  f.service.saveDraft(identity, preparedDraft);
+  const result = await prepare(f.service, identity, { text: 'privado' });
+  let otherBearer;
+  const otherHost = new LocalCredentialHost({ principalId: ids.otherPrincipal, environmentId: ids.environment, audience: 'pocketwiki.context.v1', grantedScopes: ['context.read'], deliverBearer: async (delivery) => { otherBearer = delivery.bearer; } });
+  await otherHost.bootstrap(['context.read'], { threadId: ids.thread });
+  const otherService = new ComposerService({ dataDir: f.service.dataDir, now: () => f.now.value });
+  const policy = new ComposerPolicy([{ principal_id: ids.otherPrincipal, environment_id: ids.environment, thread_id: ids.thread, roots: [] }]);
+  const server = await startComposerHTTP({ gateway: new ComposerGateway({ service: otherService, credentialHost: otherHost, policy }) });
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/v1/composer/resolve`, { method: 'POST', headers: { authorization: `Bearer ${otherBearer}`, 'content-type': 'application/json' }, body: JSON.stringify({ thread_id: ids.thread, input: { prepared_id: result.prepared_id, manifest_sha256: result.manifest_sha256 } }) });
+  assert.equal(response.status, 403);
+  assert.equal((await response.json()).code, 'ERR_FORBIDDEN');
+});
+
+test('callback de prepare exige receipt autenticado e hash exato antes de I/O', async (t) => {
+  const { LocalCredentialHost } = await import('../../../src/harness/local-host.mjs');
+  const { ComposerGateway } = await import('../../../src/harness/composer/gateway.mjs');
+  let bearer;
+  const host = new LocalCredentialHost({ principalId: ids.principal, environmentId: ids.environment, audience: 'pocketwiki.context.v1', grantedScopes: ['context.read'], deliverBearer: async (delivery) => { bearer = delivery.bearer; } });
+  await host.bootstrap(['context.read'], { threadId: ids.thread });
+  const f = fixture(t);
+  await saveDraft(f.service, auth(), { text: 'callback' });
+  const command = { protocol_major: 1, command_id: ids.command, environment_id: ids.environment, expected_revision: 0, operation: 'composer.prepare', input: { thread_id: ids.thread, draft_id: ids.draft, text: 'callback', references: [], context_budget_bytes: 1024 } };
+  const policy = new ComposerPolicy([{ principal_id: ids.principal, environment_id: ids.environment, thread_id: ids.thread, roots: [] }]);
+  const request = { bearer, thread_id: ids.thread, command };
+  const unverified = new ComposerGateway({ service: f.service, credentialHost: host, policy });
+  await assert.rejects(unverified.executeAccepted(request), { code: 'ERR_UNAVAILABLE' });
+  const other = new ComposerService({ dataDir: f.service.dataDir, now: () => f.now.value });
+  const accepted = { receipt_id: '77777777-7777-4777-8777-777777777777', command_id: ids.command, principal_id: ids.principal, environment_id: ids.environment, thread_id: ids.thread, operation: 'composer.prepare', command_sha256: hash(Buffer.from(canonicalJSON(command))), state: 'accepted' };
+  let record = { ...accepted, command_sha256: '0'.repeat(64) };
+  const gateway = new ComposerGateway({ service: other, credentialHost: host, policy, verifyAccepted: async () => record });
+  await assert.rejects(gateway.executeAccepted(request), { code: 'ERR_FORBIDDEN' });
+  record = { ...accepted, state: 'failed' };
+  await assert.rejects(gateway.executeAccepted(request), { code: 'ERR_FORBIDDEN' });
+  record = accepted;
+  const first = await gateway.executeAccepted(request);
+  assert.equal(first.duplicate, false);
+  assert.deepEqual(await gateway.executeAccepted(request), { result: first.result, duplicate: true });
+  const { startComposerHTTP } = await import('../../../src/harness/composer/http.mjs');
+  const server = await startComposerHTTP({ gateway });
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/v1/composer/execute`, { method: 'POST', headers: { authorization: `Bearer ${bearer}`, 'content-type': 'application/json' }, body: JSON.stringify({ thread_id: ids.thread, command }) });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { result: first.result, duplicate: true });
+});
+
+test('callback HTTP sem verificador de receipt falha fechado', async (t) => {
+  const { LocalCredentialHost } = await import('../../../src/harness/local-host.mjs');
+  const { ComposerGateway } = await import('../../../src/harness/composer/gateway.mjs');
+  const { startComposerHTTP } = await import('../../../src/harness/composer/http.mjs');
+  let bearer;
+  const host = new LocalCredentialHost({ principalId: ids.principal, environmentId: ids.environment, audience: 'pocketwiki.context.v1', grantedScopes: ['context.read'], deliverBearer: async (delivery) => { bearer = delivery.bearer; } });
+  await host.bootstrap(['context.read'], { threadId: ids.thread });
+  const f = fixture(t);
+  await saveDraft(f.service, auth(), { text: 'callback' });
+  const policy = new ComposerPolicy([{ principal_id: ids.principal, environment_id: ids.environment, thread_id: ids.thread, roots: [] }]);
+  const gateway = new ComposerGateway({ service: f.service, credentialHost: host, policy });
+  const server = await startComposerHTTP({ gateway });
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const command = { protocol_major: 1, command_id: ids.command, environment_id: ids.environment, expected_revision: 0, operation: 'composer.prepare', input: { thread_id: ids.thread, draft_id: ids.draft, text: 'callback', references: [], context_budget_bytes: 1024 } };
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/v1/composer/execute`, { method: 'POST', headers: { authorization: `Bearer ${bearer}`, 'content-type': 'application/json' }, body: JSON.stringify({ thread_id: ids.thread, command }) });
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).code, 'ERR_UNAVAILABLE');
+  const disk = JSON.parse(await readFile(path.join(f.service.dataDir, 'composer-state-v1.json'), 'utf8'));
+  assert.deepEqual(disk.prepared, []);
 });

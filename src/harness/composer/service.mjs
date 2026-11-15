@@ -59,7 +59,7 @@ export function validateReference(reference) {
   if (!UUID.test(reference.reference_id ?? '') || !['wiki', 'file', 'quote', 'image'].includes(reference.kind) || !SHA256.test(reference.sha256 ?? '') || !Number.isSafeInteger(reference.size_bytes) || reference.size_bytes < 0 || reference.size_bytes > 4 * 1024 * 1024 || reference.trust !== 'untrusted_content') fail('ERR_INVALID', 'Referência fora do contrato.');
   if (reference.relative_path !== undefined) {
     validateString(reference.relative_path, 1, 4096, 'Caminho relativo');
-    if (path.isAbsolute(reference.relative_path) || reference.relative_path.includes('\\') || reference.relative_path.split('/').some((part) => part === '..')) fail('ERR_INVALID', 'Caminho relativo inválido.');
+    if (path.isAbsolute(reference.relative_path) || reference.relative_path.includes('\0') || reference.relative_path.includes('\\') || reference.relative_path.split('/').some((part) => part === '..')) fail('ERR_INVALID', 'Caminho relativo inválido.');
   }
   if (reference.message_id !== undefined && !UUID.test(reference.message_id)) fail('ERR_INVALID', 'message_id inválido.');
   return reference;
@@ -273,7 +273,7 @@ export class ComposerService {
   async previewFile(auth, { root, relative_path, kind = 'file' }) {
     validateAuth(auth);
     validateString(relative_path, 1, 4096, 'Caminho relativo');
-    if (!['file', 'wiki', 'quote'].includes(kind) || path.isAbsolute(relative_path)) fail('ERR_INVALID', 'Fonte de arquivo inválida.');
+    if (!['file', 'wiki', 'quote'].includes(kind) || path.isAbsolute(relative_path) || relative_path.includes('\0')) fail('ERR_INVALID', 'Fonte de arquivo inválida.');
     const approvedRoot = this.authorizeRoot(auth, root);
     const bytes = await readAuthorizedFile(approvedRoot, relative_path, this.secureReaderPath);
     const text = bytes.toString('utf8');
@@ -289,7 +289,7 @@ export class ComposerService {
     if (!isPlainObject(input) || Object.keys(input).some((key) => !['root', 'relative_path', 'start_byte', 'end_byte'].includes(key))) fail('ERR_INVALID', 'Citação inválida.');
     const { root, relative_path, start_byte, end_byte } = input;
     validateString(relative_path, 1, 4096, 'Caminho relativo');
-    if (path.isAbsolute(relative_path) || !Number.isSafeInteger(start_byte) || !Number.isSafeInteger(end_byte) || start_byte < 0 || end_byte <= start_byte) fail('ERR_INVALID', 'Intervalo de citação inválido.');
+    if (path.isAbsolute(relative_path) || relative_path.includes('\0') || !Number.isSafeInteger(start_byte) || !Number.isSafeInteger(end_byte) || start_byte < 0 || end_byte <= start_byte) fail('ERR_INVALID', 'Intervalo de citação inválido.');
     const approvedRoot = this.authorizeRoot(auth, root);
     const source = await readAuthorizedFile(approvedRoot, relative_path, this.secureReaderPath);
     if (end_byte > source.length || !Buffer.from(source.toString('utf8'), 'utf8').equals(source)) fail('ERR_INVALID', 'Origem ou intervalo inválido.');
