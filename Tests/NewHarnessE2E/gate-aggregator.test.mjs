@@ -189,6 +189,8 @@ test('E1 requires all six cumulative pairs and validates replay artifact binding
       if (artifact === item.replay_host_path) content = JSON.stringify({ surface: item.surface, cases: [{ id: '02-01', status: 'passed', replay_nonce: item.replay_nonce, replay_proof_sha256: item.replay_proof_sha256 }] });
       await writeFile(target, content);
     }
+    // Equivalent JSON in a different property order still matches the exact hashed artifact.
+    for (const item of report.cases) if (item.replay_proof) item.replay_proof = Object.fromEntries(Object.entries(item.replay_proof).reverse());
     const reportPath = path.join(dir, `shard-${index}.json`); await writeFile(reportPath, JSON.stringify(report)); paths.push(reportPath);
   }
   assert.equal((await aggregateReportFiles('E1', paths, identity)).gate_passed, true);

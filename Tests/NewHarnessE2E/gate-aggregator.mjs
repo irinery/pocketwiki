@@ -1,4 +1,4 @@
-import { validateReplayProof, replayProofSHA256 } from './replay-proof.mjs';
+import { validateReplayProof, replayProofSHA256, canonicalJSON } from './replay-proof.mjs';
 import { assertTrackedFlags } from './git-snapshot.mjs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -187,7 +187,7 @@ async function verifyArtifacts(reportPath, report) {
       const rows = Array.isArray(host.cases) ? host.cases.filter(row => row.id === '02-01') : [];
       if (host.surface !== result.surface || rows.length !== 1 || rows[0].status !== 'passed' || rows[0].replay_nonce !== result.replay_nonce || rows[0].replay_proof_sha256 !== result.replay_proof_sha256) throw new Error('replay host artifact mismatch');
       const bytes = await readFile(proofPath);
-      if (replayProofSHA256(bytes) !== result.replay_proof_sha256 || JSON.stringify(JSON.parse(bytes)) !== JSON.stringify(result.replay_proof)) throw new Error('replay proof artifact mismatch');
+      if (replayProofSHA256(bytes) !== result.replay_proof_sha256 || canonicalJSON(JSON.parse(bytes)) !== canonicalJSON(result.replay_proof)) throw new Error('replay proof artifact mismatch');
     }
     if (!Array.isArray(result.artifact_paths)) throw new Error('artifact_paths must be an array');
     for (const relativePath of result.artifact_paths) {
