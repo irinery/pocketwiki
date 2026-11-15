@@ -7,6 +7,8 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { ComposerError, ComposerService } from '../../../src/harness/composer/index.mjs';
+import { ComposerProjection } from '../../../src/harness/composer/projection.mjs';
+import { validateAgainst } from '../../../src/harness/contracts/validate.mjs';
 
 const helperDir = mkdtempSync(path.join(os.tmpdir(), 'composer-reader-'));
 const secureReaderPath = path.join(helperDir, 'secure-read');
@@ -152,11 +154,19 @@ test('01-05: páginas compartilham snapshot consistente apesar de draft novo', a
   assert.equal(new Set([...first.drafts, ...second.drafts].map((draft) => draft.draft_id)).size, 3);
   const event = service.eventsSince(identity, first.as_of_seq);
   assert.equal(event.length, 1);
-  assert.equal(event[0].entity_id, '88888888-8888-4888-8888-888888888884');
-  const projection = new Map([...first.drafts, ...second.drafts].map((draft) => [draft.draft_id, draft]));
-  for (const item of event) projection.set(JSON.parse(item.payload.entity_key), item.payload.value);
-  assert.equal(projection.size, 4);
-  assert.equal(projection.get(event[0].entity_id).text, 'mutação posterior');
+  assert.equal(event[0].payload.value.draft_id, '88888888-8888-4888-8888-888888888884');
+  assert.ok(validateAgainst('streamEnvelope', event[0]).valid);
+  assert.ok(validateAgainst('composerFeatureSnapshot', first).valid);
+  assert.ok(validateAgainst('composerModuleEvent', event[0].payload).valid);
+  const projection = new ComposerProjection({ environment_id: ids.environment, thread_id: ids.thread });
+  projection.begin(first);
+  projection.buffer(event[0]);
+  projection.buffer(event[0]);
+  projection.finish(second);
+  projection.apply(event[0]);
+  assert.equal(projection.revision, first.revision);
+  assert.equal(projection.drafts.length, 4);
+  assert.equal(projection.drafts.find((draft) => draft.draft_id === event[0].payload.value.draft_id).text, 'mutação posterior');
   assert.deepEqual(service.eventsSince(identity, event[0].seq), []);
 });
 
@@ -368,5 +378,37 @@ test('host E1 autentica bearer e policy autoriza thread antes da mutação', asy
   assert.equal((await gateway.call({ bearer, thread_id: ids.thread, operation: 'composer.draft.save', input: { draft: input } })).revision, 1);
   await assert.rejects(gateway.call({ bearer: 'inválido', thread_id: ids.thread, operation: 'composer.draft.save', input: { draft: input } }), { code: 'ERR_FORBIDDEN' });
   await assert.rejects(gateway.call({ bearer, thread_id: ids.otherPrincipal, operation: 'composer.draft.save', input: { draft: input } }), { code: 'ERR_FORBIDDEN' });
+  const deniedGateway = new ComposerGateway({ service, credentialHost: host, policy: new ComposerPolicy([]) });
+  await assert.rejects(deniedGateway.call({ bearer, thread_id: ids.thread, operation: 'composer.draft.save', input: { draft: input } }), { code: 'ERR_FORBIDDEN' });
   assert.equal(service.getDraft(auth(), ids.draft).revision, 1);
+});
+
+test('projeção preserva estado confirmado quando evento pendente é inválido', async (t) => {
+  const { service, auth: identity } = await makeHarness(t);
+  await saveDraft(service, identity);
+  const projection = new ComposerProjection({ environment_id: ids.environment, thread_id: ids.thread });
+  projection.begin(service.snapshot(identity));
+  const initial = projection.drafts;
+  await saveDraft(service, identity, { draftId: '88888888-8888-4888-8888-888888888881' });
+  const first = service.snapshot(identity, { page_size: 1 });
+  await saveDraft(service, identity, { draftId: '88888888-8888-4888-8888-888888888882' });
+  const event = service.eventsSince(identity, first.as_of_seq)[0];
+  event.payload.entity_key = JSON.stringify(ids.draft);
+  projection.begin(first);
+  projection.buffer(event);
+  assert.throws(() => projection.finish(service.snapshot(identity, { page_size: 1, cursor: first.next_cursor })), (error) => error.code === 'ERR_INVALID');
+  assert.deepEqual(projection.drafts, initial);
+  assert.equal(projection.revision, 1);
+});
+
+
+test('projeção rejeita evento de outra thread', async (t) => {
+  const { service, auth: identity } = await makeHarness(t);
+  await saveDraft(service, identity);
+  const projection = new ComposerProjection({ environment_id: ids.environment, thread_id: ids.thread });
+  projection.begin(service.snapshot(identity));
+  await saveDraft(service, identity, { draftId: '88888888-8888-4888-8888-888888888881' });
+  const event = service.eventsSince(identity, 1)[0];
+  assert.throws(() => projection.apply({ ...event, thread_id: ids.otherPrincipal }), (error) => error.code === 'ERR_FORBIDDEN');
+  assert.equal(projection.drafts.length, 1);
 });

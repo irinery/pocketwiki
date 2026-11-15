@@ -11,7 +11,7 @@ node --test Tests/Harness/composer/composer.test.mjs
 swiftc -typecheck Sources/PocketWikiMac/Services/Harness/Composer/ComposerDraftStore.swift
 ```
 
-A suíte Node usa o serviço e stash reais em diretórios temporários privados, removidos ao término. A saída do runner contém nomes dos testes e contagens, sem conteúdo dos anexos ou credenciais. Em 2026-11-14: 22 testes passaram, nenhum skip; typecheck Swift sem saída, exit 0. Esses resultados não são uma execução do gate cumulativo nem provam os itens abaixo.
+A suíte Node usa o serviço e stash reais em diretórios temporários privados, removidos ao término. A saída do runner contém nomes dos testes e contagens, sem conteúdo dos anexos ou credenciais. Em 2026-11-14: 24 testes passaram, nenhum skip; typecheck Swift sem saída, exit 0. Esses resultados não são uma execução do gate cumulativo nem provam os itens abaixo.
 
 ## Portas para integração
 
@@ -24,7 +24,7 @@ O módulo `gateway.mjs` contém `ComposerGateway` e `ComposerPolicy`: o teste us
 ## Pendências antes de liberar a lane
 
 - O gateway autentica credenciais do `LocalCredentialHost` E1 e testa policy real. Falta conectar a execução das mutações ao ledger/receipts e CAS de agregado E1; não expor `ComposerService` diretamente a payload HTTP.
-- A quote do teste usa resolver de teste; falta exercitar o serviço real de histórico/proveniência. A aplicação do evento de 01-05 ocorre em projeção de teste, não na projeção cliente real. As fronteiras de processo/rede ainda não foram exercitadas.
+- A quote do teste usa resolver de teste; falta exercitar o serviço real de histórico/proveniência. 01-05 agora usa `ComposerProjection` e eventos/snapshot verificados no schema real; falta exercício pelo transporte e cliente de E4. As fronteiras de processo/rede ainda não foram exercitadas.
 - A leitura usa descritor de root e `openat`/`O_NOFOLLOW` em cada componente. Falta ensaio de corrida com renomeação concorrente e revisão da política de concessão de roots, incluindo diretórios que um atacante possa mover para fora do root.
 - O writer JSON serializa processos por diretório de lock e sincroniza os bytes antes de renomear. Se o processo morrer segurando o lock, o serviço retorna ERR_UNAVAILABLE até recuperação operacional controlada; ainda falta protocolo de recuperação e prova de durabilidade do diretório após crash. Eventos e tombstones ainda não têm retenção limitada. O store Swift não tem testes de persistência nem transação de erro.
 - Contrato técnico gerado por fase, testes de corpus JS/Swift, testes de deadlines, dados sensíveis e evidência dos cenários pelo host real permanecem pendentes. Não há prova dos gates R1–R7 completos ou CONTEXT-CHAIN.

@@ -147,7 +147,7 @@ export class ComposerService {
     counter.revision += 1;
     const stored = this.state.drafts.find((draft) => draft.owner === owner && draft.draft_id === entityId);
     const { owner: _owner, expires_at_ms: _expires, ...value } = stored;
-    this.state.events.push({ event_id: this.id(), seq: counter.sequence, type, entity_id: entityId, owner, at_ms: this.now(), payload: { entity_type: 'ComposerDraft', entity_key: canonicalJSON(entityId), change: 'upsert', value: structuredClone(value) } });
+    this.state.events.push({ owner, protocol_major: 1, event_id: this.id(), environment_id: auth.environment_id, thread_id: auth.thread_id, seq: counter.sequence, committed_at_ms: this.now(), module: 'composer', delivery: 'inline', payload: { entity_type: 'ComposerDraft', entity_key: canonicalJSON(entityId), change: 'upsert', value: structuredClone(value) } });
     // Events are retained while snapshots may refer to their boundary.
   }
 
@@ -248,7 +248,7 @@ export class ComposerService {
   eventsSince(auth, afterSeq) {
     validateAuth(auth);
     if (!Number.isSafeInteger(afterSeq) || afterSeq < 0) fail('ERR_INVALID', 'after_seq inválido.');
-    return this.state.events.filter((event) => event.owner === ownerKey(auth) && event.seq > afterSeq).map((event) => structuredClone(event));
+    return this.state.events.filter((event) => event.owner === ownerKey(auth) && event.seq > afterSeq).map(({ owner: _owner, ...event }) => structuredClone(event));
   }
 
   async previewFile(auth, { root, relative_path, kind = 'file' }) {
