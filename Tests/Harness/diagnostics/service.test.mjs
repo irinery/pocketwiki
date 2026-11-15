@@ -29,3 +29,23 @@ test('validation happens before I/O and unknown components fail closed', async (
  await rejects(svc.snapshot({}, {...input, max_bytes: 0}), 'ERR_REPORT_LIMIT'); assert.equal(called, false);
  await rejects(service({probe:async()=>({components:[{component_id:'secret', state:'ready',code:'OK'}],correlation_ids:[]})}).snapshot({},input),'ERR_COMPONENT_UNAVAILABLE');
 });
+test('authorization precedes every source read and failed writes do not return a report', async () => {
+ let reads = 0;
+ const probe = async () => { reads++; return {components: [], correlation_ids: []}; };
+ await rejects(service({authorize: async () => false, probe}).snapshot({}, input), 'ERR_FORBIDDEN');
+ assert.equal(reads, 0);
+ await rejects(service({authorize: async () => { throw new Error('token-secret'); }, probe}).snapshot({}, input), 'ERR_UNAVAILABLE');
+ assert.equal(reads, 0);
+ await rejects(service({probe, reports:{save:async () => {throw new Error('private path');}}}).snapshot({}, input), 'ERR_UNAVAILABLE');
+ assert.equal(reads, 1);
+});
+test('save receives only the sanitized report and preview hash tracks exact bytes', async () => {
+ let persisted;
+ const svc = service({reports:{save:async value => { persisted = structuredClone(value); }}, probe:async () => ({
+  components:[{component_id:'runtime',state:'ready',code:'OK',prompt:'private prompt'}], correlation_ids:[], logs:['private token']
+ })});
+ const result = await svc.snapshot({}, input);
+ assert.deepEqual(persisted.report, result.report);
+ assert.equal(JSON.stringify(persisted.report).includes('private'), false);
+ assert.notEqual(previewSHA256(result.report), previewSHA256({...result.report, protocol_minor:1}));
+});
