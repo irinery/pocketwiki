@@ -180,6 +180,8 @@ export class PocketMemoryStore {
           entity_type:'MemoryNote', entity_key:key, change:'upsert', value });
         const encoded = JSON.stringify(state);
         if (Buffer.byteLength(encoded) > 16 * 1024 * 1024) throw memoryError('ERR_UNAVAILABLE', 'Memory note journal full');
+        const noteDirectory = await secureDirectory(this.root, ['.notes', namespace.thread_id || 'project']);
+        await this.#writeAtomic(path.join(noteDirectory, 'MEMORY.md'), content);
         await this.#writeAtomic(file, encoded);
         return next;
       }
