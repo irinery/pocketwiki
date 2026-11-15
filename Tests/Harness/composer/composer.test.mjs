@@ -538,3 +538,42 @@ test('projeção não aceita mesmo event_id com outra sequência', async (t) => 
   assert.throws(() => projection.apply({ ...event, seq: event.seq + 1 }), (error) => error.code === 'ERR_INVALID');
   assert.equal(projection.drafts.length, 2);
 });
+
+test('falha de escrita não confirma contexto preparado nem altera draft', async (t) => {
+  const { chmod } = await import('node:fs/promises');
+  const quote = Buffer.from('trecho');
+  let stash;
+  const f = fixture(t, { sourceResolver: async () => { await chmod(stash, 0o500); return { bytes: quote, mime: 'text/plain' }; } });
+  stash = f.service.dataDir;
+  const identity = auth();
+  const ref = quoteReference(quote, '99999999-9999-4999-8999-999999999999');
+  await saveDraft(f.service, identity, { references: [ref] });
+  try {
+    await rejectsCode(prepare(f.service, identity, { references: [ref] }), 'ERR_UNAVAILABLE');
+  } finally {
+    await chmod(stash, 0o700);
+    await rm(path.join(stash, '.composer-lock'), { force: true });
+  }
+  const restarted = new ComposerService({ dataDir: stash, now: () => f.now.value });
+  assert.equal(restarted.getDraft(identity, ids.draft).revision, 1);
+  const disk = JSON.parse(await readFile(path.join(stash, 'composer-state-v1.json'), 'utf8'));
+  assert.deepEqual(disk.prepared, []);
+});
+
+test('crash depois do commit local permite replay idempotente após restart', async (t) => {
+  const { spawn } = await import('node:child_process');
+  const f = fixture(t);
+  const seed = new ComposerService({ dataDir: f.service.dataDir });
+  await saveDraft(seed, auth(), { text: 'uma vez' });
+  const child = spawn(process.execPath, ['Tests/Harness/composer/command-worker.mjs', f.service.dataDir, '--hold'], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const output = await new Promise((resolve, reject) => { child.stdout.once('data', (data) => resolve(data.toString())); child.once('error', reject); });
+  const first = JSON.parse(output);
+  const exited = new Promise((resolve) => child.once('exit', resolve));
+  child.kill('SIGKILL');
+  await exited;
+  const restarted = new ComposerService({ dataDir: f.service.dataDir });
+  const command = { protocol_major: 1, command_id: ids.command, environment_id: ids.environment, expected_revision: 0, operation: 'composer.prepare', input: { thread_id: ids.thread, draft_id: ids.draft, text: 'uma vez', references: [], context_budget_bytes: 1024 } };
+  const replay = await restarted.executeCommand(auth(), command);
+  assert.equal(first.duplicate, false);
+  assert.deepEqual(replay, { result: first.result, duplicate: true });
+});
