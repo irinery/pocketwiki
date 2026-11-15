@@ -5,6 +5,30 @@ import Darwin
 @main
 struct PocketMemoryHarnessValidation {
     static func main() async throws {
+        if CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--first-page" {
+            let root = URL(fileURLWithPath: CommandLine.arguments[2], isDirectory: true)
+            let scope = PocketMemoryNamespace(environmentID: "10000000-0000-4000-8000-000000000001",
+                projectID: "20000000-0000-4000-8000-000000000001", threadID: nil)
+            let auth = PocketMemoryAuthorization(principalID: "50000000-0000-4000-8000-000000000001", environmentID: scope.environmentID,
+                aggregateID: scope.projectID, threadID: nil, scopes: ["context.read", "memory.write", "memory.personal.read"])
+            let service = PocketMemoryHarnessService(directory: root, policy: { _, _, _, _ in true })
+            let page = try await service.snapshot(auth, namespace: scope, pageSize: 1)
+            guard let output = String(data: try JSONEncoder().encode(page), encoding: .utf8) else { fatalError("encoding failed") }
+            print(output)
+            return
+        }
+        if CommandLine.arguments.count == 4 && CommandLine.arguments[1] == "--page" {
+            let root = URL(fileURLWithPath: CommandLine.arguments[2], isDirectory: true)
+            let scope = PocketMemoryNamespace(environmentID: "10000000-0000-4000-8000-000000000001",
+                projectID: "20000000-0000-4000-8000-000000000001", threadID: nil)
+            let auth = PocketMemoryAuthorization(principalID: "50000000-0000-4000-8000-000000000001", environmentID: scope.environmentID,
+                aggregateID: scope.projectID, threadID: nil, scopes: ["context.read", "memory.write", "memory.personal.read"])
+            let service = PocketMemoryHarnessService(directory: root, policy: { _, _, _, _ in true })
+            let page = try await service.snapshot(auth, namespace: scope, pageSize: 1, cursor: CommandLine.arguments[3])
+            guard let output = String(data: try JSONEncoder().encode(page), encoding: .utf8) else { fatalError("encoding failed") }
+            print(output)
+            return
+        }
         if CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--hold-lock" {
             var database: OpaquePointer?
             guard sqlite3_open_v2(CommandLine.arguments[2], &database, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK,
@@ -24,9 +48,12 @@ struct PocketMemoryHarnessValidation {
                 aggregateID: scope.projectID, threadID: scope.threadID, scopes: ["context.read", "memory.write", "memory.personal.read"])
             let service = PocketMemoryHarnessService(directory: root, policy: { _, _, _, _ in true })
             let current = try await service.noteGet(auth, namespace: scope)
-            guard current.content == "node", current.revision == 1 else { fatalError("cross-runtime read failed") }
+            guard current.content == "node recovered", current.revision == 2 else { fatalError("cross-runtime recovery failed") }
             _ = try await service.notePut(auth, namespace: scope, content: "swift", expectedRevision: current.revision)
-            print("interop-ok")
+            let recall = try await service.recallScoped(auth, namespace: scope, question: "postgres beta")
+            let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+            guard let result = String(data: try encoder.encode(recall), encoding: .utf8) else { fatalError("encoding failed") }
+            print(result)
             return
         }
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("pocketwiki-memory-harness-\(UUID().uuidString)", isDirectory: true)
@@ -151,7 +178,11 @@ struct PocketMemoryHarnessValidation {
         let beforeMap = try await service.recallScoped(authA, namespace: namespaceA, question: "legacy postgres")
         precondition(!beforeMap.hits.contains { $0.sessionID == legacyID })
         let mapped = try await service.mapLegacy(authA, legacySessionID: legacyID, namespace: namespaceA)
-        precondition(mapped)
+        precondition(mapped.mapped && mapped.sessionID == legacyID)
+        let localMarker = root.appendingPathComponent("v2/\(environment)/projects/\(projectA)/.legacy-mappings/\(legacyID).json")
+        try FileManager.default.removeItem(at: localMarker)
+        let recoveredMapping = try await service.mapLegacy(authA, legacySessionID: legacyID, namespace: namespaceA)
+        precondition(recoveredMapping == mapped)
         let legacyAfter = try Data(contentsOf: legacyURL)
         precondition(legacyAfter == legacyData)
         let afterMap = try await service.recallScoped(authA, namespace: namespaceA, question: "legacy postgres")

@@ -100,14 +100,12 @@ function score(content, terms) {
   return terms.reduce((sum, term) => sum + (text.includes(term) ? 1 : 0), 0);
 }
 
-export function validateMemoryEvents(events) {
+export function validateMemoryEvents(events, { unicodeScalars = false } = {}) {
   if (!Array.isArray(events) || events.length < 1 || events.length > 32) throw new Error('invalid_event_batch');
   return events.map(item => {
-    const allowedFields = new Set(['event', 'session_id', 'ingest_key', 'prompt', 'message', 'provider_id', 'model_id']);
-    if (!item || typeof item !== 'object' || Object.keys(item).some((field) => !allowedFields.has(field)) ||
-        !EVENTS.has(item.event) || !UUID.test(item.session_id || '') || !KEY.test(item.ingest_key || '') ||
-        (item.prompt != null && (typeof item.prompt !== 'string' || [...item.prompt].length > 8000)) ||
-        (item.message != null && (typeof item.message !== 'string' || [...item.message].length > 8000)) ||
+    if (!EVENTS.has(item?.event) || !UUID.test(item.session_id || '') || !KEY.test(item.ingest_key || '') ||
+        (item.prompt != null && (typeof item.prompt !== 'string' || (unicodeScalars ? [...item.prompt].length : item.prompt.length) > 8000)) ||
+        (item.message != null && (typeof item.message !== 'string' || (unicodeScalars ? [...item.message].length : item.message.length) > 8000)) ||
         (item.event === 'user-prompt-submit' && !item.prompt?.trim()) ||
         (item.event === 'assistant-response' && !item.message?.trim())) throw new Error('invalid_event');
     return {
@@ -173,6 +171,7 @@ export class PocketMemoryStore {
       return Promise.reject(memoryError('ERR_INVALID', 'Invalid memory note or revision'));
     }
     return serializeWrite(`${this.root}:note`, async () => {
+      await this.#recoverNoteIntent();
       const current = await this.noteGetCAS(namespace);
       if (current.revision !== expectedRevision) {
         throw Object.assign(memoryError('ERR_CONFLICT', 'Memory note revision changed'), { revision:current.revision });
@@ -189,9 +188,8 @@ export class PocketMemoryStore {
           entity_type:'MemoryNote', entity_key:key, change:'upsert', value });
         const encoded = JSON.stringify(state);
         if (Buffer.byteLength(encoded) > 16 * 1024 * 1024) throw memoryError('ERR_UNAVAILABLE', 'Memory note journal full');
-        const noteDirectory = await secureDirectory(this.root, ['.notes', namespace.thread_id || 'project']);
-        await this.#writeAtomic(path.join(noteDirectory, 'MEMORY.md'), content);
-        await this.#writeAtomic(file, encoded);
+        await this.#writeAtomic(path.join(this.root, '.note-intent.json'), JSON.stringify({ state, namespace, content }));
+        await this.#recoverNoteIntent();
         return next;
       }
       await this.#writeAtomic(path.join(this.root, '.memory-note.json'), JSON.stringify({ schema_version:2, ...next }));
@@ -200,31 +198,68 @@ export class PocketMemoryStore {
     });
   }
 
+  async #recoverNoteIntent() {
+    const intentPath = path.join(this.root, '.note-intent.json');
+    const intent = await readJSON(intentPath, null);
+    if (!intent) return;
+    const namespace = intent.namespace;
+    try { memoryNamespacePath('/memory-root', namespace); }
+    catch { throw memoryError('ERR_MEMORY_UNAVAILABLE', 'Invalid memory note intent'); }
+    const key = JSON.stringify([namespace.environment_id, namespace.project_id || null, namespace.thread_id || null]);
+    const value = intent.state?.notes?.[key];
+    if (typeof intent.content !== 'string' || Buffer.byteLength(intent.content) > 16 * 1024 ||
+        !Number.isSafeInteger(intent.state?.sequence) || intent.state.sequence < 1 ||
+        !Array.isArray(intent.state.events) || value?.content !== intent.content ||
+        !Number.isSafeInteger(value?.revision) || value.revision < 1) {
+      throw memoryError('ERR_MEMORY_UNAVAILABLE', 'Invalid memory note intent');
+    }
+    const encoded = JSON.stringify(intent.state);
+    if (Buffer.byteLength(encoded) > 16 * 1024 * 1024) throw memoryError('ERR_MEMORY_UNAVAILABLE', 'Memory note journal full');
+    const noteDirectory = await secureDirectory(this.root, ['.notes', namespace.thread_id || 'project']);
+    await this.#writeAtomic(path.join(noteDirectory, 'MEMORY.md'), intent.content);
+    await this.#writeAtomic(path.join(this.root, '.memory-notes.json'), encoded);
+    await unlink(intentPath);
+  }
+
+  scopedNoteGet(namespace) {
+    return serializeWrite(`${this.root}:note`, async () => {
+      await this.#recoverNoteIntent();
+      return this.noteGetCAS(namespace);
+    });
+  }
+
   notesProjection(namespace) {
     return serializeWrite(`${this.root}:note`, async () => {
+      await this.#recoverNoteIntent();
       const state = await readJSON(path.join(this.root, '.memory-notes.json'), { sequence:0, notes:{}, events:[] });
-      const notes = Object.entries(state.notes).sort(([a], [b]) => a.localeCompare(b))
+      const notes = Object.entries(state.notes).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
         .map(([, value]) => value)
         .filter((value) => !namespace.thread_id || value.namespace.thread_id === namespace.thread_id);
       return { notes, sequence:state.sequence };
     });
   }
 
-  async notesEvents(afterSequence) {
-    const state = await readJSON(path.join(this.root, '.memory-notes.json'), { sequence:0, notes:{}, events:[] });
-    return state.events.filter((event) => event.sequence > afterSequence);
+  notesEvents(afterSequence) {
+    return serializeWrite(`${this.root}:note`, async () => {
+      await this.#recoverNoteIntent();
+      const state = await readJSON(path.join(this.root, '.memory-notes.json'), { sequence:0, notes:{}, events:[] });
+      return state.events.filter((event) => event.sequence > afterSequence);
+    });
   }
 
-  async notesRetentionAvailable(afterSequence) {
-    const state = await readJSON(path.join(this.root, '.memory-notes.json'), { sequence:0, notes:{}, events:[] });
-    if (!Number.isSafeInteger(state.sequence) || state.sequence < afterSequence || !Array.isArray(state.events)) return false;
-    const later = state.events.filter((event) => event.sequence > afterSequence);
-    return later.length === state.sequence - afterSequence &&
-      later.every((event, index) => event.sequence === afterSequence + index + 1);
+  notesRetentionAvailable(afterSequence) {
+    return serializeWrite(`${this.root}:note`, async () => {
+      await this.#recoverNoteIntent();
+      const state = await readJSON(path.join(this.root, '.memory-notes.json'), { sequence:0, notes:{}, events:[] });
+      if (!Number.isSafeInteger(state.sequence) || state.sequence < afterSequence || !Array.isArray(state.events)) return false;
+      const later = state.events.filter((event) => event.sequence > afterSequence);
+      return later.length === state.sequence - afterSequence &&
+        later.every((event, index) => event.sequence === afterSequence + index + 1);
+    });
   }
 
   captureScoped(events) {
-    const validated = validateMemoryEvents(events);
+    const validated = validateMemoryEvents(events, { unicodeScalars:true });
     return serializeWrite(`${this.root}:capture`, async () => {
       await this.#recoverCaptureIntent();
       const ledgerPath = path.join(this.root, '.memory-receipts.json');
@@ -248,7 +283,10 @@ export class PocketMemoryStore {
   }
 
   recoverCapture() {
-    return serializeWrite(`${this.root}:capture`, () => this.#recoverCaptureIntent());
+    return serializeWrite(`${this.root}:capture`, async () => {
+      await this.#recoverNoteIntent();
+      await this.#recoverCaptureIntent();
+    });
   }
 
   scopedRecall(question, options) {
@@ -275,7 +313,7 @@ export class PocketMemoryStore {
       throw memoryError('ERR_MEMORY_UNAVAILABLE', 'Memory capture intent is invalid');
     }
     const events = intent.events.map(({ sequence, ...event }) => ({ sequence, event }));
-    const valid = validateMemoryEvents(events.map(({ event }) => event));
+    const valid = validateMemoryEvents(events.map(({ event }) => event), { unicodeScalars:true });
     if (events.some(({ sequence }, index) => !Number.isSafeInteger(sequence) || sequence < 1 ||
         sequence > intent.ledger.sequence || intent.ledger.accepted_keys[`${valid[index].session_id}:${valid[index].ingest_key}`] !== sequence)) {
       throw memoryError('ERR_MEMORY_UNAVAILABLE', 'Memory capture intent is invalid');
@@ -451,8 +489,8 @@ export class PocketMemoryStore {
     return acceptedKeys;
   }
 
-  async recall(question, { maxCharacters = 5000, limit = 3, includeNote = true } = {}) {
-    if (typeof question !== 'string' || !question.trim() || question.length > 2000) throw new Error('invalid_question');
+  async recall(question, { maxCharacters = 5000, limit = 3, includeNote = true, unicodeScalars = false } = {}) {
+    if (typeof question !== 'string' || !question.trim() || (unicodeScalars ? [...question].length : question.length) > 2000) throw new Error('invalid_question');
     const terms = words(question);
     const blocks = [];
     let remaining = maxCharacters;
@@ -476,8 +514,9 @@ export class PocketMemoryStore {
         if (rank >= best.score && rank > 0) best = { score:rank, index };
       });
       if (best.index < 0) continue;
-      const excerpt = messages.slice(Math.max(0, best.index - 1), Math.min(messages.length, best.index + 2))
-        .map(item => `[${item.role}] ${item.content}`).join('\n\n').slice(0, 2200);
+      const excerptText = messages.slice(Math.max(0, best.index - 1), Math.min(messages.length, best.index + 2))
+        .map(item => `[${item.role}] ${item.content}`).join('\n\n');
+      const excerpt = unicodeScalars ? [...excerptText].slice(0, 2200).join('') : excerptText.slice(0, 2200);
       const candidate = { source, id:sessionID, score:best.score, excerpt,
         updated:Date.parse(record.updated_at || record.created_at) || 0 };
       const prior = byID.get(sessionID);

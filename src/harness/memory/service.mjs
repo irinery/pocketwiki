@@ -68,7 +68,19 @@ function authorize(auth, namespace, scope, { personal = false } = {}) {
 }
 
 function cleanContext(value) {
-  return String(value).replace(/\u0000/g, '').slice(0, 5_000);
+  return [...String(value).replace(/\u0000/g, '')].slice(0, 5_000).join('');
+}
+
+function utf8Prefix(value, limit) {
+  let bytes = 0;
+  let result = '';
+  for (const scalar of value) {
+    const size = Buffer.byteLength(scalar, 'utf8');
+    if (bytes + size > limit) break;
+    result += scalar;
+    bytes += size;
+  }
+  return result;
 }
 
 function validateScopedEvents(events) {
@@ -83,7 +95,7 @@ function validateScopedEvents(events) {
       throw error('ERR_INVALID', 'Invalid memory event');
     }
   }
-  return validateMemoryEvents(events);
+  return validateMemoryEvents(events, { unicodeScalars:true });
 }
 
 function redactExportText(value) {
@@ -152,10 +164,10 @@ export class MemoryHarnessService {
   async captureScoped(auth, input) {
     const { namespace:rawNamespace, events } = exactInput(input, ['namespace', 'events']);
     const namespace = validateNamespace(rawNamespace);
-    await this.#authorize(auth, namespace, 'memory.write');
     let validated;
     try { validated = validateScopedEvents(events); }
     catch (cause) { throw validateIOError(cause, 'ERR_INVALID'); }
+    await this.#authorize(auth, namespace, 'memory.write');
     try { return { accepted_keys:await (await this.#storeFor(namespace)).captureScoped(validated) }; }
     catch (cause) { throw validateIOError(cause); }
   }
@@ -169,16 +181,17 @@ export class MemoryHarnessService {
     if (!thread_id) throw error('ERR_INVALID', 'Memory recall thread is required');
     const namespace = validateNamespace({ environment_id, ...(project_id === undefined ? {} : { project_id }), thread_id }, { recall:true });
     if (typeof include_personal_note !== 'boolean') throw error('ERR_INVALID', 'include_personal_note must be boolean');
-    await this.#authorize(auth, namespace, 'context.read', { personal:include_personal_note });
     if (typeof question !== 'string' || !question.trim() || [...question].length > 2_000) {
       throw error('ERR_INVALID', 'Memory question is invalid');
     }
+    await this.#authorize(auth, namespace, 'context.read', { personal:include_personal_note });
     const store = await this.#storeFor(namespace);
+    const note = include_personal_note ? await store.scopedNoteGet(namespace) : undefined;
     let result;
-    try { result = await store.scopedRecall(question, { maxCharacters:5_000, limit:3, includeNote:false }); }
+    try { result = await store.scopedRecall(question, { maxCharacters:5_000, limit:note?.content ? 2 : 3, includeNote:false, unicodeScalars:true }); }
     catch (cause) { throw validateIOError(cause); }
     const hits = result.hits.map((hit) => {
-      const snippet = cleanContext(hit.snippet);
+      const snippet = utf8Prefix(cleanContext(hit.snippet), 4_096);
       const source = 'history';
       const hash = digest(snippet);
       return {
@@ -195,10 +208,9 @@ export class MemoryHarnessService {
     let context = cleanContext(result.context);
     let noteRevision = 0;
     if (include_personal_note) {
-      const note = await store.noteGetCAS(namespace);
       noteRevision = note.revision;
       if (note.content) {
-        const snippet = cleanContext(note.content).slice(0, 3_000);
+        const snippet = utf8Prefix([...cleanContext(note.content)].slice(0, 3_000).join(''), 4_096);
         const hit = {
           session_id:deterministicUUID(`note\u0000${namespace.environment_id}\u0000${namespace.project_id || namespace.thread_id}`),
           message_id:deterministicUUID(`note\u0000${note.revision}\u0000${snippet}`),
@@ -219,18 +231,18 @@ export class MemoryHarnessService {
     const { namespace:rawNamespace } = exactInput(input, ['namespace']);
     const namespace = validateNamespace(rawNamespace);
     await this.#authorize(auth, namespace, 'memory.personal.read', { personal:true });
-    try { return await (await this.#storeFor(namespace)).noteGetCAS(namespace); }
+    try { return await (await this.#storeFor(namespace)).scopedNoteGet(namespace); }
     catch (cause) { throw validateIOError(cause); }
   }
 
   async notePut(auth, input) {
     const { namespace:rawNamespace, content, expected_revision } = exactInput(input, ['namespace', 'content', 'expected_revision']);
     const namespace = validateNamespace(rawNamespace);
-    await this.#authorize(auth, namespace, 'memory.write');
     if (typeof content !== 'string' || Buffer.byteLength(content, 'utf8') > 16 * 1024 ||
         !Number.isSafeInteger(expected_revision) || expected_revision < 0) {
       throw error('ERR_INVALID', 'Memory note or expected_revision is invalid');
     }
+    await this.#authorize(auth, namespace, 'memory.write');
     try { return await (await this.#storeFor(namespace)).notePutCAS(content, expected_revision, namespace); }
     catch (cause) { throw validateIOError(cause); }
   }
@@ -238,8 +250,8 @@ export class MemoryHarnessService {
   async mapLegacy(auth, input) {
     const { legacy_session_id, namespace:rawNamespace } = exactInput(input, ['legacy_session_id', 'namespace']);
     const namespace = validateNamespace(rawNamespace);
-    await this.#authorize(auth, namespace, 'memory.write');
     if (!UUID.test(legacy_session_id || '')) throw error('ERR_INVALID', 'Legacy session ID must be a UUID');
+    await this.#authorize(auth, namespace, 'memory.write');
     try {
       const store = await this.#storeFor(namespace);
       let sourceValid = false;
@@ -298,7 +310,7 @@ export class MemoryHarnessService {
       schema_version:2,
       namespace,
       sessions:(await store.scopedSessionsConsistent()).map(sanitizeExportRecord),
-      ...(include_personal_note ? { note:await store.noteGetCAS(namespace).then((note) => ({
+      ...(include_personal_note ? { note:await store.scopedNoteGet(namespace).then((note) => ({
         content:redactExportText(note.content), revision:note.revision
       })) } : {})
     };

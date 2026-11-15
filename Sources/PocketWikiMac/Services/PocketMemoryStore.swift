@@ -106,6 +106,12 @@ struct PocketMemoryCaptureResponse: Codable, Sendable, Equatable {
     enum CodingKeys: String, CodingKey { case acceptedKeys = "accepted_keys" }
 }
 
+struct PocketMemoryMappingResponse: Codable, Sendable, Equatable {
+    let mapped: Bool
+    let sessionID: String
+    enum CodingKeys: String, CodingKey { case mapped, sessionID = "session_id" }
+}
+
 struct PocketMemoryScopedHit: Codable, Sendable, Equatable {
     let sessionID: String
     let messageID: String
@@ -160,10 +166,28 @@ struct PocketMemoryEventProjection: Codable, Sendable, Equatable {
     }
 }
 
+struct PocketMemorySnapshotScope: Codable {
+    let environmentID: String
+    let projectID: String?
+    let threadID: String?
+
+    init(_ namespace: PocketMemoryNamespace) {
+        environmentID = namespace.environmentID; projectID = namespace.projectID; threadID = namespace.threadID
+    }
+
+    var namespace: PocketMemoryNamespace {
+        PocketMemoryNamespace(environmentID: environmentID, projectID: projectID, threadID: threadID)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case environmentID = "environment_id", projectID = "project_id", threadID = "thread_id"
+    }
+}
+
 struct PocketMemorySnapshotEnvelope: Codable {
     let snapshotID: String
     let principalID: String
-    let namespace: PocketMemoryNamespace
+    let namespace: PocketMemorySnapshotScope
     let revision: Int
     let asOfSeq: Int
     let expiresAtMS: Int64
@@ -233,6 +257,7 @@ actor PocketMemoryStore {
     func notePutCAS(_ content: String, expectedRevision: Int, namespace: PocketMemoryNamespace? = nil) throws -> PocketMemoryNoteSnapshot {
         guard content.utf8.count <= 16 * 1024, expectedRevision >= 0 else { throw PocketMemoryStoreError.invalidInput }
         return try withHarnessLock {
+        try recoverNoteIntent()
         let current = try noteGetCAS(namespace: namespace)
         guard current.revision == expectedRevision else { throw PocketMemoryStoreError.revisionConflict(current.revision) }
         let next = PocketMemoryNoteSnapshot(content: content, revision: current.revision + 1)
@@ -253,18 +278,49 @@ actor PocketMemoryStore {
             state["sequence"] = sequence; state["notes"] = notes; state["events"] = events
             let encoded = try JSONSerialization.data(withJSONObject: state, options: [.sortedKeys])
             guard encoded.count <= 16 * 1024 * 1024 else { throw PocketMemoryStoreError.unavailable }
-            let notesDir = directory.appendingPathComponent(".notes", isDirectory: true)
-            try ensureRealDirectory(notesDir)
-            let noteDir = notesDir.appendingPathComponent(namespace.threadID ?? "project", isDirectory: true)
-            try ensureRealDirectory(noteDir)
-            try write(Data(content.utf8), to: noteDir.appendingPathComponent("MEMORY.md"))
-            try write(encoded, to: file)
+            var target: [String: Any] = ["environment_id": namespace.environmentID]
+            if let project = namespace.projectID { target["project_id"] = project }
+            if let thread = namespace.threadID { target["thread_id"] = thread }
+            let intent: [String: Any] = ["state": state, "namespace": target, "content": content]
+            try write(JSONSerialization.data(withJSONObject: intent, options: [.sortedKeys]),
+                      to: directory.appendingPathComponent(".note-intent.json"))
+            try recoverNoteIntent()
             return next
         }
         let state: [String: Any] = ["schema_version": 2, "content": content, "revision": next.revision]
         try write(JSONSerialization.data(withJSONObject: state, options: [.sortedKeys]), to: directory.appendingPathComponent(".memory-note.json"))
         try write(Data(content.utf8), to: directory.appendingPathComponent("MEMORY.md"))
         return next
+        }
+    }
+
+    private func recoverNoteIntent() throws {
+        let intentURL = directory.appendingPathComponent(".note-intent.json")
+        guard let intent = try readObject(intentURL) else { return }
+        guard let target = intent["namespace"] as? [String: Any],
+              let environment = target["environment_id"] as? String,
+              let content = intent["content"] as? String, content.utf8.count <= 16 * 1024,
+              let state = intent["state"] as? [String: Any], let sequence = state["sequence"] as? Int, sequence > 0,
+              state["events"] is [Any], let notes = state["notes"] as? [String: [String: Any]] else { throw PocketMemoryStoreError.invalidRecord }
+        let namespace = try PocketMemoryNamespace(environmentID: environment, projectID: target["project_id"] as? String,
+                                                  threadID: target["thread_id"] as? String).validated()
+        guard let value = notes[try noteKey(namespace)], value["content"] as? String == content,
+              let revision = value["revision"] as? Int, revision > 0 else { throw PocketMemoryStoreError.invalidRecord }
+        let encoded = try JSONSerialization.data(withJSONObject: state, options: [.sortedKeys])
+        guard encoded.count <= 16 * 1024 * 1024 else { throw PocketMemoryStoreError.unavailable }
+        let notesDir = directory.appendingPathComponent(".notes", isDirectory: true)
+        try ensureRealDirectory(notesDir)
+        let noteDir = notesDir.appendingPathComponent(namespace.threadID ?? "project", isDirectory: true)
+        try ensureRealDirectory(noteDir)
+        try write(Data(content.utf8), to: noteDir.appendingPathComponent("MEMORY.md"))
+        try write(encoded, to: directory.appendingPathComponent(".memory-notes.json"))
+        try fileManager.removeItem(at: intentURL)
+    }
+
+    func scopedNoteGet(namespace: PocketMemoryNamespace) throws -> PocketMemoryNoteSnapshot {
+        try withHarnessLock {
+            try recoverNoteIntent()
+            return try noteGetCAS(namespace: namespace)
         }
     }
 
@@ -277,6 +333,7 @@ actor PocketMemoryStore {
 
     func captureScoped(_ events: [PocketMemoryIncomingEvent]) throws -> [String] {
         try withHarnessLock {
+            try recoverNoteIntent()
             try recoverCaptureIntent()
             guard (1...32).contains(events.count) else { throw PocketMemoryStoreError.invalidInput }
             let ledgerURL = directory.appendingPathComponent(".memory-receipts.json")
@@ -314,7 +371,7 @@ actor PocketMemoryStore {
     }
 
     func recoverCapture() throws {
-        try withHarnessLock { try recoverCaptureIntent() }
+        try withHarnessLock { try recoverNoteIntent(); try recoverCaptureIntent() }
     }
 
     private func recoverCaptureIntent() throws {
@@ -415,6 +472,7 @@ actor PocketMemoryStore {
 
     func snapshotProjection(namespace: PocketMemoryNamespace) throws -> (items: [PocketMemorySnapshotItem], sequence: Int) {
         try withHarnessLock {
+            try recoverNoteIntent()
             let state = try readObject(directory.appendingPathComponent(".memory-notes.json")) ?? [:]
             let notes = state["notes"] as? [String: [String: Any]] ?? [:]
             var items: [PocketMemorySnapshotItem] = []
@@ -431,6 +489,8 @@ actor PocketMemoryStore {
 
     func eventsSince(_ afterSequence: Int, namespace: PocketMemoryNamespace) throws -> [PocketMemoryEventProjection] {
         guard afterSequence >= 0 else { throw PocketMemoryStoreError.invalidInput }
+        return try withHarnessLock {
+        try recoverNoteIntent()
         let state = try readObject(directory.appendingPathComponent(".memory-notes.json")) ?? [:]
         let entries = state["events"] as? [[String: Any]] ?? []
         return try entries.compactMap { entry in
@@ -440,25 +500,32 @@ actor PocketMemoryStore {
             if let thread = namespace.threadID, event.value.namespace.threadID != thread { return nil }
             return event
         }
+        }
     }
 
     func notesRetentionAvailable(after sequence: Int) throws -> Bool {
+        try withHarnessLock {
+        try recoverNoteIntent()
         guard let state = try readObject(directory.appendingPathComponent(".memory-notes.json")) else { return sequence == 0 }
         guard let current = state["sequence"] as? Int, current >= sequence,
               let events = state["events"] as? [[String: Any]] else { return false }
         let later = events.compactMap { $0["sequence"] as? Int }.filter { $0 > sequence }
         return later.count == current - sequence && later.enumerated().allSatisfy { $0.element == sequence + $0.offset + 1 }
+        }
     }
 
     func recallScoped(_ question: String, namespace: PocketMemoryNamespace, includePersonalNote: Bool) throws -> PocketMemoryScopedRecallResponse {
         try withHarnessLock {
+            try recoverNoteIntent()
             try recoverCaptureIntent()
             return try recallScopedUnlocked(question, namespace: namespace, includePersonalNote: includePersonalNote)
         }
     }
 
     private func recallScopedUnlocked(_ question: String, namespace: PocketMemoryNamespace, includePersonalNote: Bool) throws -> PocketMemoryScopedRecallResponse {
-        let result = try recall(question, includeNote: false, harnessScoring: true)
+        let personalNote = includePersonalNote ? try noteGetCAS(namespace: namespace) : nil
+        let result = try recall(question, includeNote: false, harnessScoring: true,
+                                limit: (personalNote?.content.isEmpty == false) ? 2 : 3)
         let terms = Self.harnessWords(question)
         var hits: [PocketMemoryScopedHit] = []
         for hit in result.hits {
@@ -476,7 +543,8 @@ actor PocketMemoryStore {
             }
             guard bestIndex >= 0 else { continue }
             let nearby = recent[max(0, bestIndex - 1)..<min(recent.count, bestIndex + 2)]
-            let snippet = String(nearby.map { "[\($0["role"] as! String)] \($0["content"] as! String)" }.joined(separator: "\n\n").prefix(2_200))
+            let text = nearby.map { "[\($0["role"] as! String)] \($0["content"] as! String)" }.joined(separator: "\n\n")
+            let snippet = Self.utf8Prefix(String(String.UnicodeScalarView(text.unicodeScalars.prefix(2_200))), limit: 4_096)
             let sha = SHA256.hash(data: Data(snippet.utf8)).map { String(format: "%02x", $0) }.joined()
             let messageID = Self.deterministicUUID("\(hit.id)\u{0}\(snippet)")
             hits.append(PocketMemoryScopedHit(sessionID: hit.id, messageID: messageID, source: "history", snippet: snippet,
@@ -485,11 +553,11 @@ actor PocketMemoryStore {
         var context = result.context
         var revision = 0
         if includePersonalNote {
-            let note = try noteGetCAS(namespace: namespace)
+            let note = personalNote!
             revision = note.revision
             let content = note.content
             if !content.isEmpty {
-                let snippet = String(content.prefix(3_000))
+                let snippet = Self.utf8Prefix(String(String.UnicodeScalarView(content.unicodeScalars.prefix(3_000))), limit: 4_096)
                 let sha = SHA256.hash(data: Data(snippet.utf8)).map { String(format: "%02x", $0) }.joined()
                 let scopeID = namespace.projectID ?? namespace.threadID ?? ""
                 hits.insert(PocketMemoryScopedHit(
@@ -602,7 +670,7 @@ actor PocketMemoryStore {
         return accepted
     }
 
-    func recall(_ question: String, includeNote: Bool = true, harnessScoring: Bool = false) throws -> PocketMemoryRecallResponse {
+    func recall(_ question: String, includeNote: Bool = true, harnessScoring: Bool = false, limit: Int = 3) throws -> PocketMemoryRecallResponse {
         guard !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, question.count <= 2_000 else { throw PocketMemoryStoreError.invalidInput }
         var blocks: [String] = []
         var remaining = 5_000
@@ -667,7 +735,7 @@ actor PocketMemoryStore {
             if $0.score != $1.score { return $0.score > $1.score }
             if $0.updated != $1.updated { return $0.updated > $1.updated }
             return $0.id < $1.id
-        }.prefix(3)
+        }.prefix(limit)
         var hits: [PocketMemoryHit] = []
         for item in selected where remaining > 0 {
             let block = String("Fonte: \(item.source)/session-\(item.id).json\n\(item.excerpt)".prefix(remaining))
@@ -721,6 +789,17 @@ actor PocketMemoryStore {
         text.decomposedStringWithCompatibilityMapping.unicodeScalars
             .filter { !CharacterSet.nonBaseCharacters.contains($0) }
             .map(String.init).joined().lowercased()
+    }
+
+    private static func utf8Prefix(_ text: String, limit: Int) -> String {
+        var result = "", bytes = 0
+        for scalar in text.unicodeScalars {
+            let next = String(scalar)
+            let size = next.utf8.count
+            if bytes + size > limit { break }
+            result.append(next); bytes += size
+        }
+        return result
     }
 
     private static func harnessWords(_ text: String) -> [String] {
