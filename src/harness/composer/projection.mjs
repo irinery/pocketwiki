@@ -27,7 +27,7 @@ export class ComposerProjection {
   }
   buffer(event) {
     const pending = this.#pending;
-    if (!pending || !event || !Number.isSafeInteger(event.seq) || event.seq < 0 || !UUID.test(event.event_id ?? '') || !validateAgainst('composerModuleEvent', event.payload).valid) fail('ERR_INVALID', 'Evento inválido.');
+    if (!pending || !event || !Number.isSafeInteger(event.seq) || event.seq < 0 || !UUID.test(event.event_id ?? '') || (event.module !== 'composer' || event.delivery !== 'inline' || !validateAgainst('streamEnvelope', event).valid)) fail('ERR_INVALID', 'Evento inválido.');
     if (event.environment_id !== this.#environmentID || event.thread_id !== this.#threadID) fail('ERR_FORBIDDEN', 'Evento de outra identidade.');
     if (event.seq <= pending.as_of_seq) return;
     if (pending.eventIDs.has(event.event_id) && pending.eventIDs.get(event.event_id) !== event.seq) fail('ERR_INVALID', 'event_id repetido com outra sequência.');
@@ -44,7 +44,7 @@ export class ComposerProjection {
   }
   apply(event) {
     if (this.#pending) return this.buffer(event);
-    if (!event || !UUID.test(event.event_id ?? '') || !Number.isSafeInteger(event.seq) || !validateAgainst('composerModuleEvent', event.payload).valid) fail('ERR_INVALID', 'Evento inválido.');
+    if (!event || !UUID.test(event.event_id ?? '') || !Number.isSafeInteger(event.seq) || (event.module !== 'composer' || event.delivery !== 'inline' || !validateAgainst('streamEnvelope', event).valid)) fail('ERR_INVALID', 'Evento inválido.');
     if (event.environment_id !== this.#environmentID || event.thread_id !== this.#threadID) fail('ERR_FORBIDDEN', 'Evento de outra identidade.');
     if (this.#eventIDs.has(event.event_id) && this.#eventIDs.get(event.event_id) !== event.seq) fail('ERR_INVALID', 'event_id repetido com outra sequência.');
     if (event.seq <= this.#lastSeq) return;

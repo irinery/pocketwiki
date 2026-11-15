@@ -606,3 +606,44 @@ test('corpus comum de referências concorda com contrato', async () => {
     assert.equal(accepted, item.accept, item.id);
   }
 });
+
+test('corpus comum de drafts concorda com contrato', async (t) => {
+  const { service, auth: identity } = await makeHarness(t);
+  const corpus = JSON.parse(await readFile('Tests/Harness/composer/draft-corpus.json', 'utf8'));
+  for (const item of corpus) {
+    let accepted = true;
+    try { service.saveDraft(identity, item.value); } catch { accepted = false; }
+    assert.equal(accepted, item.accept, item.id);
+  }
+});
+
+test('stash de citação expira após 24 horas', async (t) => {
+  const f = fixture(t);
+  const root = path.join(f.root, 'wiki');
+  await mkdir(root);
+  await writeFile(path.join(root, 'p.md'), 'trecho');
+  const reference = (await f.service.previewQuote(auth(), { root, relative_path: 'p.md', start_byte: 0, end_byte: 6 })).reference;
+  f.now.value += 86_400_000;
+  await rejectsCode(f.service.readQuote(auth(), reference.reference_id), 'ERR_CONTEXT_STALE');
+  const state = JSON.parse(await readFile(path.join(f.service.dataDir, 'composer-state-v1.json'), 'utf8'));
+  assert.equal(state.sources.length, 0);
+});
+
+test('HarnessError limita bytes UTF-8 sem caractere parcial', () => {
+  const error = new ComposerError('ERR_INVALID', `${'a'.repeat(1023)}é`);
+  const wire = error.toJSON();
+  assert.ok(Buffer.byteLength(wire.message, 'utf8') <= 1024);
+  assert.equal(wire.message, 'a'.repeat(1023));
+});
+
+test('citação preservada segue legível se diretório da fonte sumir dentro do grant', async (t) => {
+  const f = fixture(t);
+  const root = path.join(f.root, 'wiki');
+  await mkdir(root);
+  await writeFile(path.join(root, 'p.md'), 'salvo');
+  const reference = (await f.service.previewQuote(auth(), { root, relative_path: 'p.md', start_byte: 0, end_byte: 5 })).reference;
+  await rm(root, { recursive: true });
+  const quote = await f.service.readQuote(auth(), reference.reference_id);
+  assert.equal(Buffer.from(quote.content_base64, 'base64').toString(), 'salvo');
+  assert.equal(quote.source_available, false);
+});

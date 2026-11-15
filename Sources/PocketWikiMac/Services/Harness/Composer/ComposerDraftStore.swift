@@ -48,6 +48,16 @@ struct ComposerContextReference: Codable, Equatable, Identifiable {
         init?(intValue: Int) { return nil }
     }
 
+    init(referenceID: String, kind: Kind, relativePath: String?, messageID: String?, sha256: String, sizeBytes: Int, trust: Trust) {
+        self.referenceID = referenceID
+        self.kind = kind
+        self.relativePath = relativePath
+        self.messageID = messageID
+        self.sha256 = sha256
+        self.sizeBytes = sizeBytes
+        self.trust = trust
+    }
+
     init(from decoder: Decoder) throws {
         let all = try decoder.container(keyedBy: AnyKey.self)
         let allowed = Set(["reference_id", "kind", "relative_path", "message_id", "sha256", "size_bytes", "trust"])
@@ -98,9 +108,36 @@ struct ComposerDraft: Codable, Equatable, Identifiable {
         case threadID = "thread_id"
     }
 
+    private struct AnyKey: CodingKey {
+        let stringValue: String
+        let intValue: Int? = nil
+        init?(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { return nil }
+    }
+
+    init(draftID: String, threadID: String, text: String, references: [ComposerContextReference], revision: Int) {
+        self.draftID = draftID
+        self.threadID = threadID
+        self.text = text
+        self.references = references
+        self.revision = revision
+    }
+
+    init(from decoder: Decoder) throws {
+        let all = try decoder.container(keyedBy: AnyKey.self)
+        let allowed = Set(["draft_id", "thread_id", "text", "references", "revision"])
+        guard all.allKeys.allSatisfy({ allowed.contains($0.stringValue) }) else { throw ComposerStoreError.invalidDraft }
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        draftID = try values.decode(String.self, forKey: .draftID)
+        threadID = try values.decode(String.self, forKey: .threadID)
+        text = try values.decode(String.self, forKey: .text)
+        references = try values.decode([ComposerContextReference].self, forKey: .references)
+        revision = try values.decode(Int.self, forKey: .revision)
+    }
+
     func validate(for identity: ComposerIdentity) throws {
         guard ComposerIdentity.isCanonicalUUID(draftID), threadID == identity.threadID,
-              Data(text.utf8).count <= 32_768, revision >= 0,
+              Data(text.utf8).count <= 32_768, (0...9_007_199_254_740_991).contains(revision),
               references.count <= 20 else {
             throw ComposerStoreError.invalidDraft
         }
@@ -166,7 +203,7 @@ actor ComposerDraftStore {
     func save(_ draft: ComposerDraft, for identity: ComposerIdentity, expectedRevision: Int, nowMS: Int64) throws -> Int {
         try identity.validate()
         try draft.validate(for: identity)
-        guard draft.revision == expectedRevision else { throw ComposerStoreError.revisionConflict }
+        guard draft.revision == expectedRevision, expectedRevision < 9_007_199_254_740_991 else { throw ComposerStoreError.revisionConflict }
         var candidate = stash
         candidate.drafts.removeAll { $0.expiresAtMS <= nowMS }
         let key = identity.storageKey

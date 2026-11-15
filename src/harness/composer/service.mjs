@@ -26,7 +26,10 @@ export class ComposerError extends Error {
   }
 
   toJSON() {
-    return { code: this.code, message: this.message.slice(0, 1024), correlation_id: this.correlation_id, retryable: this.retryable };
+    const bytes = Buffer.from(this.message, 'utf8');
+    let end = Math.min(bytes.length, 1024);
+    while (end < bytes.length && end > 0 && (bytes[end] & 0xc0) === 0x80) end--;
+    return { code: this.code, message: bytes.subarray(0, end).toString('utf8'), correlation_id: this.correlation_id, retryable: this.retryable };
   }
 }
 
@@ -135,6 +138,7 @@ export class ComposerService {
     const before = JSON.stringify(this.state);
     const now = this.now();
     this.state.staging = this.state.staging.filter((item) => item.expires_at_ms > now);
+    this.state.sources = this.state.sources.filter((item) => (item.expires_at_ms ?? 0) > now);
     // Keep owner tombstones for idempotent unpin; discard expired context bytes.
     for (const item of this.state.prepared) {
       if (item.pins.length === 0 && item.expires_at_ms <= now) { item.segments = []; item.manifest = []; item.expired = true; }
@@ -184,7 +188,7 @@ export class ComposerService {
   saveDraft(auth, draft) {
     validateAuth(auth, 'context.read');
     if (!isPlainObject(draft) || Object.keys(draft).some((key) => !['draft_id', 'thread_id', 'text', 'references', 'revision'].includes(key))) fail('ERR_INVALID', 'Draft inválido.');
-    if (!UUID.test(draft.draft_id ?? '') || draft.thread_id !== auth.thread_id || !Number.isSafeInteger(draft.revision) || draft.revision < 0) fail('ERR_INVALID', 'Identidade ou revisão do draft inválida.');
+    if (!UUID.test(draft.draft_id ?? '') || draft.thread_id !== auth.thread_id || !Number.isSafeInteger(draft.revision) || draft.revision < 0 || draft.revision === Number.MAX_SAFE_INTEGER) fail('ERR_INVALID', 'Identidade ou revisão do draft inválida.');
     validateString(draft.text, 0, 32768, 'Texto do draft');
     if (!Array.isArray(draft.references) || draft.references.length > 20) fail('ERR_INVALID', 'Lista de referências fora do limite.');
     draft.references.forEach(validateReference);
@@ -275,7 +279,7 @@ export class ComposerService {
     const text = bytes.toString('utf8');
     if (!Buffer.from(text, 'utf8').equals(bytes)) fail('ERR_UNSUPPORTED', 'A fonte não é UTF-8 válido.');
     const reference = { reference_id: this.id(), kind, relative_path: path.posix.normalize(relative_path.split(path.sep).join('/')), sha256: digest(bytes), size_bytes: bytes.byteLength, trust: 'untrusted_content' };
-    this.state.sources.push({ owner: ownerKey(auth), reference_id: reference.reference_id, root: path.resolve(root) });
+    this.state.sources.push({ owner: ownerKey(auth), reference_id: reference.reference_id, root: path.resolve(root), expires_at_ms: this.now() + DRAFT_TTL_MS });
     this._persist();
     return { reference };
   }
@@ -293,7 +297,7 @@ export class ComposerService {
     if (quote.length > MIME_LIMITS['text/plain']) fail('ERR_INVALID', 'Citação excede 1 MiB.');
     if (!Buffer.from(quote.toString('utf8'), 'utf8').equals(quote)) fail('ERR_INVALID', 'Intervalo divide caractere UTF-8.');
     const reference = { reference_id: this.id(), kind: 'quote', relative_path: path.posix.normalize(relative_path.split(path.sep).join('/')), sha256: digest(quote), size_bytes: quote.length, trust: 'untrusted_content' };
-    this.state.sources.push({ owner: ownerKey(auth), reference_id: reference.reference_id, root: approvedRoot, relative_path: reference.relative_path, source_sha256: digest(source), start_byte, end_byte, quote_base64: quote.toString('base64') });
+    this.state.sources.push({ owner: ownerKey(auth), reference_id: reference.reference_id, root: approvedRoot, relative_path: reference.relative_path, source_sha256: digest(source), start_byte, end_byte, quote_base64: quote.toString('base64'), expires_at_ms: this.now() + DRAFT_TTL_MS });
     this._persist();
     return { reference };
   }
@@ -301,12 +305,23 @@ export class ComposerService {
   async readQuote(auth, referenceID) {
     validateAuth(auth);
     if (!UUID.test(referenceID ?? '')) fail('ERR_INVALID', 'Referência inválida.');
+    this._collectExpired();
     const source = this.state.sources.find((item) => item.owner === ownerKey(auth) && item.reference_id === referenceID && item.quote_base64 !== undefined);
     if (!source) fail('ERR_CONTEXT_STALE', 'Citação indisponível.');
-    const approvedRoot = this.authorizeRoot(auth, source.root);
+    let approvedRoot;
+    try { approvedRoot = this.authorizeRoot(auth, source.root); }
+    catch (error) {
+      if (!(error instanceof ComposerError) || error.code !== 'ERR_PATH_ESCAPE') throw error;
+      const grants = this.rootsFor(structuredClone(auth));
+      const allowed = Array.isArray(grants) && grants.some((grant) => {
+        try { const realGrant = realpathSync(grant); return source.root === realGrant || source.root.startsWith(`${realGrant}${path.sep}`); } catch { return false; }
+      });
+      if (!allowed) fail('ERR_FORBIDDEN', 'Root não concedido.');
+    }
     let sourceAvailable = false;
     try {
-      const bytes = await readAuthorizedFile(approvedRoot, source.relative_path, this.secureReaderPath);
+      const bytes = approvedRoot ? await readAuthorizedFile(approvedRoot, source.relative_path, this.secureReaderPath) : null;
+      if (!bytes) throw new ComposerError('ERR_CONTEXT_STALE');
       sourceAvailable = digest(bytes) === source.source_sha256;
     } catch (error) {
       if (!(error instanceof ComposerError) || error.code !== 'ERR_CONTEXT_STALE') throw error;
