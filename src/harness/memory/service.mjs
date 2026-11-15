@@ -58,6 +58,9 @@ function authorize(auth, namespace, scope, { personal = false } = {}) {
   if (namespace.thread_id && auth.thread_id !== namespace.thread_id) {
     throw error('ERR_SCOPE', 'Memory thread is outside the authenticated thread');
   }
+  if (!namespace.thread_id && auth.thread_id) {
+    throw error('ERR_SCOPE', 'Thread-bound credential cannot access project-wide memory');
+  }
   if (personal && !auth.scopes.includes('memory.personal.read')) {
     throw error('ERR_SCOPE', 'Personal memory scope is not authorized');
   }
@@ -170,7 +173,7 @@ export class MemoryHarnessService {
     let context = cleanContext(result.context);
     let noteRevision = 0;
     if (include_personal_note) {
-      const note = await store.noteGetCAS();
+      const note = await store.noteGetCAS(namespace);
       noteRevision = note.revision;
       if (note.content) {
         const snippet = cleanContext(note.content).slice(0, 3_000);
@@ -194,7 +197,7 @@ export class MemoryHarnessService {
     const { namespace:rawNamespace } = exactInput(input, ['namespace']);
     const namespace = validateNamespace(rawNamespace);
     authorize(auth, namespace, 'memory.personal.read', { personal:true });
-    try { return await (await this.#storeFor(namespace)).noteGetCAS(); }
+    try { return await (await this.#storeFor(namespace)).noteGetCAS(namespace); }
     catch (cause) { throw validateIOError(cause); }
   }
 
@@ -206,7 +209,7 @@ export class MemoryHarnessService {
         !Number.isSafeInteger(expected_revision) || expected_revision < 0) {
       throw error('ERR_INVALID', 'Memory note or expected_revision is invalid');
     }
-    try { return await (await this.#storeFor(namespace)).notePutCAS(content, expected_revision); }
+    try { return await (await this.#storeFor(namespace)).notePutCAS(content, expected_revision, namespace); }
     catch (cause) { throw validateIOError(cause); }
   }
 
@@ -248,7 +251,7 @@ export class MemoryHarnessService {
       schema_version:2,
       namespace,
       sessions:(await store.scopedSessions()).map(sanitizeExportRecord),
-      ...(include_personal_note ? { note:await store.noteGetCAS().then((note) => ({
+      ...(include_personal_note ? { note:await store.noteGetCAS(namespace).then((note) => ({
         content:redactExportText(note.content), revision:note.revision
       })) } : {})
     };
@@ -296,7 +299,7 @@ export class MemoryHarnessService {
     try { await store.importRecords(imported); }
     catch (cause) { throw validateIOError(cause, 'ERR_IMPORT'); }
     if (parsed.note !== undefined) {
-      try { await store.notePutCAS(parsed.note.content, 0); }
+      try { await store.notePutCAS(parsed.note.content, 0, namespace); }
       catch (cause) { throw validateIOError(cause, 'ERR_IMPORT'); }
     }
     return { imported_count:imported.length };
@@ -304,7 +307,7 @@ export class MemoryHarnessService {
 
   async snapshot(auth, { namespace:rawNamespace, page_size = this.pageSize, cursor } = {}) {
     const namespace = validateNamespace(rawNamespace);
-    authorize(auth, namespace, 'context.read');
+    authorize(auth, namespace, 'context.read', { personal:true });
     if (!Number.isInteger(page_size) || page_size < 1 || page_size > this.pageSize) {
       throw error('ERR_INVALID', 'Memory snapshot page_size is invalid');
     }
@@ -329,6 +332,7 @@ export class MemoryHarnessService {
       if (snapshot.principal_id !== auth.principal_id || JSON.stringify(snapshot.namespace) !== JSON.stringify(namespace)) {
         throw error('ERR_FORBIDDEN', 'Memory snapshot cursor is unauthorized');
       }
+      if (!await store.notesRetentionAvailable(snapshot.as_of_seq)) throw error('ERR_CURSOR_EXPIRED', 'Memory snapshot retention lost');
       if (snapshot.page_size !== page_size) throw error('ERR_INVALID', 'Memory snapshot page_size changed');
       const position = snapshot.cursors[cursor];
       if (!Number.isSafeInteger(position)) throw error('ERR_INVALID', 'Memory snapshot cursor is invalid');
@@ -342,20 +346,23 @@ export class MemoryHarnessService {
       snapshot.expires_at_ms = this.now() + 600_000;
       snapshot.page_size = page_size;
       snapshot.cursors = {};
+      for (let position = page_size; position < snapshot.items.length; position += page_size) {
+        snapshot.cursors[`${snapshotID}.${randomUUID()}`] = position;
+      }
+      await this.#writeSnapshot(snapshotsDir, snapshotID, snapshot);
     }
     const items = snapshot.items.slice(offset, offset + page_size);
     const nextOffset = offset + items.length;
     let nextCursor;
     if (nextOffset < snapshot.items.length) {
-      nextCursor = `${snapshotID}.${randomUUID()}`;
-      snapshot.cursors[nextCursor] = nextOffset;
+      nextCursor = Object.keys(snapshot.cursors).find((key) => snapshot.cursors[key] === nextOffset);
+      if (!nextCursor) throw error('ERR_CURSOR_EXPIRED', 'Memory snapshot cursor was lost');
     }
-    await this.#writeSnapshot(snapshotsDir, snapshotID, snapshot);
     return {
       snapshot_id:snapshotID,
       revision:snapshot.revision,
       as_of_seq:snapshot.as_of_seq,
-      items,
+      notes:items,
       ...(nextCursor ? { next_cursor:nextCursor } : {})
     };
   }
@@ -365,8 +372,8 @@ export class MemoryHarnessService {
     authorize(auth, namespace, 'context.read');
     if (!Number.isSafeInteger(after_seq) || after_seq < 0) throw error('ERR_INVALID', 'after_seq is invalid');
     const store = await this.#storeFor(namespace);
-    const events = await store.scopedEvents();
-    return events.filter((item) => item.sequence > after_seq).sort((a, b) => a.sequence - b.sequence);
+    const events = await store.notesEvents(after_seq);
+    return events.filter((item) => !namespace.thread_id || item.value.namespace.thread_id === namespace.thread_id);
   }
 
   async #storeFor(namespace) {
@@ -392,20 +399,8 @@ export class MemoryHarnessService {
   }
 
   async #collectSnapshot(auth, namespace, store, includeNote) {
-    const sessions = await store.scopedSessions();
-    const items = sessions.map((record) => ({
-      collection:'history', session_id:record.id,
-      updated_at:record.updated_at || record.created_at || '',
-      sha256:digest(JSON.stringify(record)), trust:'historical'
-    }));
-    if (includeNote) {
-      const note = await store.noteGetCAS();
-      if (note.content) items.push({ collection:'note', note_revision:note.revision, sha256:digest(note.content), trust:'historical' });
-    }
-    items.sort((a, b) => a.collection.localeCompare(b.collection) ||
-      String(a.session_id || '').localeCompare(String(b.session_id || '')));
-    const receipts = await store.scopedReceipts();
-    return { revision:receipts.sequence, as_of_seq:receipts.sequence, items };
+    const projection = await store.notesProjection(namespace);
+    return { revision:projection.sequence, as_of_seq:projection.sequence, items:projection.notes };
   }
 
   async #readSnapshot(directory, id) {
