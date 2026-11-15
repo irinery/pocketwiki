@@ -20,3 +20,22 @@ O host responsável pela sessão deve chamar `setScope` com principal e geraçã
 No JS, `readState`, `begin`, `append`, `buffer` e `apply` recebem o ticket do ciclo. Durante um refresh da mesma autoridade, o estado confirmado permanece visível até a última página válida e é substituído de uma vez, inclusive por um snapshot vazio. A mudança de autorização limpa esse estado imediatamente. No Swift, `ProviderProjection` roda no `MainActor`: `appendPage`, `bufferEvent` e `finish` recebem o ticket do ciclo, e `isCurrent` permite verificar o ticket depois de um `await` antes de aplicar sincronamente uma `View` na UI. O dono da UI deve substituir o estado completo apenas após `finish` e descartar `View`s copiadas em mudanças de autorização.
 
 O checkout ainda não tem consumidor de produção dessa projeção nem um sinal confiável de mudança dos grants de conta do Kernel. `LocalCredentialHost` trata o ciclo do bearer, mas isso não comprova uma mudança de grant de provider. Logo, os tickets protegem a projeção somente quando o futuro dono da sessão os gira na ordem acima; não implementam autenticação, invalidação proativa do cache nem integração real com a autoridade de grants. Confira os limites e o contrato de integração em [HANDOFF.md](../../../src/harness/providers/HANDOFF.md).
+
+O coordenador candidato stream-first também tem verificações locais:
+
+```sh
+node --test Tests/Harness/providers/stream-first.test.mjs Tests/HarnessUI/runtime/sse.test.mjs
+swiftc -parse-as-library \
+  Sources/PocketWikiMac/Models/Harness/HarnessV1.swift \
+  Sources/PocketWikiMac/Models/Harness/HarnessOperationRegistry.swift \
+  Sources/PocketWikiMac/Services/Harness/Providers/ProviderProjection.swift \
+  Sources/PocketWikiMac/Services/Harness/Providers/ProviderStreamFirst.swift \
+  Tests/Harness/providers/ProviderStreamFirstRunner.swift \
+  -o /tmp/pocketwiki-provider-stream-first-test
+/tmp/pocketwiki-provider-stream-first-test src/harness/contracts/harness-v1.schema.json
+```
+
+O teste JS inclui HTTP loopback com servidor fixture; o Swift usa portas de teste.
+Nenhum deles prova registro do watcher no Kernel real nem uma fonte de mudança
+de grant de conta. Consulte o [handoff](../../../src/harness/providers/HANDOFF.md)
+antes de ligar qualquer consumidor.
