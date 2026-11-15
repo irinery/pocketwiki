@@ -124,5 +124,35 @@
     "kind": "basic_padding_in_middle",
     "text": "Basic YTp=iYw",
     "expected": "Basic YTp=iYw"
+  },
+  {
+    "kind": "basic_parenthesized",
+    "text": "(Basic YTpi)",
+    "expected": "([redacted credential])"
+  },
+  {
+    "kind": "basic_bracketed",
+    "text": "[Basic YTpi]",
+    "expected": "[[redacted credential]]"
+  },
+  {
+    "kind": "basic_braced",
+    "text": "{Basic YTpi}",
+    "expected": "{[redacted credential]}"
+  },
+  {
+    "kind": "basic_multiple",
+    "text": "Basic YTpi,Basic YTpiYw",
+    "expected": "[redacted credential],[redacted credential]"
+  },
+  {
+    "kind": "basic_invalid_nested",
+    "text": "Basic YTpi*Basic YTpi",
+    "expected": "Basic YTpi*Basic YTpi"
+  },
+  {
+    "kind": "basic_without_token",
+    "text": "Basic ",
+    "expected": "Basic "
   }
 ]

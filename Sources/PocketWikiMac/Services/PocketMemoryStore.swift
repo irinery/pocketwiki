@@ -526,22 +526,34 @@ actor PocketMemoryStore {
     }
 
     private static func redactExportText(_ input: String) -> String {
-        var basicRedacted = input
-        let basic = try! NSRegularExpression(pattern: #"(?i)\bBasic\s+([^\s,;"'<>()[\]{}]+)"#)
+        guard let basic = try? NSRegularExpression(pattern: #"(?i)\bBasic\s+"#) else { return "[redacted content]" }
         let inputRange = NSRange(input.startIndex..<input.endIndex, in: input)
-        for match in basic.matches(in: input, range: inputRange).reversed() {
-            guard let tokenRange = Range(match.range(at: 1), in: basicRedacted),
-                  let matchRange = Range(match.range, in: basicRedacted) else { continue }
-            let token = String(basicRedacted[tokenRange])
-            guard token.range(of: #"^[A-Za-z0-9+/]+={0,2}$"#, options: .regularExpression) != nil else { continue }
-            let unpadded = token.trimmingCharacters(in: CharacterSet(charactersIn: "="))
-            guard unpadded.utf8.count % 4 != 1 else { continue }
-            let padded = unpadded + String(repeating: "=", count: (4 - unpadded.utf8.count % 4) % 4)
-            guard !token.contains("=") || token == padded else { continue }
-            guard let decoded = Data(base64Encoded: padded), decoded.base64EncodedString() == padded,
-                  decoded.contains(0x3a) else { continue }
-            basicRedacted.replaceSubrange(matchRange, with: "[redacted credential]")
+        let delimiters = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: ",;\"'<>()[]{}"))
+        var basicRedacted = ""
+        var cursor = input.startIndex
+        for match in basic.matches(in: input, range: inputRange) {
+            guard let prefix = Range(match.range, in: input), prefix.lowerBound >= cursor else { continue }
+            basicRedacted.append(contentsOf: input[cursor..<prefix.lowerBound])
+            var tokenEnd = prefix.upperBound
+            while tokenEnd < input.endIndex, !delimiters.contains(input.unicodeScalars[tokenEnd]) {
+                tokenEnd = input.unicodeScalars.index(after: tokenEnd)
+            }
+            let token = String(input[prefix.upperBound..<tokenEnd])
+            var isCredential = false
+            if token.range(of: #"^[A-Za-z0-9+/]+={0,2}$"#, options: .regularExpression) != nil {
+                let unpadded = token.trimmingCharacters(in: CharacterSet(charactersIn: "="))
+                if unpadded.utf8.count % 4 != 1 {
+                    let padded = unpadded + String(repeating: "=", count: (4 - unpadded.utf8.count % 4) % 4)
+                    if (!token.contains("=") || token == padded), let decoded = Data(base64Encoded: padded),
+                       decoded.base64EncodedString() == padded, decoded.contains(0x3a) {
+                        isCredential = true
+                    }
+                }
+            }
+            basicRedacted += isCredential ? "[redacted credential]" : String(input[prefix.lowerBound..<tokenEnd])
+            cursor = tokenEnd
         }
+        basicRedacted.append(contentsOf: input[cursor...])
         let rules: [(String, String)] = [
             (#"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"#, "[redacted private key]"),
             (#"(?i)\bBearer\s+[A-Za-z0-9._~+/-]+=*"#, "[redacted credential]"),
@@ -1030,7 +1042,7 @@ actor PocketMemoryStore {
 
     private static func harnessWords(_ text: String) -> [String] {
         let normalized = harnessNormalize(text)
-        let regex = try! NSRegularExpression(pattern: "[a-z0-9]{3,}")
+        guard let regex = try? NSRegularExpression(pattern: "[a-z0-9]{3,}") else { return [] }
         let range = NSRange(normalized.startIndex..<normalized.endIndex, in: normalized)
         let matches = regex.matches(in: normalized, range: range).compactMap { match -> String? in
             guard let range = Range(match.range, in: normalized) else { return nil }
