@@ -3,7 +3,7 @@ import CryptoKit
 
 /// Reidrata o snapshot inteiro antes de publicar; payloads referenciados são resolvidos pelo transporte autenticado.
 final class ProviderProjection {
-    enum Failure: Error { case invalidPage, invalidEvent, stale, overflow, incomplete }
+    enum Failure: Error { case invalidPage, invalidEvent, stale, overflow, incomplete, inactiveScope }
     struct View {
         let snapshotID: String
         let revision: Int
@@ -15,8 +15,31 @@ final class ProviderProjection {
     private let schema: [String: Any]
     private let environment: String
     private let pageSize: Int
-    private let confirmedRevision: Int
-    private let confirmedSeq: Int
+    struct Scope: Equatable {
+        let principal: String
+        let generation: String
+        var valid: Bool { !principal.isEmpty && !generation.isEmpty }
+    }
+    private var scope: Scope?
+    private var scopeInitialized = false
+    private var confirmedRevision: Int
+    private var confirmedSeq: Int
+    // Called by the authenticated host whenever its identity or authorization generation changes.
+    func setScope(_ next: Scope?) {
+        let next = next?.valid == true ? next : nil
+        guard scope != next || next == nil else { return }
+        if !scopeInitialized && next != nil { scopeInitialized = true; scope = next; return }
+        scopeInitialized = true
+        scope = next
+        confirmedRevision = 0; confirmedSeq = 0
+        snapshotID = nil; revision = 0; boundary = 0; nextCursor = nil
+        started = false; complete = false; invalid = false
+        cursors.removeAll(); bindings.removeAll(); capabilities.removeAll()
+        events.removeAll(); seen.removeAll(); sequences.removeAll(); eventBytes = 0
+    }
+    private func checkScope(_ candidate: Scope?) throws {
+        guard let scope, candidate == scope else { throw Failure.inactiveScope }
+    }
     private var snapshotID: String?
     private var revision = 0
     private var boundary = 0
@@ -48,7 +71,8 @@ final class ProviderProjection {
         if let context = value["context_bytes"], !(context is NSNull) { guard let bytes = context as? Int, bytes >= 0, bytes <= 9_007_199_254_740_991 else { return false } }
         return true
     }
-    func appendPage(_ data: Data, requestedCursor: String?) throws {
+    func appendPage(_ data: Data, requestedCursor: String?, scope: Scope? = nil) throws {
+        try checkScope(scope)
         guard !invalid else { throw Failure.invalidPage }
         do { try readPage(data, requestedCursor: requestedCursor) } catch { invalid = true; throw error }
     }
@@ -75,7 +99,8 @@ final class ProviderProjection {
         bindings = nextBindings; capabilities = nextCapabilities; snapshotID = id; revision = rev; boundary = seq
         started = true; nextCursor = cursor; complete = cursor == nil
     }
-    func bufferEvent(_ data: Data, resolvedPayload: Data? = nil) throws {
+    func bufferEvent(_ data: Data, resolvedPayload: Data? = nil, scope: Scope? = nil) throws {
+        try checkScope(scope)
         guard !invalid else { throw Failure.invalidEvent }
         do { try readEvent(data, resolvedPayload: resolvedPayload) } catch { invalid = true; throw error }
     }
@@ -100,7 +125,8 @@ final class ProviderProjection {
         guard seen.count < 4096 else { throw Failure.overflow }
         seen[id] = (seq, digest); sequences[seq] = id; events.append((seq, payload)); eventBytes += data.count + (resolvedPayload?.count ?? 0)
     }
-    func finish() throws -> View {
+    func finish(scope: Scope? = nil) throws -> View {
+        try checkScope(scope)
         guard !invalid, complete, let snapshotID else { throw Failure.incomplete }
         for binding in bindings.values { guard let id = binding["capability_id"] as? String, capabilities[id] != nil else { throw Failure.invalidPage } }
         var bs = bindings, cs = capabilities
