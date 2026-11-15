@@ -34,7 +34,7 @@ export class ProviderProjection {
   }
   constructor(environmentId) {if(!UUID.test(environmentId))throw new TypeError('invalid environment');this.#environment=environmentId;}
   #loading = null;
-  get state() { if (!this.#scope) throw new Error('inactive provider scope'); return publicState(this.#current); }
+  readState(scope) { this.#checkScope(scope); return publicState(this.#current); }
   begin(page, scope) {
     this.#checkScope(scope);
     if (this.#loading) throw new Error('snapshot already in progress');
