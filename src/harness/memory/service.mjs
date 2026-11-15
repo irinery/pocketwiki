@@ -99,10 +99,23 @@ function validateScopedEvents(events) {
 }
 
 function redactExportText(value) {
-  return String(value)
+  const withBasicRedacted = String(value).replace(/(?<![A-Za-z0-9_])[Bb][Aa][Ss][Ii][Cc][\u0009-\u000D\u0020\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]+([^\u0009-\u000D\u0020\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF,;"'<>()\[\]{}]+)/g, (match, token) => {
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(token)) return match;
+    const unpadded = token.replace(/=+$/, '');
+    if (unpadded.length % 4 === 1) return match;
+    const padded = unpadded + '='.repeat((4 - unpadded.length % 4) % 4);
+    if (token.includes('=') && token !== padded) return match;
+    const bytes = Buffer.from(padded, 'base64');
+    return bytes.toString('base64') === padded && bytes.includes(0x3a) ? '[redacted credential]' : match;
+  });
+  return withBasicRedacted
+    .replace(/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g, '[redacted private key]')
     .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi, '[redacted credential]')
-    .replace(/\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|secret|password|senha|token)\s*[:=]\s*)[^\s,;]+/gi, '$1[redacted secret]')
-    .replace(/\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_]{20,}|AIza[0-9A-Za-z_-]{30,})\b/g, '[redacted secret]')
+    .replace(/\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|secret|password|senha|token)["']?\s*[:=]\s*)(?:"(?:\\[\s\S]|[^"\\]|\\$)*(?:"|$)|'(?:\\[\s\S]|[^'\\]|\\$)*(?:'|$)|[^\s,;]+)/gi, '$1[redacted secret]')
+    .replace(/\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_]{20,}|AIza[0-9A-Za-z_-]{30,}|AKIA[0-9A-Z]{16}|glpat-[A-Za-z0-9_-]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})\b/g, '[redacted secret]')
+    .replace(/\b([a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+:[^\s/@]+@/gi, '$1[redacted credential]@')
+    .replace(/\bfile:\/\/[^\s"'<>]+/gi, '[redacted path]')
+    .replace(/(^|[\s("'=])\\\\[^\s"'<>]+/g, '$1[redacted path]')
     .replace(/(^|[\s("'=])(?:\/(?!\/)[^\s"'<>]+|[A-Za-z]:\\[^\s"'<>]+)/g, '$1[redacted path]');
 }
 

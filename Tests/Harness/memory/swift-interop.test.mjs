@@ -113,7 +113,7 @@ test('export/import redigido funciona nos dois sentidos JS e Swift', { skip:!exe
   const swiftDestination = await fixture(t);
   await source.service.captureScoped(auth, { namespace, events:[{ event:'user-prompt-submit',
     session_id:'40000000-0000-4000-8000-000000000009', ingest_key:'portable',
-    prompt:'postgres sk-abcdefghijklmnopqrstuvwxyz123456 em /etc/private/config C:\\Temp\\secret' }] });
+    prompt:'postgres password="example phrase" em /etc/private/config C:\\Temp\\example' }] });
   await source.service.notePut(auth, { namespace, content:'nota /tmp/private', expected_revision:0 });
   async function run(mode, root, input) {
     const child = spawn(executable, [mode, root], { stdio:['pipe', 'pipe', 'inherit'] });
@@ -124,7 +124,7 @@ test('export/import redigido funciona nos dois sentidos JS e Swift', { skip:!exe
     assert.equal(code, 0); return JSON.parse(output);
   }
   const exportedSwift = await run('--export', source.root);
-  assert.doesNotMatch(exportedSwift.content, /sk-abcdefghijklmnopqrstuvwxyz|\/etc\/private|\/tmp\/private|C:\\\\Temp/);
+  assert.doesNotMatch(exportedSwift.content, /example phrase|\/etc\/private|\/tmp\/private|C:\\\\Temp/);
   assert.equal((await nodeDestination.service.importNamespace(auth, { namespace, content:exportedSwift.content })).imported_count, 1);
   const exportedNode = await source.service.exportNamespace(auth, { namespace, include_personal_note:true });
   assert.equal((await run('--import', swiftDestination.root, exportedNode.content)).imported_count, 1);
@@ -149,4 +149,23 @@ test('Swift recupera journal de import persistido pelo Node', { skip:!executable
   const recalled = await service.recallScoped(auth, { environment_id:environment, project_id:project,
     thread_id:thread, question:'postgres recuperado', include_personal_note:false });
   assert.equal(recalled.hits.length, 1);
+});
+
+test('corpus de redação produz textos equivalentes em JS e Swift', { skip:!executable }, async (t) => {
+  const { root, service } = await fixture(t);
+  const corpus = JSON.parse(await readFile(new URL('./export-redaction-corpus.json', import.meta.url), 'utf8'));
+  for (const [index, item] of corpus.entries()) {
+    await service.captureScoped(auth, { namespace, events:[{ event:'user-prompt-submit',
+      session_id:`40000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+      ingest_key:`corpus-${index}`, prompt:item.text }] });
+  }
+  await service.notePut(auth, { namespace, content:corpus.map((item) => item.text).join('\n'), expected_revision:0 });
+  const expected = JSON.parse((await service.exportNamespace(auth, { namespace, include_personal_note:true })).content);
+  const child = spawn(executable, ['--export', root], { stdio:['ignore', 'pipe', 'inherit'] });
+  let output = '';
+  child.stdout.setEncoding('utf8'); child.stdout.on('data', (data) => { output += data; });
+  const code = await new Promise((resolve, reject) => { child.once('exit', resolve); child.once('error', reject); });
+  assert.equal(code, 0);
+  const actual = JSON.parse(JSON.parse(output).content);
+  assert.deepEqual(actual, expected);
 });

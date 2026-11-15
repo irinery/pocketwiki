@@ -1,0 +1,193 @@
+[
+  {
+    "kind": "quoted_json",
+    "text": "{\"password\": \"synthetic spaced secret\"}",
+    "sensitive": "synthetic spaced secret"
+  },
+  {
+    "kind": "basic",
+    "text": "Authorization: Basic YTpi",
+    "sensitive": "YTpi"
+  },
+  {
+    "kind": "file_uri",
+    "text": "file:///etc/synthetic/private.conf",
+    "sensitive": "/etc/synthetic/private.conf"
+  },
+  {
+    "kind": "unc_path",
+    "text": "path \\\\server\\private\\synthetic.txt",
+    "sensitive": "\\\\server\\private\\synthetic.txt"
+  },
+  {
+    "kind": "escaped_double_quote",
+    "text": "password=\"alpha\\\"omega\" fim",
+    "sensitive": "omega",
+    "expected": "password=[redacted secret] fim"
+  },
+  {
+    "kind": "escaped_single_quote",
+    "text": "password='alpha\\'omega' fim",
+    "sensitive": "omega",
+    "expected": "password=[redacted secret] fim"
+  },
+  {
+    "kind": "escaped_backslash",
+    "text": "password=\"alpha\\\\omega\" fim",
+    "sensitive": "omega",
+    "expected": "password=[redacted secret] fim"
+  },
+  {
+    "kind": "malformed_double_quote",
+    "text": "password=\"alpha\\\"omega fim",
+    "sensitive": "omega",
+    "expected": "password=[redacted secret]"
+  },
+  {
+    "kind": "malformed_single_quote",
+    "text": "password='alpha\\'omega fim",
+    "sensitive": "omega",
+    "expected": "password=[redacted secret]"
+  },
+  {
+    "kind": "malformed_trailing_backslash",
+    "text": "password=\"alpha\\",
+    "sensitive": "alpha",
+    "expected": "password=[redacted secret]"
+  },
+  {
+    "kind": "basic_prose",
+    "text": "Basic PostgreSQL setup",
+    "expected": "Basic PostgreSQL setup"
+  },
+  {
+    "kind": "basic_unpadded",
+    "text": "Basic YTpi",
+    "sensitive": "YTpi",
+    "expected": "[redacted credential]"
+  },
+  {
+    "kind": "basic_plain_word",
+    "text": "Basic YWJjZA== setup",
+    "expected": "Basic YWJjZA== setup"
+  },
+  {
+    "kind": "basic_missing_two_padding",
+    "text": "Basic YTpiYw",
+    "sensitive": "YTpiYw",
+    "expected": "[redacted credential]"
+  },
+  {
+    "kind": "basic_valid_two_padding",
+    "text": "Basic YTpiYw==",
+    "sensitive": "YTpiYw",
+    "expected": "[redacted credential]"
+  },
+  {
+    "kind": "basic_missing_one_padding",
+    "text": "Basic YTpiY2Q",
+    "sensitive": "YTpiY2Q",
+    "expected": "[redacted credential]"
+  },
+  {
+    "kind": "basic_valid_one_padding",
+    "text": "Basic YTpiY2Q=",
+    "sensitive": "YTpiY2Q",
+    "expected": "[redacted credential]"
+  },
+  {
+    "kind": "basic_extra_padding",
+    "text": "Basic YTpiYw===",
+    "expected": "Basic YTpiYw==="
+  },
+  {
+    "kind": "basic_incomplete_padding",
+    "text": "Basic YTpiYw=",
+    "expected": "Basic YTpiYw="
+  },
+  {
+    "kind": "basic_invalid_length",
+    "text": "Basic YTpiY",
+    "expected": "Basic YTpiY"
+  },
+  {
+    "kind": "basic_noncanonical_bits",
+    "text": "Basic YTpiYx",
+    "expected": "Basic YTpiYx"
+  },
+  {
+    "kind": "basic_invalid_character",
+    "text": "Basic YTpiYw*",
+    "expected": "Basic YTpiYw*"
+  },
+  {
+    "kind": "basic_padding_in_middle",
+    "text": "Basic YTp=iYw",
+    "expected": "Basic YTp=iYw"
+  },
+  {
+    "kind": "basic_parenthesized",
+    "text": "(Basic YTpi)",
+    "expected": "([redacted credential])"
+  },
+  {
+    "kind": "basic_bracketed",
+    "text": "[Basic YTpi]",
+    "expected": "[[redacted credential]]"
+  },
+  {
+    "kind": "basic_braced",
+    "text": "{Basic YTpi}",
+    "expected": "{[redacted credential]}"
+  },
+  {
+    "kind": "basic_multiple",
+    "text": "Basic YTpi,Basic YTpiYw",
+    "expected": "[redacted credential],[redacted credential]"
+  },
+  {
+    "kind": "basic_invalid_nested",
+    "text": "Basic YTpi*Basic YTpi",
+    "expected": "Basic YTpi*Basic YTpi"
+  },
+  {
+    "kind": "basic_without_token",
+    "text": "Basic ",
+    "expected": "Basic "
+  },
+  {
+    "kind": "basic_nonascii_prefix",
+    "text": "éBasic YTpi",
+    "expected": "é[redacted credential]"
+  },
+  {
+    "kind": "basic_feff_before_token",
+    "text": "Basic﻿YTpi",
+    "expected": "[redacted credential]"
+  },
+  {
+    "kind": "basic_feff_after_token",
+    "text": "Basic YTpi﻿fim",
+    "expected": "[redacted credential]﻿fim"
+  },
+  {
+    "kind": "basic_ascii_word_prefix",
+    "text": "aBasic YTpi",
+    "expected": "aBasic YTpi"
+  },
+  {
+    "kind": "basic_unicode_case_fold",
+    "text": "Baſic YTpi",
+    "expected": "Baſic YTpi"
+  },
+  {
+    "kind": "basic_non_js_whitespace",
+    "text": "BasicYTpi",
+    "expected": "BasicYTpi"
+  },
+  {
+    "kind": "basic_non_js_token_delimiter",
+    "text": "Basic YTpifim",
+    "expected": "Basic YTpifim"
+  }
+]

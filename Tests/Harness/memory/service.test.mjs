@@ -188,7 +188,7 @@ test('01-06 export/import é portável, revisável e remove secrets e paths abso
   const source = await fixture(t);
   const destination = await fixture(t);
   await source.memory.captureScoped(auth(), { namespace:namespace(), events:[event({
-    prompt: 'token sk-abcdefghijklmnopqrstuvwxyz123456 em /Users/irinery/private/config.json'
+    prompt: 'password="example phrase" em /tmp/example/config.json'
   })] });
   await source.memory.notePut(auth(), {
     namespace:namespace(), content:'nota com /home/irinery/secret.txt', expected_revision:0
@@ -196,19 +196,19 @@ test('01-06 export/import é portável, revisável e remove secrets e paths abso
   const exported = await source.memory.exportNamespace(auth(), {
     namespace:namespace(), include_personal_note:true
   });
-  assert.equal(exported.content.includes('sk-abcdefghijklmnopqrstuvwxyz123456'), false);
-  assert.equal(exported.content.includes('/Users/'), false);
+  assert.equal(exported.content.includes('example phrase'), false);
+  assert.equal(exported.content.includes('/tmp/example/'), false);
   assert.equal(exported.content.includes('/home/'), false);
   const imported = await destination.memory.importNamespace(auth(), {
     namespace:namespace(), content:exported.content
   });
   assert.equal(imported.imported_count, 1);
   const recall = await destination.memory.recallScoped(auth(), {
-    ...recallScope(namespace()), include_personal_note:false, question:'token private config'
+    ...recallScope(namespace()), include_personal_note:false, question:'password'
   });
   assert.equal(recall.hits.length, 1);
-  assert.equal(recall.context.includes('sk-abcdefghijklmnopqrstuvwxyz123456'), false);
-  assert.equal(recall.context.includes('/Users/'), false);
+  assert.equal(recall.context.includes('example phrase'), false);
+  assert.equal(recall.context.includes('/tmp/example/'), false);
 });
 
 test('R1 cursor expirado retorna ERR_CURSOR_EXPIRED e page_size permanece congelado', async (t) => {
@@ -654,12 +654,12 @@ test('export não vaza paths ou credenciais em metadados legados malformados', a
   const file = path.join(root, 'v2', environmentA, 'projects', projectA, 'captures', `session-${sessionA}.json`);
   const record = JSON.parse(await readFile(file, 'utf8'));
   record.created_at = '/etc/private/created';
-  record.updated_at = 'sk-abcdefghijklmnopqrstuvwxyz123456';
+  record.updated_at = 'invalid-date-example';
   record.messages[0].created_at = '/tmp/private/date';
-  record.events.push({ event:'/etc/private/event', ingest_key:'sk-abcdefghijklmnopqrstuvwxyz123456' });
+  record.events.push({ event:'/etc/private/event', ingest_key:'ordinary-invalid-key' });
   await writeFile(file, JSON.stringify(record));
   const result = await memory.exportNamespace(auth(), { namespace:namespace() });
-  assert.doesNotMatch(result.content, /\/etc\/private|\/tmp\/private|sk-abcdefghijklmnopqrstuvwxyz/);
+  assert.doesNotMatch(result.content, /\/etc\/private|\/tmp\/private|invalid-date-example|ordinary-invalid-key/);
 });
 
 test('associação thread-projeto ausente ou negada impede acesso sem I/O', async (t) => {
@@ -700,4 +700,22 @@ test('mapping existente reconstrói alvo ausente sem alterar legado', async (t) 
   const result = await memory.recallScoped(auth(), { ...recallScope(namespace()), question:'restaurável', include_personal_note:false });
   assert.equal(result.hits.length, 1);
   assert.equal(await readFile(source, 'utf8'), original);
+});
+
+test('corpus de export redige padrões adicionais em mensagens e notas', async (t) => {
+  const corpus = JSON.parse(await readFile(new URL('./export-redaction-corpus.json', import.meta.url), 'utf8'));
+  for (const [index, item] of corpus.entries()) {
+    await t.test(item.kind, async (subtest) => {
+      const { memory } = await fixture(subtest);
+      await memory.captureScoped(auth(), { namespace:namespace(), events:[event({ key:`corpus-${index}`, prompt:item.text })] });
+      await memory.notePut(auth(), { namespace:namespace(), content:item.text, expected_revision:0 });
+      const result = await memory.exportNamespace(auth(), { namespace:namespace(), include_personal_note:true });
+      const parsed = JSON.parse(result.content);
+      const values = [parsed.note.content, parsed.sessions[0].messages[0].content, parsed.sessions[0].events[0].prompt];
+      for (const value of values) {
+        if (item.sensitive !== undefined) assert.equal(value.includes(item.sensitive), false);
+        if (item.expected !== undefined) assert.equal(value, item.expected);
+      }
+    });
+  }
 });
