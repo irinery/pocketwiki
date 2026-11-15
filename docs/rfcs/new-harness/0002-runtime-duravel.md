@@ -495,9 +495,12 @@ Escrever os cenários antes da implementação. Fixtures substituem apenas front
 
 ```
 TESTE 02-01 [caminho feliz]
-dado: snapshot as_of_seq 10 e stream com seq 9,10,11
-quando: reconectar cliente
-então: somente seq 11 altera a projeção
+dado: snapshot produzido pelo serviço real com as_of_seq B, B >= 1,
+      e frames reais do mesmo agregado com seq B-1, B, B+1
+quando: reconectar o cliente nos hosts reais web e macOS e reapresentar
+        esses frames sem alterar boundary, sequência ou payload
+então: B-1 e B preservam a projeção confirmada; somente B+1 é aplicado,
+       uma única vez, avançando o cursor confirmado para B+1
 
 TESTE 02-02 [falha]
 dado: servidor legado sem harness.v1
@@ -515,6 +518,8 @@ quando: decodificar stream
 então: ERR_INCOMPATIBLE visível e nenhum estado parcial aplicado
 
 ```
+
+B deve ser o valor efetivamente recebido do snapshot real. A projeção considerada inclui seu cursor confirmado; não se exige mudança nas coleções persistidas quando o tipo do evento legitimamente não as modifica. Manter testes unitários dos projetores JavaScript e Swift com o exemplo B=10 e sequências 9, 10, 11; esses testes não substituem o cenário integrado.
 
 ### Contratos de interface
 
