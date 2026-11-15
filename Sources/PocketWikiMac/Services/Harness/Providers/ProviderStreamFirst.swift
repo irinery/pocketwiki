@@ -6,12 +6,12 @@ import Foundation
 @MainActor final class ProviderStreamFirst {
     struct Stream {
         let events: AsyncThrowingStream<Data, Error>
-        let cancel: () -> Void
+        let cancel: @MainActor () -> Void
     }
     struct Ports {
-        let snapshot: (_ cursor: String?, _ pageSize: Int) async throws -> Data
-        let openStream: (_ afterSeq: Int) async throws -> Stream
-        let payload: (_ ref: String) async throws -> Data
+        let snapshot: @MainActor (_ cursor: String?, _ pageSize: Int) async throws -> Data
+        let openStream: @MainActor (_ afterSeq: Int) async throws -> Stream
+        let payload: @MainActor (_ ref: String) async throws -> Data
     }
     enum Failure: Error { case inactive, stale, invalidSnapshot, overflow, streamEnded }
     private final class Cycle {
