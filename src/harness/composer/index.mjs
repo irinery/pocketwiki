@@ -3,11 +3,11 @@ import { randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
 import { closeSync, fsyncSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, rmdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { ComposerContextService } from './retention.mjs';
+import { ComposerCommandService } from './command.mjs';
 import { fail } from './service.mjs';
 
 const transaction = new AsyncLocalStorage();
-const methods = ['stage', 'saveDraft', 'getDraft', 'snapshot', 'eventsSince', 'previewFile', 'previewQuote', 'readQuote', 'removeReference', 'prepare', 'manifest', 'pin', 'resolve'];
+const methods = ['executeCommand', 'stage', 'saveDraft', 'getDraft', 'snapshot', 'eventsSince', 'previewFile', 'previewQuote', 'readQuote', 'removeReference', 'prepare', 'manifest', 'pin', 'resolve'];
 
 // Lock files are installed atomically with complete owner metadata. Recovery is
 // serialized; ambiguous owners and foreign hosts fail closed.
@@ -50,7 +50,7 @@ function acquire(lock) {
   }
 }
 
-export class ComposerService extends ComposerContextService {
+export class ComposerService extends ComposerCommandService {
   _runLocked(fn) {
     const current = transaction.getStore();
     if (current?.service === this && current.active) return fn();
@@ -68,7 +68,7 @@ export class ComposerService extends ComposerContextService {
   }
 }
 for (const method of methods) {
-  const implementation = ComposerContextService.prototype[method];
+  const implementation = ComposerCommandService.prototype[method];
   Object.defineProperty(ComposerService.prototype, method, {
     value: function (...args) { return this._runLocked(() => implementation.apply(this, args)); },
     configurable: false

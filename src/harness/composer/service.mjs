@@ -86,12 +86,14 @@ export class ComposerService {
     chmodSync(this.dataDir, 0o700);
     this.state = this.#loadState();
     this.state.sources ??= [];
+    this.state.commands ??= [];
     this.confirmedState = structuredClone(this.state);
   }
 
   _reload() {
     this.state = this.#loadState();
     this.state.sources ??= [];
+    this.state.commands ??= [];
     this.confirmedState = structuredClone(this.state);
   }
 
@@ -105,6 +107,7 @@ export class ComposerService {
   }
 
   _persist() {
+    if (this.deferPersist) return;
     const temporary = `${this.statePath}.${this.id()}.tmp`;
     let fd;
     try {
@@ -114,6 +117,8 @@ export class ComposerService {
       closeSync(fd);
       fd = undefined;
       renameSync(temporary, this.statePath);
+      const directoryFD = openSync(this.dataDir, fsConstants.O_RDONLY);
+      try { fsyncSync(directoryFD); } finally { closeSync(directoryFD); }
       this.confirmedState = structuredClone(this.state);
     } catch {
       this.state = structuredClone(this.confirmedState);

@@ -377,11 +377,12 @@ test('host E1 autentica bearer e policy autoriza thread antes da mutação', asy
   const { service } = await makeHarness(t);
   const gateway = new ComposerGateway({ service, credentialHost: host, policy });
   const input = { draft_id: ids.draft, thread_id: ids.thread, text: 'autenticado', references: [], revision: 0 };
-  assert.equal((await gateway.call({ bearer, thread_id: ids.thread, operation: 'composer.draft.save', input: { draft: input } })).revision, 1);
-  await assert.rejects(gateway.call({ bearer: 'inválido', thread_id: ids.thread, operation: 'composer.draft.save', input: { draft: input } }), { code: 'ERR_FORBIDDEN' });
-  await assert.rejects(gateway.call({ bearer, thread_id: ids.otherPrincipal, operation: 'composer.draft.save', input: { draft: input } }), { code: 'ERR_FORBIDDEN' });
+  const command = { protocol_major: 1, command_id: ids.command, environment_id: ids.environment, expected_revision: 0, operation: 'composer.draft.save', input: { draft: input } };
+  assert.equal((await gateway.execute({ bearer, thread_id: ids.thread, command })).result.revision, 1);
+  await assert.rejects(gateway.execute({ bearer: 'inválido', thread_id: ids.thread, command }), { code: 'ERR_FORBIDDEN' });
+  await assert.rejects(gateway.execute({ bearer, thread_id: ids.otherPrincipal, command }), { code: 'ERR_FORBIDDEN' });
   const deniedGateway = new ComposerGateway({ service, credentialHost: host, policy: new ComposerPolicy([]) });
-  await assert.rejects(deniedGateway.call({ bearer, thread_id: ids.thread, operation: 'composer.draft.save', input: { draft: input } }), { code: 'ERR_FORBIDDEN' });
+  await assert.rejects(deniedGateway.execute({ bearer, thread_id: ids.thread, command }), { code: 'ERR_FORBIDDEN' });
   assert.equal(service.getDraft(auth(), ids.draft).revision, 1);
 });
 
@@ -448,4 +449,66 @@ test('citação salva permanece legível com fonte removida; limites não divide
   assert.equal(Buffer.from(quote.content_base64, 'base64').toString(), 'é');
   assert.equal(quote.source_available, false);
   assert.equal(quote.sha256, reference.sha256);
+});
+
+test('troca concorrente de diretório por symlink nunca lê bytes externos', async (t) => {
+  const { spawn } = await import('node:child_process');
+  const f = fixture(t);
+  const root = path.join(f.root, 'root');
+  const outside = path.join(f.root, 'outside');
+  await mkdir(root);
+  await mkdir(outside);
+  await mkdir(path.join(root, 'slot'));
+  await writeFile(path.join(root, 'slot', 'page.txt'), 'autorizado');
+  await writeFile(path.join(outside, 'page.txt'), 'segredo externo');
+  const child = spawn(process.execPath, ['Tests/Harness/composer/path-racer.mjs', root, outside], { stdio: ['ignore', 'pipe', 'pipe'] });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => { stderr += chunk; });
+  const exited = new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', (code) => code === 0 ? resolve() : reject(new Error(stderr))); });
+  await new Promise((resolve) => child.stdout.once('data', resolve));
+  let reads = 0;
+  for (let i = 0; i < 100; i++) {
+    try {
+      const { reference } = await f.service.previewFile(auth(), { root, relative_path: 'slot/page.txt' });
+      assert.equal(reference.sha256, hash(Buffer.from('autorizado')));
+      reads++;
+    } catch (error) {
+      if (!['ERR_PATH_ESCAPE', 'ERR_CONTEXT_STALE'].includes(error.code)) throw error;
+    }
+  }
+  await exited;
+  const final = await f.service.previewFile(auth(), { root, relative_path: 'slot/page.txt' });
+  assert.equal(final.reference.sha256, hash(Buffer.from('autorizado')));
+  assert.ok(reads >= 0);
+});
+
+test('handler idempotente preserva resultado após restart e rejeita hash divergente', async (t) => {
+  const { service, now, auth: identity } = await makeHarness(t);
+  const command = { protocol_major: 1, command_id: ids.command, environment_id: ids.environment, expected_revision: 0, operation: 'composer.draft.save', input: { draft: { draft_id: ids.draft, thread_id: ids.thread, text: 'uma vez', references: [], revision: 0 } } };
+  const first = await service.executeCommand(identity, command);
+  assert.equal(first.duplicate, false);
+  const restarted = new ComposerService({ dataDir: service.dataDir, now: () => now.value });
+  const duplicate = await restarted.executeCommand(identity, command);
+  assert.deepEqual(duplicate, { result: first.result, duplicate: true });
+  const changed = structuredClone(command);
+  changed.input.draft.text = 'outro';
+  await rejectsCode(restarted.executeCommand(identity, changed), 'ERR_CONFLICT');
+  assert.equal(restarted.getDraft(identity, ids.draft).revision, 1);
+});
+
+test('comando duplicado concorrente em processos retorna mesmo resultado uma vez', async (t) => {
+  const { spawn } = await import('node:child_process');
+  const f = fixture(t);
+  const worker = () => new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ['Tests/Harness/composer/command-worker.mjs', f.service.dataDir], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = ''; let stderr = '';
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.once('error', reject);
+    child.once('exit', (code) => code === 0 ? resolve(JSON.parse(stdout)) : reject(new Error(stderr)));
+  });
+  const [a, b] = await Promise.all([worker(), worker()]);
+  assert.deepEqual(a.result, b.result);
+  assert.deepEqual([a.duplicate, b.duplicate].sort(), [false, true]);
+  assert.equal(f.service.getDraft(auth(), ids.draft).revision, 1);
 });

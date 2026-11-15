@@ -31,22 +31,24 @@ export class ComposerGateway {
     this.#policy = policy;
     service.rootsFor = (auth) => policy.rootsFor(auth);
   }
-  async call({ bearer, thread_id, operation, input }) {
+  #authenticate(bearer, thread_id) {
     if (!UUID.test(thread_id ?? '')) fail('ERR_INVALID', 'thread_id inválido.');
     let identity;
     try { identity = this.#host.authenticate(bearer, { audience: AUDIENCE, scope: 'context.read', threadId: thread_id }); }
     catch { fail('ERR_FORBIDDEN', 'Credencial inválida.'); }
     if (identity.thread_id !== thread_id) fail('ERR_FORBIDDEN', 'Credencial sem thread vinculada.');
     this.#policy.authorize(identity);
-    const operations = {
-      'composer.prepare': () => this.#service.prepare(identity, input),
-      'composer.stage': () => this.#service.stage(identity, input),
-      'composer.draft.save': () => this.#service.saveDraft(identity, input.draft),
-      'composer.resolve': () => this.#service.resolve({ ...identity, delegated_identity: identity }, input),
-      'composer.pin': () => this.#service.pin(identity, input)
-    };
-    if (!Object.hasOwn(operations, operation)) fail('ERR_INVALID', 'Operação desconhecida.');
-    if (!validateOperationInput(operation, input).valid) fail('ERR_INVALID', 'Entrada fora do contrato.');
-    return operations[operation]();
+    return identity;
+  }
+  // Kernel calls this only for an accepted and authorized command; it must
+  // compare-and-swap expected_revision and own the durable receipt/outbox.
+  async execute({ bearer, thread_id, command }) {
+    const identity = this.#authenticate(bearer, thread_id);
+    return this.#service.executeCommand(identity, command);
+  }
+  async resolve({ bearer, thread_id, input }) {
+    const identity = this.#authenticate(bearer, thread_id);
+    if (!validateOperationInput('composer.resolve', input).valid) fail('ERR_INVALID', 'Entrada fora do contrato.');
+    return this.#service.resolve({ ...identity, delegated_identity: identity }, input);
   }
 }
