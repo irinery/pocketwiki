@@ -91,6 +91,30 @@ struct PocketMemoryHarnessValidation {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
 
+        // Each legacy entrypoint must initialize an entirely new nested root.
+        for operation in ["read", "write", "capture", "recall"] {
+            let nested = root.appendingPathComponent("missing-\(operation)/parent/memory", isDirectory: true)
+            let legacyStore = PocketMemoryStore(directory: nested)
+            switch operation {
+            case "read": _ = try await legacyStore.readNote()
+            case "write": try await legacyStore.writeNote("first use")
+            case "capture": _ = try await legacyStore.capture([PocketMemoryIncomingEvent(
+                event: "user-prompt-submit", sessionID: UUID().uuidString.lowercased(), ingestKey: "first",
+                prompt: "first use", message: nil, providerID: nil, modelID: nil)])
+            default: _ = try await legacyStore.recall("first use")
+            }
+            precondition(FileManager.default.fileExists(atPath: nested.appendingPathComponent(".harness-writer.sqlite3").path))
+        }
+        let outsideParent = root.appendingPathComponent("outside-parent", isDirectory: true)
+        try FileManager.default.createDirectory(at: outsideParent, withIntermediateDirectories: false)
+        let linkedParent = root.appendingPathComponent("linked-parent", isDirectory: true)
+        try FileManager.default.createSymbolicLink(at: linkedParent, withDestinationURL: outsideParent)
+        do {
+            _ = try await PocketMemoryStore(directory: linkedParent.appendingPathComponent("missing/memory")).readNote()
+            fatalError("Symlink parent was accepted")
+        } catch PocketMemoryStoreError.scopeDenied {}
+        precondition(!FileManager.default.fileExists(atPath: outsideParent.appendingPathComponent("missing").path))
+
         let environment = "10000000-0000-4000-8000-000000000001"
         let projectA = "20000000-0000-4000-8000-000000000001"
         let projectB = "20000000-0000-4000-8000-000000000002"

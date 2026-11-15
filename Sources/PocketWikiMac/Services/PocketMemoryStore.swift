@@ -1037,15 +1037,27 @@ actor PocketMemoryStore {
     }
 
     private func ensureRealDirectory(_ url: URL) throws {
+        try ensureDirectoryExists(url)
+        try fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path)
+    }
+
+    private func ensureDirectoryExists(_ url: URL) throws {
+        guard !isSymbolicLink(url) else { throw PocketMemoryStoreError.scopeDenied }
         if !fileManager.fileExists(atPath: url.path) {
-            try fileManager.createDirectory(at: url, withIntermediateDirectories: false,
-                attributes: [.posixPermissions: 0o700])
+            let parent = url.deletingLastPathComponent()
+            guard parent.path != url.path else { throw PocketMemoryStoreError.scopeDenied }
+            try ensureDirectoryExists(parent)
+            do {
+                try fileManager.createDirectory(at: url, withIntermediateDirectories: false,
+                    attributes: [.posixPermissions: 0o700])
+            } catch {
+                guard fileManager.fileExists(atPath: url.path) else { throw error }
+            }
         }
         guard !isSymbolicLink(url),
               try fileManager.attributesOfItem(atPath: url.path)[.type] as? FileAttributeType == .typeDirectory else {
             throw PocketMemoryStoreError.scopeDenied
         }
-        try fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path)
     }
 
     private func isSymbolicLink(_ url: URL) -> Bool {
