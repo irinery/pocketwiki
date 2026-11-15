@@ -361,9 +361,16 @@ export class MemoryHarnessService {
       const eventNames = new Set(['session-start', 'user-prompt-submit', 'assistant-response', 'stop', 'session-end']);
       if (record.events !== undefined && (!Array.isArray(record.events) || record.events.length > 5_000 ||
           record.events.some((item) => !eventNames.has(item?.event) || item.session_id !== record.id ||
-            typeof item.ingest_key !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(item.ingest_key)))) {
+            typeof item.ingest_key !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(item.ingest_key) ||
+            (item.sequence !== undefined && (!Number.isSafeInteger(item.sequence) || item.sequence < 1))))) {
         throw error('ERR_IMPORT', 'Memory import event record is invalid');
       }
+      try {
+        for (const item of record.events || []) {
+          const { sequence, ...event } = item;
+          validateScopedEvents([event]);
+        }
+      } catch { throw error('ERR_IMPORT', 'Memory import event record is invalid'); }
       imported.push(record);
     }
     const store = await this.#storeFor(namespace);
