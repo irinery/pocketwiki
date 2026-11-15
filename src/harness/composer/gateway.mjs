@@ -46,6 +46,19 @@ export class ComposerGateway {
     const identity = this.#authenticate(bearer, thread_id);
     return this.#service.executeCommand(identity, command);
   }
+  // Picker methods are private host ports, not registered wire operations.
+  async previewFile({ bearer, thread_id, root, relative_path, kind }) {
+    const identity = this.#authenticate(bearer, thread_id);
+    return this.#service.previewFile(identity, { root, relative_path, kind });
+  }
+  async previewQuote({ bearer, thread_id, root, relative_path, start_byte, end_byte }) {
+    const identity = this.#authenticate(bearer, thread_id);
+    return this.#service.previewQuote(identity, { root, relative_path, start_byte, end_byte });
+  }
+  async readQuote({ bearer, thread_id, reference_id }) {
+    const identity = this.#authenticate(bearer, thread_id);
+    return this.#service.readQuote(identity, reference_id);
+  }
   async callLocal({ bearer, thread_id, operation, input }) {
     const identity = this.#authenticate(bearer, thread_id);
     const operations = {

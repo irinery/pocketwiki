@@ -577,3 +577,22 @@ test('crash depois do commit local permite replay idempotente após restart', as
   assert.equal(first.duplicate, false);
   assert.deepEqual(replay, { result: first.result, duplicate: true });
 });
+
+test('preview wiki usa bearer E1 e policy real de root sem confiar em path escolhido', async (t) => {
+  const { LocalCredentialHost } = await import('../../../src/harness/local-host.mjs');
+  const { ComposerGateway, ComposerPolicy } = await import('../../../src/harness/composer/gateway.mjs');
+  const f = fixture(t);
+  const allowed = path.join(f.root, 'allowed');
+  const denied = path.join(f.root, 'denied');
+  await mkdir(allowed);
+  await mkdir(denied);
+  await writeFile(path.join(allowed, 'p.md'), 'wiki permitida');
+  await writeFile(path.join(denied, 'p.md'), 'fora do grant');
+  let bearer;
+  const host = new LocalCredentialHost({ principalId: ids.principal, environmentId: ids.environment, audience: 'pocketwiki.context.v1', grantedScopes: ['context.read'], deliverBearer: async (delivery) => { bearer = delivery.bearer; } });
+  await host.bootstrap(['context.read'], { threadId: ids.thread });
+  const gateway = new ComposerGateway({ service: f.service, credentialHost: host, policy: new ComposerPolicy([{ principal_id: ids.principal, environment_id: ids.environment, thread_id: ids.thread, roots: [allowed] }]) });
+  const reference = await gateway.previewFile({ bearer, thread_id: ids.thread, root: allowed, relative_path: 'p.md', kind: 'wiki' });
+  assert.equal(reference.reference.sha256, hash(Buffer.from('wiki permitida')));
+  await assert.rejects(gateway.previewFile({ bearer, thread_id: ids.thread, root: denied, relative_path: 'p.md', kind: 'wiki' }), { code: 'ERR_FORBIDDEN' });
+});
