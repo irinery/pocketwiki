@@ -45,7 +45,7 @@ final class ProviderProjection {
         guard HarnessV1.validateCorpusValue(value, schemaName: type, document: schema) else { return false }
         if type == "ProviderBinding" { guard let revision = value["catalog_revision"] as? Int else { return false }; return revision >= 1 && revision <= 9_007_199_254_740_991 }
         guard let version = value["version"] as? Int, version >= 0, version <= 9_007_199_254_740_991 else { return false }
-        if let context = value["context_bytes"] { guard let bytes = context as? Int, bytes >= 0, bytes <= 9_007_199_254_740_991 else { return false } }
+        if let context = value["context_bytes"], !(context is NSNull) { guard let bytes = context as? Int, bytes >= 0, bytes <= 9_007_199_254_740_991 else { return false } }
         return true
     }
     func appendPage(_ data: Data, requestedCursor: String?) throws {
