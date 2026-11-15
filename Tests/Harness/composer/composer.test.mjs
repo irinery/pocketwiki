@@ -647,3 +647,41 @@ test('citação preservada segue legível se diretório da fonte sumir dentro do
   assert.equal(Buffer.from(quote.content_base64, 'base64').toString(), 'salvo');
   assert.equal(quote.source_available, false);
 });
+
+test('pin e resolve usam serviço HTTP real com bearer delegado E1', async (t) => {
+  const { LocalCredentialHost } = await import('../../../src/harness/local-host.mjs');
+  const { ComposerGateway, ComposerPolicy } = await import('../../../src/harness/composer/gateway.mjs');
+  const { startComposerHTTP } = await import('../../../src/harness/composer/http.mjs');
+  let bearer;
+  const host = new LocalCredentialHost({ principalId: ids.principal, environmentId: ids.environment, audience: 'pocketwiki.context.v1', grantedScopes: ['context.read', 'read'], deliverBearer: async (delivery) => { bearer = delivery.bearer; } });
+  await host.bootstrap(['context.read'], { threadId: ids.thread });
+  const { service } = await makeHarness(t);
+  const gateway = new ComposerGateway({ service, credentialHost: host, policy: new ComposerPolicy([{ principal_id: ids.principal, environment_id: ids.environment, thread_id: ids.thread, roots: [] }]) });
+  await gateway.callLocal({ bearer, thread_id: ids.thread, operation: 'composer.draft.save', input: { draft: { draft_id: ids.draft, thread_id: ids.thread, text: 'texto', references: [], revision: 0 } } });
+  const command = { protocol_major: 1, command_id: ids.command, environment_id: ids.environment, expected_revision: 0, operation: 'composer.prepare', input: { thread_id: ids.thread, draft_id: ids.draft, text: 'texto', references: [], context_budget_bytes: 1024 } };
+  const prepared = (await gateway.execute({ bearer, thread_id: ids.thread, command })).result;
+  const server = await startComposerHTTP({ gateway });
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const post = (operation, input, token = bearer) => fetch(`${base}/v1/composer/${operation}`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ thread_id: ids.thread, input }) });
+  const pin = await post('pin', { prepared_id: prepared.prepared_id, command_id: ids.command, retain: true });
+  assert.equal(pin.status, 200);
+  assert.deepEqual(await pin.json(), { retained: true });
+  const resolved = await post('resolve', { prepared_id: prepared.prepared_id, manifest_sha256: prepared.manifest_sha256 });
+  assert.equal(resolved.status, 200);
+  assert.equal((await resolved.json()).context.text, 'texto');
+  assert.equal((await post('resolve', { prepared_id: prepared.prepared_id, manifest_sha256: prepared.manifest_sha256 }, 'errado')).status, 403);
+  const { spawn } = await import('node:child_process');
+  const child = spawn(process.execPath, ['Tests/Harness/composer/http-client.mjs', String(server.address().port)], { stdio: ['pipe', 'pipe', 'pipe'] });
+  const childResult = new Promise((resolve, reject) => {
+    let output = ''; let errorOutput = '';
+    child.stdout.on('data', (chunk) => { output += chunk; });
+    child.stderr.on('data', (chunk) => { errorOutput += chunk; });
+    child.once('error', reject);
+    child.once('exit', (code) => code === 0 ? resolve(JSON.parse(output)) : reject(new Error(errorOutput)));
+  });
+  child.stdin.end(JSON.stringify({ bearer, thread_id: ids.thread, prepared_id: prepared.prepared_id, manifest_sha256: prepared.manifest_sha256 }));
+  assert.deepEqual(await childResult, { status: 200, text: 'texto' });
+  await host.bootstrap(['read'], { threadId: ids.thread });
+  assert.equal((await post('resolve', { prepared_id: prepared.prepared_id, manifest_sha256: prepared.manifest_sha256 }, bearer)).status, 403);
+});
