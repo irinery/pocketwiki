@@ -580,9 +580,29 @@ test('import interrompido é reconciliado antes de uma leitura', async (t) => {
   assert.equal(recall.hits[0].session_id, sessionA);
 });
 
-test('SIGKILL durante import deixa journal recuperável sem sessões parciais', async (t) => {
+function waitWorkerMessage(worker) {
+  return new Promise((resolve, reject) => {
+    function cleanup() { worker.off('message', onMessage); worker.off('error', onError); worker.off('exit', onExit); }
+    function onMessage(message) { cleanup(); resolve(message); }
+    function onError(error) { cleanup(); reject(error); }
+    function onExit(code, signal) { cleanup(); reject(new Error(`worker exited before barrier: ${code ?? signal}`)); }
+    worker.once('message', onMessage); worker.once('error', onError); worker.once('exit', onExit);
+  });
+}
+
+async function killAtPersistedJournal(worker, journal, validate) {
+  const barrier = waitWorkerMessage(worker);
+  worker.send('go');
+  assert.deepEqual(await barrier, { type:'journal-persisted' });
+  const intent = JSON.parse(await readFile(journal, 'utf8'));
+  await validate(intent);
+  const exit = new Promise((resolve) => worker.once('exit', (code, signal) => resolve({ code, signal })));
+  assert.equal(worker.kill('SIGKILL'), true);
+  assert.deepEqual(await exit, { code:null, signal:'SIGKILL' });
+}
+
+test('SIGKILL durante import deixa journal recuperável sem sessões parciais', { timeout:10_000 }, async (t) => {
   const { fork } = await import('node:child_process');
-  const { watch } = await import('node:fs');
   const { readdir } = await import('node:fs/promises');
   const { root, memory } = await fixture(t);
   await memory.noteGet(auth(), { namespace:namespace() });
@@ -595,41 +615,33 @@ test('SIGKILL durante import deixa journal recuperável sem sessões parciais', 
   await writeFile(input, JSON.stringify({ schema_version:2, namespace:recallScope(namespace()), sessions }));
   const worker = fork(new URL('./import-worker.mjs', import.meta.url), [root, input], { stdio:['ignore', 'ignore', 'inherit', 'ipc'] });
   t.after(() => worker.kill('SIGKILL'));
-  await new Promise((resolve, reject) => { worker.once('message', resolve); worker.once('error', reject); });
-  let killed = false;
-  const watcher = watch(folder, (_event, filename) => {
-    if (filename === '.import-intent.json' && !killed) { killed = true; worker.kill('SIGKILL'); }
+  assert.equal(await waitWorkerMessage(worker), 'ready');
+  await killAtPersistedJournal(worker, path.join(folder, '.import-intent.json'), async (intent) => {
+    assert.equal(intent.records.length, 500);
+    assert.equal(new Set(intent.records.map((record) => record.id)).size, 500);
+    assert.deepEqual(await readdir(path.join(folder, 'captures')), []);
   });
-  t.after(() => watcher.close());
-  worker.send('go');
-  const [code, signal] = await new Promise((resolve) => worker.once('exit', (...args) => resolve(args)));
-  watcher.close();
-  assert.equal(killed, true); assert.equal(signal, 'SIGKILL'); assert.equal(code, null);
   const reopened = new MemoryHarnessService({ root, policy:fixturePolicy, association:fixturePolicy });
   const recalled = await reopened.recallScoped(auth(), { ...recallScope(namespace()), question:'postgres import', include_personal_note:false });
   assert.equal(recalled.hits.length, 3);
   assert.equal((await readdir(path.join(folder, 'captures'))).filter((name) => name.endsWith('.json')).length, 500);
 });
 
-test('SIGKILL durante captura reconcilia lote inteiro antes de qualquer recall', async (t) => {
+test('SIGKILL durante captura reconcilia lote inteiro antes de qualquer recall', { timeout:10_000 }, async (t) => {
   const { fork } = await import('node:child_process');
-  const { watch } = await import('node:fs');
   const { readdir } = await import('node:fs/promises');
   const { root, memory } = await fixture(t);
   await memory.noteGet(auth(), { namespace:namespace() });
   const folder = path.join(root, 'v2', environmentA, 'projects', projectA);
   const worker = fork(new URL('./capture-worker.mjs', import.meta.url), [root], { stdio:['ignore', 'ignore', 'inherit', 'ipc'] });
   t.after(() => worker.kill('SIGKILL'));
-  await new Promise((resolve, reject) => { worker.once('message', resolve); worker.once('error', reject); });
-  let killed = false;
-  const watcher = watch(folder, (_event, filename) => {
-    if (filename === '.capture-intent.json' && !killed) { killed = true; worker.kill('SIGKILL'); }
+  assert.equal(await waitWorkerMessage(worker), 'ready');
+  await killAtPersistedJournal(worker, path.join(folder, '.capture-intent.json'), async (intent) => {
+    assert.equal(intent.events.length, 32);
+    assert.equal(intent.ledger.sequence, 32);
+    assert.equal(new Set(intent.events.map((event) => event.session_id)).size, 32);
+    assert.deepEqual(await readdir(path.join(folder, 'captures')), []);
   });
-  t.after(() => watcher.close());
-  worker.send('go');
-  const [, signal] = await new Promise((resolve) => worker.once('exit', (...args) => resolve(args)));
-  watcher.close();
-  assert.equal(killed, true); assert.equal(signal, 'SIGKILL');
   const reopened = new MemoryHarnessService({ root, policy:fixturePolicy, association:fixturePolicy });
   const recalled = await reopened.recallScoped(auth(), { ...recallScope(namespace()), question:'postgres', include_personal_note:false });
   assert.equal(recalled.hits.length, 3);
