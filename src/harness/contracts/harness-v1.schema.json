@@ -11154,6 +11154,35 @@
     "runtimeDispatchResult": {
       "$ref": "#/$defs/commandReceipt"
     },
+    "providersSelectResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binding_id", "capabilities", "catalog_revision"],
+      "properties": {
+        "binding_id": {"$ref": "#/$defs/uuid"},
+        "capabilities": {"$ref": "#/$defs/ProviderCapabilities"},
+        "catalog_revision": {"type": "integer", "minimum": 1, "maximum": 9007199254740991}
+      }
+    },
+    "providersSelectHTTPDomainError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "correlation_id", "retryable"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": ["ERR_PROVIDER_UNAVAILABLE", "ERR_CATALOG_STALE", "ERR_UNSUPPORTED"]
+        },
+        "message": {"type": "string", "maxLength": 1024, "x-maxUtf8Bytes": 1024},
+        "correlation_id": {"$ref": "#/$defs/uuid"},
+        "retryable": {"type": "boolean"}
+      },
+      "x-httpStatusByCode": {
+        "ERR_PROVIDER_UNAVAILABLE": 503,
+        "ERR_CATALOG_STALE": 409,
+        "ERR_UNSUPPORTED": 422
+      }
+    },
     "httpCommandReceipt": {
       "type": "object",
       "additionalProperties": false,

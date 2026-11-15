@@ -39527,6 +39527,218 @@
         "report_id": 0,
         "approval_preview_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       }
+    },
+    {
+      "id": "NH00-PROVIDER-HTTP-ERR-01",
+      "schema": "providersSelectHTTPDomainError",
+      "accept": true,
+      "value": {
+        "code": "ERR_PROVIDER_UNAVAILABLE",
+        "message": "indisponível",
+        "correlation_id": "11111111-1111-4111-8111-111111111111",
+        "retryable": true
+      }
+    },
+    {
+      "id": "NH00-PROVIDER-HTTP-ERR-02",
+      "schema": "providersSelectHTTPDomainError",
+      "accept": true,
+      "value": {
+        "code": "ERR_CATALOG_STALE",
+        "message": "indisponível",
+        "correlation_id": "11111111-1111-4111-8111-111111111111",
+        "retryable": true
+      }
+    },
+    {
+      "id": "NH00-PROVIDER-HTTP-ERR-03",
+      "schema": "providersSelectHTTPDomainError",
+      "accept": true,
+      "value": {
+        "code": "ERR_UNSUPPORTED",
+        "message": "indisponível",
+        "correlation_id": "11111111-1111-4111-8111-111111111111",
+        "retryable": true
+      }
+    },
+    {
+      "id": "NH00-PROVIDER-HTTP-ERR-04",
+      "schema": "providersSelectHTTPDomainError",
+      "accept": false,
+      "value": {
+        "code": "ERR_TIMEOUT",
+        "message": "indisponível",
+        "correlation_id": "11111111-1111-4111-8111-111111111111",
+        "retryable": true
+      }
+    },
+    {
+      "id": "NH00-PROVIDER-HTTP-ERR-05",
+      "schema": "providersSelectHTTPDomainError",
+      "accept": false,
+      "value": {
+        "code": "ERR_PROVIDER_UNAVAILABLE",
+        "message": "indisponível",
+        "correlation_id": "11111111-1111-4111-8111-111111111111",
+        "retryable": true,
+        "extra": 1
+      }
+    },
+    {
+      "id": "NH00-PROVIDER-HTTP-ERR-06",
+      "schema": "providersSelectHTTPDomainError",
+      "accept": false,
+      "value": {
+        "code": "ERR_PROVIDER_UNAVAILABLE",
+        "message": "indisponível",
+        "correlation_id": "bad",
+        "retryable": true
+      }
+    },
+    {
+      "id": "NH00-PROVIDER-HTTP-ERR-07",
+      "schema": "providersSelectHTTPDomainError",
+      "accept": false,
+      "value": {
+        "code": "ERR_PROVIDER_UNAVAILABLE",
+        "message": "indisponível",
+        "correlation_id": "11111111-1111-4111-8111-111111111111",
+        "retryable": null
+      }
+    },
+    {
+      "id": "NH00-PROVIDER-HTTP-ERR-08",
+      "schema": "providersSelectHTTPDomainError",
+      "accept": false,
+      "value": {
+        "code": "ERR_PROVIDER_UNAVAILABLE",
+        "message": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+        "correlation_id": "11111111-1111-4111-8111-111111111111",
+        "retryable": true
+      }
+    },
+    {
+      "id": "NH00-PROVIDER-HTTP-ERR-09",
+      "schema": "providersSelectHTTPDomainError",
+      "accept": false,
+      "value": {
+        "code": "ERR_PROVIDER_UNAVAILABLE",
+        "message": "indisponível",
+        "correlation_id": "11111111-1111-4111-8111-111111111111"
+      }
+    },
+    {
+      "id": "NH00-PROVIDER-RESULT-01",
+      "schema": "providersSelectResult",
+      "accept": true,
+      "value": {
+        "binding_id": "11111111-1111-4111-8111-111111111111",
+        "capabilities": {
+          "version": 1,
+          "stream_text": false,
+          "steer": false,
+          "interrupt": false,
+          "rollback": false,
+          "native_fork": false,
+          "tools": false,
+          "questions": false,
+          "plans": false,
+          "resume": false,
+          "capability_id": "11111111-1111-4111-8111-111111111111"
+        },
+        "catalog_revision": 1
+      }
+    },
+    {
+      "id": "NH00-PROVIDER-RESULT-02",
+      "schema": "providersSelectResult",
+      "accept": false,
+      "value": {
+        "binding_id": "11111111-1111-4111-8111-111111111111",
+        "capabilities": {
+          "version": 1,
+          "stream_text": false,
+          "steer": false,
+          "interrupt": false,
+          "rollback": false,
+          "native_fork": false,
+          "tools": false,
+          "questions": false,
+          "plans": false,
+          "resume": false,
+          "capability_id": "11111111-1111-4111-8111-111111111111"
+        },
+        "catalog_revision": 1,
+        "error": {
+          "code": "ERR_UNSUPPORTED"
+        }
+      }
+    },
+    {
+      "id": "NH00-PROVIDER-RESULT-03",
+      "schema": "providersSelectResult",
+      "accept": false,
+      "value": {
+        "binding_id": "11111111-1111-4111-8111-111111111111",
+        "capabilities": {
+          "version": 1,
+          "stream_text": false,
+          "steer": false,
+          "interrupt": false,
+          "rollback": false,
+          "native_fork": false,
+          "tools": false,
+          "questions": false,
+          "plans": false,
+          "resume": false,
+          "capability_id": "11111111-1111-4111-8111-111111111111"
+        },
+        "catalog_revision": 0
+      }
+    },
+    {
+      "id": "NH00-PROVIDER-RESULT-04",
+      "schema": "providersSelectResult",
+      "accept": false,
+      "value": {
+        "binding_id": "11111111-1111-4111-8111-111111111111",
+        "capabilities": {
+          "version": 1,
+          "stream_text": false,
+          "steer": false,
+          "interrupt": false,
+          "rollback": false,
+          "native_fork": false,
+          "tools": false,
+          "questions": false,
+          "plans": false,
+          "resume": false,
+          "capability_id": "11111111-1111-4111-8111-111111111111",
+          "surprise": true
+        },
+        "catalog_revision": 1
+      }
+    },
+    {
+      "id": "NH00-PROVIDER-RESULT-05",
+      "schema": "providersSelectResult",
+      "accept": false,
+      "value": {
+        "capabilities": {
+          "version": 1,
+          "stream_text": false,
+          "steer": false,
+          "interrupt": false,
+          "rollback": false,
+          "native_fork": false,
+          "tools": false,
+          "questions": false,
+          "plans": false,
+          "resume": false,
+          "capability_id": "11111111-1111-4111-8111-111111111111"
+        },
+        "catalog_revision": 1
+      }
     }
   ]
 }

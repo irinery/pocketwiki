@@ -156,10 +156,10 @@ interface:
           ação: "403; não consultar nem modificar recurso"
         - code: ERR_TIMEOUT
           quando: "deadline da operação excedido"
-          ação: "504; manter intenção/receipt e expor estado pending ou uncertain conforme efeito"
+          ação: "504; preservar intenção e reconciliar o mesmo command_id se o commit for incerto"
         - code: ERR_UNAVAILABLE
           quando: "dependência/store indisponível"
-          ação: "503; preservar estado confirmado e permitir retry idempotente"
+          ação: "503; preservar estado confirmado e, se decidir retry, manter command_id e envelope canônico"
         - code: ERR_INCOMPATIBLE
           quando: "versão major ou schema obrigatório incompatível"
           ação: "426; não aplicar payload"
@@ -178,7 +178,14 @@ interface:
       observável: "estado de erro/pending explícito; nenhuma mudança silenciosa de provider, conta, root ou ambiente"
 ```
 
-Para operações da classe mutation, o envelope de transporte é `HarnessCommand {protocol_major:int=1, command_id:uuid, environment_id:uuid, expected_revision:int, operation:string, input:<entrada tipada acima>}`. `operation` é o nome canônico desta interface; input não aceita campos extras. Erro segue HarnessError do cabeçalho; resposta de sucesso contém exatamente os campos de saída declarados. Leituras usam a rota query e operações bootstrap usam os endpoints diretos de R4, sem receipt; interface de view é local. O registry não encaminha bootstrap pelo ledger.
+Para `providers.select`, os códigos 503/409/422 acima são respostas HTTP da
+própria tentativa, com `HarnessError` fechado e sem receipt de falha. Sucesso
+novo retorna receipt HTTP 202 e replay autorizado de sucesso 200; o `Result`
+tipado é obtido por `result_ref`. Retry, concorrência, CAS, revisão e efeitos
+seguem a [decisão específica](proposta-providers-resultado-failed.md). Erro de
+uma tentativa não prova que outra concorrente não confirmou o mesmo comando.
+
+Para operações da classe mutation, o envelope de transporte é `HarnessCommand {protocol_major:int=1, command_id:uuid, environment_id:uuid, expected_revision:int, operation:string, input:<entrada tipada acima>}`. `operation` é o nome canônico desta interface; input não aceita campos extras. Erro segue HarnessError do cabeçalho; para `providers.select`, o HTTP retorna CommandReceipt e o Result consultado contém exatamente os campos de saída declarados; as demais interfaces mantêm seus contratos. Leituras usam a rota query e operações bootstrap usam os endpoints diretos de R4, sem receipt; interface de view é local. O registry não encaminha bootstrap pelo ledger.
 
 **Interface complementar: providers.catalog**
 

@@ -115,3 +115,16 @@ test('permission action discriminators reject fields from other variants and mis
     assert.equal(validateAgainst(slot.schema, slot.value).valid, false, id);
   }
 });
+
+test('providers.select domain error codes have the specified HTTP status mapping', () => {
+  const definition = schema.$defs.providersSelectHTTPDomainError;
+  assert.deepEqual(definition['x-httpStatusByCode'], {
+    ERR_PROVIDER_UNAVAILABLE: 503,
+    ERR_CATALOG_STALE: 409,
+    ERR_UNSUPPORTED: 422,
+  });
+  assert.deepEqual(new Set(definition.properties.code.enum), new Set(Object.keys(definition['x-httpStatusByCode'])));
+  for (const slot of corpus.slots.filter(({ schema: name, accept }) => name === 'providersSelectHTTPDomainError' && accept)) {
+    assert.equal(validateAgainst('harnessError', slot.value).valid, true, `${slot.id} must remain a HarnessError`);
+  }
+});
