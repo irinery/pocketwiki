@@ -9,7 +9,7 @@ import { chmod, copyFile, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFil
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { runWithinDeadline, requireProcessListing } from './deadline-sync.mjs';
-import { targetIdentity, assertSameIdentity } from './gate-aggregator.mjs';
+import { targetIdentity, assertSameIdentity, assertUIHostIdentity } from './gate-aggregator.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -55,7 +55,7 @@ try {
       ? await runContract(artifactDir, tempHome, baseSHAs, deadline, targetSHA)
       : id === 'LEGACY-00' ? await runLegacy(pair.surface, artifactDir, tempHome, deadline, targetSHA)
       : id === 'SERVICE-0002' ? await runRuntimeService(artifactDir, tempHome, targetSHA, baseSHAs)
-      : await runRuntimeUI(pair.surface, artifactDir, tempHome, targetSHA);
+      : await runRuntimeUI(pair.surface, artifactDir, tempHome, targetSHA, identity);
     cases.push({ id, surface: pair.surface, status: result.ok ? 'passed' : 'failed', artifact_paths: result.artifacts, ...(result.replay || {}) });
     if (!result.ok) exitCode = Math.max(exitCode, result.exitCode || 1);
     if (result.configurationError) exitCode = 2;
@@ -206,7 +206,7 @@ async function runRuntimeService(artifactDir, tempHome, targetSHA, shas) {
   return { ok: true, artifacts };
 }
 
-async function runRuntimeUI(surface, artifactDir, tempHome, targetSHA) {
+async function runRuntimeUI(surface, artifactDir, tempHome, targetSHA, identity) {
   const source = await cloneGitSnapshot(root, targetSHA, path.join(tempHome, 'sources/pocketwiki-ui-' + surface));
   const host = path.join(source, 'Tests/HarnessUI/runtime/run-host.mjs');
   if (!existsSync(host)) return { ok: false, exitCode: 2, configurationError: true, artifacts: [] };
@@ -228,13 +228,14 @@ async function runRuntimeUI(surface, artifactDir, tempHome, targetSHA) {
   const valid = manifest && manifest.surface === surface && manifest.invalidated !== true && Array.isArray(manifest.cases) && manifest.cases.length === 4 && required.every(id => manifest.cases.some(c => c?.id === id && c.invalidated !== true && ['passed', 'failed'].includes(c.status))) && evidence.some(name => name !== 'result.json');
   let replay;
   try {
+    assertUIHostIdentity(JSON.parse(await readFile(path.join(output, 'identity.json'), 'utf8')), { ...identity, seed: DEFAULT_FIXTURE_SEED, auth_mode: 'host_local' });
     const bytes = await readFile(path.join(output, 'replay-proof.json'));
     const proof = JSON.parse(bytes);
     const row = manifest.cases.find(c => c.id === '02-01');
     const digest = replayProofSHA256(bytes);
     if (row.replay_proof_sha256 !== digest || row.replay_nonce !== nonce) throw new Error('host replay proof binding mismatch');
     validateReplayProof(proof, { surface, nonce });
-    replay = { replay_proof: proof, replay_proof_sha256: digest, replay_nonce: nonce, replay_proof_path: path.posix.join(path.basename(artifactDir), 'ui-0002-' + surface, 'replay-proof.json'), replay_host_path: path.posix.join(path.basename(artifactDir), 'ui-0002-' + surface, 'result.json') };
+    replay = { replay_proof: proof, replay_proof_sha256: digest, replay_nonce: nonce, replay_proof_path: path.posix.join(path.basename(artifactDir), 'ui-0002-' + surface, 'replay-proof.json'), replay_host_path: path.posix.join(path.basename(artifactDir), 'ui-0002-' + surface, 'result.json'), replay_identity_path: path.posix.join(path.basename(artifactDir), 'ui-0002-' + surface, 'identity.json') };
   } catch {}
   const passed = valid && manifest.cases.every(c => c.status === 'passed') && !!replay;
   return { ok: result.status === 0 && passed, exitCode: result.status === 2 || !valid ? 2 : 1, configurationError: result.status === 2 || !valid, replay, artifacts: [path.posix.join(path.basename(artifactDir), log), ...evidence.map(name => path.posix.join(path.basename(artifactDir), 'ui-0002-' + surface, name))] };

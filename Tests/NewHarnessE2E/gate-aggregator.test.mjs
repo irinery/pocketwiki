@@ -174,8 +174,8 @@ test('E1 requires all six cumulative pairs and validates replay artifact binding
     const digest = data => replayProofSHA256(Buffer.from(canonicalJSON(data)));
     const frame = (seq, after) => ({ seq, before_cursor: 10, after_cursor: after, before_state: state(10), after_state: state(after), before: digest(state(10)), after: digest(state(after)) });
     const proof = { version: 1, level: 'integration', surface, nonce, boundary: 10, frames: [frame(9, 10), frame(10, 10), frame(11, 11)] };
-    Object.assign(input[index].cases[1], { replay_proof: proof, replay_nonce: nonce, replay_proof_sha256: replayProofSHA256(Buffer.from(JSON.stringify(proof))), replay_proof_path: surface + '/proof.json', replay_host_path: surface + '/result.json' });
-    input[index].cases[1].artifact_paths.push(surface + '/proof.json', surface + '/result.json');
+    Object.assign(input[index].cases[1], { replay_proof: proof, replay_nonce: nonce, replay_proof_sha256: replayProofSHA256(Buffer.from(JSON.stringify(proof))), replay_proof_path: surface + '/proof.json', replay_host_path: surface + '/result.json', replay_identity_path: surface + '/identity.json' });
+    input[index].cases[1].artifact_paths.push(surface + '/proof.json', surface + '/result.json', surface + '/identity.json');
   }
   assert.equal(aggregateReports('E1', input, matrix).gate_passed, true);
   const dir = await mkdtemp(path.join(os.tmpdir(), 'nh-replay-proof-'));
@@ -187,6 +187,7 @@ test('E1 requires all six cumulative pairs and validates replay artifact binding
       let content = 'fixture';
       if (artifact === item.replay_proof_path) content = JSON.stringify(item.replay_proof);
       if (artifact === item.replay_host_path) content = JSON.stringify({ surface: item.surface, cases: ['02-01', '02-02', '02-03', '02-04'].map(id => ({ id, status: 'passed', ...(id === '02-01' ? { replay_nonce: item.replay_nonce, replay_proof_sha256: item.replay_proof_sha256 } : {}) })) });
+      if (artifact === item.replay_identity_path) { const hostIdentity = Object.fromEntries(['pocketwiki_sha', 'pocketkernel_sha', 'middlewareauth_sha', 'schema_sha256', 'seed', 'auth_mode'].map(field => [field, report[field]])); content = JSON.stringify({ ...hostIdentity, after: hostIdentity }); }
       await writeFile(target, content);
     }
     // Equivalent JSON in a different property order still matches the exact hashed artifact.
@@ -208,6 +209,23 @@ test('E1 requires all six cumulative pairs and validates replay artifact binding
       const host = structuredClone(valid); mutate(host); await writeFile(file, JSON.stringify(host));
       await assert.rejects(() => aggregateReportFiles('E1', paths, identity), /replay host artifact mismatch/);
     }
+    await writeFile(file, JSON.stringify(valid));
+  }
+  for (const surface of ['web', 'macos']) {
+    const file = path.join(dir, surface, 'identity.json');
+    const valid = JSON.parse(await readFile(file, 'utf8'));
+    for (const field of ['pocketwiki_sha', 'pocketkernel_sha', 'middlewareauth_sha', 'schema_sha256', 'seed', 'auth_mode']) {
+      for (const phase of ['before', 'after', 'missing']) {
+        const bad = structuredClone(valid);
+        if (phase === 'before') bad[field] = field === 'seed' ? 42 : 'different';
+        else if (phase === 'after') bad.after[field] = field === 'seed' ? 42 : 'different';
+        else delete bad[field];
+        await writeFile(file, JSON.stringify(bad));
+        await assert.rejects(() => aggregateReportFiles('E1', paths, identity), /UI host identity mismatch/);
+      }
+    }
+    await rm(file);
+    await assert.rejects(() => aggregateReportFiles('E1', paths, identity));
     await writeFile(file, JSON.stringify(valid));
   }
   await writeFile(path.join(dir, 'web/proof.json'), '{}');

@@ -11,6 +11,16 @@ const matrixPath = path.resolve(here, '../../docs/rfcs/new-harness/matriz-verifi
 const hashFields = ['pocketwiki_sha', 'pocketkernel_sha', 'middlewareauth_sha'];
 const digestFields = ['schema_sha256', 'fixture_sha256', 'matrix_sha256'];
 
+// The UI host observes these fields before and after its own execution.
+export function assertUIHostIdentity(host, expected) {
+  const fields = ['pocketwiki_sha', 'pocketkernel_sha', 'middlewareauth_sha', 'schema_sha256', 'seed', 'auth_mode'];
+  for (const field of fields) {
+    if (host?.[field] !== expected?.[field] || host?.after?.[field] !== expected?.[field] || expected?.[field] === undefined) {
+      throw new Error('UI host identity mismatch: ' + field);
+    }
+  }
+}
+
 export async function aggregateReportFiles(stage, reportPaths, target) {
   if (!target) throw new Error('target build identity is required');
   const matrix = JSON.parse(await readFile(matrixPath, 'utf8'));
@@ -76,7 +86,7 @@ export function aggregateReports(stage, reports, matrix) {
       }
       if (result.id === 'UI-0002') {
         validateReplayProof(result.replay_proof, { surface: result.surface, nonce: result.replay_nonce });
-        if (!isSafeRelativePath(result.replay_proof_path) || !result.artifact_paths.includes(result.replay_proof_path) || !isSafeRelativePath(result.replay_host_path) || !result.artifact_paths.includes(result.replay_host_path) || !/^[a-f0-9]{64}$/.test(result.replay_proof_sha256 || '')) throw new Error('invalid replay proof artifact binding: ' + key);
+        if (!isSafeRelativePath(result.replay_proof_path) || !result.artifact_paths.includes(result.replay_proof_path) || !isSafeRelativePath(result.replay_host_path) || !result.artifact_paths.includes(result.replay_host_path) || !isSafeRelativePath(result.replay_identity_path) || !result.artifact_paths.includes(result.replay_identity_path) || !/^[a-f0-9]{64}$/.test(result.replay_proof_sha256 || '')) throw new Error('invalid replay proof artifact binding: ' + key);
       }
       if (scenario.stage <= 2 && report.auth_mode !== 'host_local') {
         throw new Error('forbidden auth_mode for ' + key + ': ' + report.auth_mode);
@@ -179,6 +189,11 @@ async function verifyArtifacts(reportPath, report) {
       const proofPath = path.resolve(reportDirectory, ...result.replay_proof_path.split('/'));
       const resolved = await realpath(proofPath), metadata = await lstat(proofPath);
       if (!resolved.startsWith(reportDirectory + path.sep) || !metadata.isFile() || metadata.isSymbolicLink()) throw new Error('invalid replay proof file');
+      if (!isSafeRelativePath(result.replay_identity_path) || !result.artifact_paths.includes(result.replay_identity_path)) throw new Error('invalid UI host identity artifact binding');
+      const identityPath = path.resolve(reportDirectory, ...result.replay_identity_path.split('/'));
+      const identityResolved = await realpath(identityPath), identityMetadata = await lstat(identityPath);
+      if (!identityResolved.startsWith(reportDirectory + path.sep) || !identityMetadata.isFile() || identityMetadata.isSymbolicLink()) throw new Error('invalid UI host identity file');
+      assertUIHostIdentity(JSON.parse(await readFile(identityPath, 'utf8')), report);
       if (!isSafeRelativePath(result.replay_host_path) || !result.artifact_paths.includes(result.replay_host_path)) throw new Error('invalid replay host artifact binding');
       const hostPath = path.resolve(reportDirectory, ...result.replay_host_path.split('/'));
       const hostResolved = await realpath(hostPath), hostMetadata = await lstat(hostPath);

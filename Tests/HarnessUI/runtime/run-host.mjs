@@ -16,9 +16,10 @@ if (!['web', 'macos'].includes(surface) || !reportDir) { console.error('usage: r
 if (process.env.NH_REPLAY_NONCE === undefined) process.env.NH_REPLAY_NONCE = randomBytes(16).toString('hex');
 if (!/^[a-f0-9]{32}$/.test(process.env.NH_REPLAY_NONCE)) { console.error('NH_REPLAY_NONCE inválido'); process.exit(2); }
 await mkdir(reportDir, { recursive: true });
+await rm(path.join(reportDir, 'identity.json'), { force: true });
 const temp = await mkdtemp(path.join(os.tmpdir(), 'runtime-ui-host-'));
 const cases = ['02-01', '02-02', '02-03', '02-04'].map(id => ({ id, status: 'failed', detail: 'cenário não concluído' }));
-let log = '', status = 1, generatedProject;
+let log = '', status = 1, generatedProject, hostIdentity, checkFinalIdentity;
 async function run(program, argv, options = {}) {
   return new Promise((resolve, reject) => {
     const { timeoutMS, ...spawnOptions } = options;
@@ -56,7 +57,11 @@ try {
   const seed = Number(process.env.NH_TEST_SEED ?? '20261102');
   if (!Number.isSafeInteger(seed) || seed < 0) throw new Error('seed inválida');
   const schemaSHA256 = createHash('sha256').update(await readFile('src/harness/contracts/harness-v1.schema.json')).digest('hex');
-  await writeFile(path.join(reportDir, 'identity.json'), JSON.stringify({ pocketwiki_sha: wikiHead.trim(), pocketkernel_sha: head.trim(), middlewareauth_sha: middlewareHead.trim(), schema_sha256: schemaSHA256, seed, auth_mode: 'host_local', generated_ids: 'fixture IDs derivados da seed; IDs emitidos pelo Kernel e credenciais são aleatórios', boundary: 'real 9; literal 10 em teste unitário' }, null, 2) + '\n');
+  hostIdentity = { pocketwiki_sha: wikiHead.trim(), pocketkernel_sha: head.trim(), middlewareauth_sha: middlewareHead.trim(), schema_sha256: schemaSHA256, seed, auth_mode: 'host_local' };
+  checkFinalIdentity = async () => {
+    const sha = async repo => (await promisify(execFile)('git', ['-C', repo, 'rev-parse', 'HEAD'])).stdout.trim();
+    return { pocketwiki_sha: await sha(process.cwd()), pocketkernel_sha: await sha(root), middlewareauth_sha: await sha(middlewareRoot), schema_sha256: createHash('sha256').update(await readFile('src/harness/contracts/harness-v1.schema.json')).digest('hex'), seed, auth_mode: 'host_local' };
+  };
   if (middlewareHead.trim() !== '04f44f62126c785f7b28718d2eff837c28cb65df') throw new Error('HEAD do MiddlewareAuth não corresponde ao pin E1');
   if (head.trim() !== '582e216c13feb7485fa9620d9543b272ec3794b5') throw new Error('HEAD do Kernel não corresponde ao pin E1');
   const snapshot = path.join(temp, 'kernel'); await mkdir(snapshot);
@@ -151,6 +156,17 @@ try {
   status = cases.every(row => row.status === 'passed') ? 0 : 1;
 } catch (error) { log += `erro: ${error.message}\n`; }
 finally {
+  if (hostIdentity && checkFinalIdentity) {
+    try {
+      const after = await checkFinalIdentity();
+      if (Object.keys(hostIdentity).some(key => hostIdentity[key] !== after[key])) throw new Error('identidade alterada durante execução');
+      await writeFile(path.join(reportDir, 'identity.json'), JSON.stringify({ ...hostIdentity, after }, null, 2) + '\n');
+    } catch (error) {
+      status = 1; log += `erro identidade final: ${error.message}\n`;
+      for (const row of cases) { row.status = 'failed'; row.detail = 'identidade final indisponível ou alterada'; }
+      await rm(path.join(reportDir, 'identity.json'), { force: true });
+    }
+  }
   await writeFile(path.join(reportDir, 'result.json'), JSON.stringify({ surface, cases }, null, 2) + '\n');
   await writeFile(path.join(reportDir, 'host.log'), log);
   if (generatedProject) await rm(generatedProject, { recursive: true, force: true });
