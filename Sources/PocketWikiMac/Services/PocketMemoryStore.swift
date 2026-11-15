@@ -295,7 +295,7 @@ actor PocketMemoryStore {
             let intent: [String: Any] = ["state": state, "namespace": target, "content": content]
             try write(JSONSerialization.data(withJSONObject: intent, options: [.sortedKeys]),
                       to: directory.appendingPathComponent(".note-intent.json"))
-            try recoverNoteIntent()
+            try commitNoteIntent(intent)
             return next
         }
         let state: [String: Any] = ["schema_version": 2, "content": content, "revision": next.revision]
@@ -306,8 +306,25 @@ actor PocketMemoryStore {
     }
 
     private func recoverNoteIntent() throws {
+        try requireNoPendingIntent(".note-intent.json")
+    }
+
+    // Only the current write can commit its in-memory intent. Disk metadata is not authority.
+    private func requireNoPendingIntent(_ name: String) throws {
+        let journal = directory.appendingPathComponent(name)
+        if isSymbolicLink(journal) { throw PocketMemoryStoreError.unavailable }
+        do {
+            _ = try fileManager.attributesOfItem(atPath: journal.path)
+        } catch let cause as NSError {
+            if cause.domain == NSCocoaErrorDomain && cause.code == NSFileReadNoSuchFileError { return }
+            throw PocketMemoryStoreError.unavailable
+        }
+        // Preserve existing journals for authoritative principal/receipt reconciliation.
+        throw PocketMemoryStoreError.unavailable
+    }
+
+    private func commitNoteIntent(_ intent: [String: Any]) throws {
         let intentURL = directory.appendingPathComponent(".note-intent.json")
-        guard let intent = try readObject(intentURL, maxBytes: 32 * 1024 * 1024) else { return }
         guard let target = intent["namespace"] as? [String: Any],
               let environment = target["environment_id"] as? String,
               let content = intent["content"] as? String, content.utf8.count <= 16 * 1024,
@@ -378,7 +395,7 @@ actor PocketMemoryStore {
             let intent: [String: Any] = ["events": prepared, "ledger": ledger]
             try write(JSONSerialization.data(withJSONObject: intent, options: [.sortedKeys]),
                       to: directory.appendingPathComponent(".capture-intent.json"))
-            try recoverCaptureIntent()
+            try commitCaptureIntent(intent)
             return events.map(\.ingestKey)
         }
     }
@@ -388,8 +405,12 @@ actor PocketMemoryStore {
     }
 
     private func recoverImportIntent() throws {
+        try requireNoPendingIntent(".import-intent.json")
+    }
+
+    // Only the current write can commit its in-memory intent. Disk metadata is not authority.
+    private func commitImportIntent(_ intent: [String: Any]) throws {
         let intentURL = directory.appendingPathComponent(".import-intent.json")
-        guard let intent = try readObject(intentURL, maxBytes: 32 * 1024 * 1024) else { return }
         guard let records = intent["records"] as? [[String: Any]], records.count <= 500 else { throw PocketMemoryStoreError.invalidRecord }
         let captures = directory.appendingPathComponent("captures", isDirectory: true)
         try ensureRealDirectory(captures)
@@ -409,14 +430,18 @@ actor PocketMemoryStore {
         if let note = intent["note_intent"] as? [String: Any] {
             try write(JSONSerialization.data(withJSONObject: note, options: [.sortedKeys]),
                       to: directory.appendingPathComponent(".note-intent.json"))
-            try recoverNoteIntent()
+            try commitNoteIntent(note)
         }
         try fileManager.removeItem(at: intentURL)
     }
 
     private func recoverCaptureIntent() throws {
+        try requireNoPendingIntent(".capture-intent.json")
+    }
+
+    // Only the current write can commit its in-memory intent. Disk metadata is not authority.
+    private func commitCaptureIntent(_ intent: [String: Any]) throws {
         let intentURL = directory.appendingPathComponent(".capture-intent.json")
-        guard let intent = try readObject(intentURL) else { return }
         guard let items = intent["events"] as? [[String: Any]], (1...32).contains(items.count),
               let ledger = intent["ledger"] as? [String: Any], let sequence = ledger["sequence"] as? Int, sequence >= 0,
               let keys = ledger["accepted_keys"] as? [String: Int] else { throw PocketMemoryStoreError.invalidRecord }
@@ -456,6 +481,9 @@ actor PocketMemoryStore {
         sqlite3_busy_timeout(database, 5_000)
         guard sqlite3_exec(database, "BEGIN IMMEDIATE", nil, nil, nil) == SQLITE_OK else { throw PocketMemoryStoreError.unavailable }
         do {
+            for name in [".capture-intent.json", ".note-intent.json", ".import-intent.json"] {
+                try requireNoPendingIntent(name)
+            }
             let result = try body()
             guard sqlite3_exec(database, "COMMIT", nil, nil, nil) == SQLITE_OK else { throw PocketMemoryStoreError.unavailable }
             return result
@@ -664,7 +692,7 @@ actor PocketMemoryStore {
             let encoded = try JSONSerialization.data(withJSONObject: intent, options: [.sortedKeys])
             guard encoded.count <= 32 * 1024 * 1024 else { throw PocketMemoryStoreError.importInvalid }
             try write(encoded, to: directory.appendingPathComponent(".import-intent.json"))
-            try recoverImportIntent()
+            try commitImportIntent(intent)
             return PocketMemoryImportResponse(importedCount: records.count)
         }
     }

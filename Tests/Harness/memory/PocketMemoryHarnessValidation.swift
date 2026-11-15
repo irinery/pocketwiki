@@ -5,6 +5,18 @@ import Darwin
 @main
 struct PocketMemoryHarnessValidation {
     static func main() async throws {
+        if CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--assert-recovery-blocked" {
+            let root = URL(fileURLWithPath: CommandLine.arguments[2], isDirectory: true)
+            let scope = PocketMemoryNamespace(environmentID: "10000000-0000-4000-8000-000000000001",
+                projectID: "20000000-0000-4000-8000-000000000001", threadID: "30000000-0000-4000-8000-000000000001")
+            let store = try await PocketMemoryStore(directory: root).scopedStore(scope)
+            do {
+                try await store.recoverCapture()
+                fatalError("Recovery without principal/receipt authority was accepted")
+            } catch PocketMemoryStoreError.unavailable {}
+            print("blocked")
+            return
+        }
         if CommandLine.arguments.count == 3 && ["--export", "--import"].contains(CommandLine.arguments[1]) {
             let root = URL(fileURLWithPath: CommandLine.arguments[2], isDirectory: true)
             let scope = PocketMemoryNamespace(environmentID: "10000000-0000-4000-8000-000000000001",
@@ -67,7 +79,7 @@ struct PocketMemoryHarnessValidation {
                 aggregateID: scope.projectID, threadID: scope.threadID, scopes: ["context.read", "memory.write", "memory.personal.read"])
             let service = PocketMemoryHarnessService(directory: root, policy: { _, _, _, _ in true }, association: { _, _ in true })
             let current = try await service.noteGet(auth, namespace: scope)
-            guard current.content == "node recovered", current.revision == 2 else { fatalError("cross-runtime recovery failed") }
+            guard current.content == "node", current.revision == 1 else { fatalError("cross-runtime committed note failed") }
             _ = try await service.notePut(auth, namespace: scope, content: "swift", expectedRevision: current.revision)
             let recall = try await service.recallScoped(auth, namespace: scope, question: "postgres beta")
             let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
@@ -124,8 +136,17 @@ struct PocketMemoryHarnessValidation {
             "ingest_key": "pending", "prompt": "intent recovery unique", "sequence": pendingSequence,
             "provider_id": NSNull(), "model_id": NSNull()]], "ledger": ledger]
         try JSONSerialization.data(withJSONObject: pending).write(to: captureRoot.appendingPathComponent(".capture-intent.json"))
-        let recovered = try await restarted.recallScoped(authA, namespace: namespaceA, question: "intent recovery unique")
-        precondition(recovered.hits.contains { $0.sessionID == pendingID })
+        let pendingURL = captureRoot.appendingPathComponent(".capture-intent.json")
+        let pendingBytes = try Data(contentsOf: pendingURL)
+        do {
+            _ = try await restarted.recallScoped(authA, namespace: namespaceA, question: "intent recovery unique")
+            fatalError("Recovery without principal/receipt authority was accepted")
+        } catch PocketMemoryStoreError.unavailable {}
+        let preservedPendingBytes = try Data(contentsOf: pendingURL)
+        precondition(preservedPendingBytes == pendingBytes)
+        precondition(!FileManager.default.fileExists(atPath: captureRoot.appendingPathComponent("captures/session-\(pendingID).json").path))
+        // Test fixture cleanup only; production never discards the journal.
+        try FileManager.default.removeItem(at: pendingURL)
         let first = try await service.recallScoped(authA, namespace: namespaceA, question: "postgres project notes")
         let second = try await service.recallScoped(authA, namespace: namespaceA, question: "postgres project notes")
         precondition(first.hits.count == 1 && first.hits[0].trust == "historical")
