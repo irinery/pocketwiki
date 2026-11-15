@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, readdir, rename, writeFile, chmod, lstat, realpath } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rename, writeFile, chmod, lstat, realpath, rmdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
@@ -46,12 +46,32 @@ async function secureDirectory(root, parts = []) {
 
 const writeQueues = new Map();
 function serializeWrite(key, operation) {
-  const previous = writeQueues.get(key) || Promise.resolve();
-  const next = previous.catch(() => {}).then(operation);
-  const queued = next.catch(() => {}).finally(() => {
-    if (writeQueues.get(key) === queued) writeQueues.delete(key);
+  const root = key.replace(/:(note|capture)$/, '');
+  const previous = writeQueues.get(root) || Promise.resolve();
+  const next = previous.catch(() => {}).then(async () => {
+    const directory = await secureDirectory(root);
+    const lock = path.join(directory, '.harness-writer.lock');
+    const deadline = Date.now() + 5_000;
+    for (;;) {
+      try { await mkdir(lock, { mode:0o700 }); break; }
+      catch (cause) {
+        if (cause.code !== 'EEXIST') throw cause;
+        const info = await lstat(lock).catch((failure) => {
+          if (failure.code === 'ENOENT') return null;
+          throw failure;
+        });
+        if (info && (!info.isDirectory() || info.isSymbolicLink())) throw memoryError('ERR_SCOPE', 'Invalid memory lock');
+        if (Date.now() >= deadline) throw memoryError('ERR_UNAVAILABLE', 'Memory writer lock unavailable');
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+    }
+    try { return await operation(); }
+    finally { await rmdir(lock); }
   });
-  writeQueues.set(key, queued);
+  const queued = next.catch(() => {}).finally(() => {
+    if (writeQueues.get(root) === queued) writeQueues.delete(root);
+  });
+  writeQueues.set(root, queued);
   return next;
 }
 
@@ -120,8 +140,13 @@ export class PocketMemoryStore {
     return new PocketMemoryStore(memoryNamespacePath(this.root, namespace));
   }
 
-  async noteGetCAS() {
+  async noteGetCAS(namespace) {
     const directory = await secureDirectory(this.root);
+    if (namespace) {
+      const state = await readJSON(path.join(directory, '.memory-notes.json'), { sequence:0, notes:{}, events:[] });
+      const item = state.notes[JSON.stringify([namespace.environment_id, namespace.project_id || null, namespace.thread_id || null])];
+      return item ? { content:item.content, revision:item.revision } : { content:'', revision:0 };
+    }
     const statePath = path.join(directory, '.memory-note.json');
     const notePath = path.join(directory, 'MEMORY.md');
     const state = await readJSON(statePath, null);
@@ -133,21 +158,58 @@ export class PocketMemoryStore {
     return { content, revision: metadata.revision };
   }
 
-  notePutCAS(content, expectedRevision) {
+  notePutCAS(content, expectedRevision, namespace) {
     if (typeof content !== 'string' || Buffer.byteLength(content, 'utf8') > 16 * 1024 ||
         !Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
       return Promise.reject(memoryError('ERR_INVALID', 'Invalid memory note or revision'));
     }
     return serializeWrite(`${this.root}:note`, async () => {
-      const current = await this.noteGetCAS();
+      const current = await this.noteGetCAS(namespace);
       if (current.revision !== expectedRevision) {
         throw Object.assign(memoryError('ERR_CONFLICT', 'Memory note revision changed'), { revision:current.revision });
       }
       const next = { content, revision:current.revision + 1 };
+      if (namespace) {
+        const file = path.join(this.root, '.memory-notes.json');
+        const state = await readJSON(file, { sequence:0, notes:{}, events:[] });
+        const key = JSON.stringify([namespace.environment_id, namespace.project_id || null, namespace.thread_id || null]);
+        const value = { namespace:{ ...namespace, schema_version:2, note_revision:next.revision }, ...next };
+        state.notes[key] = value;
+        state.sequence += 1;
+        state.events.push({ event_id:randomUUID(), sequence:state.sequence,
+          entity_type:'MemoryNote', entity_key:key, change:'upsert', value });
+        const encoded = JSON.stringify(state);
+        if (Buffer.byteLength(encoded) > 16 * 1024 * 1024) throw memoryError('ERR_UNAVAILABLE', 'Memory note journal full');
+        await this.#writeAtomic(file, encoded);
+        return next;
+      }
       await this.#writeAtomic(path.join(this.root, '.memory-note.json'), JSON.stringify({ schema_version:2, ...next }));
       await this.#writeAtomic(path.join(this.root, 'MEMORY.md'), content);
       return next;
     });
+  }
+
+  notesProjection(namespace) {
+    return serializeWrite(`${this.root}:note`, async () => {
+      const state = await readJSON(path.join(this.root, '.memory-notes.json'), { sequence:0, notes:{}, events:[] });
+      const notes = Object.entries(state.notes).sort(([a], [b]) => a.localeCompare(b))
+        .map(([, value]) => value)
+        .filter((value) => !namespace.thread_id || value.namespace.thread_id === namespace.thread_id);
+      return { notes, sequence:state.sequence };
+    });
+  }
+
+  async notesEvents(afterSequence) {
+    const state = await readJSON(path.join(this.root, '.memory-notes.json'), { sequence:0, notes:{}, events:[] });
+    return state.events.filter((event) => event.sequence > afterSequence);
+  }
+
+  async notesRetentionAvailable(afterSequence) {
+    const state = await readJSON(path.join(this.root, '.memory-notes.json'), { sequence:0, notes:{}, events:[] });
+    if (!Number.isSafeInteger(state.sequence) || state.sequence < afterSequence || !Array.isArray(state.events)) return false;
+    const later = state.events.filter((event) => event.sequence > afterSequence);
+    return later.length === state.sequence - afterSequence &&
+      later.every((event, index) => event.sequence === afterSequence + index + 1);
   }
 
   captureScoped(events) {

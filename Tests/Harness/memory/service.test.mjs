@@ -146,33 +146,40 @@ test('01-04 rejeita traversal/symlink e mantém memória hostil como dado histó
   assert.ok(safeRoot);
 });
 
-test('01-05 pagina snapshots imutáveis em páginas enquanto uma mutação ocorre', async (t) => {
-  const { memory } = await fixture(t);
-  for (let index = 0; index < 7; index += 1) {
-    await memory.captureScoped(auth(), { namespace:namespace(), events:[event({
-      sessionId: `40000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
-      key: `page-${index}`, prompt: `snapshot row ${index} postgres`
-    })] });
+async function populateNotes(memory, count) {
+  for (let index = 0; index < count; index++) {
+    const thread = `30000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`;
+    await memory.notePut(auth(environmentA, { thread_id:thread }), {
+      namespace:namespace(projectA, environmentA, thread), content:`nota ${index}`, expected_revision:0
+    });
   }
-  const first = await memory.snapshot(auth(), { namespace: namespace(), page_size: 3 });
-  await memory.captureScoped(auth(), { namespace:namespace(), events:[event({
-    sessionId: '40000000-0000-4000-8000-000000000099', key: 'late-event', prompt: 'later mutation postgres'
-  })] });
-  const second = await memory.snapshot(auth(), {
-    namespace: namespace(), page_size: 3, cursor: first.next_cursor
+}
+
+function projectNamespace() {
+  const { thread_id, ...project } = namespace();
+  return project;
+}
+
+test('01-05 pagina MemoryNote de snapshot imutável durante mutação e aplica evento posterior uma vez', async (t) => {
+  const { memory } = await fixture(t);
+  await populateNotes(memory, 7);
+  const scope = projectNamespace();
+  const first = await memory.snapshot(auth(environmentA, { thread_id:undefined }), { namespace:scope, page_size:3 });
+  assert.ok(first.next_cursor);
+  const thread = '30000000-0000-4000-8000-000000000099';
+  await memory.notePut(auth(environmentA, { thread_id:thread }), {
+    namespace:namespace(projectA, environmentA, thread), content:'nota posterior', expected_revision:0
   });
-  const third = await memory.snapshot(auth(), {
-    namespace: namespace(), page_size: 3, cursor: second.next_cursor
-  });
+  const second = await memory.snapshot(auth(environmentA, { thread_id:undefined }), { namespace:scope, page_size:3, cursor:first.next_cursor });
+  const third = await memory.snapshot(auth(environmentA, { thread_id:undefined }), { namespace:scope, page_size:3, cursor:second.next_cursor });
   assert.equal(first.snapshot_id, second.snapshot_id);
-  assert.equal(first.as_of_seq, second.as_of_seq);
-  assert.equal(second.snapshot_id, third.snapshot_id);
-  const ids = [...first.items, ...second.items, ...third.items].map((item) => item.session_id);
+  assert.equal(first.as_of_seq, third.as_of_seq);
+  const ids = [...first.notes, ...second.notes, ...third.notes].map((item) => item.namespace.thread_id);
   assert.equal(new Set(ids).size, 7);
-  assert.equal(ids.includes('40000000-0000-4000-8000-000000000099'), false);
-  const later = await memory.eventsSince(auth(), { namespace: namespace(), after_seq: first.as_of_seq });
+  assert.equal(ids.includes(thread), false);
+  const later = await memory.eventsSince(auth(environmentA, { thread_id:undefined }), { namespace:scope, after_seq:first.as_of_seq });
   assert.equal(later.length, 1);
-  assert.equal(later[0].ingest_key, 'late-event');
+  assert.equal(later[0].value.namespace.thread_id, thread);
 });
 
 test('01-06 export/import é portável, revisável e remove secrets e paths absolutos', async (t) => {
@@ -207,16 +214,14 @@ test('R1 cursor expirado retorna ERR_CURSOR_EXPIRED e page_size permanece congel
   t.after(() => rm(root, { recursive:true, force:true }));
   let now = 1_000;
   const memory = new MemoryHarnessService({ root, now:() => now });
-  for (let index = 0; index < 4; index++) {
-    await memory.captureScoped(auth(), { namespace:namespace(), events:[event({
-      sessionId:`40000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`, key:`key-${index}`
-    })] });
-  }
-  const first = await memory.snapshot(auth(), { namespace:namespace(), page_size:1 });
-  await assert.rejects(memory.snapshot(auth(), { namespace:namespace(), page_size:2, cursor:first.next_cursor }),
+  await populateNotes(memory, 4);
+  const scope = projectNamespace();
+  const first = await memory.snapshot(auth(environmentA, { thread_id:undefined }), { namespace:scope, page_size:1 });
+  assert.ok(first.next_cursor);
+  await assert.rejects(memory.snapshot(auth(environmentA, { thread_id:undefined }), { namespace:scope, page_size:2, cursor:first.next_cursor }),
     (error) => error.code === 'ERR_INVALID');
   now += 600_000;
-  await assert.rejects(memory.snapshot(auth(), { namespace:namespace(), page_size:1, cursor:first.next_cursor }),
+  await assert.rejects(memory.snapshot(auth(environmentA, { thread_id:undefined }), { namespace:scope, page_size:1, cursor:first.next_cursor }),
     (error) => error.code === 'ERR_CURSOR_EXPIRED');
 });
 
@@ -264,15 +269,13 @@ test('namespace de mutação requer versão e revisão e rejeita campos extras',
 
 test('página pode ser relida após perda de resposta sem consumir cursor', async (t) => {
   const { memory } = await fixture(t);
-  for (let index = 0; index < 3; index++) {
-    await memory.captureScoped(auth(), { namespace:namespace(), events:[event({
-      sessionId:`40000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`, key:`retry-${index}`
-    })] });
-  }
-  const first = await memory.snapshot(auth(), { namespace:namespace(), page_size:1 });
-  const second = await memory.snapshot(auth(), { namespace:namespace(), page_size:1, cursor:first.next_cursor });
-  const retry = await memory.snapshot(auth(), { namespace:namespace(), page_size:1, cursor:first.next_cursor });
-  assert.deepEqual(retry.items, second.items);
+  await populateNotes(memory, 3);
+  const scope = projectNamespace();
+  const first = await memory.snapshot(auth(environmentA, { thread_id:undefined }), { namespace:scope, page_size:1 });
+  assert.ok(first.next_cursor);
+  const second = await memory.snapshot(auth(environmentA, { thread_id:undefined }), { namespace:scope, page_size:1, cursor:first.next_cursor });
+  const retry = await memory.snapshot(auth(environmentA, { thread_id:undefined }), { namespace:scope, page_size:1, cursor:first.next_cursor });
+  assert.deepEqual(retry.notes, second.notes);
   assert.equal(retry.as_of_seq, second.as_of_seq);
 });
 
@@ -282,4 +285,58 @@ test('comandos rejeitam campos desconhecidos antes de acessar o store', async (t
     (error) => error.code === 'ERR_INVALID');
   await assert.rejects(memory.notePut(auth(), { namespace:namespace(), content:'x', expected_revision:0, extra:true }),
     (error) => error.code === 'ERR_INVALID');
+});
+
+test('CAS da nota serializa escritores em processos independentes', async (t) => {
+  const { fork } = await import('node:child_process');
+  const { root } = await fixture(t);
+  const workers = ['a', 'b'].map((value) => fork(new URL('./cas-worker.mjs', import.meta.url), [root, value], { stdio:['ignore', 'ignore', 'inherit', 'ipc'] }));
+  t.after(() => workers.forEach((worker) => worker.kill()));
+  const next = (worker) => new Promise((resolve, reject) => { worker.once('message', resolve); worker.once('error', reject); });
+  await Promise.all(workers.map(next));
+  const outcomes = Promise.all(workers.map(next));
+  workers.forEach((worker) => worker.send('go'));
+  assert.deepEqual((await outcomes).sort(), ['ERR_CONFLICT', 'ok']);
+});
+
+test('snapshot projeta MemoryNote real e exige permissão de nota pessoal', async (t) => {
+  const { memory } = await fixture(t);
+  await memory.notePut(auth(), { namespace:namespace(), content:'anotação', expected_revision:0 });
+  const snapshot = await memory.snapshot(auth(), { namespace:namespace() });
+  assert.deepEqual(snapshot.notes, [{ namespace:{ ...namespace(), note_revision:1 }, content:'anotação', revision:1 }]);
+  await assert.rejects(memory.snapshot(auth(environmentA, { scopes:['context.read'] }), { namespace:namespace() }),
+    (error) => error.code === 'ERR_SCOPE');
+});
+
+test('cursors gerados por leituras paralelas permanecem válidos', async (t) => {
+  const { memory } = await fixture(t);
+  await populateNotes(memory, 4);
+  const scope = projectNamespace();
+  const first = await memory.snapshot(auth(environmentA, { thread_id:undefined }), { namespace:scope, page_size:1 });
+  assert.ok(first.next_cursor);
+  const [a, b] = await Promise.all([1, 2].map(() => memory.snapshot(auth(environmentA, { thread_id:undefined }), {
+    namespace:scope, page_size:1, cursor:first.next_cursor
+  })));
+  assert.ok(a.next_cursor && b.next_cursor);
+  const pages = await Promise.all([a, b].map(({ next_cursor }) => memory.snapshot(auth(environmentA, { thread_id:undefined }), {
+    namespace:scope, page_size:1, cursor:next_cursor
+  })));
+  assert.deepEqual(pages[0].notes, pages[1].notes);
+});
+
+test('perda da retenção de eventos invalida cursor de snapshot', async (t) => {
+  const { memory, root } = await fixture(t);
+  await populateNotes(memory, 3);
+  const scope = projectNamespace();
+  const first = await memory.snapshot(auth(environmentA, { thread_id:undefined }), { namespace:scope, page_size:1 });
+  assert.ok(first.next_cursor);
+  await rm(path.join(root, 'v2', environmentA, 'projects', projectA, '.memory-notes.json'));
+  await assert.rejects(memory.snapshot(auth(environmentA, { thread_id:undefined }), { namespace:scope, page_size:1, cursor:first.next_cursor }),
+    (error) => error.code === 'ERR_CURSOR_EXPIRED');
+});
+
+test('credencial vinculada a thread não autoriza snapshot de projeto inteiro', async (t) => {
+  const { memory } = await fixture(t);
+  await assert.rejects(memory.snapshot(auth(), { namespace:projectNamespace() }),
+    (error) => error.code === 'ERR_SCOPE');
 });
