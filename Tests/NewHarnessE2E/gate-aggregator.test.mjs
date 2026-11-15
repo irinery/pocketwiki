@@ -172,8 +172,10 @@ test('E1 requires all six cumulative pairs and validates replay artifact binding
   for (const [index, surface] of [[1, 'web'], [2, 'macos']]) {
     const nonce = 'a'.repeat(32), state = seq => ({ revision: 1, lastSeq: seq, receipts: {}, effects: {} });
     const digest = data => replayProofSHA256(Buffer.from(canonicalJSON(data)));
-    const frame = (seq, after) => ({ seq, before_cursor: 10, after_cursor: after, before_state: state(10), after_state: state(after), before: digest(state(10)), after: digest(state(after)) });
-    const proof = { version: 1, level: 'integration', surface, nonce, boundary: 10, frames: [frame(9, 10), frame(10, 10), frame(11, 11)] };
+    const envelope = seq => ({ protocol_major: 1, event_id: '00000000-0000-4000-8000-000000000001', environment_id: '00000000-0000-4000-8000-000000000002', thread_id: '00000000-0000-4000-8000-000000000002', seq, committed_at_ms: 1, module: 'runtime', delivery: 'inline', payload: { entity_type: 'EffectRecord', entity_key: JSON.stringify('00000000-0000-4000-8000-000000000001'), change: 'upsert', value: { effect_id: '00000000-0000-4000-8000-000000000001', command_id: '00000000-0000-4000-8000-000000000002', state: 'succeeded' } } });
+    const frame = (seq, before, after) => ({ seq, snapshot_id: '00000000-0000-4000-8000-000000000003', before_cursor: before, after_cursor: after, before_state: state(before), after_state: state(after), before: digest(state(before)), after: digest(state(after)), event_id: '00000000-0000-4000-8000-000000000001', event: envelope(seq), event_sha256: digest(envelope(seq)) });
+    const snapshot = { thread_id: '00000000-0000-4000-8000-000000000002', envelope: { module: 'runtime', data: { snapshot_id: '00000000-0000-4000-8000-000000000003', revision: 1, as_of_seq: 9, receipts: [], effects: [] } } };
+    const proof = { version: 1, level: 'integration', surface, nonce, boundary: 9, snapshot, snapshot_sha256: digest(snapshot), frames: [frame(8, 9, 9), frame(9, 9, 9), frame(10, 9, 10), frame(10, 10, 10)] };
     Object.assign(input[index].cases[1], { replay_proof: proof, replay_nonce: nonce, replay_proof_sha256: replayProofSHA256(Buffer.from(JSON.stringify(proof))), replay_proof_path: surface + '/proof.json', replay_host_path: surface + '/result.json', replay_identity_path: surface + '/identity.json' });
     input[index].cases[1].artifact_paths.push(surface + '/proof.json', surface + '/result.json', surface + '/identity.json');
   }
@@ -231,8 +233,8 @@ test('E1 requires all six cumulative pairs and validates replay artifact binding
   await writeFile(path.join(dir, 'web/proof.json'), '{}');
   await assert.rejects(() => aggregateReportFiles('E1', paths, identity), /replay proof artifact mismatch/);
 
-  const badBoundary = structuredClone(input); badBoundary[1].cases[1].replay_proof.boundary = 9;
-  assert.throws(() => aggregateReports('E1', badBoundary, matrix), /invalid integrated replay/);
+  const badBoundary = structuredClone(input); badBoundary[1].cases[1].replay_proof.boundary = 8;
+  assert.throws(() => aggregateReports('E1', badBoundary, matrix), /invalid (integrated replay|UI snapshot)/);
   const badLevel = structuredClone(input); badLevel[1].cases[1].replay_proof.level = 'unit';
   assert.throws(() => aggregateReports('E1', badLevel, matrix), /invalid integrated replay/);
   const missing = structuredClone(input); missing[2].cases.pop();
