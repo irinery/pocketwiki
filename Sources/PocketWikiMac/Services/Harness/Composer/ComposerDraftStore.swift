@@ -145,38 +145,33 @@ actor ComposerDraftStore {
         try identity.validate()
         try draft.validate(for: identity)
         guard draft.revision == expectedRevision else { throw ComposerStoreError.revisionConflict }
-        pruneExpired(nowMS: nowMS)
+        var candidate = stash
+        candidate.drafts.removeAll { $0.expiresAtMS <= nowMS }
         let key = identity.storageKey
-        let index = stash.drafts.firstIndex { $0.identityKey == key && $0.draft.draftID == draft.draftID }
-        let currentRevision = index.map { stash.drafts[$0].draft.revision } ?? 0
+        let index = candidate.drafts.firstIndex { $0.identityKey == key && $0.draft.draftID == draft.draftID }
+        let currentRevision = index.map { candidate.drafts[$0].draft.revision } ?? 0
         guard currentRevision == expectedRevision else { throw ComposerStoreError.revisionConflict }
 
         var saved = draft
         saved.revision = expectedRevision + 1
         let record = StoredDraft(identityKey: key, draft: saved, expiresAtMS: nowMS + 86_400_000)
-        if let index { stash.drafts[index] = record } else { stash.drafts.append(record) }
-        try persist()
+        if let index { candidate.drafts[index] = record } else { candidate.drafts.append(record) }
+        try persist(candidate)
+        stash = candidate
         return saved.revision
     }
 
     func load(draftID: String, for identity: ComposerIdentity, nowMS: Int64) throws -> ComposerDraft {
         try identity.validate()
-        pruneExpired(nowMS: nowMS)
-        guard let record = stash.drafts.first(where: { $0.identityKey == identity.storageKey && $0.draft.draftID == draftID }) else {
+        guard let record = stash.drafts.first(where: { $0.identityKey == identity.storageKey && $0.draft.draftID == draftID && $0.expiresAtMS > nowMS }) else {
             throw ComposerStoreError.notFound
         }
         return record.draft
     }
 
-    private func pruneExpired(nowMS: Int64) {
-        let previousCount = stash.drafts.count
-        stash.drafts.removeAll { $0.expiresAtMS <= nowMS }
-        if stash.drafts.count != previousCount { try? persist() }
-    }
-
-    private func persist() throws {
+    private func persist(_ candidate: Stash) throws {
         do {
-            let data = try encoder.encode(stash)
+            let data = try encoder.encode(candidate)
             try data.write(to: fileURL, options: .atomic)
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
         } catch {

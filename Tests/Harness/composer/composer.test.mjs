@@ -377,8 +377,10 @@ test('host E1 autentica bearer e policy autoriza thread antes da mutação', asy
   const { service } = await makeHarness(t);
   const gateway = new ComposerGateway({ service, credentialHost: host, policy });
   const input = { draft_id: ids.draft, thread_id: ids.thread, text: 'autenticado', references: [], revision: 0 };
+  const local = { bearer, thread_id: ids.thread, operation: 'composer.draft.save', input: { draft: input } };
+  assert.equal((await gateway.callLocal(local)).revision, 1);
   const command = { protocol_major: 1, command_id: ids.command, environment_id: ids.environment, expected_revision: 0, operation: 'composer.draft.save', input: { draft: input } };
-  assert.equal((await gateway.execute({ bearer, thread_id: ids.thread, command })).result.revision, 1);
+  await assert.rejects(gateway.execute({ bearer, thread_id: ids.thread, command }), { code: 'ERR_INVALID' });
   await assert.rejects(gateway.execute({ bearer: 'inválido', thread_id: ids.thread, command }), { code: 'ERR_FORBIDDEN' });
   await assert.rejects(gateway.execute({ bearer, thread_id: ids.otherPrincipal, command }), { code: 'ERR_FORBIDDEN' });
   const deniedGateway = new ComposerGateway({ service, credentialHost: host, policy: new ComposerPolicy([]) });
@@ -484,14 +486,15 @@ test('troca concorrente de diretório por symlink nunca lê bytes externos', asy
 
 test('handler idempotente preserva resultado após restart e rejeita hash divergente', async (t) => {
   const { service, now, auth: identity } = await makeHarness(t);
-  const command = { protocol_major: 1, command_id: ids.command, environment_id: ids.environment, expected_revision: 0, operation: 'composer.draft.save', input: { draft: { draft_id: ids.draft, thread_id: ids.thread, text: 'uma vez', references: [], revision: 0 } } };
+  await saveDraft(service, identity, { text: 'uma vez' });
+  const command = { protocol_major: 1, command_id: ids.command, environment_id: ids.environment, expected_revision: 0, operation: 'composer.prepare', input: { thread_id: ids.thread, draft_id: ids.draft, text: 'uma vez', references: [], context_budget_bytes: 1024 } };
   const first = await service.executeCommand(identity, command);
   assert.equal(first.duplicate, false);
   const restarted = new ComposerService({ dataDir: service.dataDir, now: () => now.value });
   const duplicate = await restarted.executeCommand(identity, command);
   assert.deepEqual(duplicate, { result: first.result, duplicate: true });
   const changed = structuredClone(command);
-  changed.input.draft.text = 'outro';
+  changed.input.text = 'outro';
   await rejectsCode(restarted.executeCommand(identity, changed), 'ERR_CONFLICT');
   assert.equal(restarted.getDraft(identity, ids.draft).revision, 1);
 });
@@ -499,6 +502,8 @@ test('handler idempotente preserva resultado após restart e rejeita hash diverg
 test('comando duplicado concorrente em processos retorna mesmo resultado uma vez', async (t) => {
   const { spawn } = await import('node:child_process');
   const f = fixture(t);
+  const realClockService = new ComposerService({ dataDir: f.service.dataDir });
+  await saveDraft(realClockService, auth(), { text: 'uma vez' });
   const worker = () => new Promise((resolve, reject) => {
     const child = spawn(process.execPath, ['Tests/Harness/composer/command-worker.mjs', f.service.dataDir], { stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = ''; let stderr = '';

@@ -46,9 +46,15 @@ export class ComposerGateway {
     const identity = this.#authenticate(bearer, thread_id);
     return this.#service.executeCommand(identity, command);
   }
-  async resolve({ bearer, thread_id, input }) {
+  async callLocal({ bearer, thread_id, operation, input }) {
     const identity = this.#authenticate(bearer, thread_id);
-    if (!validateOperationInput('composer.resolve', input).valid) fail('ERR_INVALID', 'Entrada fora do contrato.');
-    return this.#service.resolve({ ...identity, delegated_identity: identity }, input);
+    const operations = {
+      'composer.stage': () => this.#service.stage(identity, input),
+      'composer.draft.save': () => this.#service.saveDraft(identity, input.draft),
+      'composer.pin': () => this.#service.pin(identity, input),
+      'composer.resolve': () => this.#service.resolve({ ...identity, delegated_identity: identity }, input)
+    };
+    if (!Object.hasOwn(operations, operation) || !validateOperationInput(operation, input).valid) fail('ERR_INVALID', 'Operação local inválida.');
+    return operations[operation]();
   }
 }

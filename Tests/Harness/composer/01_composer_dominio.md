@@ -4,7 +4,7 @@ Base PocketWiki `d98f09bc4ae667c96c093c9f0b09134326ebb435`; PocketKernel `582e21
 
 ## Autoridade e operações
 
-PocketWiki é autoridade do contexto. Identidade, environment, thread, scopes e audience vêm de credencial verificada, e não de campos escolhidos pelo cliente. Em mutation, host aplica `HarnessCommand` major 1, `command_id`, CAS por `expected_revision`, receipt e idempotência do Kernel. Leituras não criam receipt. Conteúdo anexado é sempre `untrusted_content`; pergunta e segmentos são distintos.
+PocketWiki é autoridade do contexto. Identidade, environment, thread, scopes e audience vêm de credencial verificada, e não de campos escolhidos pelo cliente. Para `composer.prepare`, classificado como mutation no registry congelado, host aplica `HarnessCommand` major 1, `command_id`, CAS por `expected_revision`, receipt e idempotência do Kernel. As demais operações são portas locais autenticadas, conforme registry; não encaminhá-las no dispatcher de commands. Leituras não criam receipt. Conteúdo anexado é sempre `untrusted_content`; pergunta e segmentos são distintos.
 
 | Operação | Entrada fechada | Sucesso |
 | --- | --- | --- |
