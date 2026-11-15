@@ -16,15 +16,33 @@ const publicState = state => ({revision:state.revision, seq:state.seq, bindings:
 export class ProviderProjection {
   #current = {revision:0, seq:0, maps:maps(), seen:new Map(), sequences:new Map()};
   #environment;
+  #scope = null;
+  // Scope is supplied by the authenticated host, never derived from provider data.
+  setScope(scope) {
+    const valid = scope && typeof scope.principal === 'string' && scope.principal.length > 0 &&
+      typeof scope.generation === 'string' && scope.generation.length > 0;
+    const next = valid ? {principal:scope.principal, generation:scope.generation} : null;
+    if (!this.#scope || !next || this.#scope.principal !== next.principal || this.#scope.generation !== next.generation) {
+      this.#current = {revision:0, seq:0, maps:maps(), seen:new Map(), sequences:new Map()};
+      this.#loading = null;
+    }
+    this.#scope = next;
+  }
+  #checkScope(scope) {
+    if (!this.#scope || !scope || scope.principal !== this.#scope.principal || scope.generation !== this.#scope.generation)
+      throw new Error('inactive or stale provider scope');
+  }
   constructor(environmentId) {if(!UUID.test(environmentId))throw new TypeError('invalid environment');this.#environment=environmentId;}
   #loading = null;
-  get state() { return publicState(this.#current); }
-  begin(page) {
+  get state() { if (!this.#scope) throw new Error('inactive provider scope'); return publicState(this.#current); }
+  begin(page, scope) {
+    this.#checkScope(scope);
     if (this.#loading) throw new Error('snapshot already in progress');
     this.#loading={id:page?.snapshot_id, revision:page?.revision, seq:page?.as_of_seq, maps:maps(), events:[], eventBytes:0, next:true, expectedCursor:undefined, cursors:new Set(), seen:new Map(), sequences:new Map()};
-    try { this.append(page); } catch (error) { this.#loading=null; throw error; }
+    try { this.append(page, undefined, scope); } catch (error) { this.#loading=null; throw error; }
   }
-  append(page, requestedCursor) {
+  append(page, requestedCursor, scope) {
+    this.#checkScope(scope);
     const pending=this.#loading;
     try {
       if (!pending || !pending.next || requestedCursor!==pending.expectedCursor || !page || !validateAgainst('providersFeatureSnapshot',page).valid || !UUID.test(page.snapshot_id) || page.snapshot_id!==pending.id || page.revision!==pending.revision || page.as_of_seq!==pending.seq || !integer(page.revision) || !integer(page.as_of_seq) || (page.revision<this.#current.revision || page.as_of_seq<this.#current.seq) || !Array.isArray(page.bindings) || !Array.isArray(page.capabilities) || page.bindings.length+page.capabilities.length>100 || size(page)>LIMIT || (page.next_cursor!==undefined && (typeof page.next_cursor!=='string'||!page.next_cursor||new TextEncoder().encode(page.next_cursor).length>512))) throw new Error('invalid snapshot page');
@@ -42,10 +60,11 @@ export class ProviderProjection {
       }
     } catch(error) {this.#loading=null;throw error;}
   }
-  buffer(event, resolvedPayload) {
+  buffer(event, resolvedPayload, scope) {
+    this.#checkScope(scope);
     try {
       event=resolveEvent(event,resolvedPayload);
-      if (!this.#loading) return this.apply(event);
+      if (!this.#loading) return this.apply(event, undefined, scope);
       validateEvent(event,this.#environment);const pending=this.#loading;if(event.seq<=pending.seq)return;
       const digest=canonical(event), previous=pending.seen.get(event.event_id), seqID=pending.sequences.get(event.seq);
       if(previous){if(previous.seq!==event.seq||previous.digest!==digest)throw new Error('conflicting event id');return;}
@@ -54,7 +73,7 @@ export class ProviderProjection {
       pending.seen.set(event.event_id,{seq:event.seq,digest});pending.sequences.set(event.seq,event.event_id);pending.events.push(clone(event));
     } catch(error) {this.#loading=null;throw error;}
   }
-  apply(event,resolvedPayload) {event=resolveEvent(event,resolvedPayload);if(this.#loading)return this.buffer(event);applyTo(this.#current,event,this.#environment);}
+  apply(event,resolvedPayload,scope) {this.#checkScope(scope);event=resolveEvent(event,resolvedPayload);if(this.#loading)return this.buffer(event,undefined,scope);applyTo(this.#current,event,this.#environment);}
 }
 function validateEvent(event,environment) {
   const p=event?.payload;if(!validateAgainst('streamEnvelope',event).valid || !validateAgainst('providersModuleEvent',p).valid || event.environment_id!==environment || Object.hasOwn(event,'thread_id') || event.module!=='providers' || event.delivery!=='inline' || !UUID.test(event?.event_id)||!integer(event?.seq)||!p||!['ProviderBinding','ProviderCapabilities'].includes(p.entity_type)||!['upsert','delete'].includes(p.change)||typeof p.entity_key!=='string')throw new Error('invalid event');

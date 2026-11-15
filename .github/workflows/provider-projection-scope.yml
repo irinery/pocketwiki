@@ -1,0 +1,17 @@
+name: Provider projection scope
+on:
+  push:
+    branches: [codex/provider-projection-scope]
+  workflow_dispatch:
+jobs:
+  projection:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test Tests/Harness/providers/projection.test.mjs
+      - run: |
+          swiftc -parse-as-library Sources/PocketWikiMac/Models/Harness/HarnessV1.swift Sources/PocketWikiMac/Models/Harness/HarnessOperationRegistry.swift Sources/PocketWikiMac/Services/Harness/Providers/ProviderProjection.swift Tests/Harness/providers/ProviderProjectionRunner.swift -o /tmp/provider-projection-test
+          /tmp/provider-projection-test src/harness/contracts/harness-v1.schema.json Tests/Harness/providers/corpus.json

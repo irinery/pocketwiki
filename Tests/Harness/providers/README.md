@@ -14,3 +14,5 @@ swiftc -parse-as-library \
 ```
 
 O integrador deve obter payload_ref na rota autenticada antes de fornecê-lo ao projetor, e conectar snapshot/stream de environment ao ledger compartilhado. As implementações não conectam UI nem shell. Ainda faltam ampliar o corpus de paridade JS/Swift e executar 01-05 com processos reais, store e eventos do runtime integrado.
+
+O host autenticado deve chamar `setScope` com principal e geração de autorização antes de usar a projeção e novamente em toda troca ou revogação (nil/null para desativar). Todas as operações de escrita e `finish` exigem o mesmo contexto; callbacks antigos são rejeitados. A API antiga sem contexto permanece inativa. O contexto é fornecido pelo host: isso não implementa autenticação nem valida sua origem. Valores já copiados por consumidores precisam ser descartados pelo próprio integrador.
