@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+import SQLite3
 
 struct PocketMemoryIncomingEvent: Codable, Sendable {
     let event: String
@@ -275,30 +276,106 @@ actor PocketMemoryStore {
     }
 
     func captureScoped(_ events: [PocketMemoryIncomingEvent]) throws -> [String] {
-        try withHarnessLock { try capture(events) }
+        try withHarnessLock {
+            try recoverCaptureIntent()
+            guard (1...32).contains(events.count) else { throw PocketMemoryStoreError.invalidInput }
+            let ledgerURL = directory.appendingPathComponent(".memory-receipts.json")
+            var ledger = try readObject(ledgerURL) ?? ["sequence": 0, "accepted_keys": [String: Int]()]
+            var sequence = ledger["sequence"] as? Int ?? 0
+            var keys = ledger["accepted_keys"] as? [String: Int] ?? [:]
+            var prepared: [[String: Any]] = []
+            for event in events {
+                guard let id = UUID(uuidString: event.sessionID)?.uuidString.lowercased(), id == event.sessionID,
+                      Self.eventNames.contains(event.event),
+                      event.ingestKey.range(of: #"^[A-Za-z0-9_-]{1,64}$"#, options: .regularExpression) != nil,
+                      (event.prompt?.unicodeScalars.count ?? 0) <= 8_000, (event.message?.unicodeScalars.count ?? 0) <= 8_000,
+                      (event.providerID?.unicodeScalars.count ?? 0) <= 120, (event.modelID?.unicodeScalars.count ?? 0) <= 120,
+                      event.event == "user-prompt-submit" || event.prompt == nil,
+                      event.event == "assistant-response" || event.message == nil else {
+                    throw PocketMemoryStoreError.invalidInput
+                }
+                if event.event == "user-prompt-submit" && (event.prompt ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { throw PocketMemoryStoreError.invalidInput }
+                if event.event == "assistant-response" && (event.message ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { throw PocketMemoryStoreError.invalidInput }
+                let key = "\(id):\(event.ingestKey)"
+                if keys[key] == nil { sequence += 1; keys[key] = sequence }
+                var item: [String: Any] = ["event": event.event, "session_id": id, "ingest_key": event.ingestKey,
+                    "sequence": keys[key]!, "provider_id": event.providerID as Any? ?? NSNull(), "model_id": event.modelID as Any? ?? NSNull()]
+                if let prompt = event.prompt { item["prompt"] = prompt }
+                if let message = event.message { item["message"] = message }
+                prepared.append(item)
+            }
+            ledger["sequence"] = sequence; ledger["accepted_keys"] = keys
+            let intent: [String: Any] = ["events": prepared, "ledger": ledger]
+            try write(JSONSerialization.data(withJSONObject: intent, options: [.sortedKeys]),
+                      to: directory.appendingPathComponent(".capture-intent.json"))
+            try recoverCaptureIntent()
+            return events.map(\.ingestKey)
+        }
+    }
+
+    func recoverCapture() throws {
+        try withHarnessLock { try recoverCaptureIntent() }
+    }
+
+    private func recoverCaptureIntent() throws {
+        let intentURL = directory.appendingPathComponent(".capture-intent.json")
+        guard let intent = try readObject(intentURL) else { return }
+        guard let items = intent["events"] as? [[String: Any]], (1...32).contains(items.count),
+              let ledger = intent["ledger"] as? [String: Any], let sequence = ledger["sequence"] as? Int, sequence >= 0,
+              let keys = ledger["accepted_keys"] as? [String: Int] else { throw PocketMemoryStoreError.invalidRecord }
+        var events: [PocketMemoryIncomingEvent] = []
+        for item in items {
+            guard let id = item["session_id"] as? String, let key = item["ingest_key"] as? String,
+                  let itemSequence = item["sequence"] as? Int, itemSequence > 0, itemSequence <= sequence,
+                  keys["\(id):\(key)"] == itemSequence else { throw PocketMemoryStoreError.invalidRecord }
+            let data = try JSONSerialization.data(withJSONObject: item, options: [.sortedKeys])
+            events.append(try JSONDecoder().decode(PocketMemoryIncomingEvent.self, from: data))
+        }
+        _ = try capture(events)
+        try write(JSONSerialization.data(withJSONObject: ledger, options: [.sortedKeys]),
+                  to: directory.appendingPathComponent(".memory-receipts.json"))
+        try fileManager.removeItem(at: intentURL)
     }
 
     private func withHarnessLock<T>(_ body: () throws -> T) throws -> T {
         try ensureRealDirectory(directory)
-        let lock = directory.appendingPathComponent(".harness-writer.lock", isDirectory: true)
-        let deadline = Date().addingTimeInterval(5)
-        while true {
-            do {
-                try fileManager.createDirectory(at: lock, withIntermediateDirectories: false,
-                                                attributes: [.posixPermissions: 0o700])
-                break
-            } catch {
-                if isSymbolicLink(lock) { throw PocketMemoryStoreError.scopeDenied }
-                guard fileManager.fileExists(atPath: lock.path) else { throw error }
-                if Date() >= deadline { throw PocketMemoryStoreError.unavailable }
-                Thread.sleep(forTimeInterval: 0.01)
-            }
+        let file = directory.appendingPathComponent(".harness-writer.sqlite3")
+        guard !isSymbolicLink(file) else { throw PocketMemoryStoreError.scopeDenied }
+        if !fileManager.fileExists(atPath: file.path) {
+            do { try Data().write(to: file, options: .withoutOverwriting) }
+            catch { if !fileManager.fileExists(atPath: file.path) { throw error } }
         }
-        defer { try? fileManager.removeItem(at: lock) }
-        return try body()
+        guard !isSymbolicLink(file),
+              try fileManager.attributesOfItem(atPath: file.path)[.type] as? FileAttributeType == .typeRegular else {
+            throw PocketMemoryStoreError.scopeDenied
+        }
+        try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        var database: OpaquePointer?
+        guard sqlite3_open_v2(file.path, &database, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK, let database else {
+            if let database { sqlite3_close(database) }
+            throw PocketMemoryStoreError.unavailable
+        }
+        defer { sqlite3_close(database) }
+        sqlite3_busy_timeout(database, 5_000)
+        guard sqlite3_exec(database, "BEGIN IMMEDIATE", nil, nil, nil) == SQLITE_OK else { throw PocketMemoryStoreError.unavailable }
+        do {
+            let result = try body()
+            guard sqlite3_exec(database, "COMMIT", nil, nil, nil) == SQLITE_OK else { throw PocketMemoryStoreError.unavailable }
+            return result
+        } catch {
+            sqlite3_exec(database, "ROLLBACK", nil, nil, nil)
+            throw error
+        }
     }
 
     func mapLegacySession(_ sessionID: String, sourceRoot: URL) throws -> Bool {
+        try withHarnessLock {
+            try recoverCaptureIntent()
+            return try mapLegacySessionUnlocked(sessionID, sourceRoot: sourceRoot)
+        }
+    }
+
+    private func mapLegacySessionUnlocked(_ sessionID: String, sourceRoot: URL) throws -> Bool {
         guard UUID(uuidString: sessionID)?.uuidString.lowercased() == sessionID else { throw PocketMemoryStoreError.invalidInput }
         let markerDirectory = directory.appendingPathComponent(".legacy-mappings", isDirectory: true)
         let marker = markerDirectory.appendingPathComponent("\(sessionID).json")
@@ -315,19 +392,22 @@ actor PocketMemoryStore {
               (record["id"] as? String)?.lowercased() == sessionID,
               let messages = record["messages"] as? [[String: Any]] else { throw PocketMemoryStoreError.importInvalid }
         let target = directory.appendingPathComponent("captures/session-\(sessionID).json")
-        guard !fileManager.fileExists(atPath: target.path) else { throw PocketMemoryStoreError.revisionConflict(0) }
         let safeMessages = messages.compactMap { item -> [String: Any]? in
             guard let role = item["role"] as? String, ["user", "assistant"].contains(role),
                   let content = item["content"] as? String else { return nil }
-            return ["role": role, "content": content, "created_at": item["created_at"] ?? record["updated_at"] ?? record["created_at"] ?? "1970-01-01T00:00:00Z"]
+            return ["role": role, "content": content, "created_at": item["created_at"] ?? record["updated_at"] ?? record["created_at"] ?? "1970-01-01T00:00:00.000Z"]
         }
         let imported: [String: Any] = [
             "schema_version": 1, "id": sessionID,
-            "created_at": record["created_at"] ?? "1970-01-01T00:00:00Z",
-            "updated_at": record["updated_at"] ?? "1970-01-01T00:00:00Z",
+            "created_at": record["created_at"] ?? "1970-01-01T00:00:00.000Z",
+            "updated_at": record["updated_at"] ?? "1970-01-01T00:00:00.000Z",
             "messages": safeMessages, "events": record["events"] ?? []
         ]
-        try write(JSONSerialization.data(withJSONObject: imported, options: [.prettyPrinted, .sortedKeys]), to: target)
+        if let existing = try readObject(target) {
+            guard NSDictionary(dictionary: existing).isEqual(to: imported) else { throw PocketMemoryStoreError.revisionConflict(0) }
+        } else {
+            try write(JSONSerialization.data(withJSONObject: imported, options: [.prettyPrinted, .sortedKeys]), to: target)
+        }
         let mapping: [String: Any] = ["schema_version": 1, "session_id": sessionID, "source": "legacy-v1"]
         try write(JSONSerialization.data(withJSONObject: mapping, options: [.sortedKeys]), to: marker)
         return true
@@ -371,28 +451,33 @@ actor PocketMemoryStore {
     }
 
     func recallScoped(_ question: String, namespace: PocketMemoryNamespace, includePersonalNote: Bool) throws -> PocketMemoryScopedRecallResponse {
-        let result = try recall(question, includeNote: false)
-        let terms = Set(Self.words(question))
+        try withHarnessLock {
+            try recoverCaptureIntent()
+            return try recallScopedUnlocked(question, namespace: namespace, includePersonalNote: includePersonalNote)
+        }
+    }
+
+    private func recallScopedUnlocked(_ question: String, namespace: PocketMemoryNamespace, includePersonalNote: Bool) throws -> PocketMemoryScopedRecallResponse {
+        let result = try recall(question, includeNote: false, harnessScoring: true)
+        let terms = Self.harnessWords(question)
         var hits: [PocketMemoryScopedHit] = []
         for hit in result.hits {
             guard let record = try readObject(directory.appendingPathComponent("captures/session-\(hit.id).json")),
                   let messages = record["messages"] as? [[String: Any]] else { continue }
-            let candidates = messages.suffix(500).compactMap { item -> (String, Int)? in
-                guard let role = item["role"] as? String, let content = item["content"] as? String,
-                      ["user", "assistant"].contains(role) else { return nil }
-                let score = terms.intersection(Set(Self.words(content))).count
-                return score > 0 ? ("[\(role)] \(content)", score) : nil
-            }.sorted { $0.1 == $1.1 ? $0.0 < $1.0 : $0.1 > $1.1 }
-            guard let best = candidates.first else { continue }
-            let snippet = String(best.0.prefix(2_200))
-            let material: [String: Any] = [
-                "environment_id": namespace.environmentID,
-                "project_id": namespace.projectID ?? "",
-                "thread_id": namespace.threadID ?? "",
-                "session_id": hit.id, "snippet": snippet
-            ]
-            let canonical = try JSONSerialization.data(withJSONObject: material, options: [.sortedKeys])
-            let sha = SHA256.hash(data: canonical).map { String(format: "%02x", $0) }.joined()
+            let recent = Array(messages.suffix(500)).filter { item in
+                guard let role = item["role"] as? String else { return false }
+                return ["user", "assistant"].contains(role) && item["content"] is String
+            }
+            var bestScore = 0, bestIndex = -1
+            for (index, item) in recent.enumerated() {
+                let normalized = Self.harnessNormalize(item["content"] as! String)
+                let score = terms.filter { normalized.contains($0) }.count
+                if score > 0 && score >= bestScore { bestScore = score; bestIndex = index }
+            }
+            guard bestIndex >= 0 else { continue }
+            let nearby = recent[max(0, bestIndex - 1)..<min(recent.count, bestIndex + 2)]
+            let snippet = String(nearby.map { "[\($0["role"] as! String)] \($0["content"] as! String)" }.joined(separator: "\n\n").prefix(2_200))
+            let sha = SHA256.hash(data: Data(snippet.utf8)).map { String(format: "%02x", $0) }.joined()
             let messageID = Self.deterministicUUID("\(hit.id)\u{0}\(snippet)")
             hits.append(PocketMemoryScopedHit(sessionID: hit.id, messageID: messageID, source: "history", snippet: snippet,
                 sha256: sha, environmentID: namespace.environmentID, projectID: namespace.projectID, trust: "historical"))
@@ -402,13 +487,10 @@ actor PocketMemoryStore {
         if includePersonalNote {
             let note = try noteGetCAS(namespace: namespace)
             revision = note.revision
-            let content = note.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            let content = note.content
             if !content.isEmpty {
                 let snippet = String(content.prefix(3_000))
-                let material: [String: Any] = ["environment_id": namespace.environmentID,
-                    "project_id": namespace.projectID ?? namespace.threadID ?? "", "revision": revision, "snippet": snippet]
-                let canonical = try JSONSerialization.data(withJSONObject: material, options: [.sortedKeys])
-                let sha = SHA256.hash(data: canonical).map { String(format: "%02x", $0) }.joined()
+                let sha = SHA256.hash(data: Data(snippet.utf8)).map { String(format: "%02x", $0) }.joined()
                 let scopeID = namespace.projectID ?? namespace.threadID ?? ""
                 hits.insert(PocketMemoryScopedHit(
                     sessionID: Self.deterministicUUID("note\u{0}\(namespace.environmentID)\u{0}\(scopeID)"),
@@ -520,7 +602,7 @@ actor PocketMemoryStore {
         return accepted
     }
 
-    func recall(_ question: String, includeNote: Bool = true) throws -> PocketMemoryRecallResponse {
+    func recall(_ question: String, includeNote: Bool = true, harnessScoring: Bool = false) throws -> PocketMemoryRecallResponse {
         guard !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, question.count <= 2_000 else { throw PocketMemoryStoreError.invalidInput }
         var blocks: [String] = []
         var remaining = 5_000
@@ -530,7 +612,7 @@ actor PocketMemoryStore {
             blocks.append(block)
             remaining -= block.count
         }
-        let terms = Set(Self.words(question).filter { !Self.stopwords.contains($0) })
+        let terms = Set(harnessScoring ? Self.harnessWords(question) : Self.words(question).filter { !Self.stopwords.contains($0) })
         struct Candidate {
             let source: String
             let id: String
@@ -559,8 +641,13 @@ actor PocketMemoryStore {
                 var bestIndex = -1
                 for (index, item) in recent.enumerated() {
                     guard let content = item["content"] as? String else { continue }
-                    let contentWords = Set(Self.words(content))
-                    let score = terms.intersection(contentWords).count
+                    let score: Int
+                    if harnessScoring {
+                        let normalized = Self.harnessNormalize(content)
+                        score = terms.filter { normalized.contains($0) }.count
+                    } else {
+                        score = terms.intersection(Set(Self.words(content))).count
+                    }
                     if score >= bestScore && score > 0 { bestScore = score; bestIndex = index }
                 }
                 guard bestIndex >= 0 else { continue }
@@ -576,7 +663,11 @@ actor PocketMemoryStore {
                 if let previous = candidates[id], previous.score > bestScore || (previous.score == bestScore && file.source != "local") { continue }
                 candidates[id] = candidate
         }
-        let selected = candidates.values.sorted { $0.score == $1.score ? $0.updated > $1.updated : $0.score > $1.score }.prefix(3)
+        let selected = candidates.values.sorted {
+            if $0.score != $1.score { return $0.score > $1.score }
+            if $0.updated != $1.updated { return $0.updated > $1.updated }
+            return $0.id < $1.id
+        }.prefix(3)
         var hits: [PocketMemoryHit] = []
         for item in selected where remaining > 0 {
             let block = String("Fonte: \(item.source)/session-\(item.id).json\n\(item.excerpt)".prefix(remaining))
@@ -624,6 +715,23 @@ actor PocketMemoryStore {
     private static func words(_ text: String) -> [String] {
         let normalized = text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "en_US_POSIX"))
         return normalized.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init).filter { $0.count >= 3 }
+    }
+
+    private static func harnessNormalize(_ text: String) -> String {
+        text.decomposedStringWithCompatibilityMapping.unicodeScalars
+            .filter { !CharacterSet.nonBaseCharacters.contains($0) }
+            .map(String.init).joined().lowercased()
+    }
+
+    private static func harnessWords(_ text: String) -> [String] {
+        let normalized = harnessNormalize(text)
+        let regex = try! NSRegularExpression(pattern: "[a-z0-9]{3,}")
+        let range = NSRange(normalized.startIndex..<normalized.endIndex, in: normalized)
+        let matches = regex.matches(in: normalized, range: range).compactMap { match -> String? in
+            guard let range = Range(match.range, in: normalized) else { return nil }
+            return String(normalized[range])
+        }.filter { !stopwords.contains($0) }
+        return Array(Set(matches))
     }
 
     private static func deterministicUUID(_ value: String) -> String {

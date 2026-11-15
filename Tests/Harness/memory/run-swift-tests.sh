@@ -9,3 +9,4 @@ swiftc -swift-version 6 \
   "$ROOT/Tests/Harness/memory/PocketMemoryHarnessValidation.swift" \
   -o "$BUILD_DIR/pocket-memory-harness-validation"
 "$BUILD_DIR/pocket-memory-harness-validation"
+SWIFT_MEMORY_BINARY="$BUILD_DIR/pocket-memory-harness-validation" node --test "$ROOT/Tests/Harness/memory/swift-interop.test.mjs"

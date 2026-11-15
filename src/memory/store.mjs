@@ -1,5 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, readdir, rename, writeFile, chmod, lstat, realpath, rmdir } from 'node:fs/promises';
+import { DatabaseSync } from 'node:sqlite';
+import { constants as fsConstants } from 'node:fs';
+import { isDeepStrictEqual } from 'node:util';
+import { mkdir, readFile, readdir, rename, writeFile, chmod, lstat, realpath, unlink, open } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
@@ -50,23 +53,29 @@ function serializeWrite(key, operation) {
   const previous = writeQueues.get(root) || Promise.resolve();
   const next = previous.catch(() => {}).then(async () => {
     const directory = await secureDirectory(root);
-    const lock = path.join(directory, '.harness-writer.lock');
-    const deadline = Date.now() + 5_000;
-    for (;;) {
-      try { await mkdir(lock, { mode:0o700 }); break; }
-      catch (cause) {
-        if (cause.code !== 'EEXIST') throw cause;
-        const info = await lstat(lock).catch((failure) => {
-          if (failure.code === 'ENOENT') return null;
-          throw failure;
-        });
-        if (info && (!info.isDirectory() || info.isSymbolicLink())) throw memoryError('ERR_SCOPE', 'Invalid memory lock');
-        if (Date.now() >= deadline) throw memoryError('ERR_UNAVAILABLE', 'Memory writer lock unavailable');
-        await new Promise((resolve) => setTimeout(resolve, 10));
+    const file = path.join(directory, '.harness-writer.sqlite3');
+    let fd;
+    try {
+      fd = await open(file, fsConstants.O_CREAT | fsConstants.O_RDWR | fsConstants.O_NOFOLLOW, 0o600);
+      const info = await fd.stat();
+      if (!info.isFile()) throw memoryError('ERR_SCOPE', 'Invalid memory writer database');
+      await fd.chmod(0o600);
+    } finally { await fd?.close(); }
+    const db = new DatabaseSync(file);
+    try {
+      db.exec('PRAGMA busy_timeout=5000; BEGIN IMMEDIATE');
+      try {
+        const result = await operation();
+        db.exec('COMMIT');
+        return result;
+      } catch (cause) {
+        try { db.exec('ROLLBACK'); } catch {}
+        throw cause;
       }
-    }
-    try { return await operation(); }
-    finally { await rmdir(lock); }
+    } catch (cause) {
+      if (String(cause?.message || '').includes('database is locked')) throw memoryError('ERR_UNAVAILABLE', 'Memory writer lock unavailable');
+      throw cause;
+    } finally { db.close(); }
   });
   const queued = next.catch(() => {}).finally(() => {
     if (writeQueues.get(root) === queued) writeQueues.delete(root);
@@ -97,8 +106,8 @@ export function validateMemoryEvents(events) {
     const allowedFields = new Set(['event', 'session_id', 'ingest_key', 'prompt', 'message', 'provider_id', 'model_id']);
     if (!item || typeof item !== 'object' || Object.keys(item).some((field) => !allowedFields.has(field)) ||
         !EVENTS.has(item.event) || !UUID.test(item.session_id || '') || !KEY.test(item.ingest_key || '') ||
-        (item.prompt != null && (typeof item.prompt !== 'string' || item.prompt.length > 8000)) ||
-        (item.message != null && (typeof item.message !== 'string' || item.message.length > 8000)) ||
+        (item.prompt != null && (typeof item.prompt !== 'string' || [...item.prompt].length > 8000)) ||
+        (item.message != null && (typeof item.message !== 'string' || [...item.message].length > 8000)) ||
         (item.event === 'user-prompt-submit' && !item.prompt?.trim()) ||
         (item.event === 'assistant-response' && !item.message?.trim())) throw new Error('invalid_event');
     return {
@@ -217,6 +226,7 @@ export class PocketMemoryStore {
   captureScoped(events) {
     const validated = validateMemoryEvents(events);
     return serializeWrite(`${this.root}:capture`, async () => {
+      await this.#recoverCaptureIntent();
       const ledgerPath = path.join(this.root, '.memory-receipts.json');
       await secureDirectory(this.root, ['captures']);
       const ledger = await readJSON(ledgerPath, { sequence:0, accepted_keys:{} });
@@ -229,12 +239,50 @@ export class PocketMemoryStore {
         if (!assigned) { assigned = ++sequence; byKey.set(key, assigned); }
         return { ...item, sequence:assigned };
       });
-      const accepted = await this.#capture(prepared);
       for (const [key, assigned] of byKey) ledger.accepted_keys[key] = assigned;
       ledger.sequence = sequence;
-      if (byKey.size) await this.#writeAtomic(ledgerPath, JSON.stringify(ledger));
-      return accepted;
+      await this.#writeAtomic(path.join(this.root, '.capture-intent.json'), JSON.stringify({ events:prepared, ledger }));
+      await this.#recoverCaptureIntent();
+      return prepared.map((item) => item.ingest_key);
     });
+  }
+
+  recoverCapture() {
+    return serializeWrite(`${this.root}:capture`, () => this.#recoverCaptureIntent());
+  }
+
+  scopedRecall(question, options) {
+    return serializeWrite(`${this.root}:capture`, async () => {
+      await this.#recoverCaptureIntent();
+      return this.recall(question, options);
+    });
+  }
+
+  scopedSessionsConsistent() {
+    return serializeWrite(`${this.root}:capture`, async () => {
+      await this.#recoverCaptureIntent();
+      return this.scopedSessions();
+    });
+  }
+
+  async #recoverCaptureIntent() {
+    const file = path.join(this.root, '.capture-intent.json');
+    const intent = await readJSON(file, null);
+    if (!intent) return;
+    if (!Array.isArray(intent.events) || !intent.ledger ||
+        !Number.isSafeInteger(intent.ledger.sequence) || intent.ledger.sequence < 0 ||
+        !intent.ledger.accepted_keys || typeof intent.ledger.accepted_keys !== 'object') {
+      throw memoryError('ERR_MEMORY_UNAVAILABLE', 'Memory capture intent is invalid');
+    }
+    const events = intent.events.map(({ sequence, ...event }) => ({ sequence, event }));
+    const valid = validateMemoryEvents(events.map(({ event }) => event));
+    if (events.some(({ sequence }, index) => !Number.isSafeInteger(sequence) || sequence < 1 ||
+        sequence > intent.ledger.sequence || intent.ledger.accepted_keys[`${valid[index].session_id}:${valid[index].ingest_key}`] !== sequence)) {
+      throw memoryError('ERR_MEMORY_UNAVAILABLE', 'Memory capture intent is invalid');
+    }
+    await this.#capture(valid.map((event, index) => ({ ...event, sequence:events[index].sequence })));
+    await this.#writeAtomic(path.join(this.root, '.memory-receipts.json'), JSON.stringify(intent.ledger));
+    await unlink(file);
   }
 
   async scopedSessions() {
@@ -302,6 +350,13 @@ export class PocketMemoryStore {
   }
 
   async mapLegacySession(sessionID, legacyRoot = this.root) {
+    return serializeWrite(`${this.root}:capture`, async () => {
+      await this.#recoverCaptureIntent();
+      return this.#mapLegacySession(sessionID, legacyRoot);
+    });
+  }
+
+  async #mapLegacySession(sessionID, legacyRoot) {
     if (!CANONICAL_UUID.test(sessionID || '')) throw memoryError('ERR_INVALID', 'Invalid legacy session ID');
     const legacyCandidates = [
       path.join(legacyRoot, `session-${sessionID}.json`),
@@ -325,7 +380,6 @@ export class PocketMemoryStore {
     const target = path.join(this.captureRoot, `session-${sessionID}.json`);
     const existing = await readJSON(target, null);
     if (prior) return { mapped:true, session_id:sessionID };
-    if (existing) throw memoryError('ERR_CONFLICT', 'Legacy session already has a different scoped record');
     const events = Array.isArray(record.events) ? record.events : [];
     const imported = {
       schema_version:1,
@@ -336,7 +390,8 @@ export class PocketMemoryStore {
         .map((item) => ({ role:item.role, content:item.content, created_at:item.created_at || record.updated_at || record.created_at || new Date(0).toISOString() })),
       events
     };
-    await this.#writeAtomic(target, JSON.stringify(imported, null, 2));
+    if (existing && !isDeepStrictEqual(existing, imported)) throw memoryError('ERR_CONFLICT', 'Legacy session already has a different scoped record');
+    if (!existing) await this.#writeAtomic(target, JSON.stringify(imported, null, 2));
     await this.#writeAtomic(marker, JSON.stringify({ schema_version:1, session_id:sessionID, source:'legacy-v1', mapped_at:new Date().toISOString() }));
     if (!sourcePath) throw memoryError('ERR_IMPORT', 'Legacy source not found');
     return { mapped:true, session_id:sessionID };
