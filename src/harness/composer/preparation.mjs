@@ -31,8 +31,8 @@ export class ComposerPreparationService extends ComposerService {
         try {
           if (this.state.sources.some((item) => item.owner === key && item.reference_id === reference.reference_id) && reference.relative_path) {
             const root = this.state.sources.find((item) => item.owner === key && item.reference_id === reference.reference_id).root;
-            this.authorizeRoot(auth, root);
-            bytes = await readAuthorizedFile(root, reference.relative_path);
+            const approvedRoot = this.authorizeRoot(auth, root);
+            bytes = await readAuthorizedFile(approvedRoot, reference.relative_path, this.secureReaderPath);
             mime = reference.kind === 'image' ? 'image/png' : 'text/plain';
           } else if (this.sourceResolver) resolved = await this.sourceResolver(structuredClone(reference), structuredClone(auth));
           else fail('ERR_CONTEXT_STALE', 'A fonte selecionada não está disponível.');

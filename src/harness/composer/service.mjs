@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { chmodSync, constants as fsConstants, mkdirSync, openSync, readFileSync, realpathSync, renameSync, writeFileSync, closeSync } from 'node:fs';
+import { chmodSync, constants as fsConstants, mkdirSync, openSync, readFileSync, realpathSync, renameSync, writeFileSync, closeSync, fstatSync, statSync, fsyncSync, unlinkSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -71,7 +72,7 @@ function cleanState(value) {
 }
 
 export class ComposerService {
-  constructor({ dataDir, now = Date.now, id = randomUUID, sourceResolver = null, rootsFor = () => [] } = {}) {
+  constructor({ dataDir, now = Date.now, id = randomUUID, sourceResolver = null, rootsFor = () => [], secureReaderPath = null } = {}) {
     if (typeof dataDir !== 'string' || !dataDir) fail('ERR_INVALID', 'dataDir obrigatório.');
     this.dataDir = path.resolve(dataDir);
     this.statePath = path.join(this.dataDir, 'composer-state-v1.json');
@@ -79,13 +80,19 @@ export class ComposerService {
     this.id = id;
     this.sourceResolver = sourceResolver;
     this.rootsFor = rootsFor;
+    this.secureReaderPath = secureReaderPath;
     this.sourceLocations = new Map();
     mkdirSync(this.dataDir, { recursive: true, mode: 0o700 });
     chmodSync(this.dataDir, 0o700);
     this.state = this.#loadState();
     this.state.sources ??= [];
     this.confirmedState = structuredClone(this.state);
-    this._collectExpired();
+  }
+
+  _reload() {
+    this.state = this.#loadState();
+    this.state.sources ??= [];
+    this.confirmedState = structuredClone(this.state);
   }
 
   #loadState() {
@@ -103,14 +110,15 @@ export class ComposerService {
     try {
       fd = openSync(temporary, 'wx', 0o600);
       writeFileSync(fd, JSON.stringify(this.state), 'utf8');
+      fsyncSync(fd);
       closeSync(fd);
       fd = undefined;
       renameSync(temporary, this.statePath);
-      chmodSync(this.statePath, 0o600);
       this.confirmedState = structuredClone(this.state);
     } catch {
       this.state = structuredClone(this.confirmedState);
       if (fd !== undefined) closeSync(fd);
+      try { unlinkSync(temporary); } catch {}
       fail('ERR_UNAVAILABLE', 'Não foi possível persistir o stash local do composer.');
     }
   }
@@ -247,8 +255,8 @@ export class ComposerService {
     validateAuth(auth);
     validateString(relative_path, 1, 4096, 'Caminho relativo');
     if (!['file', 'wiki', 'quote'].includes(kind) || path.isAbsolute(relative_path)) fail('ERR_INVALID', 'Fonte de arquivo inválida.');
-    this.authorizeRoot(auth, root);
-    const bytes = await readAuthorizedFile(root, relative_path);
+    const approvedRoot = this.authorizeRoot(auth, root);
+    const bytes = await readAuthorizedFile(approvedRoot, relative_path, this.secureReaderPath);
     const text = bytes.toString('utf8');
     if (!Buffer.from(text, 'utf8').equals(bytes)) fail('ERR_UNSUPPORTED', 'A fonte não é UTF-8 válido.');
     const reference = { reference_id: this.id(), kind, relative_path: path.posix.normalize(relative_path.split(path.sep).join('/')), sha256: digest(bytes), size_bytes: bytes.byteLength, trust: 'untrusted_content' };
@@ -264,6 +272,7 @@ export class ComposerService {
     if (!Array.isArray(roots) || !roots.some((grant) => {
       try { const canonical = realpathSync(grant); return target === canonical || target.startsWith(`${canonical}${path.sep}`); } catch { return false; }
     })) fail('ERR_FORBIDDEN', 'Root não concedido.');
+    return target;
   }
 
   removeReference(auth, draftId, referenceId, expectedRevision) {
@@ -288,26 +297,24 @@ export function canonicalJSON(value) {
   return `{${Object.keys(value).sort().filter((key) => value[key] !== undefined).map((key) => `${JSON.stringify(key)}:${canonicalJSON(value[key])}`).join(',')}}`;
 }
 
-export async function readAuthorizedFile(root, relativePath) {
-  let realRoot;
-  let candidate;
+export async function readAuthorizedFile(root, relativePath, secureReaderPath) {
+  if (typeof secureReaderPath !== 'string' || !path.isAbsolute(secureReaderPath)) fail('ERR_UNAVAILABLE', 'Leitor seguro não configurado.');
+  if (typeof relativePath !== 'string' || path.isAbsolute(relativePath) || relativePath.split('/').some((part) => !part || part === '.' || part === '..')) fail('ERR_PATH_ESCAPE', 'Caminho inválido.');
+  let fd;
   try {
-    realRoot = realpathSync(root);
-    candidate = path.resolve(realRoot, relativePath);
-  } catch { fail('ERR_PATH_ESCAPE', 'Root ou caminho indisponível.'); }
-  if (candidate !== realRoot && !candidate.startsWith(`${realRoot}${path.sep}`)) fail('ERR_PATH_ESCAPE', 'Caminho fora do root autorizado.');
-  let realFile;
-  try { realFile = realpathSync(candidate); } catch { fail('ERR_CONTEXT_STALE', 'A fonte não está disponível.'); }
-  if (realFile !== realRoot && !realFile.startsWith(`${realRoot}${path.sep}`)) fail('ERR_PATH_ESCAPE', 'Symlink sai do root autorizado.');
-  let handle;
-  try {
-    handle = await import('node:fs/promises').then(({ open }) => open(realFile, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0)));
-    const stat = await handle.stat();
-    if (!stat.isFile() || stat.size > 4 * 1024 * 1024) fail('ERR_INVALID', 'Fonte não é arquivo regular ou excede 4 MiB.');
-    return await handle.readFile();
+    const expected = statSync(root);
+    fd = openSync(root, fsConstants.O_RDONLY | fsConstants.O_DIRECTORY | fsConstants.O_NOFOLLOW);
+    const opened = fstatSync(fd);
+    if (!opened.isDirectory() || expected.dev !== opened.dev || expected.ino !== opened.ino) fail('ERR_PATH_ESCAPE', 'Root alterado durante abertura.');
+    const result = spawnSync(secureReaderPath, [relativePath], { stdio: ['ignore', 'pipe', 'ignore', fd], maxBuffer: 4 * 1024 * 1024 + 1, timeout: 30_000 });
+    if (result.error) fail(result.error.code === 'ETIMEDOUT' ? 'ERR_TIMEOUT' : 'ERR_UNAVAILABLE', 'Leitor seguro indisponível.');
+    if (result.status === 10) fail('ERR_PATH_ESCAPE', 'Caminho ou symlink não autorizado.');
+    if (result.status === 12) fail('ERR_INVALID', 'Fonte inválida ou grande demais.');
+    if (result.status !== 0) fail('ERR_CONTEXT_STALE', 'Fonte indisponível.');
+    return result.stdout;
   } catch (error) {
     if (error instanceof ComposerError) throw error;
-    if (error.code === 'ELOOP' || error.code === 'ENOTDIR') fail('ERR_PATH_ESCAPE', 'Symlink ou caminho não autorizado.');
-    fail('ERR_CONTEXT_STALE', 'A fonte mudou ou não pôde ser lida.');
-  } finally { await handle?.close(); }
+    if (error.code === 'ELOOP' || error.code === 'ENOTDIR') fail('ERR_PATH_ESCAPE', 'Root não autorizado.');
+    fail('ERR_CONTEXT_STALE', 'Fonte indisponível.');
+  } finally { if (fd !== undefined) closeSync(fd); }
 }

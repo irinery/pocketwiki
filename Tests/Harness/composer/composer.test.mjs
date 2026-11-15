@@ -1,10 +1,17 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { ComposerError, ComposerService } from '../../../src/harness/composer/index.mjs';
+
+const helperDir = mkdtempSync(path.join(os.tmpdir(), 'composer-reader-'));
+const secureReaderPath = path.join(helperDir, 'secure-read');
+execFileSync('cc', ['-std=c11', '-O2', '-Wall', '-Wextra', 'src/harness/composer/secure-read.c', '-o', secureReaderPath]);
+process.on('exit', () => rmSync(helperDir, { recursive: true, force: true }));
 
 const ids = {
   principal: '11111111-1111-4111-8111-111111111111',
@@ -23,6 +30,7 @@ function fixture(t, options = {}) {
   const service = new ComposerService({
     dataDir: path.join(root, 'private-stash'),
     rootsFor: () => [root],
+    secureReaderPath,
     now: () => now.value,
     id: () => idQueue.shift() ?? `aaaaaaaa-aaaa-4aaa-8aaa-${String(++idCounter).padStart(12, '0')}`,
     ...options
@@ -223,7 +231,7 @@ test('root precisa de concessão explícita e fonte é resolvida após restart',
   await mkdir(root);
   await writeFile(path.join(root, 'pagina.md'), 'conteúdo autorizado');
   await rejectsCode(f.service.previewFile(identity, { root, relative_path: 'pagina.md', kind: 'wiki' }), 'ERR_FORBIDDEN');
-  const options = { dataDir: f.service.dataDir, now: () => f.now.value, rootsFor: () => [root] };
+  const options = { dataDir: f.service.dataDir, now: () => f.now.value, rootsFor: () => [root], secureReaderPath };
   const authorized = new ComposerService(options);
   const { reference } = await authorized.previewFile(identity, { root, relative_path: 'pagina.md', kind: 'wiki' });
   await saveDraft(authorized, identity, { references: [reference] });
@@ -310,4 +318,39 @@ test('01-03: orçamento conta bytes multibyte sem truncar referência', async (t
   assert.deepEqual(Buffer.from(context.segments[0].content_base64, 'base64'), content);
   await saveDraft(service, identity, { text: 'aa', references: [staged], revision: 1 });
   await rejectsCode(prepare(service, identity, { text: 'aa', references: [staged], budget: 1024 }), 'ERR_BUDGET');
+});
+
+test('leitura ancorada rejeita symlink intermediário e root sem concessão', async (t) => {
+  const f = fixture(t);
+  const root = path.join(f.root, 'root');
+  const outside = path.join(f.root, 'outside');
+  await mkdir(root);
+  await mkdir(outside);
+  await writeFile(path.join(outside, 'secret'), 'não permitido');
+  await symlink(outside, path.join(root, 'link'));
+  await rejectsCode(f.service.previewFile(auth(), { root, relative_path: 'link/secret' }), 'ERR_PATH_ESCAPE');
+});
+
+test('store serializa escritores de processos independentes', async (t) => {
+  const { spawn } = await import('node:child_process');
+  const f = fixture(t);
+  const worker = (prefix) => new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ['Tests/Harness/composer/store-worker.mjs', f.service.dataDir, prefix], { stdio: ['ignore', 'ignore', 'pipe'] });
+    let stderr = '';
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.on('error', reject);
+    child.on('exit', (code) => code === 0 ? resolve() : reject(new Error(stderr)));
+  });
+  await Promise.all([worker('1'), worker('2')]);
+  const restarted = new ComposerService({ dataDir: f.service.dataDir });
+  assert.equal(restarted.snapshot(auth()).drafts.length, 40);
+});
+
+test('lock abandonado falha fechado sem apagar estado confirmado', async (t) => {
+  const { service, auth: identity } = await makeHarness(t);
+  await saveDraft(service, identity);
+  await mkdir(path.join(service.dataDir, '.composer-lock'));
+  assert.throws(() => service.getDraft(identity, ids.draft), (error) => error.code === 'ERR_UNAVAILABLE');
+  await rm(path.join(service.dataDir, '.composer-lock'), { recursive: true });
+  assert.equal(service.getDraft(identity, ids.draft).text, 'Analise esta fonte.');
 });
