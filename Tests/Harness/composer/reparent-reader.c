@@ -7,7 +7,12 @@
 #include <stdio.h>
 #if defined(__linux__)
 #include <sys/syscall.h>
+#if defined(__has_include)
+#if __has_include(<linux/openat2.h>)
 #include <linux/openat2.h>
+#define HAVE_LINUX_OPENAT2 1
+#endif
+#endif
 #endif
 int main(int argc, char **argv) {
     if (argc != 2) return 2;
@@ -16,7 +21,7 @@ int main(int argc, char **argv) {
         int fd;
 #if defined(__APPLE__) && defined(O_RESOLVE_BENEATH) && defined(O_NOFOLLOW_ANY) && defined(O_UNIQUE)
         fd = openat(3, argv[1], O_RDONLY | O_RESOLVE_BENEATH | O_NOFOLLOW_ANY | O_UNIQUE);
-#elif defined(__linux__) && defined(SYS_openat2)
+#elif defined(__linux__) && defined(SYS_openat2) && defined(HAVE_LINUX_OPENAT2)
         struct open_how how = { .flags = O_RDONLY, .resolve = RESOLVE_BENEATH | RESOLVE_NO_SYMLINKS | RESOLVE_NO_MAGICLINKS };
         fd = (int)syscall(SYS_openat2, 3, argv[1], &how, sizeof how);
 #else
