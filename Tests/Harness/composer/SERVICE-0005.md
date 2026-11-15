@@ -11,11 +11,11 @@ node --test Tests/Harness/composer/composer.test.mjs
 swiftc -typecheck Sources/PocketWikiMac/Services/Harness/Composer/ComposerDraftStore.swift
 ```
 
-A suíte Node usa o serviço e stash reais em diretórios temporários privados, removidos ao término. A saída do runner contém nomes dos testes e contagens, sem conteúdo dos anexos ou credenciais. Em 2026-11-14: 14 testes passaram, nenhum skip; typecheck Swift sem saída, exit 0. Esses resultados não são uma execução do gate cumulativo nem provam os itens abaixo.
+A suíte Node usa o serviço e stash reais em diretórios temporários privados, removidos ao término. A saída do runner contém nomes dos testes e contagens, sem conteúdo dos anexos ou credenciais. Em 2026-11-14: 15 testes passaram, nenhum skip; typecheck Swift sem saída, exit 0. Esses resultados não são uma execução do gate cumulativo nem provam os itens abaixo.
 
 ## Portas para integração
 
-`ComposerService({dataDir, rootsFor, sourceResolver, imageCapability})` recebe diretório privado e policy de roots definida pelo host. `rootsFor(auth)` retorna somente roots explicitamente concedidos para a identidade autenticada; o serviço revalida a concessão antes de abrir e também após restart. `sourceResolver(reference, auth)` é a porta confiável para fontes não locais, inclusive quote: deve verificar autorização e proveniência e devolver `{bytes, mime, relative_path?}`. Fontes locais armazenam o root em stash privado, nunca no manifesto público.
+`ComposerService({dataDir, rootsFor, sourceResolver})` recebe diretório privado e policy de roots definida pelo host. `rootsFor(auth)` retorna somente roots explicitamente concedidos para a identidade autenticada; o serviço revalida a concessão antes de abrir e também após restart. `sourceResolver(reference, auth)` é a porta confiável para fontes não locais, inclusive quote: deve verificar autorização e proveniência e devolver `{bytes, mime, relative_path?}`. Fontes locais armazenam o root em stash privado, nunca no manifesto público.
 
 O host deve autenticar o bearer e extrair principal/environment/thread/scopes da credencial E1, verificar pertencimento da thread e audience do contexto antes de fornecer `auth`; objetos `auth` e `delegated_identity` não são credenciais e não podem ser aceitos do payload HTTP. Rotas devem usar schema fechado e conectar mutações ao ledger/CAS/receipt E1, sem logar segmentos. Resolve precisa receber identidade delegada verificada para a audience `pocketwiki.context.v1`. É necessário fornecer `rootsFor` e `sourceResolver` também na recriação do serviço. Integração de rotas, registry e shell pertence ao integrador.
 

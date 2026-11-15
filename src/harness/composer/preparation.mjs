@@ -47,7 +47,6 @@ export class ComposerPreparationService extends ComposerService {
       }
       if (bytes.byteLength !== reference.size_bytes || digest(bytes) !== reference.sha256) fail('ERR_CONTEXT_STALE', 'A fonte mudou desde o preview.');
       if (!Object.hasOwn(MIME_LIMITS, mime) || bytes.byteLength > MIME_LIMITS[mime]) fail('ERR_UNSUPPORTED', 'MIME ou tamanho não permitido para esta referência.');
-      if (mime.startsWith('image/') && !this.imageCapability) fail('ERR_UNSUPPORTED', 'O adapter atual não declara suporte a imagens.');
       if (!mime.startsWith('image/')) {
         const text = bytes.toString('utf8');
         if (!Buffer.from(text, 'utf8').equals(bytes)) fail('ERR_UNSUPPORTED', 'Referência textual não é UTF-8 válido.');

@@ -71,7 +71,7 @@ function cleanState(value) {
 }
 
 export class ComposerService {
-  constructor({ dataDir, now = Date.now, id = randomUUID, sourceResolver = null, rootsFor = () => [], imageCapability = false } = {}) {
+  constructor({ dataDir, now = Date.now, id = randomUUID, sourceResolver = null, rootsFor = () => [] } = {}) {
     if (typeof dataDir !== 'string' || !dataDir) fail('ERR_INVALID', 'dataDir obrigatório.');
     this.dataDir = path.resolve(dataDir);
     this.statePath = path.join(this.dataDir, 'composer-state-v1.json');
@@ -79,7 +79,6 @@ export class ComposerService {
     this.id = id;
     this.sourceResolver = sourceResolver;
     this.rootsFor = rootsFor;
-    this.imageCapability = imageCapability;
     this.sourceLocations = new Map();
     mkdirSync(this.dataDir, { recursive: true, mode: 0o700 });
     chmodSync(this.dataDir, 0o700);

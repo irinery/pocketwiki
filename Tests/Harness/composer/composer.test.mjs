@@ -272,3 +272,11 @@ test('staging aplica limite agregado de 4 MiB', async (t) => {
   service.stage(identity, { filename: 'b.png', mime: 'image/png', content_base64 });
   assert.throws(() => service.stage(identity, { filename: 'c.txt', mime: 'text/plain', content_base64: 'YQ==' }), (error) => error.code === 'ERR_BUDGET');
 });
+
+test('E2 prepara imagem sem consultar capacidade do provider', async (t) => {
+  const { service, auth: identity } = await makeHarness(t);
+  const image = service.stage(identity, { filename: 'x.png', mime: 'image/png', content_base64: 'iVBORw0KGgo=' }).reference;
+  await saveDraft(service, identity, { references: [image] });
+  const prepared = await prepare(service, identity, { references: [image] });
+  assert.equal(service.resolve(delegatedAuth(identity), { prepared_id: prepared.prepared_id, manifest_sha256: prepared.manifest_sha256 }).context.segments[0].mime, 'image/png');
+});
