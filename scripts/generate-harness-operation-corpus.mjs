@@ -175,7 +175,7 @@ function validInput(name, value) {
 function boundaryCases(rule, value) {
   const cases = [];
   const typeRule = resolve(rule);
-  if (typeRule.type === 'integer') {
+  if (typeRule.type === 'integer' && !Object.hasOwn(typeRule, 'const')) {
     if (typeRule.minimum !== undefined) cases.push(['EDGE-MIN', true, typeRule.minimum], ['BELOW-MIN', false, typeRule.minimum - 1]);
     if (typeRule.maximum !== undefined) cases.push(['EDGE-MAX', true, typeRule.maximum], ['ABOVE-MAX', false, typeRule.maximum + 1]);
   }

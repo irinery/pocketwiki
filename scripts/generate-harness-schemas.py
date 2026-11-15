@@ -43,7 +43,7 @@ def parse_type(raw):
         "sha1": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
         "string": {"type": "string", "x-maxUtf8Bytes": 4096},
         "bool": {"type": "boolean"},
-        "int": {"type": "integer"},
+        "int": {"type": "integer", "minimum": 0, "maximum": 9007199254740991},
     }
     if value in primitives:
         return dict(primitives[value])
@@ -155,6 +155,11 @@ def field_blocks(markdown):
             required_match = re.search(r"^    obrigatório: (true|false)$", rest, re.M)
             limit_match = re.search(r"^    limite: (.+)$", rest, re.M)
             field_schema = parse_type(raw_type)
+            if field_name == "exit_code":
+                numeric = field_schema["anyOf"][0] if "anyOf" in field_schema else field_schema
+                if numeric.get("type") != "integer":
+                    raise ValueError("exit_code must be an integer")
+                numeric["minimum"], numeric["maximum"] = -255, 255
             if limit_match and field_schema.get("type") == "string":
                 limit = limit_match.group(1).strip().strip('"')
                 byte_match = re.search(r"(?:0\.\.)?(\d+)\s*bytes", limit)
@@ -174,6 +179,19 @@ def object_schema(fields):
         "required": [name for name, _, required in fields if required],
         "properties": {name: field_schema for name, field_schema, _ in fields},
     }
+
+
+def enforce_safe_integer_bounds(node):
+    """Apply RFC primitive bounds to generated and hand-written schemas."""
+    if isinstance(node, dict):
+        if node.get("type") == "integer":
+            node.setdefault("minimum", 0)
+            node.setdefault("maximum", 9007199254740991)
+        for value in node.values():
+            enforce_safe_integer_bounds(value)
+    elif isinstance(node, list):
+        for value in node:
+            enforce_safe_integer_bounds(value)
 
 
 def permission_action_schema():
@@ -467,6 +485,7 @@ def main():
         "Entity, snapshot and operation input schemas generated from NH RFC-0002–0016 phase-01 YAML. "
         "runtime.dispatch input command_id and expected_revision must equal the envelope fields, per R1."
     )
+    enforce_safe_integer_bounds(definitions)
     SCHEMA_PATH.write_text(json.dumps(schema, ensure_ascii=False, indent=2) + "\n")
     print(f"generated {len(seen)} entity schemas and {len(feature_snapshots)} snapshot schemas")
 

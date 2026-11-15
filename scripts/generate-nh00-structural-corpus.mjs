@@ -67,11 +67,12 @@ for (const entity of schema['x-entityTypes'] ?? []) {
     const rule = resolve(rawRule);
     if (!rule) continue;
     const current = base[field];
-    if (rule.type === 'integer') {
+    if (rawRule.anyOf?.some((candidate) => candidate.type === 'null')) addEntityCase(entity, field, 'NULL', true, null);
+    if (rule.type === 'integer' && !Object.hasOwn(rule, 'const')) {
       if (rule.minimum !== undefined) addEntityCase(entity, field, 'EDGE-MIN', true, rule.minimum);
       if (rule.minimum !== undefined && rule.minimum > -9007199254740991) addEntityCase(entity, field, 'BELOW-MIN', false, rule.minimum - 1);
       if (rule.maximum !== undefined) addEntityCase(entity, field, 'EDGE-MAX', true, rule.maximum);
-      if (rule.maximum !== undefined && rule.maximum < 9007199254740991) addEntityCase(entity, field, 'ABOVE-MAX', false, rule.maximum + 1);
+      if (rule.maximum !== undefined && rule.maximum <= 9007199254740991) addEntityCase(entity, field, 'ABOVE-MAX', false, rule.maximum + 1);
     }
     if (rule.type === 'string') {
       if (rule['x-maxBase64DecodedBytes'] !== undefined) {
@@ -138,7 +139,12 @@ for (const [name, target, valid, value] of [
   ['HTTP-NULL-RESULT', 'httpCommandReceipt', true, { ...http, result_ref: null }],
   ['HTTP-BAD-DUPLICATE', 'httpCommandReceipt', false, { ...http, duplicate: 0 }],
   ['HTTP-BAD-STATE', 'httpCommandReceipt', false, { ...http, state: 'duplicate' }],
+  ['HTTP-REVISION-UNSAFE', 'httpCommandReceipt', false, { ...http, revision: 9007199254740992 }],
 ]) slots.push(slot(`${prefix}E1-${name}`, target, valid, value));
+
+const unsafeStream = structuredClone(runtimeEvent);
+unsafeStream.seq = 9007199254740992;
+slots.push(slot(`${prefix}E1-STREAM-SEQ-UNSAFE`, 'streamEnvelope', false, unsafeStream));
 
 const previous = corpus.slots.filter(({ id }) => !id.startsWith(prefix));
 corpus.slots = [...previous, ...slots];
