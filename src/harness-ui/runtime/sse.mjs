@@ -1,11 +1,18 @@
 // Parse bounded, complete SSE frames; envelope validation remains in projection.
-export async function* runtimeFrames(response) {
+export async function* runtimeFrames(response, { signal, idleTimeoutMS } = {}) {
   const reader = response.body.getReader();
+  const cancel = () => { void reader.cancel().catch(() => {}); };
+  if (signal?.aborted) cancel(); else signal?.addEventListener('abort', cancel, { once:true });
   const decoder = new TextDecoder('utf-8', { fatal: true });
   let pending = '', data = [], id, frameBytes = 0;
   try {
     for (;;) {
-      const { value, done } = await reader.read();
+      let timer;
+      const read = reader.read();
+      const timeout = idleTimeoutMS === undefined ? null : new Promise((_, reject) => { timer=setTimeout(()=>reject(new Error('SSE idle timeout')),idleTimeoutMS); });
+      let value,done;
+      try { ({value,done}=await (timeout ? Promise.race([read,timeout]) : read)); } finally { if(timer)clearTimeout(timer); }
+      if (signal?.aborted) throw new Error('SSE aborted');
       pending += decoder.decode(value || new Uint8Array(), { stream: !done });
       for (;;) {
         const at = pending.indexOf('\n'); if (at < 0) break;
@@ -34,5 +41,5 @@ export async function* runtimeFrames(response) {
         return;
       }
     }
-  } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
+  } finally { signal?.removeEventListener('abort', cancel); void reader.cancel().catch(() => {}); reader.releaseLock(); }
 }
