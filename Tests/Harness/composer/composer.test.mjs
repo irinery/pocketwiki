@@ -251,24 +251,26 @@ test('root precisa de concessão explícita e fonte é resolvida após restart',
 });
 
 
-test('01-01: wiki e quote no mesmo manifesto preservam bytes e proveniência', async (t) => {
-  const quote = Buffer.from('trecho exato da mensagem');
-  const f = fixture(t, { sourceResolver: async (reference) => {
-    if (reference.kind !== 'quote') throw new Error('fonte desconhecida');
-    return { bytes: quote, mime: 'text/plain' };
-  } });
+test('01-01: quote de trecho real da wiki preserva bytes e origem após restart', async (t) => {
+  const f = fixture(t);
   const identity = auth();
   const root = path.join(f.root, 'wiki');
   await mkdir(root);
-  await writeFile(path.join(root, 'pagina.md'), 'wiki');
+  const source = Buffer.from('antes: citação exata; depois', 'utf8');
+  await writeFile(path.join(root, 'pagina.md'), source);
   const wiki = (await f.service.previewFile(identity, { root, relative_path: 'pagina.md', kind: 'wiki' })).reference;
-  const citation = quoteReference(quote, '99999999-9999-4999-8999-999999999999');
+  const start = Buffer.byteLength('antes: ');
+  const quote = Buffer.from('citação exata');
+  const citation = (await f.service.previewQuote(identity, { root, relative_path: 'pagina.md', start_byte: start, end_byte: start + quote.length })).reference;
   await saveDraft(f.service, identity, { references: [wiki, citation] });
-  const result = await prepare(f.service, identity, { references: [wiki, citation] });
-  const context = f.service.resolve(delegatedAuth(identity), { prepared_id: result.prepared_id, manifest_sha256: result.manifest_sha256 }).context;
-  assert.equal(context.manifest[1].message_id, citation.message_id);
+  const restarted = new ComposerService({ dataDir: f.service.dataDir, now: () => f.now.value, rootsFor: () => [root], secureReaderPath });
+  const result = await prepare(restarted, identity, { references: [wiki, citation] });
+  const context = restarted.resolve(delegatedAuth(identity), { prepared_id: result.prepared_id, manifest_sha256: result.manifest_sha256 }).context;
+  assert.equal(context.manifest[1].relative_path, 'pagina.md');
   assert.equal(context.segments[1].sha256, hash(quote));
   assert.deepEqual(Buffer.from(context.segments[1].content_base64, 'base64'), quote);
+  await writeFile(path.join(root, 'pagina.md'), 'página modificada');
+  await rejectsCode(prepare(restarted, identity, { references: [wiki, citation] }), 'ERR_CONTEXT_STALE');
 });
 
 test('snapshot limita bytes serializados da página sem truncar drafts', async (t) => {
@@ -419,4 +421,31 @@ test('eventos expiram com cursor antigo explícito, sem apagar draft', async (t)
   now.value += 600_001;
   assert.throws(() => service.eventsSince(identity, 0), (error) => error.code === 'ERR_CURSOR_EXPIRED');
   assert.equal(service.getDraft(identity, ids.draft).text, 'Analise esta fonte.');
+});
+
+test('lock de processo morto é recuperado sem perder estado confirmado', async (t) => {
+  const { spawn } = await import('node:child_process');
+  const { service, auth: identity } = await makeHarness(t);
+  await saveDraft(service, identity);
+  const child = spawn(process.execPath, ['Tests/Harness/composer/crash-worker.mjs', service.dataDir], { stdio: ['ignore', 'pipe', 'pipe'] });
+  await new Promise((resolve, reject) => { child.stdout.once('data', resolve); child.once('error', reject); });
+  const exited = new Promise((resolve) => child.once('exit', resolve));
+  child.kill('SIGKILL');
+  await exited;
+  assert.equal(service.getDraft(identity, ids.draft).text, 'Analise esta fonte.');
+});
+
+test('citação salva permanece legível com fonte removida; limites não dividem UTF-8', async (t) => {
+  const f = fixture(t);
+  const identity = auth();
+  const root = path.join(f.root, 'wiki');
+  await mkdir(root);
+  await writeFile(path.join(root, 'p.md'), 'aéz');
+  await rejectsCode(f.service.previewQuote(identity, { root, relative_path: 'p.md', start_byte: 1, end_byte: 2 }), 'ERR_INVALID');
+  const reference = (await f.service.previewQuote(identity, { root, relative_path: 'p.md', start_byte: 1, end_byte: 3 })).reference;
+  await rm(path.join(root, 'p.md'));
+  const quote = await f.service.readQuote(identity, reference.reference_id);
+  assert.equal(Buffer.from(quote.content_base64, 'base64').toString(), 'é');
+  assert.equal(quote.source_available, false);
+  assert.equal(quote.sha256, reference.sha256);
 });

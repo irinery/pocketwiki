@@ -33,6 +33,11 @@ export class ComposerPreparationService extends ComposerService {
             const root = this.state.sources.find((item) => item.owner === key && item.reference_id === reference.reference_id).root;
             const approvedRoot = this.authorizeRoot(auth, root);
             bytes = await readAuthorizedFile(approvedRoot, reference.relative_path, this.secureReaderPath);
+            const source = this.state.sources.find((item) => item.owner === key && item.reference_id === reference.reference_id);
+            if (source.source_sha256 !== undefined) {
+              if (digest(bytes) !== source.source_sha256) fail('ERR_CONTEXT_STALE', 'A origem da citação mudou.');
+              bytes = bytes.subarray(source.start_byte, source.end_byte);
+            }
             mime = reference.kind === 'image' ? 'image/png' : 'text/plain';
           } else if (this.sourceResolver) resolved = await this.sourceResolver(structuredClone(reference), structuredClone(auth));
           else fail('ERR_CONTEXT_STALE', 'A fonte selecionada não está disponível.');

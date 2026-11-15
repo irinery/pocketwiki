@@ -272,6 +272,40 @@ export class ComposerService {
     return { reference };
   }
 
+  async previewQuote(auth, input) {
+    validateAuth(auth);
+    if (!isPlainObject(input) || Object.keys(input).some((key) => !['root', 'relative_path', 'start_byte', 'end_byte'].includes(key))) fail('ERR_INVALID', 'Citação inválida.');
+    const { root, relative_path, start_byte, end_byte } = input;
+    validateString(relative_path, 1, 4096, 'Caminho relativo');
+    if (path.isAbsolute(relative_path) || !Number.isSafeInteger(start_byte) || !Number.isSafeInteger(end_byte) || start_byte < 0 || end_byte <= start_byte) fail('ERR_INVALID', 'Intervalo de citação inválido.');
+    const approvedRoot = this.authorizeRoot(auth, root);
+    const source = await readAuthorizedFile(approvedRoot, relative_path, this.secureReaderPath);
+    if (end_byte > source.length || !Buffer.from(source.toString('utf8'), 'utf8').equals(source)) fail('ERR_INVALID', 'Origem ou intervalo inválido.');
+    const quote = source.subarray(start_byte, end_byte);
+    if (!Buffer.from(quote.toString('utf8'), 'utf8').equals(quote)) fail('ERR_INVALID', 'Intervalo divide caractere UTF-8.');
+    const reference = { reference_id: this.id(), kind: 'quote', relative_path: path.posix.normalize(relative_path.split(path.sep).join('/')), sha256: digest(quote), size_bytes: quote.length, trust: 'untrusted_content' };
+    this.state.sources.push({ owner: ownerKey(auth), reference_id: reference.reference_id, root: approvedRoot, relative_path: reference.relative_path, source_sha256: digest(source), start_byte, end_byte, quote_base64: quote.toString('base64') });
+    this._persist();
+    return { reference };
+  }
+
+  async readQuote(auth, referenceID) {
+    validateAuth(auth);
+    if (!UUID.test(referenceID ?? '')) fail('ERR_INVALID', 'Referência inválida.');
+    const source = this.state.sources.find((item) => item.owner === ownerKey(auth) && item.reference_id === referenceID && item.quote_base64 !== undefined);
+    if (!source) fail('ERR_CONTEXT_STALE', 'Citação indisponível.');
+    const approvedRoot = this.authorizeRoot(auth, source.root);
+    let sourceAvailable = false;
+    try {
+      const bytes = await readAuthorizedFile(approvedRoot, source.relative_path, this.secureReaderPath);
+      sourceAvailable = digest(bytes) === source.source_sha256;
+    } catch (error) {
+      if (!(error instanceof ComposerError) || error.code !== 'ERR_CONTEXT_STALE') throw error;
+    }
+    const quote = Buffer.from(source.quote_base64, 'base64');
+    return { content_base64: source.quote_base64, sha256: digest(quote), source_available: sourceAvailable };
+  }
+
   authorizeRoot(auth, root) {
     let target;
     try { target = realpathSync(root); } catch { fail('ERR_PATH_ESCAPE', 'Root indisponível.'); }
