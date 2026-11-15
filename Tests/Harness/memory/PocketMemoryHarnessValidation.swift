@@ -5,13 +5,32 @@ import Darwin
 @main
 struct PocketMemoryHarnessValidation {
     static func main() async throws {
+        if CommandLine.arguments.count == 3 && ["--export", "--import"].contains(CommandLine.arguments[1]) {
+            let root = URL(fileURLWithPath: CommandLine.arguments[2], isDirectory: true)
+            let scope = PocketMemoryNamespace(environmentID: "10000000-0000-4000-8000-000000000001",
+                projectID: "20000000-0000-4000-8000-000000000001", threadID: "30000000-0000-4000-8000-000000000001")
+            let auth = PocketMemoryAuthorization(principalID: "50000000-0000-4000-8000-000000000001", environmentID: scope.environmentID,
+                aggregateID: scope.projectID, threadID: scope.threadID, scopes: ["context.read", "memory.write", "memory.personal.read"])
+            let service = PocketMemoryHarnessService(directory: root, policy: { _, _, _, _ in true }, association: { _, _ in true })
+            let data: Data
+            if CommandLine.arguments[1] == "--export" {
+                data = try JSONEncoder().encode(try await service.exportNamespace(auth, namespace: scope, includePersonalNote: true))
+            } else {
+                let input = FileHandle.standardInput.readDataToEndOfFile()
+                guard let content = String(data: input, encoding: .utf8) else { fatalError("invalid input") }
+                data = try JSONEncoder().encode(try await service.importNamespace(auth, namespace: scope, content: content))
+            }
+            guard let output = String(data: data, encoding: .utf8) else { fatalError("encoding failed") }
+            print(output)
+            return
+        }
         if CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--first-page" {
             let root = URL(fileURLWithPath: CommandLine.arguments[2], isDirectory: true)
             let scope = PocketMemoryNamespace(environmentID: "10000000-0000-4000-8000-000000000001",
                 projectID: "20000000-0000-4000-8000-000000000001", threadID: nil)
             let auth = PocketMemoryAuthorization(principalID: "50000000-0000-4000-8000-000000000001", environmentID: scope.environmentID,
                 aggregateID: scope.projectID, threadID: nil, scopes: ["context.read", "memory.write", "memory.personal.read"])
-            let service = PocketMemoryHarnessService(directory: root, policy: { _, _, _, _ in true })
+            let service = PocketMemoryHarnessService(directory: root, policy: { _, _, _, _ in true }, association: { _, _ in true })
             let page = try await service.snapshot(auth, namespace: scope, pageSize: 1)
             guard let output = String(data: try JSONEncoder().encode(page), encoding: .utf8) else { fatalError("encoding failed") }
             print(output)
@@ -23,7 +42,7 @@ struct PocketMemoryHarnessValidation {
                 projectID: "20000000-0000-4000-8000-000000000001", threadID: nil)
             let auth = PocketMemoryAuthorization(principalID: "50000000-0000-4000-8000-000000000001", environmentID: scope.environmentID,
                 aggregateID: scope.projectID, threadID: nil, scopes: ["context.read", "memory.write", "memory.personal.read"])
-            let service = PocketMemoryHarnessService(directory: root, policy: { _, _, _, _ in true })
+            let service = PocketMemoryHarnessService(directory: root, policy: { _, _, _, _ in true }, association: { _, _ in true })
             let page = try await service.snapshot(auth, namespace: scope, pageSize: 1, cursor: CommandLine.arguments[3])
             guard let output = String(data: try JSONEncoder().encode(page), encoding: .utf8) else { fatalError("encoding failed") }
             print(output)
@@ -46,7 +65,7 @@ struct PocketMemoryHarnessValidation {
                 projectID: "20000000-0000-4000-8000-000000000001", threadID: "30000000-0000-4000-8000-000000000001")
             let auth = PocketMemoryAuthorization(principalID: "50000000-0000-4000-8000-000000000001", environmentID: scope.environmentID,
                 aggregateID: scope.projectID, threadID: scope.threadID, scopes: ["context.read", "memory.write", "memory.personal.read"])
-            let service = PocketMemoryHarnessService(directory: root, policy: { _, _, _, _ in true })
+            let service = PocketMemoryHarnessService(directory: root, policy: { _, _, _, _ in true }, association: { _, _ in true })
             let current = try await service.noteGet(auth, namespace: scope)
             guard current.content == "node recovered", current.revision == 2 else { fatalError("cross-runtime recovery failed") }
             _ = try await service.notePut(auth, namespace: scope, content: "swift", expectedRevision: current.revision)
@@ -65,7 +84,7 @@ struct PocketMemoryHarnessValidation {
         let projectB = "20000000-0000-4000-8000-000000000002"
         let thread = "30000000-0000-4000-8000-000000000001"
         let principal = "50000000-0000-4000-8000-000000000001"
-        let service = PocketMemoryHarnessService(directory: root, policy: { _, _, _, _ in true })
+        let service = PocketMemoryHarnessService(directory: root, policy: { _, _, _, _ in true }, association: { _, _ in true })
         let authA = PocketMemoryAuthorization(principalID: principal, environmentID: environment,
             aggregateID: projectA, threadID: thread, scopes: ["context.read", "memory.write", "memory.personal.read"])
         let namespaceA = PocketMemoryNamespace(environmentID: environment, projectID: projectA, threadID: thread)
@@ -80,7 +99,17 @@ struct PocketMemoryHarnessValidation {
             _ = try await absentPolicy.captureScoped(authA, namespace: namespaceA, events: [event])
             fatalError("Missing policy was accepted")
         } catch PocketMemoryStoreError.unavailable {}
-        let restarted = PocketMemoryHarnessService(directory: root, policy: { _, _, _, _ in true })
+        let absentAssociation = PocketMemoryHarnessService(directory: root, policy: { _, _, _, _ in true })
+        do {
+            _ = try await absentAssociation.captureScoped(authA, namespace: namespaceA, events: [event])
+            fatalError("Missing association was accepted")
+        } catch PocketMemoryStoreError.unavailable {}
+        let deniedAssociation = PocketMemoryHarnessService(directory: root, policy: { _, _, _, _ in true }, association: { _, _ in false })
+        do {
+            _ = try await deniedAssociation.captureScoped(authA, namespace: namespaceA, events: [event])
+            fatalError("Denied association was accepted")
+        } catch PocketMemoryStoreError.forbidden {}
+        let restarted = PocketMemoryHarnessService(directory: root, policy: { _, _, _, _ in true }, association: { _, _ in true })
         let replay = try await restarted.captureScoped(authA, namespace: namespaceA, events: [event])
         precondition(replay == accepted)
         let captureRoot = root.appendingPathComponent("v2/\(environment)/projects/\(projectA)")
@@ -150,6 +179,18 @@ struct PocketMemoryHarnessValidation {
         precondition(!pageIDs.contains(lateThread) && page1.asOfSeq == page3.asOfSeq)
         let laterEvents = try await service.eventsSince(projectAuth, namespace: projectNamespace, afterSequence: page1.asOfSeq)
         precondition(laterEvents.count == 1 && laterEvents[0].value.namespace.threadID == lateThread)
+        let timed = PocketMemoryHarnessService(directory: root, policy: { _, _, _, _ in true }, association: { _, _ in true }, now: { 1_000 })
+        let timedPage = try await timed.snapshot(projectAuth, namespace: projectNamespace, pageSize: 2)
+        guard let timedCursor = timedPage.nextCursor else { fatalError("timed snapshot did not paginate") }
+        do {
+            _ = try await timed.snapshot(projectAuth, namespace: projectNamespace, pageSize: 3, cursor: timedCursor)
+            fatalError("page size changed")
+        } catch PocketMemoryStoreError.invalidInput {}
+        let expired = PocketMemoryHarnessService(directory: root, policy: { _, _, _, _ in true }, association: { _, _ in true }, now: { 601_000 })
+        do {
+            _ = try await expired.snapshot(projectAuth, namespace: projectNamespace, cursor: timedCursor)
+            fatalError("expired cursor accepted")
+        } catch PocketMemoryStoreError.cursorExpired {}
         let noteState = root.appendingPathComponent("v2/\(environment)/projects/\(projectC)/.memory-notes.json")
         try FileManager.default.removeItem(at: noteState)
         do {
@@ -162,7 +203,7 @@ struct PocketMemoryHarnessValidation {
         try FileManager.default.createDirectory(at: symlinkRoot, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
         try FileManager.default.createSymbolicLink(at: symlinkRoot.appendingPathComponent("v2"), withDestinationURL: outside)
-        let symlinkService = PocketMemoryHarnessService(directory: symlinkRoot, policy: { _, _, _, _ in true })
+        let symlinkService = PocketMemoryHarnessService(directory: symlinkRoot, policy: { _, _, _, _ in true }, association: { _, _ in true })
         do {
             _ = try await symlinkService.captureScoped(authA, namespace: namespaceA, events: [event])
             fatalError("Symlink namespace was accepted")

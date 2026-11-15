@@ -101,22 +101,25 @@ function validateScopedEvents(events) {
 function redactExportText(value) {
   return String(value)
     .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi, '[redacted credential]')
+    .replace(/\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|secret|password|senha|token)\s*[:=]\s*)[^\s,;]+/gi, '$1[redacted secret]')
     .replace(/\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_]{20,}|AIza[0-9A-Za-z_-]{30,})\b/g, '[redacted secret]')
     .replace(/(^|[\s("'=])(?:\/(?!\/)[^\s"'<>]+|[A-Za-z]:\\[^\s"'<>]+)/g, '$1[redacted path]');
 }
 
 function sanitizeExportRecord(record) {
+  const timestamp = (value) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value) ? value : undefined;
+  const eventNames = new Set(['session-start', 'user-prompt-submit', 'assistant-response', 'stop', 'session-end']);
   const safe = {
     schema_version:1,
     id:record.id,
-    created_at:record.created_at,
-    updated_at:record.updated_at,
+    ...(timestamp(record.created_at) ? { created_at:record.created_at } : {}),
+    ...(timestamp(record.updated_at) ? { updated_at:record.updated_at } : {}),
     messages:(record.messages || []).filter((item) => ['user', 'assistant'].includes(item?.role) && typeof item.content === 'string')
-      .map((item) => ({ role:item.role, content:redactExportText(item.content), ...(item.created_at ? { created_at:item.created_at } : {}) })),
-    events:(record.events || []).filter((item) => typeof item?.event === 'string').map((item) => ({
+      .map((item) => ({ role:item.role, content:redactExportText(item.content), ...(timestamp(item.created_at) ? { created_at:item.created_at } : {}) })),
+    events:(record.events || []).filter((item) => eventNames.has(item?.event) && typeof item.ingest_key === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(item.ingest_key)).map((item) => ({
       event:item.event,
       session_id:record.id,
-      ingest_key:item.ingest_key,
+      ingest_key:digest(`memory-export\u0000${item.ingest_key}`),
       ...(item.prompt ? { prompt:redactExportText(item.prompt) } : {}),
       ...(item.message ? { message:redactExportText(item.message) } : {}),
       ...(Number.isSafeInteger(item.sequence) ? { sequence:item.sequence } : {})
@@ -140,7 +143,7 @@ function validateIOError(cause, fallback = 'ERR_UNAVAILABLE') {
 }
 
 export class MemoryHarnessService {
-  constructor({ root, now = () => Date.now(), pageSize = 100, policy } = {}) {
+  constructor({ root, now = () => Date.now(), pageSize = 100, policy, association } = {}) {
     if (typeof root !== 'string' || !root) throw error('ERR_INVALID', 'Memory store root is required');
     if (typeof now !== 'function' || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
       throw error('ERR_INVALID', 'Memory service configuration is invalid');
@@ -149,7 +152,9 @@ export class MemoryHarnessService {
     this.now = now;
     this.pageSize = pageSize;
     if (policy !== undefined && typeof policy !== 'function') throw error('ERR_INVALID', 'Memory policy port is invalid');
+    if (association !== undefined && typeof association !== 'function') throw error('ERR_INVALID', 'Memory association port is invalid');
     this.policy = policy;
+    this.association = association;
   }
 
   async #authorize(auth, namespace, scope, options = {}) {
@@ -159,6 +164,13 @@ export class MemoryHarnessService {
     try { granted = await this.policy(auth, { namespace, scope, personal:options.personal === true }); }
     catch { throw error('ERR_UNAVAILABLE', 'Memory policy port is unavailable', { retryable:true }); }
     if (granted !== true) throw error('ERR_FORBIDDEN', 'Memory policy denied access');
+    if (namespace.project_id && namespace.thread_id) {
+      if (!this.association) throw error('ERR_UNAVAILABLE', 'Memory association port is unavailable', { retryable:true });
+      let associated;
+      try { associated = await this.association(auth, namespace); }
+      catch { throw error('ERR_UNAVAILABLE', 'Memory association port is unavailable', { retryable:true }); }
+      if (associated !== true) throw error('ERR_FORBIDDEN', 'Memory association denied access');
+    }
   }
 
   async captureScoped(auth, input) {
@@ -355,12 +367,8 @@ export class MemoryHarnessService {
       imported.push(record);
     }
     const store = await this.#storeFor(namespace);
-    try { await store.importRecords(imported); }
+    try { await store.importRecords(imported, { namespace, note:parsed.note }); }
     catch (cause) { throw validateIOError(cause, 'ERR_IMPORT'); }
-    if (parsed.note !== undefined) {
-      try { await store.notePutCAS(parsed.note.content, 0, namespace); }
-      catch (cause) { throw validateIOError(cause, 'ERR_IMPORT'); }
-    }
     return { imported_count:imported.length };
   }
 

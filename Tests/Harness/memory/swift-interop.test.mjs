@@ -18,7 +18,7 @@ const next = (child) => new Promise((resolve, reject) => { child.once('message',
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'memory-interop-'));
   t.after(() => rm(root, { recursive:true, force:true }));
-  return { root, service:new MemoryHarnessService({ root, policy:async () => true }) };
+  return { root, service:new MemoryHarnessService({ root, policy:async () => true, association:async () => true }) };
 }
 
 test('JS e Swift leem a mesma nota, CAS e journal de eventos', { skip:!executable }, async (t) => {
@@ -105,4 +105,48 @@ test('cursor gerado em Swift continua a mesma página em Node', { skip:!executab
   const second = await service.snapshot({ ...auth, thread_id:undefined }, { namespace:projectScope, cursor:first.next_cursor });
   assert.equal(second.snapshot_id, first.snapshot_id);
   assert.equal(second.notes[0].namespace.thread_id, '30000000-0000-4000-8000-000000000002');
+});
+
+test('export/import redigido funciona nos dois sentidos JS e Swift', { skip:!executable }, async (t) => {
+  const source = await fixture(t);
+  const nodeDestination = await fixture(t);
+  const swiftDestination = await fixture(t);
+  await source.service.captureScoped(auth, { namespace, events:[{ event:'user-prompt-submit',
+    session_id:'40000000-0000-4000-8000-000000000009', ingest_key:'portable',
+    prompt:'postgres sk-abcdefghijklmnopqrstuvwxyz123456 em /etc/private/config C:\\Temp\\secret' }] });
+  await source.service.notePut(auth, { namespace, content:'nota /tmp/private', expected_revision:0 });
+  async function run(mode, root, input) {
+    const child = spawn(executable, [mode, root], { stdio:['pipe', 'pipe', 'inherit'] });
+    let output = '';
+    child.stdout.setEncoding('utf8'); child.stdout.on('data', (data) => { output += data; });
+    child.stdin.end(input);
+    const code = await new Promise((resolve, reject) => { child.once('exit', resolve); child.once('error', reject); });
+    assert.equal(code, 0); return JSON.parse(output);
+  }
+  const exportedSwift = await run('--export', source.root);
+  assert.doesNotMatch(exportedSwift.content, /sk-abcdefghijklmnopqrstuvwxyz|\/etc\/private|\/tmp\/private|C:\\\\Temp/);
+  assert.equal((await nodeDestination.service.importNamespace(auth, { namespace, content:exportedSwift.content })).imported_count, 1);
+  const exportedNode = await source.service.exportNamespace(auth, { namespace, include_personal_note:true });
+  assert.equal((await run('--import', swiftDestination.root, exportedNode.content)).imported_count, 1);
+  assert.equal((await swiftDestination.service.noteGet(auth, { namespace })).content, 'nota [redacted path]');
+  const recalled = await swiftDestination.service.recallScoped(auth, { environment_id:environment, project_id:project,
+    thread_id:thread, question:'postgres', include_personal_note:false });
+  assert.equal(recalled.hits.length, 1);
+});
+
+test('Swift recupera journal de import persistido pelo Node', { skip:!executable }, async (t) => {
+  const { root, service } = await fixture(t);
+  await service.noteGet(auth, { namespace });
+  const folder = path.join(root, 'v2', environment, 'projects', project);
+  const record = { schema_version:1, id:'40000000-0000-4000-8000-000000000010',
+    created_at:'1970-01-01T00:00:00.000Z', updated_at:'1970-01-01T00:00:00.000Z',
+    messages:[{ role:'user', content:'postgres recuperado' }], events:[] };
+  await writeFile(path.join(folder, '.import-intent.json'), JSON.stringify({ records:[record] }));
+  const child = spawn(executable, ['--first-page', root], { stdio:['ignore', 'pipe', 'inherit'] });
+  child.stdout.resume();
+  const code = await new Promise((resolve, reject) => { child.once('exit', resolve); child.once('error', reject); });
+  assert.equal(code, 0);
+  const recalled = await service.recallScoped(auth, { environment_id:environment, project_id:project,
+    thread_id:thread, question:'postgres recuperado', include_personal_note:false });
+  assert.equal(recalled.hits.length, 1);
 });

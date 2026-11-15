@@ -17,7 +17,7 @@ const fixturePolicy = async () => true; // Boundary substitute; AUTH-REAL requir
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'pocketwiki-memory-'));
   t.after(() => rm(root, { recursive: true, force: true }));
-  return { root, memory: new MemoryHarnessService({ root, policy:fixturePolicy }) };
+  return { root, memory: new MemoryHarnessService({ root, policy:fixturePolicy, association:fixturePolicy }) };
 }
 
 function auth(environmentId = environmentA, extra = {}) {
@@ -71,7 +71,7 @@ test('01-02 reenvio após perda de ack e restart preserva uma mensagem e accepte
   const { root, memory } = await fixture(t);
   const batch = [event()];
   const accepted = await memory.captureScoped(auth(), { namespace:namespace(), events:batch });
-  const restarted = new MemoryHarnessService({ root, policy:fixturePolicy });
+  const restarted = new MemoryHarnessService({ root, policy:fixturePolicy, association:fixturePolicy });
   const retried = await restarted.captureScoped(auth(), { namespace:namespace(), events:batch });
   assert.deepEqual(retried, accepted);
   const recalled = await restarted.recallScoped(auth(), {
@@ -215,7 +215,7 @@ test('R1 cursor expirado retorna ERR_CURSOR_EXPIRED e page_size permanece congel
   const root = await mkdtemp(path.join(os.tmpdir(), 'memory-cursor-'));
   t.after(() => rm(root, { recursive:true, force:true }));
   let now = 1_000;
-  const memory = new MemoryHarnessService({ root, policy:fixturePolicy, now:() => now });
+  const memory = new MemoryHarnessService({ root, policy:fixturePolicy, association:fixturePolicy, now:() => now });
   await populateNotes(memory, 4);
   const scope = projectNamespace();
   const first = await memory.snapshot(auth(environmentA, { thread_id:undefined }), { namespace:scope, page_size:1 });
@@ -411,7 +411,7 @@ test('intenção de captura pendente é reconciliada antes de qualquer recall ap
   const folder = path.join(root, 'v2', environmentA, 'projects', projectA);
   const pending = { events:[{ ...event(), sequence:1 }], ledger:{ sequence:1, accepted_keys:{ [`${sessionA}:prompt-1`]:1 } } };
   await writeFile(path.join(folder, '.capture-intent.json'), JSON.stringify(pending));
-  const restarted = new MemoryHarnessService({ root, policy:fixturePolicy });
+  const restarted = new MemoryHarnessService({ root, policy:fixturePolicy, association:fixturePolicy });
   const recalled = await restarted.recallScoped(auth(), {
     ...recallScope(namespace()), question:'postgres', include_personal_note:false
   });
@@ -536,7 +536,7 @@ test('journal de nota reconcilia espelho e estado antes de uma leitura após cra
   state.events.push({ event_id:'60000000-0000-4000-8000-000000000002', sequence:2,
     entity_type:'MemoryNote', entity_key:key, change:'upsert', value });
   await writeFile(path.join(folder, '.note-intent.json'), JSON.stringify({ state, namespace:recallScope(namespace()), content:'depois' }));
-  const restarted = new MemoryHarnessService({ root, policy:fixturePolicy });
+  const restarted = new MemoryHarnessService({ root, policy:fixturePolicy, association:fixturePolicy });
   assert.deepEqual(await restarted.noteGet(auth(), { namespace:namespace() }), { content:'depois', revision:2 });
   assert.equal(await readFile(path.join(folder, '.notes', threadA, 'MEMORY.md'), 'utf8'), 'depois');
 });
@@ -552,4 +552,112 @@ test('recall respeita limite de três hits incluindo nota pessoal', async (t) =>
   const result = await memory.recallScoped(auth(), { ...recallScope(namespace()), question:'postgres', include_personal_note:true });
   assert.equal(result.hits.length, 3);
   assert.equal(result.hits[0].source, 'note');
+});
+
+test('import com conflito de nota não deixa sessões parcialmente importadas', async (t) => {
+  const source = await fixture(t);
+  const destination = await fixture(t);
+  await source.memory.captureScoped(auth(), { namespace:namespace(), events:[event({ prompt:'único importação segura' })] });
+  await source.memory.notePut(auth(), { namespace:namespace(), content:'origem', expected_revision:0 });
+  await destination.memory.notePut(auth(), { namespace:namespace(), content:'existente', expected_revision:0 });
+  const exported = await source.memory.exportNamespace(auth(), { namespace:namespace(), include_personal_note:true });
+  await assert.rejects(destination.memory.importNamespace(auth(), { namespace:namespace(), content:exported.content }),
+    (error) => error.code === 'ERR_CONFLICT');
+  const recall = await destination.memory.recallScoped(auth(), { ...recallScope(namespace()), question:'único importação', include_personal_note:false });
+  assert.equal(recall.hits.length, 0);
+});
+
+test('import interrompido é reconciliado antes de uma leitura', async (t) => {
+  const { root, memory } = await fixture(t);
+  await memory.noteGet(auth(), { namespace:namespace() });
+  const folder = path.join(root, 'v2', environmentA, 'projects', projectA);
+  const record = { schema_version:1, id:sessionA, created_at:'1970-01-01T00:00:00.000Z',
+    updated_at:'1970-01-01T00:00:00.000Z', messages:[{ role:'user', content:'import retomado postgres' }], events:[] };
+  await writeFile(path.join(folder, '.import-intent.json'), JSON.stringify({ records:[record] }));
+  const reopened = new MemoryHarnessService({ root, policy:fixturePolicy, association:fixturePolicy });
+  const recall = await reopened.recallScoped(auth(), { ...recallScope(namespace()), question:'import retomado', include_personal_note:false });
+  assert.equal(recall.hits.length, 1);
+  assert.equal(recall.hits[0].session_id, sessionA);
+});
+
+test('SIGKILL durante import deixa journal recuperável sem sessões parciais', async (t) => {
+  const { fork } = await import('node:child_process');
+  const { watch } = await import('node:fs');
+  const { readdir } = await import('node:fs/promises');
+  const { root, memory } = await fixture(t);
+  await memory.noteGet(auth(), { namespace:namespace() });
+  const folder = path.join(root, 'v2', environmentA, 'projects', projectA);
+  const sessions = Array.from({ length:500 }, (_, index) => ({
+    schema_version:1, id:`40000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+    messages:[{ role:'user', content:`postgres import ${index}` }], events:[]
+  }));
+  const input = path.join(root, 'import-fixture.json');
+  await writeFile(input, JSON.stringify({ schema_version:2, namespace:recallScope(namespace()), sessions }));
+  const worker = fork(new URL('./import-worker.mjs', import.meta.url), [root, input], { stdio:['ignore', 'ignore', 'inherit', 'ipc'] });
+  t.after(() => worker.kill('SIGKILL'));
+  await new Promise((resolve, reject) => { worker.once('message', resolve); worker.once('error', reject); });
+  let killed = false;
+  const watcher = watch(folder, (_event, filename) => {
+    if (filename === '.import-intent.json' && !killed) { killed = true; worker.kill('SIGKILL'); }
+  });
+  t.after(() => watcher.close());
+  worker.send('go');
+  const [code, signal] = await new Promise((resolve) => worker.once('exit', (...args) => resolve(args)));
+  watcher.close();
+  assert.equal(killed, true); assert.equal(signal, 'SIGKILL'); assert.equal(code, null);
+  const reopened = new MemoryHarnessService({ root, policy:fixturePolicy, association:fixturePolicy });
+  const recalled = await reopened.recallScoped(auth(), { ...recallScope(namespace()), question:'postgres import', include_personal_note:false });
+  assert.equal(recalled.hits.length, 3);
+  assert.equal((await readdir(path.join(folder, 'captures'))).filter((name) => name.endsWith('.json')).length, 500);
+});
+
+test('SIGKILL durante captura reconcilia lote inteiro antes de qualquer recall', async (t) => {
+  const { fork } = await import('node:child_process');
+  const { watch } = await import('node:fs');
+  const { readdir } = await import('node:fs/promises');
+  const { root, memory } = await fixture(t);
+  await memory.noteGet(auth(), { namespace:namespace() });
+  const folder = path.join(root, 'v2', environmentA, 'projects', projectA);
+  const worker = fork(new URL('./capture-worker.mjs', import.meta.url), [root], { stdio:['ignore', 'ignore', 'inherit', 'ipc'] });
+  t.after(() => worker.kill('SIGKILL'));
+  await new Promise((resolve, reject) => { worker.once('message', resolve); worker.once('error', reject); });
+  let killed = false;
+  const watcher = watch(folder, (_event, filename) => {
+    if (filename === '.capture-intent.json' && !killed) { killed = true; worker.kill('SIGKILL'); }
+  });
+  t.after(() => watcher.close());
+  worker.send('go');
+  const [, signal] = await new Promise((resolve) => worker.once('exit', (...args) => resolve(args)));
+  watcher.close();
+  assert.equal(killed, true); assert.equal(signal, 'SIGKILL');
+  const reopened = new MemoryHarnessService({ root, policy:fixturePolicy, association:fixturePolicy });
+  const recalled = await reopened.recallScoped(auth(), { ...recallScope(namespace()), question:'postgres', include_personal_note:false });
+  assert.equal(recalled.hits.length, 3);
+  assert.equal((await readdir(path.join(folder, 'captures'))).filter((name) => name.endsWith('.json')).length, 32);
+});
+
+test('export não vaza paths ou credenciais em metadados legados malformados', async (t) => {
+  const { memory, root } = await fixture(t);
+  await memory.captureScoped(auth(), { namespace:namespace(), events:[event()] });
+  const file = path.join(root, 'v2', environmentA, 'projects', projectA, 'captures', `session-${sessionA}.json`);
+  const record = JSON.parse(await readFile(file, 'utf8'));
+  record.created_at = '/etc/private/created';
+  record.updated_at = 'sk-abcdefghijklmnopqrstuvwxyz123456';
+  record.messages[0].created_at = '/tmp/private/date';
+  record.events.push({ event:'/etc/private/event', ingest_key:'sk-abcdefghijklmnopqrstuvwxyz123456' });
+  await writeFile(file, JSON.stringify(record));
+  const result = await memory.exportNamespace(auth(), { namespace:namespace() });
+  assert.doesNotMatch(result.content, /\/etc\/private|\/tmp\/private|sk-abcdefghijklmnopqrstuvwxyz/);
+});
+
+test('associação thread-projeto ausente ou negada impede acesso sem I/O', async (t) => {
+  const { root } = await fixture(t);
+  const missing = new MemoryHarnessService({ root, policy:fixturePolicy });
+  await assert.rejects(missing.captureScoped(auth(), { namespace:namespace(), events:[event()] }),
+    (error) => error.code === 'ERR_UNAVAILABLE');
+  const denied = new MemoryHarnessService({ root, policy:fixturePolicy, association:async () => false });
+  await assert.rejects(denied.captureScoped(auth(), { namespace:namespace(), events:[event()] }),
+    (error) => error.code === 'ERR_FORBIDDEN');
+  const { readdir } = await import('node:fs/promises');
+  assert.deepEqual(await readdir(root), []);
 });
