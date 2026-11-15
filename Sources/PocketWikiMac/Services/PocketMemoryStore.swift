@@ -526,9 +526,12 @@ actor PocketMemoryStore {
     }
 
     private static func redactExportText(_ input: String) -> String {
-        guard let basic = try? NSRegularExpression(pattern: #"(?i)\bBasic\s+"#) else { return "[redacted content]" }
+        // JavaScript's non-Unicode \b and \s are deliberately specified here;
+        // ICU's Unicode word boundaries and Foundation whitespace differ.
+        guard let basic = try? NSRegularExpression(pattern: #"(?<![A-Za-z0-9_])[Bb][Aa][Ss][Ii][Cc][\u0009-\u000D\u0020\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]+"#) else { return "[redacted content]" }
         let inputRange = NSRange(input.startIndex..<input.endIndex, in: input)
-        let delimiters = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: ",;\"'<>()[]{}"))
+        let jsWhitespace = "\u{0009}\u{000A}\u{000B}\u{000C}\u{000D}\u{0020}\u{00A0}\u{1680}\u{2000}\u{2001}\u{2002}\u{2003}\u{2004}\u{2005}\u{2006}\u{2007}\u{2008}\u{2009}\u{200A}\u{2028}\u{2029}\u{202F}\u{205F}\u{3000}\u{FEFF}"
+        let delimiters = CharacterSet(charactersIn: jsWhitespace + ",;\"'<>()[]{}")
         var basicRedacted = ""
         var cursor = input.startIndex
         for match in basic.matches(in: input, range: inputRange) {
