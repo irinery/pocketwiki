@@ -4,7 +4,7 @@ import { promisify } from 'node:util';
 import { createHash, randomBytes } from 'node:crypto';
 import { requireRuntimeProof, requireRuntimeScreenshot } from './runtime-proof.mjs';
 import { superviseMacHost } from '../../NewHarnessE2E/MacOSHost/supervisor.mjs';
-import { assertTrackedFlags } from '../../NewHarnessE2E/git-snapshot.mjs';
+import { assertTrackedFlags, assertTrackedCheckoutClean } from '../../NewHarnessE2E/git-snapshot.mjs';
 import { access, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -59,6 +59,7 @@ try {
   const schemaSHA256 = createHash('sha256').update(await readFile('src/harness/contracts/harness-v1.schema.json')).digest('hex');
   hostIdentity = { pocketwiki_sha: wikiHead.trim(), pocketkernel_sha: head.trim(), middlewareauth_sha: middlewareHead.trim(), schema_sha256: schemaSHA256, seed, auth_mode: 'host_local' };
   checkFinalIdentity = async () => {
+    assertTrackedCheckoutClean(process.cwd());
     const sha = async repo => (await promisify(execFile)('git', ['-C', repo, 'rev-parse', 'HEAD'])).stdout.trim();
     return { pocketwiki_sha: await sha(process.cwd()), pocketkernel_sha: await sha(root), middlewareauth_sha: await sha(middlewareRoot), schema_sha256: createHash('sha256').update(await readFile('src/harness/contracts/harness-v1.schema.json')).digest('hex'), seed, auth_mode: 'host_local' };
   };
