@@ -5,9 +5,14 @@ on:
     paths:
       - 'Sources/PocketWikiMac/Models/Harness/**'
       - 'Sources/PocketWikiMac/Services/Harness/Runtime/**'
+      - 'Sources/PocketWikiMac/Services/Harness/Memory/**'
+      - 'Sources/PocketWikiMac/Services/PocketMemoryStore.swift'
       - 'Tests/Harness/runtime/**'
+      - 'Tests/Harness/memory/**'
       - 'src/harness/contracts/**'
       - 'src/harness/runtime/**'
+      - 'src/harness/memory/**'
+      - 'src/memory/**'
       - '.github/workflows/new-harness-runtime-lane.yml'
   workflow_dispatch:
 
@@ -15,6 +20,27 @@ permissions:
   contents: read
 
 jobs:
+  memory-validation:
+    name: Memory Swift and Node interoperability
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - name: Checkout requested revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+      - name: Test memory Swift and Node interoperability
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+          git rev-parse HEAD
+          node --version
+          swift --version
+          sh Tests/Harness/memory/run-swift-tests.sh
+
   runtime-transport:
     name: Runtime transport and projection (Node and Swift)
     runs-on: macos-15

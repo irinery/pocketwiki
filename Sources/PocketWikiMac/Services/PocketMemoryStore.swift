@@ -526,13 +526,33 @@ actor PocketMemoryStore {
     }
 
     private static func redactExportText(_ input: String) -> String {
+        var basicRedacted = input
+        let basic = try! NSRegularExpression(pattern: #"(?i)\bBasic\s+([^\s,;"'<>()[\]{}]+)"#)
+        let inputRange = NSRange(input.startIndex..<input.endIndex, in: input)
+        for match in basic.matches(in: input, range: inputRange).reversed() {
+            guard let tokenRange = Range(match.range(at: 1), in: basicRedacted),
+                  let matchRange = Range(match.range, in: basicRedacted) else { continue }
+            let token = String(basicRedacted[tokenRange])
+            guard token.range(of: #"^[A-Za-z0-9+/]+={0,2}$"#, options: .regularExpression) != nil else { continue }
+            let unpadded = token.trimmingCharacters(in: CharacterSet(charactersIn: "="))
+            guard unpadded.utf8.count % 4 != 1 else { continue }
+            let padded = unpadded + String(repeating: "=", count: (4 - unpadded.utf8.count % 4) % 4)
+            guard !token.contains("=") || token == padded else { continue }
+            guard let decoded = Data(base64Encoded: padded), decoded.base64EncodedString() == padded,
+                  decoded.contains(0x3a) else { continue }
+            basicRedacted.replaceSubrange(matchRange, with: "[redacted credential]")
+        }
         let rules: [(String, String)] = [
+            (#"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"#, "[redacted private key]"),
             (#"(?i)\bBearer\s+[A-Za-z0-9._~+/-]+=*"#, "[redacted credential]"),
-            (#"(?i)\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|secret|password|senha|token)\s*[:=]\s*)[^\s,;]+"#, "$1[redacted secret]"),
-            (#"\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_]{20,}|AIza[0-9A-Za-z_-]{30,})\b"#, "[redacted secret]"),
+            (#"(?i)\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|secret|password|senha|token)[\"']?\s*[:=]\s*)(?:\"(?:\\[\s\S]|[^\"\\]|\\$)*(?:\"|$)|'(?:\\[\s\S]|[^'\\]|\\$)*(?:'|$)|[^\s,;]+)"#, "$1[redacted secret]"),
+            (#"\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_]{20,}|AIza[0-9A-Za-z_-]{30,}|AKIA[0-9A-Z]{16}|glpat-[A-Za-z0-9_-]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})\b"#, "[redacted secret]"),
+            (#"(?i)\b([a-z][a-z0-9+.-]*://)[^\s/@:]+:[^\s/@]+@"#, "$1[redacted credential]@"),
+            (#"(?i)\bfile://[^\s\"'<>]+"#, "[redacted path]"),
+            (#"(^|[\s(\"'=])\\\\[^\s\"'<>]+"#, "$1[redacted path]"),
             (#"(^|[\s(\"'=])(?:/(?!/)[^\s\"'<>]+|[A-Za-z]:\\[^\s\"'<>]+)"#, "$1[redacted path]")
         ]
-        return rules.reduce(input) { text, rule in
+        return rules.reduce(basicRedacted) { text, rule in
             text.replacingOccurrences(of: rule.0, with: rule.1, options: .regularExpression)
         }
     }
