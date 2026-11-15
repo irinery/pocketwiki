@@ -53,8 +53,11 @@ export function validateReference(reference) {
   if (!isPlainObject(reference)) fail('ERR_INVALID', 'Referência inválida.');
   const allowed = new Set(['reference_id', 'kind', 'relative_path', 'message_id', 'sha256', 'size_bytes', 'trust']);
   if (Object.keys(reference).some((key) => !allowed.has(key))) fail('ERR_INVALID', 'Campo desconhecido em referência.');
-  if (!UUID.test(reference.reference_id ?? '') || !['wiki', 'file', 'quote', 'image'].includes(reference.kind) || !SHA256.test(reference.sha256 ?? '') || !Number.isSafeInteger(reference.size_bytes) || reference.size_bytes < 0 || reference.trust !== 'untrusted_content') fail('ERR_INVALID', 'Referência fora do contrato.');
-  if (reference.relative_path !== undefined) validateString(reference.relative_path, 1, 4096, 'Caminho relativo');
+  if (!UUID.test(reference.reference_id ?? '') || !['wiki', 'file', 'quote', 'image'].includes(reference.kind) || !SHA256.test(reference.sha256 ?? '') || !Number.isSafeInteger(reference.size_bytes) || reference.size_bytes < 0 || reference.size_bytes > 4 * 1024 * 1024 || reference.trust !== 'untrusted_content') fail('ERR_INVALID', 'Referência fora do contrato.');
+  if (reference.relative_path !== undefined) {
+    validateString(reference.relative_path, 1, 4096, 'Caminho relativo');
+    if (path.isAbsolute(reference.relative_path) || reference.relative_path.includes('\\') || reference.relative_path.split('/').some((part) => part === '..')) fail('ERR_INVALID', 'Caminho relativo inválido.');
+  }
   if (reference.message_id !== undefined && !UUID.test(reference.message_id)) fail('ERR_INVALID', 'message_id inválido.');
   return reference;
 }

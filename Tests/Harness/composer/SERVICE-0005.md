@@ -12,9 +12,12 @@ swiftc -typecheck Sources/PocketWikiMac/Services/Harness/Composer/ComposerDraftS
 swiftc Sources/PocketWikiMac/Services/Harness/Composer/ComposerDraftStore.swift Tests/Harness/composer/swift-store-test.swift -o /tmp/pocketwiki-composer-swift-test
 /tmp/pocketwiki-composer-swift-test
 rm /tmp/pocketwiki-composer-swift-test
+swiftc Sources/PocketWikiMac/Services/Harness/Composer/ComposerDraftStore.swift Tests/Harness/composer/swift-corpus-test.swift -o /tmp/pocketwiki-composer-corpus-test
+/tmp/pocketwiki-composer-corpus-test
+rm /tmp/pocketwiki-composer-corpus-test
 ```
 
-A suíte Node usa o serviço e stash reais em diretórios temporários privados, removidos ao término. A saída do runner contém nomes dos testes e contagens, sem conteúdo dos anexos ou credenciais. Em 2026-11-14: 35 testes passaram, nenhum skip; typecheck Swift sem saída, exit 0. O teste de store Swift compila e executa `swift-store-test.swift`, com um caso aprovado. Esses resultados não são uma execução do gate cumulativo nem provam os itens abaixo.
+A suíte Node usa o serviço e stash reais em diretórios temporários privados, removidos ao término. A saída do runner contém nomes dos testes e contagens, sem conteúdo dos anexos ou credenciais. Em 2026-11-14: 36 testes passaram, nenhum skip; typecheck Swift sem saída, exit 0. O teste de store Swift compila e executa `swift-store-test.swift`, com um caso aprovado; corpus compartilhado de referências executado em JS/Swift: 7 casos aprovados por ambos. Esses resultados não são uma execução do gate cumulativo nem provam os itens abaixo.
 
 ## Portas para integração
 
@@ -30,7 +33,7 @@ O módulo `gateway.mjs` contém `ComposerGateway` e `ComposerPolicy`: o teste us
 - 01-01 usa trecho real de arquivo wiki autorizado, preservado por hash e relido após restart; referências a mensagens de thread dependem de `threads.history` E3. 01-05 agora usa `ComposerProjection` e eventos/snapshot verificados no schema real; falta exercício pelo transporte e cliente de E4. Processos independentes e SIGKILL foram exercitados; falta fronteira de rede integrada ao Kernel.
 - A leitura usa descritor de root e `openat`/`O_NOFOLLOW` em cada componente. Um ensaio concorrente troca diretório por symlink 2000 vezes e nunca observa bytes externos; ainda é necessária revisão da política para diretórios que um atacante possa mover para fora do root após abertura.
 - O writer JSON serializa processos por lock e sincroniza os bytes antes de renomear. O lock usa arquivo com metadata instalado por hardlink atômico; outro processo recupera lock do mesmo host somente quando o PID deixou de existir. Dono ambíguo, host diferente ou reaper abandonado falham fechados e exigem recuperação operacional; o arquivo e diretório são sincronizados após escrita/rename; SIGKILL após commit confirma replay local; falta injeção de falha nos demais pontos de commit. Eventos são mantidos por 10 minutos ou enquanto necessários para snapshot ativo; tombstones ainda não têm retenção limitada. O store Swift tem teste de falha de escrita seguida de retry e reabertura; falta prova concorrente e de crash.
-- O contrato técnico revisável está em `01_composer_dominio.md` nesta lane, para o integrador mover; testes de corpus JS/Swift, deadlines, dados sensíveis e evidência dos cenários pelo host real permanecem pendentes. Não há prova dos gates R1–R7 completos ou CONTEXT-CHAIN.
+- O contrato técnico revisável está em `01_composer_dominio.md` nesta lane, para o integrador mover; corpus completo de todas as entidades/comandos em JS/Swift, deadlines, dados sensíveis e evidência dos cenários pelo host real permanecem pendentes. Não há prova dos gates R1–R7 completos ou CONTEXT-CHAIN.
 
 ## Porta proposta para o ledger Kernel
 

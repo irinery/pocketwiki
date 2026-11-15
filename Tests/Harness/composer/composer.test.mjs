@@ -596,3 +596,13 @@ test('preview wiki usa bearer E1 e policy real de root sem confiar em path escol
   assert.equal(reference.reference.sha256, hash(Buffer.from('wiki permitida')));
   await assert.rejects(gateway.previewFile({ bearer, thread_id: ids.thread, root: denied, relative_path: 'p.md', kind: 'wiki' }), { code: 'ERR_FORBIDDEN' });
 });
+
+test('corpus comum de referências concorda com contrato', async () => {
+  const { validateReference } = await import('../../../src/harness/composer/service.mjs');
+  const corpus = JSON.parse(await readFile('Tests/Harness/composer/reference-corpus.json', 'utf8'));
+  for (const item of corpus) {
+    let accepted = true;
+    try { validateReference(item.value); } catch { accepted = false; }
+    assert.equal(accepted, item.accept, item.id);
+  }
+});

@@ -15,8 +15,7 @@ struct ComposerIdentity: Codable, Equatable, Hashable {
     }
 
     static func isCanonicalUUID(_ value: String) -> Bool {
-        guard let uuid = UUID(uuidString: value) else { return false }
-        return uuid.uuidString.lowercased() == value
+        value.range(of: "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", options: .regularExpression) != nil
     }
 }
 
@@ -42,6 +41,29 @@ struct ComposerContextReference: Codable, Equatable, Identifiable {
         case sizeBytes = "size_bytes"
     }
 
+    private struct AnyKey: CodingKey {
+        let stringValue: String
+        let intValue: Int? = nil
+        init?(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { return nil }
+    }
+
+    init(from decoder: Decoder) throws {
+        let all = try decoder.container(keyedBy: AnyKey.self)
+        let allowed = Set(["reference_id", "kind", "relative_path", "message_id", "sha256", "size_bytes", "trust"])
+        guard all.allKeys.allSatisfy({ allowed.contains($0.stringValue) }) else { throw ComposerStoreError.invalidReference }
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        if values.contains(.relativePath), try values.decodeNil(forKey: .relativePath) { throw ComposerStoreError.invalidReference }
+        if values.contains(.messageID), try values.decodeNil(forKey: .messageID) { throw ComposerStoreError.invalidReference }
+        referenceID = try values.decode(String.self, forKey: .referenceID)
+        kind = try values.decode(Kind.self, forKey: .kind)
+        relativePath = try values.decodeIfPresent(String.self, forKey: .relativePath)
+        messageID = try values.decodeIfPresent(String.self, forKey: .messageID)
+        sha256 = try values.decode(String.self, forKey: .sha256)
+        sizeBytes = try values.decode(Int.self, forKey: .sizeBytes)
+        trust = try values.decode(Trust.self, forKey: .trust)
+    }
+
     func validate() throws {
         guard ComposerIdentity.isCanonicalUUID(referenceID),
               sha256.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil,
@@ -50,7 +72,7 @@ struct ComposerContextReference: Codable, Equatable, Identifiable {
         }
         if let relativePath {
             let bytes = Data(relativePath.utf8)
-            guard !bytes.isEmpty, bytes.count <= 4096, !relativePath.hasPrefix("/"),
+            guard !bytes.isEmpty, bytes.count <= 4096, !relativePath.hasPrefix("/"), !relativePath.contains("\\"),
                   !relativePath.split(separator: "/").contains("..") else {
                 throw ComposerStoreError.invalidReference
             }
