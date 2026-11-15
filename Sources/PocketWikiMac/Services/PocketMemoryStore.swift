@@ -592,7 +592,12 @@ actor PocketMemoryStore {
                 "updated_at": session["updated_at"] as? String ?? "1970-01-01T00:00:00.000Z",
                 "messages": messages, "events": events])
         }
+        let recordsData = try JSONSerialization.data(withJSONObject: records, options: [.sortedKeys])
+        let noteContent = note?["content"] as? String
         return try withHarnessLock {
+            guard let records = try JSONSerialization.jsonObject(with: recordsData) as? [[String: Any]] else {
+                throw PocketMemoryStoreError.importInvalid
+            }
             try recoverNoteIntent(); try recoverCaptureIntent(); try recoverImportIntent()
             let captures = directory.appendingPathComponent("captures", isDirectory: true)
             try ensureRealDirectory(captures)
@@ -601,7 +606,7 @@ actor PocketMemoryStore {
                 if isSymbolicLink(target) || fileManager.fileExists(atPath: target.path) { throw PocketMemoryStoreError.revisionConflict(0) }
             }
             var intent: [String: Any] = ["records": records]
-            if let note, let content = note["content"] as? String {
+            if let content = noteContent {
                 let current = try noteGetCAS(namespace: namespace)
                 guard current.revision == 0 else { throw PocketMemoryStoreError.revisionConflict(current.revision) }
                 let file = directory.appendingPathComponent(".memory-notes.json")
