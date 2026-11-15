@@ -661,3 +661,16 @@ test('associação thread-projeto ausente ou negada impede acesso sem I/O', asyn
   const { readdir } = await import('node:fs/promises');
   assert.deepEqual(await readdir(root), []);
 });
+
+test('import rejeita payload de evento inválido antes de alterar qualquer sessão', async (t) => {
+  const source = await fixture(t);
+  const destination = await fixture(t);
+  await source.memory.captureScoped(auth(), { namespace:namespace(), events:[event()] });
+  const exported = await source.memory.exportNamespace(auth(), { namespace:namespace() });
+  const malformed = JSON.parse(exported.content);
+  malformed.sessions[0].events[0].prompt = { arbitrary:'value' };
+  await assert.rejects(destination.memory.importNamespace(auth(), { namespace:namespace(), content:JSON.stringify(malformed) }),
+    (error) => error.code === 'ERR_IMPORT');
+  const recalled = await destination.memory.recallScoped(auth(), { ...recallScope(namespace()), question:'postgres', include_personal_note:false });
+  assert.equal(recalled.hits.length, 0);
+});

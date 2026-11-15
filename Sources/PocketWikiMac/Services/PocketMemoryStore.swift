@@ -572,7 +572,20 @@ actor PocketMemoryStore {
             guard events.count <= 5_000, events.allSatisfy({ item in
                 guard let name = item["event"] as? String, Self.eventNames.contains(name),
                       item["session_id"] as? String == id, let key = item["ingest_key"] as? String else { return false }
-                return key.range(of: #"^[A-Za-z0-9_-]{1,64}$"#, options: .regularExpression) != nil
+                let allowed = Set(["event", "session_id", "ingest_key", "prompt", "message", "provider_id", "model_id", "sequence"])
+                guard Set(item.keys).isSubset(of: allowed),
+                      key.range(of: #"^[A-Za-z0-9_-]{1,64}$"#, options: .regularExpression) != nil,
+                      ["prompt", "message", "provider_id", "model_id"].allSatisfy({ item[$0] == nil || item[$0] is String }),
+                      item["sequence"] == nil || ((item["sequence"] as? Int ?? 0) > 0),
+                      name == "user-prompt-submit" || item["prompt"] == nil,
+                      name == "assistant-response" || item["message"] == nil,
+                      (item["prompt"] as? String)?.unicodeScalars.count ?? 0 <= 8_000,
+                      (item["message"] as? String)?.unicodeScalars.count ?? 0 <= 8_000,
+                      (item["provider_id"] as? String)?.unicodeScalars.count ?? 0 <= 120,
+                      (item["model_id"] as? String)?.unicodeScalars.count ?? 0 <= 120 else { return false }
+                if name == "user-prompt-submit" && (item["prompt"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return false }
+                if name == "assistant-response" && (item["message"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return false }
+                return true
             }) else { throw PocketMemoryStoreError.importInvalid }
             records.append(["schema_version": 1, "id": id,
                 "created_at": session["created_at"] as? String ?? "1970-01-01T00:00:00.000Z",
