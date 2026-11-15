@@ -39,9 +39,9 @@ async function finishReplay(row, code) {
     const nonce = process.env.NH_REPLAY_NONCE;
     row.replay_nonce = nonce;
     row.replay_proof_sha256 = replayProofSHA256(bytes);
-    validateReplayProof(JSON.parse(bytes), { surface, nonce });
-    row.status = 'passed'; row.detail = 'replay integrado literal validado';
-  } catch (error) { row.detail = `replay literal não comprovado: ${error.message}`; }
+    const proof = validateReplayProof(JSON.parse(bytes), { surface, nonce });
+    row.status = 'passed'; row.detail = `replay integrado validado com boundary real ${proof.boundary}; B=10 apenas nos testes unitários`;
+  } catch (error) { row.detail = `replay integrado não comprovado: ${error.message}`; }
 }
 try {
   assertTrackedFlags(process.cwd());
@@ -90,7 +90,7 @@ try {
     if (await run('go', ['build', '-o', legacy, 'legacy-ui-host.go'], { cwd: snapshot, env: { ...process.env, GOFLAGS: '-buildvcs=false' } })) throw new Error('build legado falhou');
     const baseEnv = { ...process.env, RUNTIME_KERNEL_BINARY: kernel, RUNTIME_LEGACY_BINARY: legacy, RUNTIME_ARTIFACT_DIR: reportDir, NH_TEST_SEED: String(seed) };
     const scenarios = [
-      ['02-01', 'RUNTIME_REPLAY', 'Kernel: B=9, replay 8/9/10/11/12; B=10/9/10/11 apenas em testes unitários JS e Swift'],
+      ['02-01', 'RUNTIME_REPLAY', ''],
       ['02-03', 'RUNTIME_PAUSE_EFFECT', ''],
       ['02-04', 'RUNTIME_INCOMPATIBLE', '']
     ];

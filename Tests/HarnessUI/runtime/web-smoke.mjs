@@ -37,7 +37,7 @@ const canonical = value => value === null || typeof value !== 'object' ? JSON.st
 const stateHash = value => createHash('sha256').update(canonical(value)).digest('hex');
 const proofFrame = frame => {
   const withoutCursor = ({ lastSeq, ...state }) => state;
-  return { ...frame, before: stateHash(frame.before_state), after: stateHash(frame.after_state), before_entities: stateHash(withoutCursor(frame.before_state)), after_entities: stateHash(withoutCursor(frame.after_state)) };
+  return { ...frame, event_sha256: stateHash(frame.event), before: stateHash(frame.before_state), after: stateHash(frame.after_state), before_entities: stateHash(withoutCursor(frame.before_state)), after_entities: stateHash(withoutCursor(frame.after_state)) };
 };
 const fixtureScope = replay ? 'replay' : incompatible ? 'incompatible' : pauseEffect ? 'accepted' : legacy ? 'legacy' : 'connect';
 const fixtureID = label => fixtureUUID(seed, `${macos ? 'macos' : 'web'}/${fixtureScope}/${label}`);
@@ -59,6 +59,7 @@ try {
   await bootstrap.registerAggregateGrant({ principal_id: principalId, environment_id: environmentId, audience, aggregate_id: threadId, scopes });
   const credentialHost = new LocalCredentialHost({ principalId, environmentId, audience, grantedScopes: scopes, deliverBearer: async value => { bearer = value.bearer; }, persistVerifier: verifier => bootstrap.persistVerifier(verifier) });
   await credentialHost.bootstrap(scopes, { aggregateId: threadId });
+  let replayBoundary;
   if (replay) {
     const transport = new RuntimeTransport({ baseURL: base, bearer });
     const abort = new AbortController();
@@ -69,10 +70,11 @@ try {
     for (;;) {
       const { value, done } = await frames.next();
       if (done) throw new Error('stream ended before seed effect');
-      if (value.seq === 9) break;
+      if (value.payload?.entity_type === 'EffectRecord' && value.payload.value?.command_id === commandId && value.payload.value.state === 'succeeded') break;
     }
     abort.abort(); await frames.return();
-    assert.equal((await transport.snapshot(threadId)).data.as_of_seq, 9);
+    replayBoundary = (await transport.snapshot(threadId)).data.as_of_seq;
+    if (!Number.isSafeInteger(replayBoundary) || replayBoundary < 1) throw new Error('boundary real inválido');
   }
   let targetBase = base;
   if (legacy) {
@@ -83,13 +85,20 @@ try {
       legacyChild.once('error', reject); legacyChild.once('exit', code => reject(new Error(`legacy host exited ${code}`)));
     });
   }
+  const observedSnapshots = [];
   server = http.createServer((req,res) => {
     if (req.url === '/release-stream') { releaseStream?.(); res.writeHead(204); res.end(); return; }
     if (req.url === '/') { res.writeHead(200, {'content-type':'text/html'}); res.end('<main id="runtime-slot"></main>'); return; }
     if (req.url === '/bundle.js') { res.writeHead(200, {'content-type':'text/javascript'}); res.end(buildResult.outputFiles[0].contents); return; }
     const target = new URL(req.url, targetBase); const headers = { ...req.headers };
-    if (replay && target.pathname.startsWith('/v1/harness/streams/')) { target.searchParams.set('after_seq', '7'); headers['last-event-id'] = '7'; }
-    const upstream = http.request(target, { method:req.method, headers }, response => { res.writeHead(response.statusCode, response.headers); res.flushHeaders(); if (pauseEffect && req.url.startsWith('/v1/harness/streams/')) { response.pause(); releaseStream = () => response.pipe(res); }
+    if (replay && target.pathname.startsWith('/v1/harness/streams/')) { target.searchParams.set('after_seq', String(Math.max(0, replayBoundary - 2))); headers['last-event-id'] = String(Math.max(0, replayBoundary - 2)); }
+    const upstream = http.request(target, { method:req.method, headers }, response => {
+      if (replay && response.statusCode === 200 && target.pathname === `/v1/harness/threads/${threadId}/snapshot`) {
+        const chunks = []; let size = 0;
+        response.on('data', chunk => { size += chunk.length; if (size <= 4_194_304) chunks.push(chunk); });
+        response.on('end', () => { if (size <= 4_194_304) { try { observedSnapshots.push(JSON.parse(Buffer.concat(chunks).toString('utf8'))); } catch {} } });
+      }
+      res.writeHead(response.statusCode, response.headers); res.flushHeaders(); if (pauseEffect && req.url.startsWith('/v1/harness/streams/')) { response.pause(); releaseStream = () => response.pipe(res); }
       else if (incompatible && req.url.startsWith('/v1/harness/streams/')) {
         let pending = '', injected = false;
         const filter = new Transform({ transform(chunk, encoding, done) {
@@ -109,7 +118,7 @@ try {
   server.listen(0,'127.0.0.1'); await once(server,'listening');
   if (macos) {
     const configPath = path.join(tmp, 'native-config.json');
-    await writeFile(configPath, JSON.stringify({ baseURL: `http://127.0.0.1:${server.address().port}`, bearer, environmentID: environmentId, threadID: threadId, schemaSHA256, schemaPath: path.resolve('src/harness/contracts/harness-v1.schema.json'), commandIDs: commandIds.join(','), commandID: commandIds[0], seedCommandID: fixtureID('seed-command'), observeFrames: replay ? '1' : '0', replayNonce, replayProofPath: path.join(tmp, 'native-replay-observation.json') }), { mode: 0o600 });
+    await writeFile(configPath, JSON.stringify({ baseURL: `http://127.0.0.1:${server.address().port}`, bearer, environmentID: environmentId, threadID: threadId, schemaSHA256, schemaPath: path.resolve('src/harness/contracts/harness-v1.schema.json'), commandIDs: commandIds.join(','), commandID: commandIds[0], seedCommandID: fixtureID('seed-command'), observeFrames: replay ? '1' : '0', replayNonce, replayBoundary: String(replayBoundary ?? ''), replayProofPath: path.join(tmp, 'native-replay-observation.json') }), { mode: 0o600 });
     const scenario = replay ? 'replay' : incompatible ? 'incompatible' : pauseEffect ? 'accepted' : 'connect';
     const resultPath = path.join(tmp, `runtime-${scenario}.xcresult`);
     const test = spawn('xcodebuild', ['-resultBundlePath', resultPath, '-project', 'Tests/HarnessUI/runtime/macos/PocketWikiRuntimeUIHost.xcodeproj', '-scheme', 'PocketWikiRuntimeUIHost', '-destination', 'platform=macOS,arch=arm64', '-derivedDataPath', process.env.RUNTIME_DERIVED_DATA, 'test-without-building', 'CODE_SIGNING_ALLOWED=NO', '-quiet'], { env: { ...process.env, NH_RUNTIME_CONFIG_PATH: configPath, NH_RUNTIME_SCENARIO: scenario, NH_RUNTIME_TEST_FORCE_FAILURE: process.env.NH_RUNTIME_TEST_FORCE_FAILURE || '0' }, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -144,7 +153,12 @@ try {
     if (code !== 0) throw new Error(`XCTest falhou (${code}): ${output}`);
     if (replay && replayNonce && process.env.RUNTIME_ARTIFACT_DIR) {
       const proof = JSON.parse(await readFile(path.join(tmp, 'native-replay-observation.json'), 'utf8'));
-      if (proof.nonce !== replayNonce || proof.surface !== 'macos' || proof.boundary !== 9) throw new Error('observação de replay nativa inválida');
+      if (proof.nonce !== replayNonce || proof.surface !== 'macos' || proof.boundary !== replayBoundary) throw new Error('observação de replay nativa inválida');
+      const snapshotID = proof.frames[0]?.snapshot_id;
+      const snapshotEnvelope = observedSnapshots.find(item => item.data?.snapshot_id === snapshotID && item.data?.as_of_seq === proof.boundary);
+      if (!snapshotEnvelope || proof.frames.some(frame => frame.snapshot_id !== snapshotID)) throw new Error('snapshot nativo observado não corresponde à projeção');
+      proof.snapshot = { thread_id: threadId, envelope: snapshotEnvelope };
+      proof.snapshot_sha256 = stateHash(proof.snapshot);
       proof.frames = proof.frames.map(proofFrame);
       await writeFile(path.join(process.env.RUNTIME_ARTIFACT_DIR, 'replay-proof.json'), JSON.stringify(proof, null, 2) + '\n', { mode: 0o600 });
     }
@@ -158,8 +172,20 @@ try {
     window.waitSeen = count => window.seen.length >= count ? Promise.resolve() : new Promise(resolve => { wake = { count, resolve }; });
     const original = window.runtime.client.applyEvent.bind(window.runtime.client);
     const contents = p => ({ revision: p.revision, lastSeq: p.boundary, receipts: Object.fromEntries(p.receipts), effects: Object.fromEntries(p.effects) });
-    window.runtime.client.applyEvent = async (...args) => { const p = window.runtime.client.projection; const before = structuredClone(contents(p)); const snapshotBoundary = p.asOfSeq; await original(...args); const after = structuredClone(contents(p)); window.projectionFrames.push({ boundary: snapshotBoundary, seq: args[0].seq, before_cursor: before.lastSeq, after_cursor: after.lastSeq, before_state: before, after_state: after }); window.seen.push(args[0].seq); window.views.push({ lastSeq: window.runtime.client.state.lastSeq, receipts: window.runtime.client.state.receipts.length }); if (wake && window.seen.length >= wake.count) { wake.resolve(); wake = null; } };
-  }, { bearer, environmentId, threadId, schemaSHA256, commandIds, legacy });
+    let replayedNext = false;
+    window.runtime.client.applyEvent = async (...args) => {
+      const p = window.runtime.client.projection, snapshotBoundary = p.asOfSeq;
+      const observe = async () => {
+        const before = structuredClone(contents(p));
+        await original(...args);
+        const after = structuredClone(contents(p));
+        window.projectionFrames.push({ boundary: snapshotBoundary, snapshot_id: p.snapshotId, seq: args[0].seq, event_id: args[0].event_id, event: structuredClone(args[0]), before_cursor: before.lastSeq, after_cursor: after.lastSeq, before_state: before, after_state: after });
+      };
+      await observe();
+      if (config.replay && !replayedNext && args[0].seq === snapshotBoundary + 1) { replayedNext = true; await observe(); }
+      window.seen.push(args[0].seq); window.views.push({ lastSeq: window.runtime.client.state.lastSeq, receipts: window.runtime.client.state.receipts.length }); if (wake && window.seen.length >= wake.count) { wake.resolve(); wake = null; }
+    };
+  }, { bearer, environmentId, threadId, schemaSHA256, commandIds, legacy, replay });
   // Start after credential injection so the mount arguments never enter the trace.
   await page.context().tracing.start({ screenshots: false, snapshots: true, sources: false });
   traceStarted = true;
@@ -169,8 +195,8 @@ try {
   if (process.env.RUNTIME_TEST_FORCE_FAILURE === '1') throw new Error('forced fixture failure');
   if (replay) {
     await page.evaluate(() => window.waitSeen(2));
-    assert.deepEqual(await page.evaluate(() => window.seen.slice(0, 2)), [8, 9]);
-    assert.equal(await page.evaluate(() => window.runtime.client.state.lastSeq), 9);
+    assert.deepEqual(await page.evaluate(() => window.seen.slice(0, 2)), [replayBoundary - 1, replayBoundary]);
+    assert.equal(await page.evaluate(() => window.runtime.client.state.lastSeq), replayBoundary);
   }
   if (legacy) {
     await page.getByRole('status').getByText(/Execução durável indisponível/).waitFor();
@@ -186,14 +212,18 @@ try {
   await page.getByRole('button', {name:'Enviar comando'}).click();
   if (replay) {
     await page.evaluate(() => window.waitSeen(5));
-    assert.deepEqual(await page.evaluate(() => window.seen.slice(0, 5)), [8, 9, 10, 11, 12]);
+    assert.deepEqual(await page.evaluate(() => window.seen.slice(0, 5)), [replayBoundary - 1, replayBoundary, replayBoundary + 1, replayBoundary + 2, replayBoundary + 3]);
     if (replayNonce && process.env.RUNTIME_ARTIFACT_DIR) {
-      const frames = await page.evaluate(() => window.projectionFrames.slice(0, 5));
-      if (frames.some(frame => frame.boundary !== 9)) throw new Error('boundary observado diferente do snapshot real');
-      const proof = { version: 1, surface: 'web', level: 'integration', nonce: replayNonce, boundary: frames[0].boundary, frames: frames.map(({ boundary, ...frame }) => proofFrame(frame)) };
+      const frames = await page.evaluate(() => window.projectionFrames.slice(0, 4));
+      if (frames.some(frame => frame.boundary !== replayBoundary)) throw new Error('boundary observado diferente do snapshot real');
+      const snapshotID = frames[0]?.snapshot_id;
+      const snapshot = observedSnapshots.find(item => item.data?.snapshot_id === snapshotID && item.data?.as_of_seq === replayBoundary);
+      if (!snapshot || frames.some(frame => frame.snapshot_id !== snapshotID)) throw new Error('snapshot web observado não corresponde à projeção');
+      const snapshotEvidence = { thread_id: threadId, envelope: snapshot };
+      const proof = { version: 1, surface: 'web', level: 'integration', nonce: replayNonce, boundary: frames[0].boundary, snapshot: snapshotEvidence, snapshot_sha256: stateHash(snapshotEvidence), frames: frames.map(({ boundary, ...frame }) => proofFrame(frame)) };
       await writeFile(path.join(process.env.RUNTIME_ARTIFACT_DIR, 'replay-proof.json'), JSON.stringify(proof, null, 2) + '\n', { mode: 0o600 });
     }
-    assert.deepEqual(await page.evaluate(() => window.views.slice(0, 5).map(view => view.lastSeq)), [9, 9, 10, 11, 12]);
+    assert.deepEqual(await page.evaluate(() => window.views.slice(0, 5).map(view => view.lastSeq)), [replayBoundary, replayBoundary, replayBoundary + 1, replayBoundary + 2, replayBoundary + 3]);
     assert.equal(await page.evaluate(() => window.views[1].receipts), 1);
     assert.equal(await page.evaluate(() => window.views[3].receipts), 2);
     const ids = await page.evaluate(() => window.runtime.client.state.receipts.map(receipt => receipt.command_id));
@@ -221,7 +251,7 @@ try {
   }
   if (process.env.RUNTIME_ARTIFACT_DIR) await page.screenshot({ path: path.join(process.env.RUNTIME_ARTIFACT_DIR, `runtime-${replay ? 'replay' : incompatible ? 'incompatible' : pauseEffect ? 'accepted' : legacy ? 'legacy' : 'connect'}.png`) });
   await page.evaluate(() => window.runtime.client.close());
-  if (!legacy) console.log(replay ? 'Chromium: snapshot real 9 ignorou replay 8/9 e aplicou 10/11/12' : incompatible ? 'Chromium: versão incompatível recusada sem aplicar frame' : pauseEffect ? 'Chromium: receipt aceito antes da confirmação do efeito' : 'Chromium: bootstrap scoped, painel, dispatch e efeito real verificados');
+  if (!legacy) console.log(replay ? `Chromium: snapshot real B=${replayBoundary}; frames B-1/B preservados e B+1 repetido sem dupla aplicação` : incompatible ? 'Chromium: versão incompatível recusada sem aplicar frame' : pauseEffect ? 'Chromium: receipt aceito antes da confirmação do efeito' : 'Chromium: bootstrap scoped, painel, dispatch e efeito real verificados');
   }
 } catch (error) {
   scenarioError = error;

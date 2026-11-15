@@ -41,7 +41,8 @@ final class RuntimeUISession: ObservableObject {
     private var generation = 0
     var onFrame: ((Int, Int, Int) -> Void)?
     // Optional fixture observer receives the materialized projection before and after each frame.
-    var onProjectionFrame: ((Int, Int, Int, Int, Data, Data) -> Void)?
+    var onProjectionFrame: ((Int, String, Int, String, Int, Int, Data, Data, Data) -> Void)?
+    var replayNextFrameForFixture = false
     private func projectionContents(_ view: RuntimeProjection.View) throws -> Data {
         let contents: [String: Any] = ["revision": view.revision, "lastSeq": view.lastSeq, "receipts": view.receipts, "effects": view.effects]
         return try JSONSerialization.data(withJSONObject: contents, options: [.sortedKeys, .withoutEscapingSlashes])
@@ -70,7 +71,14 @@ final class RuntimeUISession: ObservableObject {
             projection = p; publish(view)
             streamTask = Task { [weak self] in
                 do {
-                    for try await frame in stream { guard let self, !Task.isCancelled else { return }; try await self.apply(frame) }
+                    for try await frame in stream {
+                        guard let self, !Task.isCancelled else { return }
+                        try await self.apply(frame)
+                        if self.replayNextFrameForFixture && frame.seq == view.asOfSeq + 1 {
+                            self.replayNextFrameForFixture = false
+                            try await self.apply(frame)
+                        }
+                    }
                     guard let self, !Task.isCancelled, self.generation == current else { return }
                     self.available = false; self.error = "ERR_UNAVAILABLE"
                 } catch RuntimeProjection.Failure.overflow {
@@ -106,7 +114,7 @@ final class RuntimeUISession: ObservableObject {
         try projection.bufferEvent(JSONSerialization.data(withJSONObject: object), resolvedPayload: payload)
         let after = try projection.finish()
         publish(after)
-        if let before, let observer = onProjectionFrame { observer(after.asOfSeq, frame.seq, before.lastSeq, after.lastSeq, try projectionContents(before), try projectionContents(after)) }
+        if let before, let observer = onProjectionFrame { observer(after.asOfSeq, after.snapshotID, frame.seq, frame.eventID.uuidString.lowercased(), before.lastSeq, after.lastSeq, try projectionContents(before), try projectionContents(after), try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes])) }
         onFrame?(frame.seq, lastSeq, receipts.count)
     }
     func submit() async {
