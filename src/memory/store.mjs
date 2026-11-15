@@ -47,6 +47,16 @@ async function secureDirectory(root, parts = []) {
   return current;
 }
 
+async function requireNoPendingIntent(root, name) {
+  try { await lstat(path.join(root, name)); }
+  catch (cause) {
+    if (cause.code === 'ENOENT') return;
+    throw memoryError('ERR_MEMORY_UNAVAILABLE', 'Memory recovery authority is unavailable');
+  }
+  // Preserve every existing journal, including legacy or forged envelopes, for reconciliation.
+  throw memoryError('ERR_MEMORY_UNAVAILABLE', 'Memory recovery authority is unavailable');
+}
+
 const writeQueues = new Map();
 function serializeWrite(key, operation) {
   const root = key.replace(/:(note|capture)$/, '');
@@ -65,6 +75,9 @@ function serializeWrite(key, operation) {
     try {
       db.exec('PRAGMA busy_timeout=5000; BEGIN IMMEDIATE');
       try {
+        for (const name of ['.capture-intent.json', '.note-intent.json', '.import-intent.json']) {
+          await requireNoPendingIntent(root, name);
+        }
         const result = await operation();
         db.exec('COMMIT');
         return result;
@@ -124,10 +137,15 @@ export class PocketMemoryStore {
   constructor(root) {
     this.root = path.resolve(root);
     this.captureRoot = path.join(this.root, 'captures');
-    this.writeTail = Promise.resolve();
   }
 
-  async readNote() {
+  // HTTP v1 and scoped operations may share a directory and writer lock.
+  readNote() { return serializeWrite(this.root, () => this.#readNote()); }
+  writeNote(content) { return serializeWrite(this.root, () => this.#writeNote(content)); }
+  capture(events) { const validated = validateMemoryEvents(events); return serializeWrite(this.root, () => this.#capture(validated)); }
+  recall(question, options) { return serializeWrite(this.root, () => this.#recall(question, options)); }
+
+  async #readNote() {
     try {
       return await readFile(path.join(this.root, 'MEMORY.md'), 'utf8');
     } catch (error) {
@@ -136,7 +154,7 @@ export class PocketMemoryStore {
     }
   }
 
-  async writeNote(content) {
+  async #writeNote(content) {
     if (typeof content !== 'string' || Buffer.byteLength(content, 'utf8') > 16 * 1024) {
       throw new Error('invalid_memory_note');
     }
@@ -184,7 +202,7 @@ export class PocketMemoryStore {
       if (namespace) {
         const intent = await this.#makeNoteIntent(namespace, next);
         await this.#writeAtomic(path.join(this.root, '.note-intent.json'), JSON.stringify(intent));
-        await this.#recoverNoteIntent();
+        await this.#commitNoteIntent(intent);
         return next;
       }
       await this.#writeAtomic(path.join(this.root, '.memory-note.json'), JSON.stringify({ schema_version:2, ...next }));
@@ -205,9 +223,12 @@ export class PocketMemoryStore {
   }
 
   async #recoverNoteIntent() {
+    await requireNoPendingIntent(this.root, '.note-intent.json');
+  }
+
+  // Only the current write can commit its in-memory intent. Disk metadata is not authority.
+  async #commitNoteIntent(intent) {
     const intentPath = path.join(this.root, '.note-intent.json');
-    const intent = await readJSON(intentPath, null);
-    if (!intent) return;
     const namespace = intent.namespace;
     try { memoryNamespacePath('/memory-root', namespace); }
     catch { throw memoryError('ERR_MEMORY_UNAVAILABLE', 'Invalid memory note intent'); }
@@ -287,8 +308,9 @@ export class PocketMemoryStore {
       });
       for (const [key, assigned] of byKey) ledger.accepted_keys[key] = assigned;
       ledger.sequence = sequence;
-      await this.#writeAtomic(path.join(this.root, '.capture-intent.json'), JSON.stringify({ events:prepared, ledger }));
-      await this.#recoverCaptureIntent();
+      const intent = { events:prepared, ledger };
+      await this.#writeAtomic(path.join(this.root, '.capture-intent.json'), JSON.stringify(intent));
+      await this.#commitCaptureIntent(intent);
       return prepared.map((item) => item.ingest_key);
     });
   }
@@ -305,7 +327,7 @@ export class PocketMemoryStore {
     return serializeWrite(`${this.root}:capture`, async () => {
       await this.#recoverCaptureIntent();
       await this.#recoverImportIntent();
-      return this.recall(question, options);
+      return this.#recall(question, options);
     });
   }
 
@@ -318,9 +340,12 @@ export class PocketMemoryStore {
   }
 
   async #recoverCaptureIntent() {
+    await requireNoPendingIntent(this.root, '.capture-intent.json');
+  }
+
+  // Only the current write can commit its in-memory intent. Disk metadata is not authority.
+  async #commitCaptureIntent(intent) {
     const file = path.join(this.root, '.capture-intent.json');
-    const intent = await readJSON(file, null);
-    if (!intent) return;
     if (!Array.isArray(intent.events) || !intent.ledger ||
         !Number.isSafeInteger(intent.ledger.sequence) || intent.ledger.sequence < 0 ||
         !intent.ledger.accepted_keys || typeof intent.ledger.accepted_keys !== 'object') {
@@ -393,15 +418,18 @@ export class PocketMemoryStore {
       const intent = { records:normalized, ...(noteIntent ? { note_intent:noteIntent } : {}) };
       if (Buffer.byteLength(JSON.stringify(intent)) > 32 * 1024 * 1024) throw memoryError('ERR_IMPORT', 'Memory import intent too large');
       await this.#writeAtomic(path.join(this.root, '.import-intent.json'), JSON.stringify(intent));
-      await this.#recoverImportIntent();
+      await this.#commitImportIntent(intent);
       return normalized.length;
     });
   }
 
   async #recoverImportIntent() {
+    await requireNoPendingIntent(this.root, '.import-intent.json');
+  }
+
+  // Only the current write can commit its in-memory intent. Disk metadata is not authority.
+  async #commitImportIntent(intent) {
     const file = path.join(this.root, '.import-intent.json');
-    const intent = await readJSON(file, null);
-    if (!intent) return;
     if (!Array.isArray(intent.records) || intent.records.length > 500 ||
         intent.records.some((record) => !CANONICAL_UUID.test(record?.id || '') || !Array.isArray(record.messages) ||
           !Array.isArray(record.events)) || new Set(intent.records.map((record) => record.id)).size !== intent.records.length) {
@@ -416,7 +444,7 @@ export class PocketMemoryStore {
     }
     if (intent.note_intent) {
       await this.#writeAtomic(path.join(this.root, '.note-intent.json'), JSON.stringify(intent.note_intent));
-      await this.#recoverNoteIntent();
+      await this.#commitNoteIntent(intent.note_intent);
     }
     await unlink(file);
   }
@@ -470,13 +498,6 @@ export class PocketMemoryStore {
     return { mapped:true, session_id:sessionID };
   }
 
-  capture(events) {
-    const validated = validateMemoryEvents(events);
-    const work = this.writeTail.then(() => this.#capture(validated));
-    this.writeTail = work.catch(() => {});
-    return work;
-  }
-
   async #capture(events) {
     const records = new Map();
     const acceptedKeys = [];
@@ -524,12 +545,12 @@ export class PocketMemoryStore {
     return acceptedKeys;
   }
 
-  async recall(question, { maxCharacters = 5000, limit = 3, includeNote = true, unicodeScalars = false } = {}) {
+  async #recall(question, { maxCharacters = 5000, limit = 3, includeNote = true, unicodeScalars = false } = {}) {
     if (typeof question !== 'string' || !question.trim() || (unicodeScalars ? [...question].length : question.length) > 2000) throw new Error('invalid_question');
     const terms = words(question);
     const blocks = [];
     let remaining = maxCharacters;
-    const note = includeNote ? (await this.readNote()).trim() : '';
+    const note = includeNote ? (await this.#readNote()).trim() : '';
     if (note) {
       const block = `Fonte: MEMORY.md\n${note}`.slice(0, Math.min(3000, remaining));
       blocks.push(block);

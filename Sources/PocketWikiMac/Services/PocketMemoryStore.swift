@@ -261,7 +261,7 @@ actor PocketMemoryStore {
            let revision = state["revision"] as? Int, revision >= 0 {
             return PocketMemoryNoteSnapshot(content: content, revision: revision)
         }
-        return PocketMemoryNoteSnapshot(content: try readNote(), revision: 0)
+        return PocketMemoryNoteSnapshot(content: try readNoteUnlocked(), revision: 0)
     }
 
     func notePutCAS(_ content: String, expectedRevision: Int, namespace: PocketMemoryNamespace? = nil) throws -> PocketMemoryNoteSnapshot {
@@ -295,7 +295,7 @@ actor PocketMemoryStore {
             let intent: [String: Any] = ["state": state, "namespace": target, "content": content]
             try write(JSONSerialization.data(withJSONObject: intent, options: [.sortedKeys]),
                       to: directory.appendingPathComponent(".note-intent.json"))
-            try recoverNoteIntent()
+            try commitNoteIntent(intent)
             return next
         }
         let state: [String: Any] = ["schema_version": 2, "content": content, "revision": next.revision]
@@ -306,8 +306,25 @@ actor PocketMemoryStore {
     }
 
     private func recoverNoteIntent() throws {
+        try requireNoPendingIntent(".note-intent.json")
+    }
+
+    // Only the current write can commit its in-memory intent. Disk metadata is not authority.
+    private func requireNoPendingIntent(_ name: String) throws {
+        let journal = directory.appendingPathComponent(name)
+        if isSymbolicLink(journal) { throw PocketMemoryStoreError.unavailable }
+        do {
+            _ = try fileManager.attributesOfItem(atPath: journal.path)
+        } catch let cause as NSError {
+            if cause.domain == NSCocoaErrorDomain && cause.code == NSFileReadNoSuchFileError { return }
+            throw PocketMemoryStoreError.unavailable
+        }
+        // Preserve existing journals for authoritative principal/receipt reconciliation.
+        throw PocketMemoryStoreError.unavailable
+    }
+
+    private func commitNoteIntent(_ intent: [String: Any]) throws {
         let intentURL = directory.appendingPathComponent(".note-intent.json")
-        guard let intent = try readObject(intentURL, maxBytes: 32 * 1024 * 1024) else { return }
         guard let target = intent["namespace"] as? [String: Any],
               let environment = target["environment_id"] as? String,
               let content = intent["content"] as? String, content.utf8.count <= 16 * 1024,
@@ -378,7 +395,7 @@ actor PocketMemoryStore {
             let intent: [String: Any] = ["events": prepared, "ledger": ledger]
             try write(JSONSerialization.data(withJSONObject: intent, options: [.sortedKeys]),
                       to: directory.appendingPathComponent(".capture-intent.json"))
-            try recoverCaptureIntent()
+            try commitCaptureIntent(intent)
             return events.map(\.ingestKey)
         }
     }
@@ -388,8 +405,12 @@ actor PocketMemoryStore {
     }
 
     private func recoverImportIntent() throws {
+        try requireNoPendingIntent(".import-intent.json")
+    }
+
+    // Only the current write can commit its in-memory intent. Disk metadata is not authority.
+    private func commitImportIntent(_ intent: [String: Any]) throws {
         let intentURL = directory.appendingPathComponent(".import-intent.json")
-        guard let intent = try readObject(intentURL, maxBytes: 32 * 1024 * 1024) else { return }
         guard let records = intent["records"] as? [[String: Any]], records.count <= 500 else { throw PocketMemoryStoreError.invalidRecord }
         let captures = directory.appendingPathComponent("captures", isDirectory: true)
         try ensureRealDirectory(captures)
@@ -409,14 +430,18 @@ actor PocketMemoryStore {
         if let note = intent["note_intent"] as? [String: Any] {
             try write(JSONSerialization.data(withJSONObject: note, options: [.sortedKeys]),
                       to: directory.appendingPathComponent(".note-intent.json"))
-            try recoverNoteIntent()
+            try commitNoteIntent(note)
         }
         try fileManager.removeItem(at: intentURL)
     }
 
     private func recoverCaptureIntent() throws {
+        try requireNoPendingIntent(".capture-intent.json")
+    }
+
+    // Only the current write can commit its in-memory intent. Disk metadata is not authority.
+    private func commitCaptureIntent(_ intent: [String: Any]) throws {
         let intentURL = directory.appendingPathComponent(".capture-intent.json")
-        guard let intent = try readObject(intentURL) else { return }
         guard let items = intent["events"] as? [[String: Any]], (1...32).contains(items.count),
               let ledger = intent["ledger"] as? [String: Any], let sequence = ledger["sequence"] as? Int, sequence >= 0,
               let keys = ledger["accepted_keys"] as? [String: Int] else { throw PocketMemoryStoreError.invalidRecord }
@@ -428,7 +453,7 @@ actor PocketMemoryStore {
             let data = try JSONSerialization.data(withJSONObject: item, options: [.sortedKeys])
             events.append(try JSONDecoder().decode(PocketMemoryIncomingEvent.self, from: data))
         }
-        _ = try capture(events)
+        _ = try captureUnlocked(events)
         try write(JSONSerialization.data(withJSONObject: ledger, options: [.sortedKeys]),
                   to: directory.appendingPathComponent(".memory-receipts.json"))
         try fileManager.removeItem(at: intentURL)
@@ -456,6 +481,9 @@ actor PocketMemoryStore {
         sqlite3_busy_timeout(database, 5_000)
         guard sqlite3_exec(database, "BEGIN IMMEDIATE", nil, nil, nil) == SQLITE_OK else { throw PocketMemoryStoreError.unavailable }
         do {
+            for name in [".capture-intent.json", ".note-intent.json", ".import-intent.json"] {
+                try requireNoPendingIntent(name)
+            }
             let result = try body()
             guard sqlite3_exec(database, "COMMIT", nil, nil, nil) == SQLITE_OK else { throw PocketMemoryStoreError.unavailable }
             return result
@@ -664,7 +692,7 @@ actor PocketMemoryStore {
             let encoded = try JSONSerialization.data(withJSONObject: intent, options: [.sortedKeys])
             guard encoded.count <= 32 * 1024 * 1024 else { throw PocketMemoryStoreError.importInvalid }
             try write(encoded, to: directory.appendingPathComponent(".import-intent.json"))
-            try recoverImportIntent()
+            try commitImportIntent(intent)
             return PocketMemoryImportResponse(importedCount: records.count)
         }
     }
@@ -765,7 +793,7 @@ actor PocketMemoryStore {
 
     private func recallScopedUnlocked(_ question: String, namespace: PocketMemoryNamespace, includePersonalNote: Bool) throws -> PocketMemoryScopedRecallResponse {
         let personalNote = includePersonalNote ? try noteGetCAS(namespace: namespace) : nil
-        let result = try recall(question, includeNote: false, harnessScoring: true,
+        let result = try recallUnlocked(question, includeNote: false, harnessScoring: true,
                                 limit: (personalNote?.content.isEmpty == false) ? 2 : 3)
         let terms = Self.harnessWords(question)
         var hits: [PocketMemoryScopedHit] = []
@@ -812,19 +840,29 @@ actor PocketMemoryStore {
         return PocketMemoryScopedRecallResponse(context: String(context.prefix(5_000)), hits: hits, noteRevision: revision)
     }
 
-    func readNote() throws -> String {
+    // The v1 endpoint can point at a scoped directory; use the same lock and journal gate.
+    func readNote() throws -> String { try withHarnessLock { try readNoteUnlocked() } }
+    func writeNote(_ content: String) throws { try withHarnessLock { try writeNoteUnlocked(content) } }
+    func capture(_ events: [PocketMemoryIncomingEvent]) throws -> [String] {
+        try withHarnessLock { try captureUnlocked(events) }
+    }
+    func recall(_ question: String, includeNote: Bool = true, harnessScoring: Bool = false, limit: Int = 3) throws -> PocketMemoryRecallResponse {
+        try withHarnessLock { try recallUnlocked(question, includeNote: includeNote, harnessScoring: harnessScoring, limit: limit) }
+    }
+
+    private func readNoteUnlocked() throws -> String {
         let url = directory.appendingPathComponent("MEMORY.md")
         guard !isSymbolicLink(url) else { throw PocketMemoryStoreError.scopeDenied }
         if !fileManager.fileExists(atPath: url.path) { return "" }
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    func writeNote(_ content: String) throws {
+    private func writeNoteUnlocked(_ content: String) throws {
         guard content.utf8.count <= 16 * 1024 else { throw PocketMemoryStoreError.invalidInput }
         try write(Data(content.utf8), to: directory.appendingPathComponent("MEMORY.md"))
     }
 
-    func capture(_ events: [PocketMemoryIncomingEvent]) throws -> [String] {
+    private func captureUnlocked(_ events: [PocketMemoryIncomingEvent]) throws -> [String] {
         guard (1...32).contains(events.count) else { throw PocketMemoryStoreError.invalidInput }
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         try ensureRealDirectory(directory)
@@ -911,11 +949,11 @@ actor PocketMemoryStore {
         return accepted
     }
 
-    func recall(_ question: String, includeNote: Bool = true, harnessScoring: Bool = false, limit: Int = 3) throws -> PocketMemoryRecallResponse {
+    private func recallUnlocked(_ question: String, includeNote: Bool = true, harnessScoring: Bool = false, limit: Int = 3) throws -> PocketMemoryRecallResponse {
         guard !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, question.count <= 2_000 else { throw PocketMemoryStoreError.invalidInput }
         var blocks: [String] = []
         var remaining = 5_000
-        let note = includeNote ? try readNote().trimmingCharacters(in: .whitespacesAndNewlines) : ""
+        let note = includeNote ? try readNoteUnlocked().trimmingCharacters(in: .whitespacesAndNewlines) : ""
         if !note.isEmpty {
             let block = String("Fonte: MEMORY.md\n\(note)".prefix(min(3_000, remaining)))
             blocks.append(block)
@@ -999,15 +1037,27 @@ actor PocketMemoryStore {
     }
 
     private func ensureRealDirectory(_ url: URL) throws {
+        try ensureDirectoryExists(url)
+        try fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path)
+    }
+
+    private func ensureDirectoryExists(_ url: URL) throws {
+        guard !isSymbolicLink(url) else { throw PocketMemoryStoreError.scopeDenied }
         if !fileManager.fileExists(atPath: url.path) {
-            try fileManager.createDirectory(at: url, withIntermediateDirectories: false,
-                attributes: [.posixPermissions: 0o700])
+            let parent = url.deletingLastPathComponent()
+            guard parent.path != url.path else { throw PocketMemoryStoreError.scopeDenied }
+            try ensureDirectoryExists(parent)
+            do {
+                try fileManager.createDirectory(at: url, withIntermediateDirectories: false,
+                    attributes: [.posixPermissions: 0o700])
+            } catch {
+                guard fileManager.fileExists(atPath: url.path) else { throw error }
+            }
         }
         guard !isSymbolicLink(url),
               try fileManager.attributesOfItem(atPath: url.path)[.type] as? FileAttributeType == .typeDirectory else {
             throw PocketMemoryStoreError.scopeDenied
         }
-        try fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path)
     }
 
     private func isSymbolicLink(_ url: URL) -> Bool {

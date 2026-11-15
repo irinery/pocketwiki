@@ -28,23 +28,14 @@ test('JS e Swift leem a mesma nota, CAS e journal de eventos', { skip:!executabl
     session_id:'40000000-0000-4000-8000-000000000001', ingest_key:'interop', prompt:'postgres beta' }] });
   const expected = await service.recallScoped(auth, { environment_id:environment, project_id:project,
     thread_id:thread, question:'postgres beta', include_personal_note:false });
-  const folder = path.join(root, 'v2', environment, 'projects', project);
-  const state = JSON.parse(await readFile(path.join(folder, '.memory-notes.json'), 'utf8'));
-  const key = JSON.stringify([environment, project, thread]);
-  const value = { namespace:{ ...namespace, note_revision:2 }, content:'node recovered', revision:2 };
-  state.notes[key] = value; state.sequence = 2;
-  state.events.push({ event_id:'60000000-0000-4000-8000-000000000002', sequence:2,
-    entity_type:'MemoryNote', entity_key:key, change:'upsert', value });
-  await writeFile(path.join(folder, '.note-intent.json'), JSON.stringify({ state,
-    namespace:{ environment_id:environment, project_id:project, thread_id:thread }, content:'node recovered' }));
   const child = spawn(executable, ['--interop', root], { stdio:['ignore', 'pipe', 'inherit'] });
   let output = '';
   child.stdout.setEncoding('utf8'); child.stdout.on('data', (data) => { output += data; });
   const code = await new Promise((resolve, reject) => { child.once('exit', resolve); child.once('error', reject); });
   assert.equal(code, 0); assert.deepEqual(JSON.parse(output), expected);
-  assert.deepEqual(await service.noteGet(auth, { namespace }), { content:'swift', revision:3 });
+  assert.deepEqual(await service.noteGet(auth, { namespace }), { content:'swift', revision:2 });
   const events = await service.eventsSince(auth, { namespace, after_seq:0 });
-  assert.deepEqual(events.map((event) => event.value.content), ['node', 'node recovered', 'swift']);
+  assert.deepEqual(events.map((event) => event.value.content), ['node', 'swift']);
 });
 
 test('SIGKILL do escritor Swift libera lock SQLite para writer Node', { skip:!executable }, async (t) => {
@@ -134,21 +125,27 @@ test('export/import redigido funciona nos dois sentidos JS e Swift', { skip:!exe
   assert.equal(recalled.hits.length, 1);
 });
 
-test('Swift recupera journal de import persistido pelo Node', { skip:!executable }, async (t) => {
-  const { root, service } = await fixture(t);
-  await service.noteGet(auth, { namespace });
-  const folder = path.join(root, 'v2', environment, 'projects', project);
-  const record = { schema_version:1, id:'40000000-0000-4000-8000-000000000010',
-    created_at:'1970-01-01T00:00:00.000Z', updated_at:'1970-01-01T00:00:00.000Z',
-    messages:[{ role:'user', content:'postgres recuperado' }], events:[] };
-  await writeFile(path.join(folder, '.import-intent.json'), JSON.stringify({ records:[record] }));
-  const child = spawn(executable, ['--first-page', root], { stdio:['ignore', 'pipe', 'inherit'] });
-  child.stdout.resume();
-  const code = await new Promise((resolve, reject) => { child.once('exit', resolve); child.once('error', reject); });
-  assert.equal(code, 0);
-  const recalled = await service.recallScoped(auth, { environment_id:environment, project_id:project,
-    thread_id:thread, question:'postgres recuperado', include_personal_note:false });
-  assert.equal(recalled.hits.length, 1);
+test('Swift e Node bloqueiam os três journals existentes sem autoridade e preservam bytes', { skip:!executable }, async (t) => {
+  for (const kind of ['capture', 'note', 'import']) {
+    await t.test(kind, async (subtest) => {
+      const { root, service } = await fixture(subtest);
+      await service.notePut(auth, { namespace, content:'committed', expected_revision:0 });
+      const folder = path.join(root, 'v2', environment, 'projects', project);
+      const journal = path.join(folder, `.${kind}-intent.json`);
+      const bytes = JSON.stringify({ journal_version:1, principal_id:auth.principal_id, receipt_id:thread,
+        command_id:project, environment_id:environment, operation:'memory.import',
+        records:[], content:'unapproved replay', authorized:true });
+      await writeFile(journal, bytes);
+      const child = spawn(executable, ['--assert-recovery-blocked', root], { stdio:['ignore', 'pipe', 'inherit'] });
+      let output = '';
+      child.stdout.setEncoding('utf8'); child.stdout.on('data', data => { output += data; });
+      const code = await new Promise((resolve, reject) => { child.once('exit', resolve); child.once('error', reject); });
+      assert.equal(code, 0); assert.equal(output.trim(), 'blocked');
+      assert.equal(await readFile(journal, 'utf8'), bytes);
+      await assert.rejects(service.noteGet(auth, { namespace }), { code:'ERR_MEMORY_UNAVAILABLE' });
+      assert.equal(await readFile(path.join(folder, '.notes', thread, 'MEMORY.md'), 'utf8'), 'committed');
+    });
+  }
 });
 
 test('corpus de redação produz textos equivalentes em JS e Swift', { skip:!executable }, async (t) => {

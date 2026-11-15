@@ -405,18 +405,19 @@ test('MemoryHit respeita o schema fechado do contrato', async (t) => {
   assert.deepEqual(validateAgainst('MemoryHit', result.hits[0]), { valid:true, errors:[] });
 });
 
-test('intenção de captura pendente é reconciliada antes de qualquer recall após restart', async (t) => {
+test('intenção de captura pendente bloqueia leitura e escrita após restart sem autoridade', async (t) => {
   const { root, memory } = await fixture(t);
   await memory.noteGet(auth(), { namespace:namespace() });
   const folder = path.join(root, 'v2', environmentA, 'projects', projectA);
   const pending = { events:[{ ...event(), sequence:1 }], ledger:{ sequence:1, accepted_keys:{ [`${sessionA}:prompt-1`]:1 } } };
   await writeFile(path.join(folder, '.capture-intent.json'), JSON.stringify(pending));
   const restarted = new MemoryHarnessService({ root, policy:fixturePolicy, association:fixturePolicy });
-  const recalled = await restarted.recallScoped(auth(), {
+  const journal = await readFile(path.join(folder, '.capture-intent.json'), 'utf8');
+  await assert.rejects(restarted.recallScoped(auth(), {
     ...recallScope(namespace()), question:'postgres', include_personal_note:false
-  });
-  assert.equal(recalled.hits.length, 1);
-  assert.deepEqual(await restarted.captureScoped(auth(), { namespace:namespace(), events:[event()] }), { accepted_keys:['prompt-1'] });
+  }), { code:'ERR_MEMORY_UNAVAILABLE' });
+  await assert.rejects(restarted.captureScoped(auth(), { namespace:namespace(), events:[event()] }), { code:'ERR_MEMORY_UNAVAILABLE' });
+  assert.equal(await readFile(path.join(folder, '.capture-intent.json'), 'utf8'), journal);
 });
 
 test('lock de processo vivo bloqueia escrita e SIGKILL libera sem reaproveitar PID', async (t) => {
@@ -524,7 +525,7 @@ test('snippets multibyte respeitam 4096 bytes do schema sem truncar UTF-8', asyn
   assert.equal(validateAgainst('MemoryHit', result.hits[0]).valid, true);
 });
 
-test('journal de nota reconcilia espelho e estado antes de uma leitura após crash', async (t) => {
+test('journal de nota após crash é preservado sem alterar espelho ou estado', async (t) => {
   const { root, memory } = await fixture(t);
   await memory.notePut(auth(), { namespace:namespace(), content:'antes', expected_revision:0 });
   const folder = path.join(root, 'v2', environmentA, 'projects', projectA);
@@ -537,8 +538,11 @@ test('journal de nota reconcilia espelho e estado antes de uma leitura após cra
     entity_type:'MemoryNote', entity_key:key, change:'upsert', value });
   await writeFile(path.join(folder, '.note-intent.json'), JSON.stringify({ state, namespace:recallScope(namespace()), content:'depois' }));
   const restarted = new MemoryHarnessService({ root, policy:fixturePolicy, association:fixturePolicy });
-  assert.deepEqual(await restarted.noteGet(auth(), { namespace:namespace() }), { content:'depois', revision:2 });
-  assert.equal(await readFile(path.join(folder, '.notes', threadA, 'MEMORY.md'), 'utf8'), 'depois');
+  const journal = await readFile(path.join(folder, '.note-intent.json'), 'utf8');
+  await assert.rejects(restarted.noteGet(auth(), { namespace:namespace() }), { code:'ERR_MEMORY_UNAVAILABLE' });
+  assert.equal(await readFile(path.join(folder, '.note-intent.json'), 'utf8'), journal);
+  assert.equal(await readFile(path.join(folder, '.notes', threadA, 'MEMORY.md'), 'utf8'), 'antes');
+  assert.equal(JSON.parse(await readFile(file, 'utf8')).sequence, 1);
 });
 
 test('recall respeita limite de três hits incluindo nota pessoal', async (t) => {
@@ -567,7 +571,7 @@ test('import com conflito de nota não deixa sessões parcialmente importadas', 
   assert.equal(recall.hits.length, 0);
 });
 
-test('import interrompido é reconciliado antes de uma leitura', async (t) => {
+test('import interrompido fica bloqueado sem criar sessões', async (t) => {
   const { root, memory } = await fixture(t);
   await memory.noteGet(auth(), { namespace:namespace() });
   const folder = path.join(root, 'v2', environmentA, 'projects', projectA);
@@ -575,9 +579,10 @@ test('import interrompido é reconciliado antes de uma leitura', async (t) => {
     updated_at:'1970-01-01T00:00:00.000Z', messages:[{ role:'user', content:'import retomado postgres' }], events:[] };
   await writeFile(path.join(folder, '.import-intent.json'), JSON.stringify({ records:[record] }));
   const reopened = new MemoryHarnessService({ root, policy:fixturePolicy, association:fixturePolicy });
-  const recall = await reopened.recallScoped(auth(), { ...recallScope(namespace()), question:'import retomado', include_personal_note:false });
-  assert.equal(recall.hits.length, 1);
-  assert.equal(recall.hits[0].session_id, sessionA);
+  const journal = await readFile(path.join(folder, '.import-intent.json'), 'utf8');
+  await assert.rejects(reopened.recallScoped(auth(), { ...recallScope(namespace()), question:'import retomado', include_personal_note:false }), { code:'ERR_MEMORY_UNAVAILABLE' });
+  assert.equal(await readFile(path.join(folder, '.import-intent.json'), 'utf8'), journal);
+  await assert.rejects(readFile(path.join(folder, 'captures', `session-${sessionA}.json`)), { code:'ENOENT' });
 });
 
 function waitWorkerMessage(worker) {
@@ -601,7 +606,7 @@ async function killAtPersistedJournal(worker, journal, validate) {
   assert.deepEqual(await exit, { code:null, signal:'SIGKILL' });
 }
 
-test('SIGKILL durante import deixa journal recuperável sem sessões parciais', { timeout:10_000 }, async (t) => {
+test('SIGKILL durante import preserva journal e bloqueia replay sem sessões parciais', { timeout:10_000 }, async (t) => {
   const { fork } = await import('node:child_process');
   const { readdir } = await import('node:fs/promises');
   const { root, memory } = await fixture(t);
@@ -622,12 +627,13 @@ test('SIGKILL durante import deixa journal recuperável sem sessões parciais', 
     assert.deepEqual(await readdir(path.join(folder, 'captures')), []);
   });
   const reopened = new MemoryHarnessService({ root, policy:fixturePolicy, association:fixturePolicy });
-  const recalled = await reopened.recallScoped(auth(), { ...recallScope(namespace()), question:'postgres import', include_personal_note:false });
-  assert.equal(recalled.hits.length, 3);
-  assert.equal((await readdir(path.join(folder, 'captures'))).filter((name) => name.endsWith('.json')).length, 500);
+  const journal = await readFile(path.join(folder, '.import-intent.json'), 'utf8');
+  await assert.rejects(reopened.recallScoped(auth(), { ...recallScope(namespace()), question:'postgres import', include_personal_note:false }), { code:'ERR_MEMORY_UNAVAILABLE' });
+  assert.equal(await readFile(path.join(folder, '.import-intent.json'), 'utf8'), journal);
+  assert.deepEqual(await readdir(path.join(folder, 'captures')), []);
 });
 
-test('SIGKILL durante captura reconcilia lote inteiro antes de qualquer recall', { timeout:10_000 }, async (t) => {
+test('SIGKILL durante captura preserva journal e bloqueia replay sem sessões parciais', { timeout:10_000 }, async (t) => {
   const { fork } = await import('node:child_process');
   const { readdir } = await import('node:fs/promises');
   const { root, memory } = await fixture(t);
@@ -643,9 +649,10 @@ test('SIGKILL durante captura reconcilia lote inteiro antes de qualquer recall',
     assert.deepEqual(await readdir(path.join(folder, 'captures')), []);
   });
   const reopened = new MemoryHarnessService({ root, policy:fixturePolicy, association:fixturePolicy });
-  const recalled = await reopened.recallScoped(auth(), { ...recallScope(namespace()), question:'postgres', include_personal_note:false });
-  assert.equal(recalled.hits.length, 3);
-  assert.equal((await readdir(path.join(folder, 'captures'))).filter((name) => name.endsWith('.json')).length, 32);
+  const journal = await readFile(path.join(folder, '.capture-intent.json'), 'utf8');
+  await assert.rejects(reopened.recallScoped(auth(), { ...recallScope(namespace()), question:'postgres', include_personal_note:false }), { code:'ERR_MEMORY_UNAVAILABLE' });
+  assert.equal(await readFile(path.join(folder, '.capture-intent.json'), 'utf8'), journal);
+  assert.deepEqual(await readdir(path.join(folder, 'captures')), []);
 });
 
 test('export não vaza paths ou credenciais em metadados legados malformados', async (t) => {

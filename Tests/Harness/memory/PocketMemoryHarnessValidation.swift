@@ -5,6 +5,18 @@ import Darwin
 @main
 struct PocketMemoryHarnessValidation {
     static func main() async throws {
+        if CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--assert-recovery-blocked" {
+            let root = URL(fileURLWithPath: CommandLine.arguments[2], isDirectory: true)
+            let scope = PocketMemoryNamespace(environmentID: "10000000-0000-4000-8000-000000000001",
+                projectID: "20000000-0000-4000-8000-000000000001", threadID: "30000000-0000-4000-8000-000000000001")
+            let store = try await PocketMemoryStore(directory: root).scopedStore(scope)
+            do {
+                try await store.recoverCapture()
+                fatalError("Recovery without principal/receipt authority was accepted")
+            } catch PocketMemoryStoreError.unavailable {}
+            print("blocked")
+            return
+        }
         if CommandLine.arguments.count == 3 && ["--export", "--import"].contains(CommandLine.arguments[1]) {
             let root = URL(fileURLWithPath: CommandLine.arguments[2], isDirectory: true)
             let scope = PocketMemoryNamespace(environmentID: "10000000-0000-4000-8000-000000000001",
@@ -67,7 +79,7 @@ struct PocketMemoryHarnessValidation {
                 aggregateID: scope.projectID, threadID: scope.threadID, scopes: ["context.read", "memory.write", "memory.personal.read"])
             let service = PocketMemoryHarnessService(directory: root, policy: { _, _, _, _ in true }, association: { _, _ in true })
             let current = try await service.noteGet(auth, namespace: scope)
-            guard current.content == "node recovered", current.revision == 2 else { fatalError("cross-runtime recovery failed") }
+            guard current.content == "node", current.revision == 1 else { fatalError("cross-runtime committed note failed") }
             _ = try await service.notePut(auth, namespace: scope, content: "swift", expectedRevision: current.revision)
             let recall = try await service.recallScoped(auth, namespace: scope, question: "postgres beta")
             let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
@@ -78,6 +90,30 @@ struct PocketMemoryHarnessValidation {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("pocketwiki-memory-harness-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
+
+        // Each legacy entrypoint must initialize an entirely new nested root.
+        for operation in ["read", "write", "capture", "recall"] {
+            let nested = root.appendingPathComponent("missing-\(operation)/parent/memory", isDirectory: true)
+            let legacyStore = PocketMemoryStore(directory: nested)
+            switch operation {
+            case "read": _ = try await legacyStore.readNote()
+            case "write": try await legacyStore.writeNote("first use")
+            case "capture": _ = try await legacyStore.capture([PocketMemoryIncomingEvent(
+                event: "user-prompt-submit", sessionID: UUID().uuidString.lowercased(), ingestKey: "first",
+                prompt: "first use", message: nil, providerID: nil, modelID: nil)])
+            default: _ = try await legacyStore.recall("first use")
+            }
+            precondition(FileManager.default.fileExists(atPath: nested.appendingPathComponent(".harness-writer.sqlite3").path))
+        }
+        let outsideParent = root.appendingPathComponent("outside-parent", isDirectory: true)
+        try FileManager.default.createDirectory(at: outsideParent, withIntermediateDirectories: false)
+        let linkedParent = root.appendingPathComponent("linked-parent", isDirectory: true)
+        try FileManager.default.createSymbolicLink(at: linkedParent, withDestinationURL: outsideParent)
+        do {
+            _ = try await PocketMemoryStore(directory: linkedParent.appendingPathComponent("missing/memory")).readNote()
+            fatalError("Symlink parent was accepted")
+        } catch PocketMemoryStoreError.scopeDenied {}
+        precondition(!FileManager.default.fileExists(atPath: outsideParent.appendingPathComponent("missing").path))
 
         let environment = "10000000-0000-4000-8000-000000000001"
         let projectA = "20000000-0000-4000-8000-000000000001"
@@ -124,8 +160,37 @@ struct PocketMemoryHarnessValidation {
             "ingest_key": "pending", "prompt": "intent recovery unique", "sequence": pendingSequence,
             "provider_id": NSNull(), "model_id": NSNull()]], "ledger": ledger]
         try JSONSerialization.data(withJSONObject: pending).write(to: captureRoot.appendingPathComponent(".capture-intent.json"))
-        let recovered = try await restarted.recallScoped(authA, namespace: namespaceA, question: "intent recovery unique")
-        precondition(recovered.hits.contains { $0.sessionID == pendingID })
+        let legacy = PocketMemoryStore(directory: captureRoot)
+        let originalJournal = try Data(contentsOf: captureRoot.appendingPathComponent(".capture-intent.json"))
+        try FileManager.default.removeItem(at: captureRoot.appendingPathComponent(".capture-intent.json"))
+        for kind in ["capture", "note", "import"] {
+            let journal = captureRoot.appendingPathComponent(".\(kind)-intent.json")
+            let saved = Data("pending".utf8)
+            try saved.write(to: journal)
+            do { _ = try await legacy.readNote(); fatalError("v1 read accepted journal") }
+            catch PocketMemoryStoreError.unavailable {}
+            do { try await legacy.writeNote("overwrite"); fatalError("v1 note accepted journal") }
+            catch PocketMemoryStoreError.unavailable {}
+            do { _ = try await legacy.capture([event]); fatalError("v1 capture accepted journal") }
+            catch PocketMemoryStoreError.unavailable {}
+            do { _ = try await legacy.recall("postgres"); fatalError("v1 recall accepted journal") }
+            catch PocketMemoryStoreError.unavailable {}
+            let preserved = try Data(contentsOf: journal)
+            precondition(preserved == saved)
+            try FileManager.default.removeItem(at: journal)
+        }
+        try originalJournal.write(to: captureRoot.appendingPathComponent(".capture-intent.json"))
+        let pendingURL = captureRoot.appendingPathComponent(".capture-intent.json")
+        let pendingBytes = try Data(contentsOf: pendingURL)
+        do {
+            _ = try await restarted.recallScoped(authA, namespace: namespaceA, question: "intent recovery unique")
+            fatalError("Recovery without principal/receipt authority was accepted")
+        } catch PocketMemoryStoreError.unavailable {}
+        let preservedPendingBytes = try Data(contentsOf: pendingURL)
+        precondition(preservedPendingBytes == pendingBytes)
+        precondition(!FileManager.default.fileExists(atPath: captureRoot.appendingPathComponent("captures/session-\(pendingID).json").path))
+        // Test fixture cleanup only; production never discards the journal.
+        try FileManager.default.removeItem(at: pendingURL)
         let first = try await service.recallScoped(authA, namespace: namespaceA, question: "postgres project notes")
         let second = try await service.recallScoped(authA, namespace: namespaceA, question: "postgres project notes")
         precondition(first.hits.count == 1 && first.hits[0].trust == "historical")
