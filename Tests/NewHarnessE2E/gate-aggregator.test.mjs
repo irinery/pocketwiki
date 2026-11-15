@@ -180,6 +180,23 @@ test('E1 requires all six cumulative pairs and validates replay artifact binding
     input[index].cases[1].artifact_paths.push(surface + '/proof.json', surface + '/result.json', surface + '/identity.json');
   }
   assert.equal(aggregateReports('E1', input, matrix).gate_passed, true);
+  // E2 is cumulative: a successful E1 shard or five of six E2 services cannot close it.
+  const e2 = structuredClone(input).map(report => ({ ...report, stage: 'E2' }));
+  const services = ['SERVICE-0003', 'SERVICE-0005', 'SERVICE-0006', 'SERVICE-0007', 'SERVICE-0013', 'SERVICE-0016'];
+  for (const id of services) e2[0].cases.push({ id, surface: 'service', status: 'passed', artifact_paths: ['service/' + id + '.log'] });
+  const completeE2 = aggregateReports('E2', e2, matrix);
+  assert.equal(completeE2.gate_passed, true);
+  assert.equal(completeE2.cases.length, 12);
+  for (const id of services) {
+    const missingService = structuredClone(e2);
+    missingService[0].cases = missingService[0].cases.filter(item => item.id !== id);
+    assert.throws(() => aggregateReports('E2', missingService, matrix), /missing required/);
+    for (const status of ['failed', 'skipped']) {
+      const incomplete = structuredClone(e2);
+      incomplete[0].cases.find(item => item.id === id).status = status;
+      assert.throws(() => aggregateReports('E2', incomplete, matrix), /not passed/);
+    }
+  }
   const dir = await mkdtemp(path.join(os.tmpdir(), 'nh-replay-proof-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const paths = [];
