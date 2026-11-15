@@ -43,7 +43,7 @@ export function validateAuth(auth, scope = 'context.read') {
 }
 
 export function validateString(value, min, max, label) {
-  if (typeof value !== 'string') fail('ERR_INVALID', `${label} inválido.`);
+  if (typeof value !== 'string' || !value.isWellFormed()) fail('ERR_INVALID', `${label} inválido.`);
   const length = bytesOf(value).byteLength;
   if (length < min || length > max) fail('ERR_INVALID', `${label} fora do limite de bytes.`);
   return length;
@@ -287,6 +287,7 @@ export class ComposerService {
     const source = await readAuthorizedFile(approvedRoot, relative_path, this.secureReaderPath);
     if (end_byte > source.length || !Buffer.from(source.toString('utf8'), 'utf8').equals(source)) fail('ERR_INVALID', 'Origem ou intervalo inválido.');
     const quote = source.subarray(start_byte, end_byte);
+    if (quote.length > MIME_LIMITS['text/plain']) fail('ERR_INVALID', 'Citação excede 1 MiB.');
     if (!Buffer.from(quote.toString('utf8'), 'utf8').equals(quote)) fail('ERR_INVALID', 'Intervalo divide caractere UTF-8.');
     const reference = { reference_id: this.id(), kind: 'quote', relative_path: path.posix.normalize(relative_path.split(path.sep).join('/')), sha256: digest(quote), size_bytes: quote.length, trust: 'untrusted_content' };
     this.state.sources.push({ owner: ownerKey(auth), reference_id: reference.reference_id, root: approvedRoot, relative_path: reference.relative_path, source_sha256: digest(source), start_byte, end_byte, quote_base64: quote.toString('base64') });

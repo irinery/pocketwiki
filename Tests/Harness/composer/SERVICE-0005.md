@@ -14,7 +14,7 @@ swiftc Sources/PocketWikiMac/Services/Harness/Composer/ComposerDraftStore.swift 
 rm /tmp/pocketwiki-composer-swift-test
 ```
 
-A suíte Node usa o serviço e stash reais em diretórios temporários privados, removidos ao término. A saída do runner contém nomes dos testes e contagens, sem conteúdo dos anexos ou credenciais. Em 2026-11-14: 30 testes passaram, nenhum skip; typecheck Swift sem saída, exit 0. O teste de store Swift compila e executa `swift-store-test.swift`, com um caso aprovado. Esses resultados não são uma execução do gate cumulativo nem provam os itens abaixo.
+A suíte Node usa o serviço e stash reais em diretórios temporários privados, removidos ao término. A saída do runner contém nomes dos testes e contagens, sem conteúdo dos anexos ou credenciais. Em 2026-11-14: 32 testes passaram, nenhum skip; typecheck Swift sem saída, exit 0. O teste de store Swift compila e executa `swift-store-test.swift`, com um caso aprovado. Esses resultados não são uma execução do gate cumulativo nem provam os itens abaixo.
 
 ## Portas para integração
 

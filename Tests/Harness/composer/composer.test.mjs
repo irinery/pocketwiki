@@ -517,3 +517,24 @@ test('comando duplicado concorrente em processos retorna mesmo resultado uma vez
   assert.deepEqual([a.duplicate, b.duplicate].sort(), [false, true]);
   assert.equal(f.service.getDraft(auth(), ids.draft).revision, 1);
 });
+
+test('entradas recusam Unicode inválido e citação textual acima de 1 MiB', async (t) => {
+  const f = fixture(t);
+  await assert.rejects(saveDraft(f.service, auth(), { text: '\ud800' }), (error) => error.code === 'ERR_INVALID');
+  const root = path.join(f.root, 'wiki');
+  await mkdir(root);
+  await writeFile(path.join(root, 'grande.txt'), Buffer.alloc(1024 * 1024 + 1, 97));
+  await rejectsCode(f.service.previewQuote(auth(), { root, relative_path: 'grande.txt', start_byte: 0, end_byte: 1024 * 1024 + 1 }), 'ERR_INVALID');
+});
+
+test('projeção não aceita mesmo event_id com outra sequência', async (t) => {
+  const { service, auth: identity } = await makeHarness(t);
+  await saveDraft(service, identity);
+  const projection = new ComposerProjection({ environment_id: ids.environment, thread_id: ids.thread });
+  projection.begin(service.snapshot(identity));
+  await saveDraft(service, identity, { draftId: '88888888-8888-4888-8888-888888888881' });
+  const event = service.eventsSince(identity, 1)[0];
+  projection.apply(event);
+  assert.throws(() => projection.apply({ ...event, seq: event.seq + 1 }), (error) => error.code === 'ERR_INVALID');
+  assert.equal(projection.drafts.length, 2);
+});

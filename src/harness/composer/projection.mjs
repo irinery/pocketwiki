@@ -15,12 +15,13 @@ export class ComposerProjection {
   #pending = null;
   #lastSeq = 0;
   #lastEventID = null;
+  #eventIDs = new Map();
   get drafts() { return [...this.#drafts.values()].sort((a, b) => a.draft_id.localeCompare(b.draft_id)).map((draft) => structuredClone(draft)); }
   get revision() { return this.#revision; }
   begin(page) {
     if (!validateAgainst('composerFeatureSnapshot', page).valid) fail('ERR_INVALID', 'Snapshot inválido.');
     if (page.revision < this.#revision || page.as_of_seq < this.#lastSeq) fail('ERR_CONTEXT_STALE', 'Snapshot mais antigo que a projeção.');
-    this.#pending = { snapshot_id: page.snapshot_id, revision: page.revision, as_of_seq: page.as_of_seq, cursor: page.next_cursor, drafts: new Map(), events: new Map(), eventBytes: 0 };
+    this.#pending = { snapshot_id: page.snapshot_id, revision: page.revision, as_of_seq: page.as_of_seq, cursor: page.next_cursor, drafts: new Map(), events: new Map(), eventIDs: new Map(), eventBytes: 0 };
     this.#append(page);
     if (!page.next_cursor) this.#install();
   }
@@ -29,6 +30,7 @@ export class ComposerProjection {
     if (!pending || !event || !Number.isSafeInteger(event.seq) || event.seq < 0 || !UUID.test(event.event_id ?? '') || !validateAgainst('composerModuleEvent', event.payload).valid) fail('ERR_INVALID', 'Evento inválido.');
     if (event.environment_id !== this.#environmentID || event.thread_id !== this.#threadID) fail('ERR_FORBIDDEN', 'Evento de outra identidade.');
     if (event.seq <= pending.as_of_seq) return;
+    if (pending.eventIDs.has(event.event_id) && pending.eventIDs.get(event.event_id) !== event.seq) fail('ERR_INVALID', 'event_id repetido com outra sequência.');
     const previous = pending.events.get(event.seq);
     if (previous) {
       if (JSON.stringify(previous) !== JSON.stringify(event)) fail('ERR_CONTEXT_STALE', 'Sequência duplicada divergente.');
@@ -38,15 +40,18 @@ export class ComposerProjection {
     if (pending.eventBytes + size > 4 * 1024 * 1024) { this.#pending = null; fail('ERR_CURSOR_EXPIRED', 'Buffer de eventos excedido; reinicie o snapshot.'); }
     pending.eventBytes += size;
     pending.events.set(event.seq, structuredClone(event));
+    pending.eventIDs.set(event.event_id, event.seq);
   }
   apply(event) {
     if (this.#pending) return this.buffer(event);
     if (!event || !UUID.test(event.event_id ?? '') || !Number.isSafeInteger(event.seq) || !validateAgainst('composerModuleEvent', event.payload).valid) fail('ERR_INVALID', 'Evento inválido.');
     if (event.environment_id !== this.#environmentID || event.thread_id !== this.#threadID) fail('ERR_FORBIDDEN', 'Evento de outra identidade.');
+    if (this.#eventIDs.has(event.event_id) && this.#eventIDs.get(event.event_id) !== event.seq) fail('ERR_INVALID', 'event_id repetido com outra sequência.');
     if (event.seq <= this.#lastSeq) return;
     this.#applyTo(this.#drafts, event);
     this.#lastSeq = event.seq;
     this.#lastEventID = event.event_id;
+    this.#eventIDs.set(event.event_id, event.seq);
   }
   finish(page) {
     const pending = this.#pending;
@@ -84,6 +89,7 @@ export class ComposerProjection {
     this.#revision = revision;
     this.#lastSeq = sequence;
     this.#lastEventID = eventID;
+    this.#eventIDs = new Map(pending.eventIDs);
     this.#pending = null;
   }
 }
