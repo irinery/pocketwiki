@@ -633,7 +633,8 @@ actor PocketMemoryStore {
         guard UUID(uuidString: sessionID)?.uuidString.lowercased() == sessionID else { throw PocketMemoryStoreError.invalidInput }
         let markerDirectory = directory.appendingPathComponent(".legacy-mappings", isDirectory: true)
         let marker = markerDirectory.appendingPathComponent("\(sessionID).json")
-        if fileManager.fileExists(atPath: marker.path) { return true }
+        let target = directory.appendingPathComponent("captures/session-\(sessionID).json")
+        if try readObject(marker) != nil, try readObject(target) != nil { return true }
         let candidates = [
             sourceRoot.appendingPathComponent("session-\(sessionID).json"),
             sourceRoot.appendingPathComponent("captures/session-\(sessionID).json")
@@ -645,7 +646,6 @@ actor PocketMemoryStore {
               let record = try readObject(source),
               (record["id"] as? String)?.lowercased() == sessionID,
               let messages = record["messages"] as? [[String: Any]] else { throw PocketMemoryStoreError.importInvalid }
-        let target = directory.appendingPathComponent("captures/session-\(sessionID).json")
         let safeMessages = messages.compactMap { item -> [String: Any]? in
             guard let role = item["role"] as? String, ["user", "assistant"].contains(role),
                   let content = item["content"] as? String else { return nil }

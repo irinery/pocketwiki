@@ -674,3 +674,18 @@ test('import rejeita payload de evento inválido antes de alterar qualquer sess�
   const recalled = await destination.memory.recallScoped(auth(), { ...recallScope(namespace()), question:'postgres', include_personal_note:false });
   assert.equal(recalled.hits.length, 0);
 });
+
+test('mapping existente reconstrói alvo ausente sem alterar legado', async (t) => {
+  const { root, memory } = await fixture(t);
+  const source = path.join(root, `session-${sessionA}.json`);
+  const original = JSON.stringify({ schema_version:1, id:sessionA, messages:[{ role:'user', content:'legado restaurável' }] });
+  await writeFile(source, original);
+  const input = { legacy_session_id:sessionA, namespace:namespace() };
+  await memory.mapLegacy(auth(), input);
+  const target = path.join(root, 'v2', environmentA, 'projects', projectA, 'captures', `session-${sessionA}.json`);
+  await rm(target);
+  assert.equal((await memory.mapLegacy(auth(), input)).mapped, true);
+  const result = await memory.recallScoped(auth(), { ...recallScope(namespace()), question:'restaurável', include_personal_note:false });
+  assert.equal(result.hits.length, 1);
+  assert.equal(await readFile(source, 'utf8'), original);
+});
