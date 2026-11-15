@@ -143,8 +143,10 @@ export class ComposerService {
     // Events are retained while snapshots may refer to their boundary.
   }
 
-  stage(auth, { filename, mime, content_base64 }) {
+  stage(auth, input) {
     validateAuth(auth);
+    if (!isPlainObject(input) || Object.keys(input).some((key) => !['filename', 'mime', 'content_base64'].includes(key))) fail('ERR_INVALID', 'Entrada de stage inválida.');
+    const { filename, mime, content_base64 } = input;
     const filenameBytes = validateString(filename, 1, 255, 'Nome do arquivo');
     if (filename === '.' || filename === '..' || /[\\/\u0000-\u001f\u007f]/.test(filename) || path.basename(filename) !== filename) fail('ERR_INVALID', 'O nome precisa ser um basename simples.');
     if (!Object.hasOwn(MIME_LIMITS, mime)) fail('ERR_UNSUPPORTED', 'MIME não aceito para staging.');

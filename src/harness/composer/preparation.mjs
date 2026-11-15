@@ -8,6 +8,7 @@ export class ComposerPreparationService extends ComposerService {
     const textBytes = validateString(input.text, 1, 32768, 'Texto da mensagem');
     if (!Number.isSafeInteger(input.context_budget_bytes) || input.context_budget_bytes < 1024 || input.context_budget_bytes > 65536) fail('ERR_INVALID', 'context_budget_bytes fora do limite.');
     input.references.forEach(validateReference);
+    if (new Set(input.references.map((reference) => reference.reference_id)).size !== input.references.length) fail('ERR_INVALID', 'Referência duplicada.');
     const key = ownerKey(auth);
     this._collectExpired();
     const draft = this.state.drafts.find((item) => item.owner === key && item.draft_id === input.draft_id);

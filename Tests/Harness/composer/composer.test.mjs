@@ -280,3 +280,11 @@ test('E2 prepara imagem sem consultar capacidade do provider', async (t) => {
   const prepared = await prepare(service, identity, { references: [image] });
   assert.equal(service.resolve(delegatedAuth(identity), { prepared_id: prepared.prepared_id, manifest_sha256: prepared.manifest_sha256 }).context.segments[0].mime, 'image/png');
 });
+
+test('prepare rejeita referência duplicada e campos extras antes de ler fonte', async (t) => {
+  const { service, auth: identity } = await makeHarness(t);
+  const staged = service.stage(identity, { filename: 'a.txt', mime: 'text/plain', content_base64: 'YQ==' }).reference;
+  await saveDraft(service, identity, { references: [staged] });
+  await rejectsCode(prepare(service, identity, { references: [staged, staged] }), 'ERR_INVALID');
+  assert.throws(() => service.stage(identity, { filename: 'a.txt', mime: 'text/plain', content_base64: 'YQ==', extra: true }), (error) => error.code === 'ERR_INVALID');
+});
