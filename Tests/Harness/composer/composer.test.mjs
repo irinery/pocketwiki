@@ -788,3 +788,33 @@ test('não troca policy de roots em serviço já vinculado a outro gateway', asy
   new ComposerGateway({ service, credentialHost: host, policy: first });
   assert.throws(() => new ComposerGateway({ service, credentialHost: host, policy: second }), TypeError);
 });
+
+test('stress nativo de lookup sob reparent não lê inode externo', async (t) => {
+  const { spawn } = await import('node:child_process');
+  const f = fixture(t);
+  const root = path.join(f.root, 'root');
+  const outside = path.join(f.root, 'outside');
+  await mkdir(root);
+  await mkdir(outside);
+  await mkdir(path.join(root, 'slot'));
+  await writeFile(path.join(root, 'slot', 'page.txt'), 'permitido');
+  await writeFile(path.join(outside, 'secret.txt'), 'segredo externo');
+  try { execFileSync(secureReaderPath, ['--probe']); } catch { t.skip('Resolução beneath indisponível no runtime'); return; }
+  const readerPath = path.join(helperDir, 'reparent-reader');
+  execFileSync('cc', ['-std=c11', '-O2', 'Tests/Harness/composer/reparent-reader.c', '-o', readerPath]);
+  const fd = openSync(root, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+  t.after(() => closeSync(fd));
+  const policy = new ComposerPolicy([{ principal_id: ids.principal, environment_id: ids.environment, thread_id: ids.thread, roots: [{ path: root, fd }] }]);
+  assert.equal(policy.rootHandle(auth(), root), fd);
+  const racer = spawn(process.execPath, ['Tests/Harness/composer/reparent-racer.mjs', root, outside], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const raceExit = new Promise((resolve, reject) => { racer.once('error', reject); racer.once('exit', (code) => code === 0 ? resolve() : reject(new Error(`racer exit ${code}`))); });
+  await new Promise((resolve) => racer.stdout.once('data', resolve));
+  const reader = spawn(readerPath, ['slot/page.txt'], { stdio: ['ignore', 'pipe', 'pipe', fd] });
+  let successfulReads = '';
+  reader.stdout.on('data', (chunk) => { successfulReads += chunk; });
+  const readerExit = new Promise((resolve, reject) => { reader.once('error', reject); reader.once('exit', resolve); });
+  const [code] = await Promise.all([readerExit, raceExit]);
+  if (code === 77) { t.skip('Primitiva beneath não disponível no SDK'); return; }
+  assert.equal(code, 0, 'leitura do inode externo foi observada');
+  assert.ok(Number(successfulReads.trim()) > 0, 'nenhuma leitura legítima concluída');
+});
