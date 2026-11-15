@@ -2,7 +2,7 @@ import test from 'node:test';
 import { replayProofSHA256, canonicalJSON } from './replay-proof.mjs';
 import { execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import matrix from '../../docs/rfcs/new-harness/matriz-verificacao.json' with { type: 'json' };
@@ -186,7 +186,7 @@ test('E1 requires all six cumulative pairs and validates replay artifact binding
       const target = path.join(dir, artifact); await mkdir(path.dirname(target), { recursive: true });
       let content = 'fixture';
       if (artifact === item.replay_proof_path) content = JSON.stringify(item.replay_proof);
-      if (artifact === item.replay_host_path) content = JSON.stringify({ surface: item.surface, cases: [{ id: '02-01', status: 'passed', replay_nonce: item.replay_nonce, replay_proof_sha256: item.replay_proof_sha256 }] });
+      if (artifact === item.replay_host_path) content = JSON.stringify({ surface: item.surface, cases: ['02-01', '02-02', '02-03', '02-04'].map(id => ({ id, status: 'passed', ...(id === '02-01' ? { replay_nonce: item.replay_nonce, replay_proof_sha256: item.replay_proof_sha256 } : {}) })) });
       await writeFile(target, content);
     }
     // Equivalent JSON in a different property order still matches the exact hashed artifact.
@@ -194,6 +194,22 @@ test('E1 requires all six cumulative pairs and validates replay artifact binding
     const reportPath = path.join(dir, `shard-${index}.json`); await writeFile(reportPath, JSON.stringify(report)); paths.push(reportPath);
   }
   assert.equal((await aggregateReportFiles('E1', paths, identity)).gate_passed, true);
+  for (const surface of ['web', 'macos']) {
+    const file = path.join(dir, surface, 'result.json');
+    const valid = JSON.parse(await readFile(file, 'utf8'));
+    for (const mutate of [
+      host => { host.cases[1].status = 'failed'; },
+      host => { host.cases.pop(); },
+      host => { host.cases[1] = { ...host.cases[0] }; },
+      host => { host.invalidated = true; },
+      host => { host.cases[2].invalidated = true; },
+      host => { host.surface = surface === 'web' ? 'macos' : 'web'; }
+    ]) {
+      const host = structuredClone(valid); mutate(host); await writeFile(file, JSON.stringify(host));
+      await assert.rejects(() => aggregateReportFiles('E1', paths, identity), /replay host artifact mismatch/);
+    }
+    await writeFile(file, JSON.stringify(valid));
+  }
   await writeFile(path.join(dir, 'web/proof.json'), '{}');
   await assert.rejects(() => aggregateReportFiles('E1', paths, identity), /replay proof artifact mismatch/);
 

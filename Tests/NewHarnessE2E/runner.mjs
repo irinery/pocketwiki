@@ -225,7 +225,7 @@ async function runRuntimeUI(surface, artifactDir, tempHome, targetSHA) {
   let manifest;
   try { manifest = JSON.parse(await readFile(path.join(output, 'result.json'), 'utf8')); } catch {}
   const required = ['02-01', '02-02', '02-03', '02-04'];
-  const valid = manifest && Array.isArray(manifest.cases) && manifest.cases.length === 4 && required.every(id => manifest.cases.some(c => c.id === id && ['passed', 'failed'].includes(c.status))) && evidence.some(name => name !== 'result.json');
+  const valid = manifest && manifest.surface === surface && manifest.invalidated !== true && Array.isArray(manifest.cases) && manifest.cases.length === 4 && required.every(id => manifest.cases.some(c => c?.id === id && c.invalidated !== true && ['passed', 'failed'].includes(c.status))) && evidence.some(name => name !== 'result.json');
   let replay;
   try {
     const bytes = await readFile(path.join(output, 'replay-proof.json'));

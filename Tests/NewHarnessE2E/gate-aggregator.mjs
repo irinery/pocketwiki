@@ -184,8 +184,11 @@ async function verifyArtifacts(reportPath, report) {
       const hostResolved = await realpath(hostPath), hostMetadata = await lstat(hostPath);
       if (!hostResolved.startsWith(reportDirectory + path.sep) || !hostMetadata.isFile() || hostMetadata.isSymbolicLink()) throw new Error('invalid replay host file');
       const host = JSON.parse(await readFile(hostPath, 'utf8'));
-      const rows = Array.isArray(host.cases) ? host.cases.filter(row => row.id === '02-01') : [];
-      if (host.surface !== result.surface || rows.length !== 1 || rows[0].status !== 'passed' || rows[0].replay_nonce !== result.replay_nonce || rows[0].replay_proof_sha256 !== result.replay_proof_sha256) throw new Error('replay host artifact mismatch');
+      const required = ['02-01', '02-02', '02-03', '02-04'];
+      if (host.surface !== result.surface || host.invalidated === true || !Array.isArray(host.cases) || host.cases.length !== required.length ||
+          !required.every(id => host.cases.filter(row => row?.id === id && row.status === 'passed' && row.invalidated !== true).length === 1)) throw new Error('replay host artifact mismatch');
+      const row = host.cases.find(item => item.id === '02-01');
+      if (row.replay_nonce !== result.replay_nonce || row.replay_proof_sha256 !== result.replay_proof_sha256) throw new Error('replay host artifact mismatch');
       const bytes = await readFile(proofPath);
       if (replayProofSHA256(bytes) !== result.replay_proof_sha256 || canonicalJSON(JSON.parse(bytes)) !== canonicalJSON(result.replay_proof)) throw new Error('replay proof artifact mismatch');
     }
