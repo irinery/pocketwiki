@@ -154,5 +154,40 @@
     "kind": "basic_without_token",
     "text": "Basic ",
     "expected": "Basic "
+  },
+  {
+    "kind": "basic_nonascii_prefix",
+    "text": "éBasic YTpi",
+    "expected": "é[redacted credential]"
+  },
+  {
+    "kind": "basic_feff_before_token",
+    "text": "Basic﻿YTpi",
+    "expected": "[redacted credential]"
+  },
+  {
+    "kind": "basic_feff_after_token",
+    "text": "Basic YTpi﻿fim",
+    "expected": "[redacted credential]﻿fim"
+  },
+  {
+    "kind": "basic_ascii_word_prefix",
+    "text": "aBasic YTpi",
+    "expected": "aBasic YTpi"
+  },
+  {
+    "kind": "basic_unicode_case_fold",
+    "text": "Baſic YTpi",
+    "expected": "Baſic YTpi"
+  },
+  {
+    "kind": "basic_non_js_whitespace",
+    "text": "BasicYTpi",
+    "expected": "BasicYTpi"
+  },
+  {
+    "kind": "basic_non_js_token_delimiter",
+    "text": "Basic YTpifim",
+    "expected": "Basic YTpifim"
   }
 ]
