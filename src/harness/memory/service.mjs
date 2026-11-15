@@ -71,11 +71,26 @@ function cleanContext(value) {
   return String(value).replace(/\u0000/g, '').slice(0, 5_000);
 }
 
+function validateScopedEvents(events) {
+  if (!Array.isArray(events) || events.length < 1 || events.length > 32) throw error('ERR_INVALID', 'Invalid memory event batch');
+  for (const item of events) {
+    if (!item || typeof item !== 'object' || Array.isArray(item) || !UUID.test(item.session_id || '') ||
+        Object.keys(item).some((key) => !['event', 'session_id', 'ingest_key', 'prompt', 'message', 'provider_id', 'model_id'].includes(key)) ||
+        ['prompt', 'message', 'provider_id', 'model_id'].some((key) => Object.hasOwn(item, key) && typeof item[key] !== 'string') ||
+        ['provider_id', 'model_id'].some((key) => item[key] !== undefined && [...item[key]].length > 120) ||
+        (item.event !== 'user-prompt-submit' && item.prompt !== undefined) ||
+        (item.event !== 'assistant-response' && item.message !== undefined)) {
+      throw error('ERR_INVALID', 'Invalid memory event');
+    }
+  }
+  return validateMemoryEvents(events);
+}
+
 function redactExportText(value) {
   return String(value)
     .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi, '[redacted credential]')
     .replace(/\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_]{20,}|AIza[0-9A-Za-z_-]{30,})\b/g, '[redacted secret]')
-    .replace(/(?:\/Users\/|\/home\/|\/private\/var\/|[A-Za-z]:\\Users\\)[^\s"'<>]*/g, '[redacted path]');
+    .replace(/(^|[\s("'=])(?:\/(?!\/)[^\s"'<>]+|[A-Za-z]:\\[^\s"'<>]+)/g, '$1[redacted path]');
 }
 
 function sanitizeExportRecord(record) {
@@ -139,7 +154,7 @@ export class MemoryHarnessService {
     const namespace = validateNamespace(rawNamespace);
     await this.#authorize(auth, namespace, 'memory.write');
     let validated;
-    try { validated = validateMemoryEvents(events); }
+    try { validated = validateScopedEvents(events); }
     catch (cause) { throw validateIOError(cause, 'ERR_INVALID'); }
     try { return { accepted_keys:await (await this.#storeFor(namespace)).captureScoped(validated) }; }
     catch (cause) { throw validateIOError(cause); }
@@ -160,15 +175,12 @@ export class MemoryHarnessService {
     }
     const store = await this.#storeFor(namespace);
     let result;
-    try { result = await store.recall(question, { maxCharacters:5_000, limit:3, includeNote:false }); }
+    try { result = await store.scopedRecall(question, { maxCharacters:5_000, limit:3, includeNote:false }); }
     catch (cause) { throw validateIOError(cause); }
     const hits = result.hits.map((hit) => {
       const snippet = cleanContext(hit.snippet);
       const source = 'history';
-      const hash = digest(JSON.stringify({
-        environment_id:namespace.environment_id, project_id:namespace.project_id || '',
-        thread_id:namespace.thread_id || '', session_id:hit.id, snippet
-      }));
+      const hash = digest(snippet);
       return {
         session_id:hit.id,
         message_id:deterministicUUID(`${hit.id}\u0000${snippet}`),
@@ -191,7 +203,7 @@ export class MemoryHarnessService {
           session_id:deterministicUUID(`note\u0000${namespace.environment_id}\u0000${namespace.project_id || namespace.thread_id}`),
           message_id:deterministicUUID(`note\u0000${note.revision}\u0000${snippet}`),
           source:'note', snippet,
-          sha256:digest(JSON.stringify({ namespace, revision:note.revision, snippet })),
+          sha256:digest(snippet),
           environment_id:namespace.environment_id,
           ...(namespace.project_id ? { project_id:namespace.project_id } : {}),
           trust:'historical'
@@ -230,6 +242,24 @@ export class MemoryHarnessService {
     if (!UUID.test(legacy_session_id || '')) throw error('ERR_INVALID', 'Legacy session ID must be a UUID');
     try {
       const store = await this.#storeFor(namespace);
+      let sourceValid = false;
+      for (const parent of [this.root, path.join(this.root, 'captures')]) {
+        const parentInfo = await lstat(parent).catch((cause) => { if (cause.code === 'ENOENT') return null; throw cause; });
+        if (!parentInfo) continue;
+        if (!parentInfo.isDirectory() || parentInfo.isSymbolicLink()) throw error('ERR_SCOPE', 'Invalid legacy source directory');
+        const source = path.join(parent, `session-${legacy_session_id}.json`);
+        const info = await lstat(source).catch((cause) => { if (cause.code === 'ENOENT') return null; throw cause; });
+        if (!info) continue;
+        if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_IMPORT_BYTES) throw error('ERR_IMPORT', 'Invalid legacy source');
+        let record;
+        try { record = JSON.parse(await readFile(source, 'utf8')); } catch { throw error('ERR_IMPORT', 'Invalid legacy source'); }
+        if (record?.schema_version !== 1 || record.id !== legacy_session_id || !Array.isArray(record.messages)) {
+          throw error('ERR_IMPORT', 'Invalid legacy source');
+        }
+        sourceValid = true;
+        break;
+      }
+      if (!sourceValid) throw error('ERR_IMPORT', 'Legacy source is missing');
       const mappings = path.join(this.root, '.legacy-mappings');
       await mkdir(mappings, { mode:0o700 }).catch((cause) => { if (cause.code !== 'EEXIST') throw cause; });
       const info = await lstat(mappings);
@@ -241,7 +271,14 @@ export class MemoryHarnessService {
         if (cause.code !== 'EEXIST') throw cause;
         const markerInfo = await lstat(marker);
         if (!markerInfo.isFile() || markerInfo.isSymbolicLink()) throw error('ERR_SCOPE', 'Invalid mapping marker');
-        if (await readFile(marker, 'utf8') !== intent) throw error('ERR_CONFLICT', 'Legacy session already mapped');
+        let existing;
+        try { existing = JSON.parse(await readFile(marker, 'utf8')); }
+        catch { throw error('ERR_IMPORT', 'Legacy mapping marker is invalid'); }
+        const prior = existing?.namespace;
+        if (existing?.principal_id !== auth.principal_id || prior?.environment_id !== namespace.environment_id ||
+            prior?.project_id !== namespace.project_id || prior?.thread_id !== namespace.thread_id) {
+          throw error('ERR_CONFLICT', 'Legacy session already mapped');
+        }
       }
       return await store.mapLegacySession(legacy_session_id, this.root);
     }
@@ -260,7 +297,7 @@ export class MemoryHarnessService {
     const exported = {
       schema_version:2,
       namespace,
-      sessions:(await store.scopedSessions()).map(sanitizeExportRecord),
+      sessions:(await store.scopedSessionsConsistent()).map(sanitizeExportRecord),
       ...(include_personal_note ? { note:await store.noteGetCAS(namespace).then((note) => ({
         content:redactExportText(note.content), revision:note.revision
       })) } : {})
@@ -414,7 +451,10 @@ export class MemoryHarnessService {
       if (!info.isDirectory() || info.isSymbolicLink()) throw error('ERR_SCOPE', 'Memory namespace contains a symlink');
       await chmod(current, 0o700);
     }
-    return new PocketMemoryStore(this.root).namespace(namespace);
+    const store = new PocketMemoryStore(this.root).namespace(namespace);
+    try { await store.recoverCapture(); }
+    catch (cause) { throw validateIOError(cause, 'ERR_MEMORY_UNAVAILABLE'); }
+    return store;
   }
 
   async #collectSnapshot(auth, namespace, store, includeNote) {

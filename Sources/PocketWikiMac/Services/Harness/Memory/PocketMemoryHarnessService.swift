@@ -49,7 +49,52 @@ actor PocketMemoryHarnessService {
         guard UUID(uuidString: legacySessionID)?.uuidString.lowercased() == legacySessionID else {
             throw PocketMemoryStoreError.invalidInput
         }
-        return try await store(for: namespace).mapLegacySession(legacySessionID, sourceRoot: rootStore.directory)
+        let store = try await store(for: namespace)
+        var sourceValid = false
+        for parent in [rootStore.directory, rootStore.directory.appendingPathComponent("captures", isDirectory: true)] {
+            if isSymbolicLink(parent) { throw PocketMemoryStoreError.scopeDenied }
+            guard FileManager.default.fileExists(atPath: parent.path) else { continue }
+            guard try FileManager.default.attributesOfItem(atPath: parent.path)[.type] as? FileAttributeType == .typeDirectory else {
+                throw PocketMemoryStoreError.scopeDenied
+            }
+            let source = parent.appendingPathComponent("session-\(legacySessionID).json")
+            if isSymbolicLink(source) { throw PocketMemoryStoreError.scopeDenied }
+            guard FileManager.default.fileExists(atPath: source.path) else { continue }
+            let attributes = try FileManager.default.attributesOfItem(atPath: source.path)
+            guard attributes[.type] as? FileAttributeType == .typeRegular,
+                  (attributes[.size] as? NSNumber)?.intValue ?? 0 <= 16 * 1024 * 1024,
+                  let data = try? Data(contentsOf: source),
+                  let record = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                  record["schema_version"] as? Int == 1, record["id"] as? String == legacySessionID,
+                  record["messages"] is [Any] else { throw PocketMemoryStoreError.importInvalid }
+            sourceValid = true
+            break
+        }
+        guard sourceValid else { throw PocketMemoryStoreError.importInvalid }
+        let mappingDirectory = rootStore.directory.appendingPathComponent(".legacy-mappings", isDirectory: true)
+        try ensurePrivateDirectory(mappingDirectory)
+        let marker = mappingDirectory.appendingPathComponent("\(legacySessionID).json")
+        guard !isSymbolicLink(marker) else { throw PocketMemoryStoreError.scopeDenied }
+        var target: [String: Any] = ["environment_id": namespace.environmentID]
+        if let project = namespace.projectID { target["project_id"] = project }
+        if let thread = namespace.threadID { target["thread_id"] = thread }
+        let intent: [String: Any] = ["principal_id": auth.principalID, "namespace": target]
+        let encoded = try JSONSerialization.data(withJSONObject: intent, options: [.sortedKeys])
+        do {
+            try encoded.write(to: marker, options: .withoutOverwriting)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: marker.path)
+        } catch {
+            guard !isSymbolicLink(marker), let data = try? Data(contentsOf: marker),
+                  let prior = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                  let priorNamespace = prior["namespace"] as? [String: Any],
+                  prior["principal_id"] as? String == auth.principalID,
+                  priorNamespace["environment_id"] as? String == namespace.environmentID,
+                  priorNamespace["project_id"] as? String == namespace.projectID,
+                  priorNamespace["thread_id"] as? String == namespace.threadID else {
+                throw PocketMemoryStoreError.revisionConflict(0)
+            }
+        }
+        return try await store.mapLegacySession(legacySessionID, sourceRoot: rootStore.directory)
     }
 
     func snapshot(_ auth: PocketMemoryAuthorization, namespace rawNamespace: PocketMemoryNamespace,
@@ -118,8 +163,12 @@ actor PocketMemoryHarnessService {
 
     private func store(for namespace: PocketMemoryNamespace) async throws -> PocketMemoryStore {
         let key = [namespace.environmentID, namespace.projectID ?? "", namespace.threadID ?? ""].joined(separator: ":")
-        if let store = stores[key] { return store }
+        if let store = stores[key] {
+            try await store.recoverCapture()
+            return store
+        }
         let store = try await rootStore.scopedStore(namespace)
+        try await store.recoverCapture()
         stores[key] = store
         return store
     }

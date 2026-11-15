@@ -1,8 +1,34 @@
 import Foundation
+import SQLite3
+import Darwin
 
 @main
 struct PocketMemoryHarnessValidation {
     static func main() async throws {
+        if CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--hold-lock" {
+            var database: OpaquePointer?
+            guard sqlite3_open_v2(CommandLine.arguments[2], &database, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK,
+                  let database, sqlite3_exec(database, "BEGIN IMMEDIATE", nil, nil, nil) == SQLITE_OK else {
+                fatalError("lock setup failed")
+            }
+            FileHandle.standardOutput.write(Data("locked\n".utf8))
+            sleep(60)
+            sqlite3_exec(database, "ROLLBACK", nil, nil, nil); sqlite3_close(database)
+            return
+        }
+        if CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--interop" {
+            let root = URL(fileURLWithPath: CommandLine.arguments[2], isDirectory: true)
+            let scope = PocketMemoryNamespace(environmentID: "10000000-0000-4000-8000-000000000001",
+                projectID: "20000000-0000-4000-8000-000000000001", threadID: "30000000-0000-4000-8000-000000000001")
+            let auth = PocketMemoryAuthorization(principalID: "50000000-0000-4000-8000-000000000001", environmentID: scope.environmentID,
+                aggregateID: scope.projectID, threadID: scope.threadID, scopes: ["context.read", "memory.write", "memory.personal.read"])
+            let service = PocketMemoryHarnessService(directory: root, policy: { _, _, _, _ in true })
+            let current = try await service.noteGet(auth, namespace: scope)
+            guard current.content == "node", current.revision == 1 else { fatalError("cross-runtime read failed") }
+            _ = try await service.notePut(auth, namespace: scope, content: "swift", expectedRevision: current.revision)
+            print("interop-ok")
+            return
+        }
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("pocketwiki-memory-harness-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -30,6 +56,20 @@ struct PocketMemoryHarnessValidation {
         let restarted = PocketMemoryHarnessService(directory: root, policy: { _, _, _, _ in true })
         let replay = try await restarted.captureScoped(authA, namespace: namespaceA, events: [event])
         precondition(replay == accepted)
+        let captureRoot = root.appendingPathComponent("v2/\(environment)/projects/\(projectA)")
+        let ledgerURL = captureRoot.appendingPathComponent(".memory-receipts.json")
+        var ledger = try JSONSerialization.jsonObject(with: Data(contentsOf: ledgerURL)) as! [String: Any]
+        var keys = ledger["accepted_keys"] as! [String: Int]
+        let pendingID = "40000000-0000-4000-8000-000000000005"
+        let pendingSequence = (ledger["sequence"] as! Int) + 1
+        keys["\(pendingID):pending"] = pendingSequence
+        ledger["sequence"] = pendingSequence; ledger["accepted_keys"] = keys
+        let pending: [String: Any] = ["events": [["event": "user-prompt-submit", "session_id": pendingID,
+            "ingest_key": "pending", "prompt": "intent recovery unique", "sequence": pendingSequence,
+            "provider_id": NSNull(), "model_id": NSNull()]], "ledger": ledger]
+        try JSONSerialization.data(withJSONObject: pending).write(to: captureRoot.appendingPathComponent(".capture-intent.json"))
+        let recovered = try await restarted.recallScoped(authA, namespace: namespaceA, question: "intent recovery unique")
+        precondition(recovered.hits.contains { $0.sessionID == pendingID })
         let first = try await service.recallScoped(authA, namespace: namespaceA, question: "postgres project notes")
         let second = try await service.recallScoped(authA, namespace: namespaceA, question: "postgres project notes")
         precondition(first.hits.count == 1 && first.hits[0].trust == "historical")

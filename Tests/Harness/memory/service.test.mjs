@@ -404,3 +404,98 @@ test('MemoryHit respeita o schema fechado do contrato', async (t) => {
   assert.equal(result.hits.length, 1);
   assert.deepEqual(validateAgainst('MemoryHit', result.hits[0]), { valid:true, errors:[] });
 });
+
+test('intenção de captura pendente é reconciliada antes de qualquer recall após restart', async (t) => {
+  const { root, memory } = await fixture(t);
+  await memory.noteGet(auth(), { namespace:namespace() });
+  const folder = path.join(root, 'v2', environmentA, 'projects', projectA);
+  const pending = { events:[{ ...event(), sequence:1 }], ledger:{ sequence:1, accepted_keys:{ [`${sessionA}:prompt-1`]:1 } } };
+  await writeFile(path.join(folder, '.capture-intent.json'), JSON.stringify(pending));
+  const restarted = new MemoryHarnessService({ root, policy:fixturePolicy });
+  const recalled = await restarted.recallScoped(auth(), {
+    ...recallScope(namespace()), question:'postgres', include_personal_note:false
+  });
+  assert.equal(recalled.hits.length, 1);
+  assert.deepEqual(await restarted.captureScoped(auth(), { namespace:namespace(), events:[event()] }), { accepted_keys:['prompt-1'] });
+});
+
+test('lock de processo vivo bloqueia escrita e SIGKILL libera sem reaproveitar PID', async (t) => {
+  const { fork } = await import('node:child_process');
+  const { root, memory } = await fixture(t);
+  await memory.noteGet(auth(), { namespace:namespace() });
+  const database = path.join(root, 'v2', environmentA, 'projects', projectA, '.harness-writer.sqlite3');
+  const child = fork(new URL('./lock-worker.mjs', import.meta.url), [database], { stdio:['ignore', 'ignore', 'ignore', 'ipc'] });
+  t.after(() => child.kill('SIGKILL'));
+  await new Promise((resolve, reject) => { child.once('message', resolve); child.once('error', reject); });
+  // O writer bloqueado roda em processo separado: SQLite síncrono não bloqueia este controlador.
+  const { fork: forkWriter } = await import('node:child_process');
+  const writer = forkWriter(new URL('./cas-worker.mjs', import.meta.url), [root, 'depois'], { stdio:['ignore', 'ignore', 'inherit', 'ipc'] });
+  t.after(() => writer.kill('SIGKILL'));
+  await new Promise((resolve, reject) => { writer.once('message', resolve); writer.once('error', reject); });
+  let outcome;
+  writer.once('message', (message) => { outcome = message; });
+  writer.send('go');
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assert.equal(outcome, undefined);
+  child.kill('SIGKILL');
+  await new Promise((resolve) => child.once('exit', resolve));
+  if (outcome === undefined) await new Promise((resolve) => writer.once('message', resolve));
+  assert.equal(outcome, 'ok');
+  assert.equal((await memory.noteGet(auth(), { namespace:namespace() })).revision, 1);
+});
+
+test('mapping legado não segue diretório captures simbólico nem reserva sessão inexistente', async (t) => {
+  const { root, memory } = await fixture(t);
+  const outside = await mkdtemp(path.join(os.tmpdir(), 'memory-legacy-outside-'));
+  t.after(() => rm(outside, { recursive:true, force:true }));
+  await writeFile(path.join(outside, `session-${sessionA}.json`), JSON.stringify({
+    schema_version:1, id:sessionA, messages:[{ role:'user', content:'fora' }]
+  }));
+  await symlink(outside, path.join(root, 'captures'));
+  await assert.rejects(memory.mapLegacy(auth(), { legacy_session_id:sessionA, namespace:namespace() }),
+    (error) => error.code === 'ERR_SCOPE' || error.code === 'ERR_IMPORT');
+  await rm(path.join(root, 'captures'));
+  await writeFile(path.join(root, `session-${sessionA}.json`), JSON.stringify({ schema_version:1, id:sessionA, messages:[] }));
+  const mapped = await memory.mapLegacy(auth(environmentA, { aggregate_id:projectB }), {
+    legacy_session_id:sessionA, namespace:namespace(projectB)
+  });
+  assert.equal(mapped.mapped, true);
+});
+
+test('captura scoped rejeita provider longo, null e texto em evento sem conteúdo', async (t) => {
+  const { memory } = await fixture(t);
+  for (const invalid of [
+    { ...event(), provider_id:'x'.repeat(121) },
+    { ...event(), provider_id:null },
+    { event:'stop', session_id:sessionA, ingest_key:'stop', prompt:'não permitido' }
+  ]) {
+    await assert.rejects(memory.captureScoped(auth(), { namespace:namespace(), events:[invalid] }),
+      (error) => error.code === 'ERR_INVALID');
+  }
+});
+
+test('mapping recupera falha após copiar alvo e recusa alvo divergente', async (t) => {
+  const { root, memory } = await fixture(t);
+  await writeFile(path.join(root, `session-${sessionA}.json`), JSON.stringify({
+    schema_version:1, id:sessionA, messages:[{ role:'user', content:'legado' }]
+  }));
+  const input = { legacy_session_id:sessionA, namespace:namespace() };
+  await memory.mapLegacy(auth(), input);
+  const folder = path.join(root, 'v2', environmentA, 'projects', projectA);
+  const localMarker = path.join(folder, '.legacy-mappings', `${sessionA}.json`);
+  await rm(localMarker);
+  assert.equal((await memory.mapLegacy(auth(), input)).mapped, true);
+  await rm(localMarker);
+  const target = path.join(folder, 'captures', `session-${sessionA}.json`);
+  await writeFile(target, JSON.stringify({ schema_version:1, id:sessionA, messages:[], events:[] }));
+  await assert.rejects(memory.mapLegacy(auth(), input), (error) => error.code === 'ERR_CONFLICT');
+});
+
+test('export omite caminhos absolutos genéricos de Unix e Windows', async (t) => {
+  const { memory } = await fixture(t);
+  await memory.captureScoped(auth(), { namespace:namespace(), events:[event({
+    prompt:'arquivo /etc/private/data e C:\\Temp\\secret.txt e /tmp/config.conf'
+  })] });
+  const result = await memory.exportNamespace(auth(), { namespace:namespace() });
+  assert.doesNotMatch(result.content, /\/etc\/private|\/tmp\/config|C:\\\\Temp/);
+});
