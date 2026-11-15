@@ -499,3 +499,57 @@ test('export omite caminhos absolutos genéricos de Unix e Windows', async (t) =
   const result = await memory.exportNamespace(auth(), { namespace:namespace() });
   assert.doesNotMatch(result.content, /\/etc\/private|\/tmp\/config|C:\\\\Temp/);
 });
+
+test('entrada inválida é rejeitada antes de consultar a porta de policy', async (t) => {
+  const { root } = await fixture(t);
+  let calls = 0;
+  const memory = new MemoryHarnessService({ root, policy:async () => { calls++; return true; } });
+  await assert.rejects(memory.captureScoped(auth(), { namespace:namespace(), events:[{ ...event(), provider_id:'x'.repeat(121) }] }),
+    (error) => error.code === 'ERR_INVALID');
+  await assert.rejects(memory.notePut(auth(), { namespace:namespace(), content:'x', expected_revision:-1 }),
+    (error) => error.code === 'ERR_INVALID');
+  await assert.rejects(memory.recallScoped(auth(), { ...recallScope(namespace()), question:'', include_personal_note:false }),
+    (error) => error.code === 'ERR_INVALID');
+  assert.equal(calls, 0);
+});
+
+test('snippets multibyte respeitam 4096 bytes do schema sem truncar UTF-8', async (t) => {
+  const { validateAgainst } = await import('../../../src/harness/contracts/validate.mjs');
+  const { memory } = await fixture(t);
+  await memory.captureScoped(auth(), { namespace:namespace(), events:[event({ prompt:`postgres ${'😀'.repeat(1800)}` })] });
+  const result = await memory.recallScoped(auth(), { ...recallScope(namespace()), question:'postgres', include_personal_note:false });
+  assert.equal(result.hits.length, 1);
+  assert.ok(Buffer.byteLength(result.hits[0].snippet) <= 4096);
+  assert.equal(result.hits[0].snippet.includes('\ufffd'), false);
+  assert.equal(validateAgainst('MemoryHit', result.hits[0]).valid, true);
+});
+
+test('journal de nota reconcilia espelho e estado antes de uma leitura após crash', async (t) => {
+  const { root, memory } = await fixture(t);
+  await memory.notePut(auth(), { namespace:namespace(), content:'antes', expected_revision:0 });
+  const folder = path.join(root, 'v2', environmentA, 'projects', projectA);
+  const file = path.join(folder, '.memory-notes.json');
+  const state = JSON.parse(await readFile(file, 'utf8'));
+  const key = JSON.stringify([environmentA, projectA, threadA]);
+  const value = { namespace:{ ...namespace(), note_revision:2 }, content:'depois', revision:2 };
+  state.notes[key] = value; state.sequence = 2;
+  state.events.push({ event_id:'60000000-0000-4000-8000-000000000002', sequence:2,
+    entity_type:'MemoryNote', entity_key:key, change:'upsert', value });
+  await writeFile(path.join(folder, '.note-intent.json'), JSON.stringify({ state, namespace:recallScope(namespace()), content:'depois' }));
+  const restarted = new MemoryHarnessService({ root, policy:fixturePolicy });
+  assert.deepEqual(await restarted.noteGet(auth(), { namespace:namespace() }), { content:'depois', revision:2 });
+  assert.equal(await readFile(path.join(folder, '.notes', threadA, 'MEMORY.md'), 'utf8'), 'depois');
+});
+
+test('recall respeita limite de três hits incluindo nota pessoal', async (t) => {
+  const { memory } = await fixture(t);
+  for (let index = 1; index <= 3; index++) {
+    await memory.captureScoped(auth(), { namespace:namespace(), events:[event({
+      sessionId:`40000000-0000-4000-8000-${String(index).padStart(12, '0')}`, key:`limit-${index}`
+    })] });
+  }
+  await memory.notePut(auth(), { namespace:namespace(), content:'nota pessoal', expected_revision:0 });
+  const result = await memory.recallScoped(auth(), { ...recallScope(namespace()), question:'postgres', include_personal_note:true });
+  assert.equal(result.hits.length, 3);
+  assert.equal(result.hits[0].source, 'note');
+});

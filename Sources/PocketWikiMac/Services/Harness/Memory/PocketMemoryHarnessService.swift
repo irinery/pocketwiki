@@ -15,6 +15,18 @@ actor PocketMemoryHarnessService {
 
     func captureScoped(_ auth: PocketMemoryAuthorization, namespace rawNamespace: PocketMemoryNamespace,
                        events: [PocketMemoryIncomingEvent]) async throws -> PocketMemoryCaptureResponse {
+        guard (1...32).contains(events.count) else { throw PocketMemoryStoreError.invalidInput }
+        for event in events {
+            guard UUID(uuidString: event.sessionID)?.uuidString.lowercased() == event.sessionID,
+                  ["session-start", "user-prompt-submit", "assistant-response", "stop", "session-end"].contains(event.event),
+                  event.ingestKey.range(of: #"^[A-Za-z0-9_-]{1,64}$"#, options: .regularExpression) != nil,
+                  (event.prompt?.unicodeScalars.count ?? 0) <= 8_000, (event.message?.unicodeScalars.count ?? 0) <= 8_000,
+                  (event.providerID?.unicodeScalars.count ?? 0) <= 120, (event.modelID?.unicodeScalars.count ?? 0) <= 120,
+                  event.event == "user-prompt-submit" || event.prompt == nil,
+                  event.event == "assistant-response" || event.message == nil else { throw PocketMemoryStoreError.invalidInput }
+            if event.event == "user-prompt-submit" && (event.prompt ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { throw PocketMemoryStoreError.invalidInput }
+            if event.event == "assistant-response" && (event.message ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { throw PocketMemoryStoreError.invalidInput }
+        }
         let namespace = try await authorize(auth, namespace: rawNamespace, scope: "memory.write")
         let store = try await store(for: namespace)
         return PocketMemoryCaptureResponse(acceptedKeys: try await store.captureScoped(events))
@@ -22,33 +34,33 @@ actor PocketMemoryHarnessService {
 
     func recallScoped(_ auth: PocketMemoryAuthorization, namespace rawNamespace: PocketMemoryNamespace,
                       question: String, includePersonalNote: Bool = false) async throws -> PocketMemoryScopedRecallResponse {
-        let namespace = try await authorize(auth, namespace: rawNamespace, scope: "context.read",
-            includePersonalNote ? "memory.personal.read" : nil)
         guard !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, question.unicodeScalars.count <= 2_000 else {
             throw PocketMemoryStoreError.invalidInput
         }
+        let namespace = try await authorize(auth, namespace: rawNamespace, scope: "context.read",
+            includePersonalNote ? "memory.personal.read" : nil)
         let store = try await store(for: namespace)
         return try await store.recallScoped(question, namespace: namespace, includePersonalNote: includePersonalNote)
     }
 
     func noteGet(_ auth: PocketMemoryAuthorization, namespace rawNamespace: PocketMemoryNamespace) async throws -> PocketMemoryNoteSnapshot {
         let namespace = try await authorize(auth, namespace: rawNamespace, scope: "memory.personal.read")
-        return try await store(for: namespace).noteGetCAS(namespace: namespace)
+        return try await store(for: namespace).scopedNoteGet(namespace: namespace)
     }
 
     func notePut(_ auth: PocketMemoryAuthorization, namespace rawNamespace: PocketMemoryNamespace,
                  content: String, expectedRevision: Int) async throws -> PocketMemoryNoteSnapshot {
-        let namespace = try await authorize(auth, namespace: rawNamespace, scope: "memory.write")
         guard content.utf8.count <= 16 * 1024, expectedRevision >= 0 else { throw PocketMemoryStoreError.invalidInput }
+        let namespace = try await authorize(auth, namespace: rawNamespace, scope: "memory.write")
         return try await store(for: namespace).notePutCAS(content, expectedRevision: expectedRevision, namespace: namespace)
     }
 
     func mapLegacy(_ auth: PocketMemoryAuthorization, legacySessionID: String,
-                   namespace rawNamespace: PocketMemoryNamespace) async throws -> Bool {
-        let namespace = try await authorize(auth, namespace: rawNamespace, scope: "memory.write")
+                   namespace rawNamespace: PocketMemoryNamespace) async throws -> PocketMemoryMappingResponse {
         guard UUID(uuidString: legacySessionID)?.uuidString.lowercased() == legacySessionID else {
             throw PocketMemoryStoreError.invalidInput
         }
+        let namespace = try await authorize(auth, namespace: rawNamespace, scope: "memory.write")
         let store = try await store(for: namespace)
         var sourceValid = false
         for parent in [rootStore.directory, rootStore.directory.appendingPathComponent("captures", isDirectory: true)] {
@@ -94,7 +106,8 @@ actor PocketMemoryHarnessService {
                 throw PocketMemoryStoreError.revisionConflict(0)
             }
         }
-        return try await store.mapLegacySession(legacySessionID, sourceRoot: rootStore.directory)
+        return PocketMemoryMappingResponse(mapped: try await store.mapLegacySession(legacySessionID, sourceRoot: rootStore.directory),
+                                           sessionID: legacySessionID)
     }
 
     func snapshot(_ auth: PocketMemoryAuthorization, namespace rawNamespace: PocketMemoryNamespace,
@@ -121,7 +134,7 @@ actor PocketMemoryHarnessService {
             let saved: PocketMemorySnapshotEnvelope
             do { saved = try decoder.decode(PocketMemorySnapshotEnvelope.self, from: data) }
             catch { throw PocketMemoryStoreError.cursorExpired }
-            guard saved.principalID == auth.principalID, saved.namespace == namespace else { throw PocketMemoryStoreError.scopeDenied }
+            guard saved.principalID == auth.principalID, saved.namespace.namespace == namespace else { throw PocketMemoryStoreError.scopeDenied }
             guard saved.expiresAtMS > now() else { throw PocketMemoryStoreError.cursorExpired }
             let retained = (try? await store.notesRetentionAvailable(after: saved.asOfSeq)) ?? false
             guard retained else { throw PocketMemoryStoreError.cursorExpired }
@@ -133,7 +146,7 @@ actor PocketMemoryHarnessService {
             let projection = try await store.snapshotProjection(namespace: namespace)
             let size = pageSize ?? 100
             envelope = PocketMemorySnapshotEnvelope(snapshotID: UUID().uuidString.lowercased(),
-                principalID: auth.principalID, namespace: namespace, revision: projection.sequence,
+                principalID: auth.principalID, namespace: PocketMemorySnapshotScope(namespace), revision: projection.sequence,
                 asOfSeq: projection.sequence, expiresAtMS: now() + 600_000, pageSize: size,
                 items: projection.items, cursors: [:])
             var position = size
