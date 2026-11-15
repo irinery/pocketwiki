@@ -46,3 +46,22 @@ test('fixture manifest rejects traversal, duplicates and symlink files', async t
   await symlink('/etc/passwd', path.join(root, 'link'));
   await assert.rejects(fixtureDigest(root, 'E0'), /regular file/);
 });
+
+test('fixture digest requires every stage through the requested gate', async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'nh-fixture-stages-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const manifestFile = path.join(root, manifestPath);
+  await mkdir(path.dirname(manifestFile), { recursive: true });
+  const save = stages => writeFile(manifestFile, JSON.stringify({ version: 1, stages }));
+  await writeFile(path.join(root, 'e0'), 'e0');
+  await writeFile(path.join(root, 'e1'), 'e1');
+  await writeFile(path.join(root, 'e2'), 'e2');
+  await save({ E0: ['e0'], E1: ['e1'] });
+  await assert.rejects(fixtureDigest(root, 'E2'), /missing fixture manifest stage: E2/);
+  await save({ E0: ['e0'], E2: ['e2'] });
+  await assert.rejects(fixtureDigest(root, 'E2'), /missing fixture manifest stage: E1/);
+  await save({ E0: ['e0'], E1: ['e1'], E2: ['e2'] });
+  const before = await fixtureDigest(root, 'E2');
+  await writeFile(path.join(root, 'e2'), 'changed');
+  assert.notEqual(await fixtureDigest(root, 'E2'), before);
+});

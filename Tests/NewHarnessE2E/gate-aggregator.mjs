@@ -149,7 +149,12 @@ export async function fixtureDigest(wiki, stage) {
   const manifest = JSON.parse(await readFile(path.join(wiki, 'docs/rfcs/new-harness/fixture-hashes-v1.json'), 'utf8'));
   if (!manifest || manifest.version !== 1 || !manifest.stages || typeof manifest.stages !== 'object' || Array.isArray(manifest.stages)) throw new Error('invalid fixture manifest');
   const stages = Object.keys(manifest.stages);
-  if (!stages.includes('E0') || !stages.includes('E1') || stages.some(key => !/^E[0-6]$/.test(key))) throw new Error('invalid fixture manifest stages');
+  if (stages.some(key => !/^E[0-6]$/.test(key))) throw new Error('invalid fixture manifest stages');
+  for (let index = 0; index <= stageNumber; index += 1) {
+    const requiredStage = 'E' + index;
+    if (!stages.includes(requiredStage)) throw new Error('missing fixture manifest stage: ' + requiredStage);
+  }
+  if (!stages.includes('E0') || !stages.includes('E1')) throw new Error('invalid fixture manifest stages');
   const all = new Set(), selected = [];
   for (const key of stages.sort((a, b) => parseStage(a) - parseStage(b))) {
     if (!Array.isArray(manifest.stages[key]) || manifest.stages[key].length === 0) throw new Error('empty fixture manifest stage: ' + key);
