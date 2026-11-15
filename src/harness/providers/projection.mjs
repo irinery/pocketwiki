@@ -17,19 +17,30 @@ export class ProviderProjection {
   #current = {revision:0, seq:0, maps:maps(), seen:new Map(), sequences:new Map()};
   #environment;
   #scope = null;
+  #authority = null;
   // Scope is supplied by the authenticated host, never derived from provider data.
+  // This authority ticket is local only; the host must call setScope when
+  // its real authorization changes. Every activation invalidates old work.
   setScope(scope) {
     const valid = scope && typeof scope.principal === 'string' && scope.principal.length > 0 &&
       typeof scope.generation === 'string' && scope.generation.length > 0;
-    const next = valid ? {principal:scope.principal, generation:scope.generation} : null;
-    if (!this.#scope || !next || this.#scope.principal !== next.principal || this.#scope.generation !== next.generation) {
-      this.#current = {revision:0, seq:0, maps:maps(), seen:new Map(), sequences:new Map()};
-      this.#loading = null;
-    }
-    this.#scope = next;
+    this.#current = {revision:0, seq:0, maps:maps(), seen:new Map(), sequences:new Map()};
+    this.#loading = null;
+    this.#scope = null;
+    this.#authority = valid ? Object.freeze({principal:scope.principal, generation:scope.generation}) : null;
+    return this.#authority;
+  }
+  // Must run before starting any snapshot/stream/payload request. A new cycle
+  // invalidates all earlier responses, even at identical revision and sequence.
+  beginRefresh(authority) {
+    if (!this.#authority || authority !== this.#authority) throw new Error('inactive or stale provider authority');
+    // Keep the confirmed projection until every replacement page validates.
+    this.#loading = null;
+    this.#scope = Object.freeze({});
+    return this.#scope;
   }
   #checkScope(scope) {
-    if (!this.#scope || !scope || scope.principal !== this.#scope.principal || scope.generation !== this.#scope.generation)
+    if (!this.#scope || scope !== this.#scope)
       throw new Error('inactive or stale provider scope');
   }
   constructor(environmentId) {if(!UUID.test(environmentId))throw new TypeError('invalid environment');this.#environment=environmentId;}

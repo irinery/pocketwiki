@@ -2,7 +2,7 @@ import Foundation
 import CryptoKit
 
 /// Reidrata o snapshot inteiro antes de publicar; payloads referenciados são resolvidos pelo transporte autenticado.
-final class ProviderProjection {
+@MainActor final class ProviderProjection {
     enum Failure: Error { case invalidPage, invalidEvent, stale, overflow, incomplete, inactiveScope }
     struct View {
         let snapshotID: String
@@ -20,24 +20,45 @@ final class ProviderProjection {
         let generation: String
         var valid: Bool { !principal.isEmpty && !generation.isEmpty }
     }
-    private var scope: Scope?
+    // The host supplies real authorization changes; these tokens are local
+    // and do not represent or discover Kernel grant generations.
+    struct AuthorityTicket: Equatable {
+        fileprivate let nonce: UUID
+        fileprivate init() { nonce = UUID() }
+    }
+    struct ScopeTicket: Equatable {
+        fileprivate let nonce: UUID
+        fileprivate init() { nonce = UUID() }
+    }
+    private var authority: AuthorityTicket?
+    private var scope: ScopeTicket?
     private var scopeInitialized = false
     private var confirmedRevision: Int
     private var confirmedSeq: Int
-    // Called by the authenticated host whenever its identity or authorization generation changes.
-    func setScope(_ next: Scope?) {
-        let next = next?.valid == true ? next : nil
-        guard scope != next || next == nil else { return }
-        if !scopeInitialized && next != nil { scopeInitialized = true; scope = next; return }
-        scopeInitialized = true
-        scope = next
-        confirmedRevision = 0; confirmedSeq = 0
+    @discardableResult func setScope(_ next: Scope?) -> AuthorityTicket? {
+        let ticket = next?.valid == true ? AuthorityTicket() : nil
+        if !scopeInitialized && ticket != nil { scopeInitialized = true; authority = ticket; return ticket }
+        scopeInitialized = true; authority = ticket; scope = nil
+        clearProjection()
+        return ticket
+    }
+    // Call before starting snapshot, stream, or referenced-payload I/O.
+    func beginRefresh(_ candidate: AuthorityTicket?) throws -> ScopeTicket {
+        guard let authority, candidate == authority else { throw Failure.inactiveScope }
+        if scope != nil { clearProjection(preserveConfirmed: true) }
+        let ticket = ScopeTicket(); scope = ticket; return ticket
+    }
+    private func clearProjection(preserveConfirmed: Bool = false) {
+        if !preserveConfirmed { confirmedRevision = 0; confirmedSeq = 0 }
         snapshotID = nil; revision = 0; boundary = 0; nextCursor = nil
         started = false; complete = false; invalid = false
         cursors.removeAll(); bindings.removeAll(); capabilities.removeAll()
         events.removeAll(); seen.removeAll(); sequences.removeAll(); eventBytes = 0
     }
-    private func checkScope(_ candidate: Scope?) throws {
+    // An owner holding a detached View can fence its synchronous UI commit
+    // after an await while still on MainActor.
+    func isCurrent(_ candidate: ScopeTicket?) -> Bool { scope != nil && candidate == scope }
+    private func checkScope(_ candidate: ScopeTicket?) throws {
         guard let scope, candidate == scope else { throw Failure.inactiveScope }
     }
     private var snapshotID: String?
@@ -71,7 +92,7 @@ final class ProviderProjection {
         if let context = value["context_bytes"], !(context is NSNull) { guard let bytes = context as? Int, bytes >= 0, bytes <= 9_007_199_254_740_991 else { return false } }
         return true
     }
-    func appendPage(_ data: Data, requestedCursor: String?, scope: Scope? = nil) throws {
+    func appendPage(_ data: Data, requestedCursor: String?, scope: ScopeTicket? = nil) throws {
         try checkScope(scope)
         guard !invalid else { throw Failure.invalidPage }
         do { try readPage(data, requestedCursor: requestedCursor) } catch { invalid = true; throw error }
@@ -99,7 +120,7 @@ final class ProviderProjection {
         bindings = nextBindings; capabilities = nextCapabilities; snapshotID = id; revision = rev; boundary = seq
         started = true; nextCursor = cursor; complete = cursor == nil
     }
-    func bufferEvent(_ data: Data, resolvedPayload: Data? = nil, scope: Scope? = nil) throws {
+    func bufferEvent(_ data: Data, resolvedPayload: Data? = nil, scope: ScopeTicket? = nil) throws {
         try checkScope(scope)
         guard !invalid else { throw Failure.invalidEvent }
         do { try readEvent(data, resolvedPayload: resolvedPayload) } catch { invalid = true; throw error }
@@ -125,7 +146,7 @@ final class ProviderProjection {
         guard seen.count < 4096 else { throw Failure.overflow }
         seen[id] = (seq, digest); sequences[seq] = id; events.append((seq, payload)); eventBytes += data.count + (resolvedPayload?.count ?? 0)
     }
-    func finish(scope: Scope? = nil) throws -> View {
+    func finish(scope: ScopeTicket? = nil) throws -> View {
         try checkScope(scope)
         guard !invalid, complete, let snapshotID else { throw Failure.incomplete }
         for binding in bindings.values { guard let id = binding["capability_id"] as? String, capabilities[id] != nil else { throw Failure.invalidPage } }
@@ -140,6 +161,8 @@ final class ProviderProjection {
             else if type == "ProviderCapabilities", value["capability_id"] as? String == key { cs[key] = value }
             else { throw Failure.invalidEvent }
         }
-        return View(snapshotID: snapshotID, revision: revision, asOfSeq: boundary, lastSeq: events.last?.0 ?? boundary, bindings: bs, capabilities: cs)
+        let lastSeq = events.last?.0 ?? boundary
+        confirmedRevision = revision; confirmedSeq = lastSeq
+        return View(snapshotID: snapshotID, revision: revision, asOfSeq: boundary, lastSeq: lastSeq, bindings: bs, capabilities: cs)
     }
 }
