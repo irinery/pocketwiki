@@ -192,9 +192,8 @@ test('E1 requires all six cumulative pairs and validates replay artifact binding
   const e2 = structuredClone(input).map(report => ({ ...report, stage: 'E2' }));
   const services = ['SERVICE-0003', 'SERVICE-0005', 'SERVICE-0006', 'SERVICE-0007', 'SERVICE-0013', 'SERVICE-0016'];
   for (const id of services) e2[0].cases.push({ id, surface: 'service', status: 'passed', artifact_paths: ['service/' + id + '.log'] });
-  const completeE2 = aggregateReports('E2', e2, matrix);
-  assert.equal(completeE2.gate_passed, true);
-  assert.equal(completeE2.cases.length, 12);
+  // Synthetic passed rows and arbitrary logs cannot stand in for the service.
+  assert.throws(() => aggregateReports('E2', e2, matrix), /service evidence verifier unavailable/);
   for (const id of services) {
     const missingService = structuredClone(e2);
     missingService[0].cases = missingService[0].cases.filter(item => item.id !== id);
@@ -222,6 +221,19 @@ test('E1 requires all six cumulative pairs and validates replay artifact binding
     const reportPath = path.join(dir, `shard-${index}.json`); await writeFile(reportPath, JSON.stringify(report)); paths.push(reportPath);
   }
   assert.equal((await aggregateReportFiles('E1', paths, identity)).gate_passed, true);
+  const e2Paths = [];
+  for (const [index, report] of e2.entries()) {
+    for (const item of report.cases) for (const artifact of item.artifact_paths) {
+      const target = path.join(dir, artifact);
+      await mkdir(path.dirname(target), { recursive: true });
+      // Existing E1 proofs stay intact; these files only fake E2 service evidence.
+      if (item.id.startsWith('SERVICE-00') && item.id !== 'SERVICE-0002') await writeFile(target, 'passed\n');
+    }
+    const file = path.join(dir, `e2-shard-${index}.json`);
+    await writeFile(file, JSON.stringify(report)); e2Paths.push(file);
+  }
+  await assert.rejects(() => aggregateReportFiles('E2', e2Paths, identity), /service evidence verifier unavailable/);
+
   for (const surface of ['web', 'macos']) {
     const file = path.join(dir, surface, 'result.json');
     const valid = JSON.parse(await readFile(file, 'utf8'));

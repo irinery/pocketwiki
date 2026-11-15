@@ -97,6 +97,14 @@ export function aggregateReports(stage, reports, matrix) {
 
   const missing = [...expected.keys()].filter((key) => !actual.has(key));
   if (missing.length) throw new Error('missing required scenario/surface pairs: ' + missing.join(', '));
+  // No E2 service currently has a verifier that binds every RFC scenario to
+  // the real service. A passed status and an existing log are not such proof.
+  // Keep this closed until an independently reviewed verifier is implemented.
+  const unverifiedServices = [...expected.entries()]
+    .filter(([, scenario]) => scenario.stage >= 2 && scenario.kind === 'service-integration')
+    .map(([key]) => key);
+  if (unverifiedServices.length) throw new Error('service evidence verifier unavailable: ' + unverifiedServices.join(', '));
+
   return {
     version: '0.2.0',
     stage,
