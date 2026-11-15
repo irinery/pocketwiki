@@ -10,7 +10,7 @@ swiftc -parse-as-library \
   Sources/PocketWikiMac/Services/Harness/Providers/ProviderProjection.swift \
   Tests/Harness/providers/ProviderProjectionRunner.swift \
   -o /tmp/pocketwiki-providers-projection-test
-/tmp/pocketwiki-providers-projection-test src/harness/contracts/harness-v1.schema.json
+/tmp/pocketwiki-providers-projection-test src/harness/contracts/harness-v1.schema.json Tests/Harness/providers/corpus.json
 ```
 
-O integrador deve obter payload_ref na rota autenticada antes de fornecê-lo ao projetor, e conectar snapshot/stream de environment ao ledger compartilhado. As implementações não conectam UI nem shell. Ainda faltam corpus de paridade abrangente JS/Swift e 01-05 com processos reais, store e eventos do runtime integrado.
+O integrador deve obter payload_ref na rota autenticada antes de fornecê-lo ao projetor, e conectar snapshot/stream de environment ao ledger compartilhado. As implementações não conectam UI nem shell. Ainda faltam ampliar o corpus de paridade JS/Swift e executar 01-05 com processos reais, store e eventos do runtime integrado.

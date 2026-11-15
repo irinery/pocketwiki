@@ -41,6 +41,13 @@ final class ProviderProjection {
         guard let value = value as? String else { return false }
         return value.range(of: "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", options: .regularExpression) != nil
     }
+    private func validEntity(_ value: [String: Any], type: String) -> Bool {
+        guard HarnessV1.validateCorpusValue(value, schemaName: type, document: schema) else { return false }
+        if type == "ProviderBinding" { guard let revision = value["catalog_revision"] as? Int else { return false }; return revision >= 1 && revision <= 9_007_199_254_740_991 }
+        guard let version = value["version"] as? Int, version >= 0, version <= 9_007_199_254_740_991 else { return false }
+        if let context = value["context_bytes"] { guard let bytes = context as? Int, bytes >= 0, bytes <= 9_007_199_254_740_991 else { return false } }
+        return true
+    }
     func appendPage(_ data: Data, requestedCursor: String?) throws {
         guard !invalid else { throw Failure.invalidPage }
         do { try readPage(data, requestedCursor: requestedCursor) } catch { invalid = true; throw error }
@@ -58,11 +65,11 @@ final class ProviderProjection {
         if let cursor, (cursor.isEmpty || cursor.utf8.count > 512 || !cursors.insert(cursor).inserted) { throw Failure.invalidPage }
         var nextBindings = bindings, nextCapabilities = capabilities
         for value in bs {
-            guard let key = value["binding_id"] as? String, Self.uuid(key), Self.uuid(value["capability_id"]), nextBindings[key] == nil else { throw Failure.invalidPage }
+            guard validEntity(value, type: "ProviderBinding"), let key = value["binding_id"] as? String, Self.uuid(key), Self.uuid(value["capability_id"]), nextBindings[key] == nil else { throw Failure.invalidPage }
             nextBindings[key] = value
         }
         for value in cs {
-            guard let key = value["capability_id"] as? String, Self.uuid(key), nextCapabilities[key] == nil else { throw Failure.invalidPage }
+            guard validEntity(value, type: "ProviderCapabilities"), let key = value["capability_id"] as? String, Self.uuid(key), nextCapabilities[key] == nil else { throw Failure.invalidPage }
             nextCapabilities[key] = value
         }
         bindings = nextBindings; capabilities = nextCapabilities; snapshotID = id; revision = rev; boundary = seq
@@ -102,7 +109,7 @@ final class ProviderProjection {
                   let raw = keyJSON.data(using: .utf8), let key = try? JSONSerialization.jsonObject(with: raw, options: .fragmentsAllowed) as? String,
                   Self.uuid(key), keyJSON == "\"\(key)\"", let change = payload["change"] as? String else { throw Failure.invalidEvent }
             if change == "delete" { if type == "ProviderBinding" { bs.removeValue(forKey: key) } else if type == "ProviderCapabilities" { cs.removeValue(forKey: key) } else { throw Failure.invalidEvent }; continue }
-            guard change == "upsert", let value = payload["value"] as? [String: Any] else { throw Failure.invalidEvent }
+            guard change == "upsert", let value = payload["value"] as? [String: Any], validEntity(value,type:type) else { throw Failure.invalidEvent }
             if type == "ProviderBinding", value["binding_id"] as? String == key { bs[key] = value }
             else if type == "ProviderCapabilities", value["capability_id"] as? String == key { cs[key] = value }
             else { throw Failure.invalidEvent }

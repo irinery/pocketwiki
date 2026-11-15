@@ -22,3 +22,7 @@ test('rejects stale boundary and accepts only explicitly resolved references',()
 test('rejects conflicting event replay',()=>{
  const p=new ProviderProjection(env);p.begin(page({bindings:[b],capabilities:[c]}));const first=event(3,'upsert',{...b,model_id:'a'});p.apply(first);p.apply(first);assert.throws(()=>p.apply(event(3,'upsert',{...b,model_id:'different'})));
 });
+test('shared provider entity corpus',async()=>{
+ const {readFile}=await import('node:fs/promises');const corpus=JSON.parse(await readFile(new URL('./corpus.json',import.meta.url),'utf8'));
+ for(const slot of corpus.slots){const p=new ProviderProjection(env);let accepted=true;try{p.begin(page({bindings:[slot.binding],capabilities:[slot.capability]}));}catch{accepted=false}assert.equal(accepted,slot.accept,slot.id)}
+});

@@ -5,7 +5,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const integer = n => Number.isSafeInteger(n) && n >= 0;
 const size = value => new TextEncoder().encode(JSON.stringify(value)).length;
 const clone = value => structuredClone(value);
-const validEntity = (type, value) => validateAgainst(type, value).valid;
+const validEntity = (type, value) => validateAgainst(type, value).valid && (type === 'ProviderBinding'
+  ? UUID.test(value.binding_id) && UUID.test(value.capability_id) && integer(value.catalog_revision) && value.catalog_revision >= 1
+  : UUID.test(value.capability_id) && integer(value.version) && (!Object.hasOwn(value, 'context_bytes') || integer(value.context_bytes)));
 const keyOf = (kind, value) => kind === 'ProviderBinding' ? value.binding_id : value.capability_id;
 const maps = () => ({ bindings:new Map(), capabilities:new Map() });
 const publicState = state => ({revision:state.revision, seq:state.seq, bindings:[...state.maps.bindings.values()].map(clone), capabilities:[...state.maps.capabilities.values()].map(clone)});

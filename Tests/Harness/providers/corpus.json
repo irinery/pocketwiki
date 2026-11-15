@@ -1,0 +1,321 @@
+{
+  "slots": [
+    {
+      "id": "valid",
+      "accept": true,
+      "binding": {
+        "binding_id": "11111111-1111-4111-8111-111111111111",
+        "provider_id": "openai",
+        "account_ref": "a",
+        "model_id": "m",
+        "mode": "inference",
+        "catalog_revision": 1,
+        "capability_id": "22222222-2222-4222-8222-222222222222"
+      },
+      "capability": {
+        "capability_id": "22222222-2222-4222-8222-222222222222",
+        "version": 1,
+        "stream_text": false,
+        "steer": false,
+        "interrupt": false,
+        "rollback": false,
+        "native_fork": false,
+        "tools": false,
+        "questions": false,
+        "plans": false,
+        "resume": false
+      }
+    },
+    {
+      "id": "zero_context",
+      "accept": true,
+      "binding": {
+        "binding_id": "11111111-1111-4111-8111-111111111111",
+        "provider_id": "openai",
+        "account_ref": "a",
+        "model_id": "m",
+        "mode": "inference",
+        "catalog_revision": 1,
+        "capability_id": "22222222-2222-4222-8222-222222222222"
+      },
+      "capability": {
+        "capability_id": "22222222-2222-4222-8222-222222222222",
+        "version": 1,
+        "stream_text": false,
+        "steer": false,
+        "interrupt": false,
+        "rollback": false,
+        "native_fork": false,
+        "tools": false,
+        "questions": false,
+        "plans": false,
+        "resume": false,
+        "context_bytes": 0
+      }
+    },
+    {
+      "id": "maximum_context",
+      "accept": true,
+      "binding": {
+        "binding_id": "11111111-1111-4111-8111-111111111111",
+        "provider_id": "openai",
+        "account_ref": "a",
+        "model_id": "m",
+        "mode": "inference",
+        "catalog_revision": 1,
+        "capability_id": "22222222-2222-4222-8222-222222222222"
+      },
+      "capability": {
+        "capability_id": "22222222-2222-4222-8222-222222222222",
+        "version": 1,
+        "stream_text": false,
+        "steer": false,
+        "interrupt": false,
+        "rollback": false,
+        "native_fork": false,
+        "tools": false,
+        "questions": false,
+        "plans": false,
+        "resume": false,
+        "context_bytes": 9007199254740991
+      }
+    },
+    {
+      "id": "null_context",
+      "accept": false,
+      "binding": {
+        "binding_id": "11111111-1111-4111-8111-111111111111",
+        "provider_id": "openai",
+        "account_ref": "a",
+        "model_id": "m",
+        "mode": "inference",
+        "catalog_revision": 1,
+        "capability_id": "22222222-2222-4222-8222-222222222222"
+      },
+      "capability": {
+        "capability_id": "22222222-2222-4222-8222-222222222222",
+        "version": 1,
+        "stream_text": false,
+        "steer": false,
+        "interrupt": false,
+        "rollback": false,
+        "native_fork": false,
+        "tools": false,
+        "questions": false,
+        "plans": false,
+        "resume": false,
+        "context_bytes": null
+      }
+    },
+    {
+      "id": "negative_context",
+      "accept": false,
+      "binding": {
+        "binding_id": "11111111-1111-4111-8111-111111111111",
+        "provider_id": "openai",
+        "account_ref": "a",
+        "model_id": "m",
+        "mode": "inference",
+        "catalog_revision": 1,
+        "capability_id": "22222222-2222-4222-8222-222222222222"
+      },
+      "capability": {
+        "capability_id": "22222222-2222-4222-8222-222222222222",
+        "version": 1,
+        "stream_text": false,
+        "steer": false,
+        "interrupt": false,
+        "rollback": false,
+        "native_fork": false,
+        "tools": false,
+        "questions": false,
+        "plans": false,
+        "resume": false,
+        "context_bytes": -1
+      }
+    },
+    {
+      "id": "negative_version",
+      "accept": false,
+      "binding": {
+        "binding_id": "11111111-1111-4111-8111-111111111111",
+        "provider_id": "openai",
+        "account_ref": "a",
+        "model_id": "m",
+        "mode": "inference",
+        "catalog_revision": 1,
+        "capability_id": "22222222-2222-4222-8222-222222222222"
+      },
+      "capability": {
+        "capability_id": "22222222-2222-4222-8222-222222222222",
+        "version": -1,
+        "stream_text": false,
+        "steer": false,
+        "interrupt": false,
+        "rollback": false,
+        "native_fork": false,
+        "tools": false,
+        "questions": false,
+        "plans": false,
+        "resume": false
+      }
+    },
+    {
+      "id": "boolean_version",
+      "accept": false,
+      "binding": {
+        "binding_id": "11111111-1111-4111-8111-111111111111",
+        "provider_id": "openai",
+        "account_ref": "a",
+        "model_id": "m",
+        "mode": "inference",
+        "catalog_revision": 1,
+        "capability_id": "22222222-2222-4222-8222-222222222222"
+      },
+      "capability": {
+        "capability_id": "22222222-2222-4222-8222-222222222222",
+        "version": true,
+        "stream_text": false,
+        "steer": false,
+        "interrupt": false,
+        "rollback": false,
+        "native_fork": false,
+        "tools": false,
+        "questions": false,
+        "plans": false,
+        "resume": false
+      }
+    },
+    {
+      "id": "unknown_capability_field",
+      "accept": false,
+      "binding": {
+        "binding_id": "11111111-1111-4111-8111-111111111111",
+        "provider_id": "openai",
+        "account_ref": "a",
+        "model_id": "m",
+        "mode": "inference",
+        "catalog_revision": 1,
+        "capability_id": "22222222-2222-4222-8222-222222222222"
+      },
+      "capability": {
+        "capability_id": "22222222-2222-4222-8222-222222222222",
+        "version": 1,
+        "stream_text": false,
+        "steer": false,
+        "interrupt": false,
+        "rollback": false,
+        "native_fork": false,
+        "tools": false,
+        "questions": false,
+        "plans": false,
+        "resume": false,
+        "extra": true
+      }
+    },
+    {
+      "id": "zero_revision",
+      "accept": false,
+      "binding": {
+        "binding_id": "11111111-1111-4111-8111-111111111111",
+        "provider_id": "openai",
+        "account_ref": "a",
+        "model_id": "m",
+        "mode": "inference",
+        "catalog_revision": 0,
+        "capability_id": "22222222-2222-4222-8222-222222222222"
+      },
+      "capability": {
+        "capability_id": "22222222-2222-4222-8222-222222222222",
+        "version": 1,
+        "stream_text": false,
+        "steer": false,
+        "interrupt": false,
+        "rollback": false,
+        "native_fork": false,
+        "tools": false,
+        "questions": false,
+        "plans": false,
+        "resume": false
+      }
+    },
+    {
+      "id": "unknown_mode",
+      "accept": false,
+      "binding": {
+        "binding_id": "11111111-1111-4111-8111-111111111111",
+        "provider_id": "openai",
+        "account_ref": "a",
+        "model_id": "m",
+        "mode": "shell",
+        "catalog_revision": 1,
+        "capability_id": "22222222-2222-4222-8222-222222222222"
+      },
+      "capability": {
+        "capability_id": "22222222-2222-4222-8222-222222222222",
+        "version": 1,
+        "stream_text": false,
+        "steer": false,
+        "interrupt": false,
+        "rollback": false,
+        "native_fork": false,
+        "tools": false,
+        "questions": false,
+        "plans": false,
+        "resume": false
+      }
+    },
+    {
+      "id": "uppercase_uuid",
+      "accept": false,
+      "binding": {
+        "binding_id": "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA",
+        "provider_id": "openai",
+        "account_ref": "a",
+        "model_id": "m",
+        "mode": "inference",
+        "catalog_revision": 1,
+        "capability_id": "22222222-2222-4222-8222-222222222222"
+      },
+      "capability": {
+        "capability_id": "22222222-2222-4222-8222-222222222222",
+        "version": 1,
+        "stream_text": false,
+        "steer": false,
+        "interrupt": false,
+        "rollback": false,
+        "native_fork": false,
+        "tools": false,
+        "questions": false,
+        "plans": false,
+        "resume": false
+      }
+    },
+    {
+      "id": "missing_reference",
+      "accept": false,
+      "binding": {
+        "binding_id": "11111111-1111-4111-8111-111111111111",
+        "provider_id": "openai",
+        "account_ref": "a",
+        "model_id": "m",
+        "mode": "inference",
+        "catalog_revision": 1,
+        "capability_id": "66666666-6666-4666-8666-666666666666"
+      },
+      "capability": {
+        "capability_id": "22222222-2222-4222-8222-222222222222",
+        "version": 1,
+        "stream_text": false,
+        "steer": false,
+        "interrupt": false,
+        "rollback": false,
+        "native_fork": false,
+        "tools": false,
+        "questions": false,
+        "plans": false,
+        "resume": false
+      }
+    }
+  ]
+}

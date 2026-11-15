@@ -27,6 +27,14 @@ import Foundation
         do { try conflictProjection.bufferEvent(bytes(conflicting)); fatalError("conflicting replay accepted") } catch ProviderProjection.Failure.invalidEvent { }
         let stale = try ProviderProjection(schema: schema, environmentID: environment, pageSize: 1, confirmedRevision: 2)
         do { try stale.appendPage(bytes(first), requestedCursor: nil); fatalError("stale snapshot accepted") } catch ProviderProjection.Failure.invalidPage { }
+        let corpus = try JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[2]))) as! [String: Any]
+        for slot in corpus["slots"] as! [[String: Any]] {
+            let check = try ProviderProjection(schema: schema, environmentID: environment, pageSize: 100, confirmedRevision: 0)
+            let sample: [String: Any] = ["snapshot_id":"33333333-3333-4333-8333-333333333333", "revision":1, "as_of_seq":2, "bindings":[slot["binding"]!], "capabilities":[slot["capability"]!]]
+            var accepted = true
+            do { try check.appendPage(bytes(sample), requestedCursor: nil); _ = try check.finish() } catch { accepted = false }
+            guard accepted == (slot["accept"] as! Bool) else { fatalError("corpus mismatch: \(slot["id"]!)") }
+        }
         print("ProviderProjection: ok")
     }
 }
