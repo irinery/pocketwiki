@@ -47,10 +47,10 @@ Para falha de domínio confirmada e persistida, POST novo devolve 202 e receipt
 inclusive `correlation_id` e bytes canônicos, após autorização atual. Esta
 proposta resolve o conflito a favor do contrato transversal: os 503/409/422 da
 RFC para essas três condições deixam de ser status do POST **somente depois**
-da alteração normativa coordenada. `retryable=false` no resultado terminal
-significa que repetir **esse command_id** não repete preparação; uma nova
-intenção explícita com novo ID pode tentar novamente após refresh ou reparo.
-Não tratar `retryable` como promessa de que o provider ficará disponível.
+da alteração normativa coordenada. A idempotência do mesmo `command_id`/hash
+é obrigatória independentemente do valor de `retryable`. O flag sugere se uma
+nova intenção explícita, com novo ID, pode fazer sentido após refresh ou reparo;
+não garante disponibilidade e não autoriza criar essa intenção automaticamente.
 
 ## Fronteira entre falha terminal e indisponibilidade
 
@@ -61,7 +61,8 @@ conseguiu confirmar a falha. A lista fechada proposta é:
 - `ERR_CATALOG_STALE`: revisão pedida não corresponde ao catálogo confirmado.
 - `ERR_UNSUPPORTED`: capability ou modo não é publicado para aquela seleção.
 - `ERR_PROVIDER_UNAVAILABLE`: adapter/login/binário explicitamente indisponível
-  segundo diagnóstico conhecido; não usar para uma falha genérica de rede.
+  segundo diagnóstico tipado e confiável da fronteira; não deduzir a classe
+  comparando texto nem usar erro genérico de rede já colapsado.
 
 Formato inválido, major incompatível, falta de autoridade, conflito CAS/hash,
 limite e rate limit continuam erros HTTP da fronteira, sem receipt novo. Erro
@@ -69,7 +70,9 @@ indeterminado de rede, cancelamento, timeout, perda de commit ou falha do store
 não vira `failed` conhecido: responder erro de fronteira permitido, sem inventar
 resultado. Se o cliente não sabe se houve commit, consulta receipt pelo mesmo
 ID; em caso de indisponibilidade preserva o estado e não troca o ID
-silenciosamente. Nenhum timeout sozinho prova que o outro lado não fez I/O.
+silenciosamente. Resposta 404, epoch revogado ou retenção expirada tampouco
+prova ausência de commit e não autoriza trocar o ID automaticamente. Nenhum
+timeout sozinho prova que o outro lado não fez I/O.
 
 A preparação de `providers.select` deve ser somente consulta/handshake: não
 executar prompt nem lançar efeito que dependa de exactly-once. Esta proposta
@@ -81,7 +84,12 @@ próprio e reconciliação, não retry automático baseado nesta proposta.
 
 ## CAS, revisão, seq e replay
 
-Recomendação para uma falha **sem mudança de estado do módulo providers**:
+Recomendação para uma falha **sem mudar a seleção confirmada, bindings ou
+capabilities**, e sem avançar a revision ou seq do environment na transação de
+falha. A preparação autorizada pode já ter persistido tracking de catálogo
+(`TrackCatalogTx`), inclusive digest/revisão próprios, antes do diagnóstico;
+a proposta não promete desfazer esse tracking nem que todo estado auxiliar
+permaneceu inalterado:
 
 1. Preflight valida command, owner/scope, grant da conta, expected revision e
    replay existente antes de consultar catálogo/adapter. Falta de autoridade
@@ -129,18 +137,34 @@ revisão — não reutilizar silenciosamente a entidade runtime de thread.
 
 - Atualizar arquitetura/R1 e RFC 0003 em conjunto, inclusive tabela de status,
   sem alterar o significado de erros de transporte. Registrar explicitamente
-  a exceção revision/seq para receipt failed sem mudança de providers.
+  a exceção revision/seq para receipt failed sem mudança da seleção confirmada.
 - Adicionar schemas fechados de sucesso e falha e união discriminada por forma,
   exemplos e corpus positivo/negativo; validadores JS e Swift precisam rejeitar
   campos misturados, códigos fora da lista, null indevido e UUID inválido.
+  Validar `failed` com `result_ref` obrigatório e shape `error`; `succeeded`
+  exige `SelectionResult`. HTTP 200 do GET sozinho não indica sucesso. Um
+  primeiro failed pode ter revision 0: criar ramo explícito para ele, sem
+  passar pela validação legada de sucesso que exige revision >= 1.
   Implementar também os transportes e validadores providers JS e Swift para
   POST/receipt e a união de resultados; os clientes atuais de providers não
   fazem esse fluxo e `runtimeDispatchResult` não é substituto.
+  Como failed não avança revision/seq, ordenar por esses números não basta:
+  associar receipt/result_ref/command_id a um ticket da tentativa local e
+  à autoridade vigente. Resposta antiga após nova seleção, refresh ou reauth não sobrescreve
+  draft, erro ou estado atual. Testar duas falhas em revision 0 recebidas em
+  ordem inversa e falha antiga chegando depois de sucesso ou reauth.
+- Definir política explícita de admissão, limites e retenção de receipts e
+  resultados failed, e o que ocorre após GC. Preservar tombstone/índice e hash
+  de command suficiente para impedir reexecução do mesmo ID após perda do corpo;
+  não inventar TTL nem tratar resultado removido como comando nunca aceito.
+  Retenção insuficiente ou evidência ausente deve falhar fechado.
 - Projetar migração versionada e seal/proveniência para receipts failed sem
   backfill por inferência; bancos antigos ficam fail-closed até migração testada.
   Nunca fazer `failed` passar pelo caminho legado que assume `succeeded`.
 - Testar cliente/servidor reais e processos: cada erro terminal; erros de
-  transporte sem receipt falso; CAS concorrente; mesmo ID/hash concorrente e
+  transporte sem receipt falso e diagnóstico typed distinto de erro genérico
+  de rede; failed revision 0, vinculação state/shape e retention/GC sem replay;
+  CAS concorrente; mesmo ID/hash concorrente e
   conflito hash; perda de resposta após commit e GET/replay sem novo adapter;
   falha de commit com rollback integral; concorrência entre commits sucesso e
   falha; revoke/regrant em preparação, commit e publicação; leitores/principais
