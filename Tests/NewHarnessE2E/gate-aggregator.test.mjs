@@ -170,7 +170,7 @@ test('E1 requires all six cumulative pairs and validates replay artifact binding
   input[2].cases.push({ id: 'UI-0002', surface: 'macos', status: 'passed', artifact_paths: ['macos/runtime.log'] });
   assert.throws(() => aggregateReports('E1', input, matrix), /invalid integrated replay/);
   for (const [index, surface] of [[1, 'web'], [2, 'macos']]) {
-    const nonce = 'a'.repeat(32), state = seq => ({ revision: 1, lastSeq: seq, receipts: [], effects: [] });
+    const nonce = 'a'.repeat(32), state = seq => ({ revision: 1, lastSeq: seq, receipts: {}, effects: {} });
     const digest = data => replayProofSHA256(Buffer.from(canonicalJSON(data)));
     const frame = (seq, after) => ({ seq, before_cursor: 10, after_cursor: after, before_state: state(10), after_state: state(after), before: digest(state(10)), after: digest(state(after)) });
     const proof = { version: 1, level: 'integration', surface, nonce, boundary: 10, frames: [frame(9, 10), frame(10, 10), frame(11, 11)] };

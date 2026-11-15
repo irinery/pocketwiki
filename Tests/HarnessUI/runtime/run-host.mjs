@@ -13,6 +13,8 @@ const args = process.argv.slice(2);
 const option = name => { const i = args.indexOf(name); return i < 0 ? undefined : args[i + 1]; };
 const surface = option('--surface'), reportDir = option('--report-dir');
 if (!['web', 'macos'].includes(surface) || !reportDir) { console.error('usage: run-host.mjs --surface web|macos --report-dir <dir>'); process.exit(2); }
+if (process.env.NH_REPLAY_NONCE === undefined) process.env.NH_REPLAY_NONCE = randomBytes(16).toString('hex');
+if (!/^[a-f0-9]{32}$/.test(process.env.NH_REPLAY_NONCE)) { console.error('NH_REPLAY_NONCE inválido'); process.exit(2); }
 await mkdir(reportDir, { recursive: true });
 const temp = await mkdtemp(path.join(os.tmpdir(), 'runtime-ui-host-'));
 const cases = ['02-01', '02-02', '02-03', '02-04'].map(id => ({ id, status: 'failed', detail: 'cenário não concluído' }));

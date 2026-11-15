@@ -1,3 +1,4 @@
+import { validateAgainst } from '../../src/harness/contracts/validate.mjs';
 import { createHash } from 'node:crypto';
 
 // A nonce binds artifacts to one runner invocation; it is not authentication.
@@ -6,11 +7,13 @@ export function validateReplayProof(proof, { surface, nonce }) {
   if (!proof || proof.version !== 1 || proof.level !== 'integration' || proof.surface !== surface || !['web', 'macos'].includes(surface) ||
       typeof nonce !== 'string' || !/^[a-f0-9]{32}$/.test(nonce) || proof.nonce !== nonce || proof.boundary !== 10 ||
       !Array.isArray(proof.frames) || proof.frames.length !== 3) throw new Error('invalid integrated replay proof identity or boundary');
+  const validCollection = (value, schema, idField) => value && typeof value === 'object' && !Array.isArray(value) &&
+    Object.entries(value).every(([id, item]) => item?.[idField] === id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id) && validateAgainst(schema, item).valid);
   const validState = (state, cursor) => state && typeof state === 'object' && !Array.isArray(state) &&
     Object.keys(state).sort().join(',') === 'effects,lastSeq,receipts,revision' &&
     Number.isSafeInteger(state.revision) && state.revision >= 0 && state.lastSeq === cursor &&
-    state.receipts !== null && typeof state.receipts === 'object' &&
-    state.effects !== null && typeof state.effects === 'object';
+    validCollection(state.receipts, 'RuntimeReceipt', 'command_id') &&
+    validCollection(state.effects, 'EffectRecord', 'effect_id');
   for (let i = 0; i < 3; i++) {
     const frame = proof.frames[i];
     if (!frame || frame.seq !== 9 + i || !hash(frame.before) || !hash(frame.after) ||
