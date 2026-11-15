@@ -297,3 +297,17 @@ test('stage exige thread autenticada do envelope tipado', async (t) => {
   assert.throws(() => service.stage(identity, { ...body, thread_id: ids.otherPrincipal }), (error) => error.code === 'ERR_FORBIDDEN');
   assert.ok(service.stage(identity, { ...body, thread_id: identity.thread_id }).reference);
 });
+
+test('01-03: orçamento conta bytes multibyte sem truncar referência', async (t) => {
+  const { service, auth: identity } = await makeHarness(t);
+  const text = 'a';
+  const content = Buffer.from('é'.repeat(511) + 'a');
+  const staged = service.stage(identity, { thread_id: identity.thread_id, filename: 'multi.txt', mime: 'text/plain', content_base64: content.toString('base64') }).reference;
+  await saveDraft(service, identity, { text, references: [staged] });
+  const result = await prepare(service, identity, { text, references: [staged], budget: 1024 });
+  assert.equal(result.included_bytes, 1024);
+  const context = service.resolve(delegatedAuth(identity), { prepared_id: result.prepared_id, manifest_sha256: result.manifest_sha256 }).context;
+  assert.deepEqual(Buffer.from(context.segments[0].content_base64, 'base64'), content);
+  await saveDraft(service, identity, { text: 'aa', references: [staged], revision: 1 });
+  await rejectsCode(prepare(service, identity, { text: 'aa', references: [staged], budget: 1024 }), 'ERR_BUDGET');
+});
