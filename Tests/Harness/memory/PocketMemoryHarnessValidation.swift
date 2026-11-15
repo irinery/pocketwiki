@@ -12,7 +12,7 @@ struct PocketMemoryHarnessValidation {
         let projectB = "20000000-0000-4000-8000-000000000002"
         let thread = "30000000-0000-4000-8000-000000000001"
         let principal = "50000000-0000-4000-8000-000000000001"
-        let service = PocketMemoryHarnessService(directory: root)
+        let service = PocketMemoryHarnessService(directory: root, policy: { _, _, _, _ in true })
         let authA = PocketMemoryAuthorization(principalID: principal, environmentID: environment,
             aggregateID: projectA, threadID: thread, scopes: ["context.read", "memory.write", "memory.personal.read"])
         let namespaceA = PocketMemoryNamespace(environmentID: environment, projectID: projectA, threadID: thread)
@@ -22,7 +22,12 @@ struct PocketMemoryHarnessValidation {
             providerID: nil, modelID: nil)
 
         let accepted = try await service.captureScoped(authA, namespace: namespaceA, events: [event])
-        let restarted = PocketMemoryHarnessService(directory: root)
+        let absentPolicy = PocketMemoryHarnessService(directory: root)
+        do {
+            _ = try await absentPolicy.captureScoped(authA, namespace: namespaceA, events: [event])
+            fatalError("Missing policy was accepted")
+        } catch PocketMemoryStoreError.unavailable {}
+        let restarted = PocketMemoryHarnessService(directory: root, policy: { _, _, _, _ in true })
         let replay = try await restarted.captureScoped(authA, namespace: namespaceA, events: [event])
         precondition(replay == accepted)
         let first = try await service.recallScoped(authA, namespace: namespaceA, question: "postgres project notes")
@@ -53,34 +58,44 @@ struct PocketMemoryHarnessValidation {
         precondition(isolated.hits.count == 1 && isolated.hits[0].projectID == projectA)
 
         let projectC = "20000000-0000-4000-8000-000000000003"
-        let namespaceC = PocketMemoryNamespace(environmentID: environment, projectID: projectC, threadID: thread)
-        let authC = PocketMemoryAuthorization(principalID: principal, environmentID: environment,
-            aggregateID: projectC, threadID: thread, scopes: ["context.read", "memory.write"])
+        let projectNamespace = PocketMemoryNamespace(environmentID: environment, projectID: projectC, threadID: nil)
+        let projectAuth = PocketMemoryAuthorization(principalID: principal, environmentID: environment,
+            aggregateID: projectC, threadID: nil, scopes: ["context.read", "memory.write", "memory.personal.read"])
         for index in 1...5 {
-            let id = String(format: "40000000-0000-4000-8000-%012d", index + 10)
-            _ = try await service.captureScoped(authC, namespace: namespaceC, events: [PocketMemoryIncomingEvent(
-                event: "user-prompt-submit", sessionID: id, ingestKey: "page-\(index)",
-                prompt: "snapshot project row \(index)", message: nil, providerID: nil, modelID: nil)])
+            let id = String(format: "30000000-0000-4000-8000-%012d", index)
+            let scope = PocketMemoryNamespace(environmentID: environment, projectID: projectC, threadID: id)
+            let writer = PocketMemoryAuthorization(principalID: principal, environmentID: environment,
+                aggregateID: projectC, threadID: id, scopes: ["context.read", "memory.write", "memory.personal.read"])
+            _ = try await service.notePut(writer, namespace: scope, content: "nota \(index)", expectedRevision: 0)
         }
-        let page1 = try await service.snapshot(authC, namespace: namespaceC, pageSize: 2)
-        let lateSession = "40000000-0000-4000-8000-000000000099"
-        _ = try await service.captureScoped(authC, namespace: namespaceC, events: [PocketMemoryIncomingEvent(
-            event: "user-prompt-submit", sessionID: lateSession, ingestKey: "late-event",
-            prompt: "snapshot concurrent mutation", message: nil, providerID: nil, modelID: nil)])
-        let page2 = try await service.snapshot(authC, namespace: namespaceC, pageSize: 2, cursor: page1.nextCursor)
-        let page3 = try await service.snapshot(authC, namespace: namespaceC, pageSize: 2, cursor: page2.nextCursor)
-        let pageIDs = [page1, page2, page3].flatMap { $0.items.compactMap(\.sessionID) }
+        let page1 = try await service.snapshot(projectAuth, namespace: projectNamespace, pageSize: 2)
+        guard let cursor1 = page1.nextCursor else { fatalError("snapshot did not paginate") }
+        let lateThread = "30000000-0000-4000-8000-000000000099"
+        let lateNamespace = PocketMemoryNamespace(environmentID: environment, projectID: projectC, threadID: lateThread)
+        let lateAuth = PocketMemoryAuthorization(principalID: principal, environmentID: environment,
+            aggregateID: projectC, threadID: lateThread, scopes: ["context.read", "memory.write", "memory.personal.read"])
+        _ = try await service.notePut(lateAuth, namespace: lateNamespace, content: "posterior", expectedRevision: 0)
+        let page2 = try await service.snapshot(projectAuth, namespace: projectNamespace, pageSize: 2, cursor: cursor1)
+        guard let cursor2 = page2.nextCursor else { fatalError("snapshot ended early") }
+        let page3 = try await service.snapshot(projectAuth, namespace: projectNamespace, pageSize: 2, cursor: cursor2)
+        let pageIDs = [page1, page2, page3].flatMap { $0.notes.compactMap { $0.namespace.threadID } }
         precondition(pageIDs.count == 5 && Set(pageIDs).count == 5)
-        precondition(!pageIDs.contains(lateSession) && page1.asOfSeq == page3.asOfSeq)
-        let laterEvents = try await service.eventsSince(authC, namespace: namespaceC, afterSequence: page1.asOfSeq)
-        precondition(laterEvents.count == 1 && laterEvents[0].ingestKey == "late-event")
+        precondition(!pageIDs.contains(lateThread) && page1.asOfSeq == page3.asOfSeq)
+        let laterEvents = try await service.eventsSince(projectAuth, namespace: projectNamespace, afterSequence: page1.asOfSeq)
+        precondition(laterEvents.count == 1 && laterEvents[0].value.namespace.threadID == lateThread)
+        let noteState = root.appendingPathComponent("v2/\(environment)/projects/\(projectC)/.memory-notes.json")
+        try FileManager.default.removeItem(at: noteState)
+        do {
+            _ = try await service.snapshot(projectAuth, namespace: projectNamespace, pageSize: 2, cursor: cursor1)
+            fatalError("Lost retention was accepted")
+        } catch PocketMemoryStoreError.cursorExpired {}
 
         let symlinkRoot = root.appendingPathComponent("symlink-store", isDirectory: true)
         let outside = root.appendingPathComponent("outside-store", isDirectory: true)
         try FileManager.default.createDirectory(at: symlinkRoot, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
         try FileManager.default.createSymbolicLink(at: symlinkRoot.appendingPathComponent("v2"), withDestinationURL: outside)
-        let symlinkService = PocketMemoryHarnessService(directory: symlinkRoot)
+        let symlinkService = PocketMemoryHarnessService(directory: symlinkRoot, policy: { _, _, _, _ in true })
         do {
             _ = try await symlinkService.captureScoped(authA, namespace: namespaceA, events: [event])
             fatalError("Symlink namespace was accepted")

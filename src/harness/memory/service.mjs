@@ -177,8 +177,7 @@ export class MemoryHarnessService {
         sha256:hash,
         environment_id:namespace.environment_id,
         ...(namespace.project_id ? { project_id:namespace.project_id } : {}),
-        trust:'historical',
-        score:hit.score
+        trust:'historical'
       };
     });
     let context = cleanContext(result.context);
@@ -195,7 +194,7 @@ export class MemoryHarnessService {
           sha256:digest(JSON.stringify({ namespace, revision:note.revision, snippet })),
           environment_id:namespace.environment_id,
           ...(namespace.project_id ? { project_id:namespace.project_id } : {}),
-          trust:'historical', score:0
+          trust:'historical'
         };
         hits.unshift(hit);
         context = [`Fonte: MEMORY.md\n${snippet}`, context].filter(Boolean).join('\n\n---\n\n').slice(0, 5_000);
