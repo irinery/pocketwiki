@@ -4,7 +4,7 @@ import { validateReplayProof, replayProofSHA256, canonicalJSON } from './replay-
 const nonce = 'a'.repeat(32);
 const state = seq => ({ revision: 1, lastSeq: seq, receipts: {}, effects: {} });
 const digest = value => replayProofSHA256(Buffer.from(canonicalJSON(value)));
-const envelope = seq => ({ protocol_major: 1, event_id: '00000000-0000-4000-8000-000000000001', environment_id: '00000000-0000-4000-8000-000000000002', thread_id: '00000000-0000-4000-8000-000000000002', seq, committed_at_ms: 1, module: 'runtime', delivery: 'inline', payload: { entity_type: 'EffectRecord', entity_key: JSON.stringify('00000000-0000-4000-8000-000000000001'), change: 'upsert', value: { effect_id: '00000000-0000-4000-8000-000000000001', command_id: '00000000-0000-4000-8000-000000000002', state: 'succeeded' } } });
+const envelope = seq => ({ protocol_major: 1, event_id: '00000000-0000-4000-8000-000000000001', environment_id: '00000000-0000-4000-8000-000000000002', thread_id: '00000000-0000-4000-8000-000000000002', seq, committed_at_ms: 1, module: 'runtime', delivery: 'inline', payload: { entity_type: 'RuntimeEvent', entity_key: JSON.stringify('00000000-0000-4000-8000-000000000001'), change: 'upsert', value: { event_id: '00000000-0000-4000-8000-000000000001', thread_id: '00000000-0000-4000-8000-000000000002', seq, kind: 'intent_committed' } } });
 const frame = (seq, before, after) => ({ seq, snapshot_id: '00000000-0000-4000-8000-000000000003', before_cursor: before, after_cursor: after, before_state: state(before), after_state: state(after), before: digest(state(before)), after: digest(state(after)), event_id: '00000000-0000-4000-8000-000000000001', event: envelope(seq), event_sha256: digest(envelope(seq)) });
 const sample = (boundary = 10) => {
   const snapshot = { thread_id: '00000000-0000-4000-8000-000000000002', envelope: { module: 'runtime', data: { snapshot_id: '00000000-0000-4000-8000-000000000003', revision: 1, as_of_seq: boundary, receipts: [], effects: [] } } };
@@ -52,7 +52,7 @@ test('rejects regressive view revisions and receipts newer than the view', () =>
 
 test('rejects a replayed envelope whose payload or identity differs', () => {
   const different = sample(9);
-  different.frames[3].event.payload.value.state = 'failed';
+  different.frames[3].event.payload.value.kind = 'effect_started';
   different.frames[3].event_sha256 = digest(different.frames[3].event);
   assert.throws(() => validateReplayProof(different, { surface: 'web', nonce }), /invalid duplicate replay event identity/);
   const tampered = sample(9);
@@ -75,4 +75,45 @@ test('binds the snapshot observed by the UI to the boundary and projection', () 
   assert.throws(() => validateReplayProof(wrongState, { surface: 'web', nonce }), /UI snapshot does not match/);
   const wrongSnapshot = sample(9); wrongSnapshot.frames[2].snapshot_id = '00000000-0000-4000-8000-000000000004';
   assert.throws(() => validateReplayProof(wrongSnapshot, { surface: 'web', nonce }), /invalid UI snapshot/);
+});
+
+test('validates RuntimeEvent, EffectRecord and RuntimeReceipt transitions', () => {
+  const id = '00000000-0000-4000-8000-000000000001';
+  const owner = '00000000-0000-4000-8000-000000000002';
+  const effect = { effect_id: id, command_id: owner, state: 'succeeded' };
+  const receipt = { command_id: id, receipt_id: id, payload_sha256: 'a'.repeat(64), revision: 2, state: 'accepted' };
+  for (const [type, change, value] of [
+    ['EffectRecord', 'upsert', effect], ['EffectRecord', 'delete', effect],
+    ['RuntimeReceipt', 'upsert', receipt], ['RuntimeReceipt', 'delete', { ...receipt, revision: 1 }]
+  ]) {
+    const proof = sample(9), field = type === 'EffectRecord' ? 'effects' : 'receipts';
+    if (change === 'delete') {
+      proof.snapshot.envelope.data[field] = [value];
+      for (const item of proof.frames) { item.before_state[field][id] = value; item.after_state[field][id] = value; }
+    }
+    const payload = { entity_type: type, entity_key: JSON.stringify(id), change, ...(change === 'upsert' ? { value } : {}) };
+    for (const item of proof.frames.slice(2)) { item.event.payload = payload; item.event_sha256 = digest(item.event); }
+    if (change === 'upsert') {
+      proof.frames[2].after_state[field][id] = value;
+      proof.frames[3].before_state[field][id] = value;
+      proof.frames[3].after_state[field][id] = value;
+      if (type === 'RuntimeReceipt') for (const item of [proof.frames[2].after_state, proof.frames[3].before_state, proof.frames[3].after_state]) item.revision = 2;
+    } else {
+      delete proof.frames[2].after_state[field][id];
+      delete proof.frames[3].before_state[field][id];
+      delete proof.frames[3].after_state[field][id];
+    }
+    proof.snapshot_sha256 = digest(proof.snapshot);
+    for (const item of proof.frames) { item.before = digest(item.before_state); item.after = digest(item.after_state); }
+    assert.doesNotThrow(() => validateReplayProof(proof, { surface: 'web', nonce }), `${type} ${change}`);
+    if (change === 'upsert') {
+      const discarded = structuredClone(proof);
+      delete discarded.frames[2].after_state[field][id];
+      delete discarded.frames[3].before_state[field][id];
+      delete discarded.frames[3].after_state[field][id];
+      for (const item of discarded.frames) { item.before = digest(item.before_state); item.after = digest(item.after_state); }
+      assert.throws(() => validateReplayProof(discarded, { surface: 'web', nonce }), /replay payload does not match/);
+    }
+  }
+  assert.doesNotThrow(() => validateReplayProof(sample(9), { surface: 'web', nonce }), 'RuntimeEvent advances only cursor');
 });

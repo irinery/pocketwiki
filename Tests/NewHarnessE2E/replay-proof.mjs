@@ -52,6 +52,32 @@ export function validateReplayProof(proof, { surface, nonce }) {
       event.event.event_id !== event.event_id || replay.event.event_id !== replay.event_id) {
     throw new Error('invalid duplicate replay event identity');
   }
+  const envelope = event.event;
+  // Reference payloads need the resolved body as evidence; until the host
+  // records it, fail closed rather than guessing the projection transition.
+  if (envelope.delivery !== 'inline' || !validateAgainst('runtimeModuleEvent', envelope.payload).valid) throw new Error('unsupported or invalid replay payload');
+  const payload = envelope.payload;
+  let key;
+  try { key = JSON.parse(payload.entity_key); } catch { throw new Error('invalid replay entity key'); }
+  if (typeof key !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(key) || JSON.stringify(key) !== payload.entity_key) throw new Error('invalid replay entity key');
+  const expected = structuredClone(event.before_state);
+  expected.lastSeq = boundary + 1;
+  if (payload.entity_type === 'RuntimeEvent') {
+    if (payload.change === 'upsert' && (payload.value?.event_id !== key || payload.value?.thread_id !== envelope.thread_id)) throw new Error('invalid runtime event identity');
+  } else {
+    const collection = payload.entity_type === 'RuntimeReceipt' ? expected.receipts : payload.entity_type === 'EffectRecord' ? expected.effects : null;
+    const idField = payload.entity_type === 'RuntimeReceipt' ? 'command_id' : 'effect_id';
+    if (!collection) throw new Error('unsupported replay entity');
+    if (payload.change === 'delete') delete collection[key];
+    else if (payload.change === 'upsert' && payload.value?.[idField] === key) {
+      if (payload.entity_type === 'RuntimeReceipt') {
+        if (!Number.isSafeInteger(payload.value.revision) || payload.value.revision < (collection[key]?.revision ?? 0)) throw new Error('invalid replay receipt revision');
+        expected.revision = Math.max(expected.revision, payload.value.revision);
+      }
+      collection[key] = payload.value;
+    } else throw new Error('invalid replay entity change');
+  }
+  if (canonicalJSON(expected) !== canonicalJSON(event.after_state)) throw new Error('replay payload does not match projection transition');
   return proof;
 }
 
