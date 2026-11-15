@@ -14,6 +14,15 @@ function digest(value) {
   return createHash('sha256').update(value, 'utf8').digest('hex');
 }
 
+function exactInput(input, fields) {
+  if (!input || typeof input !== 'object' || Array.isArray(input) ||
+      Object.keys(input).some((key) => !fields.includes(key)) ||
+      fields.some((key) => !Object.hasOwn(input, key))) {
+    throw error('ERR_INVALID', 'Memory input is invalid');
+  }
+  return input;
+}
+
 function deterministicUUID(value) {
   const bytes = Buffer.from(digest(value).slice(0, 32), 'hex');
   bytes[6] = (bytes[6] & 0x0f) | 0x50;
@@ -111,7 +120,8 @@ export class MemoryHarnessService {
     this.pageSize = pageSize;
   }
 
-  async captureScoped(auth, { namespace:rawNamespace, events } = {}) {
+  async captureScoped(auth, input) {
+    const { namespace:rawNamespace, events } = exactInput(input, ['namespace', 'events']);
     const namespace = validateNamespace(rawNamespace);
     authorize(auth, namespace, 'memory.write');
     let validated;
@@ -180,14 +190,16 @@ export class MemoryHarnessService {
     return { context, hits, note_revision:noteRevision };
   }
 
-  async noteGet(auth, { namespace:rawNamespace } = {}) {
+  async noteGet(auth, input) {
+    const { namespace:rawNamespace } = exactInput(input, ['namespace']);
     const namespace = validateNamespace(rawNamespace);
     authorize(auth, namespace, 'memory.personal.read', { personal:true });
     try { return await (await this.#storeFor(namespace)).noteGetCAS(); }
     catch (cause) { throw validateIOError(cause); }
   }
 
-  async notePut(auth, { namespace:rawNamespace, content, expected_revision } = {}) {
+  async notePut(auth, input) {
+    const { namespace:rawNamespace, content, expected_revision } = exactInput(input, ['namespace', 'content', 'expected_revision']);
     const namespace = validateNamespace(rawNamespace);
     authorize(auth, namespace, 'memory.write');
     if (typeof content !== 'string' || Buffer.byteLength(content, 'utf8') > 16 * 1024 ||
@@ -198,7 +210,8 @@ export class MemoryHarnessService {
     catch (cause) { throw validateIOError(cause); }
   }
 
-  async mapLegacy(auth, { legacy_session_id, namespace:rawNamespace } = {}) {
+  async mapLegacy(auth, input) {
+    const { legacy_session_id, namespace:rawNamespace } = exactInput(input, ['legacy_session_id', 'namespace']);
     const namespace = validateNamespace(rawNamespace);
     authorize(auth, namespace, 'memory.write');
     if (!UUID.test(legacy_session_id || '')) throw error('ERR_INVALID', 'Legacy session ID must be a UUID');
