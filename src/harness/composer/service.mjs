@@ -132,6 +132,7 @@ export class ComposerService {
       if (item.pins.length === 0 && item.expires_at_ms <= now) { item.segments = []; item.manifest = []; item.expired = true; }
     }
     this.state.snapshots = this.state.snapshots.filter((item) => item.expires_at_ms > now);
+    this.state.events = this.state.events.filter((event) => event.committed_at_ms > now - SNAPSHOT_TTL_MS || this.state.snapshots.some((snapshot) => snapshot.owner === event.owner && event.seq > snapshot.as_of_seq));
     this.state.drafts = this.state.drafts.filter((item) => item.expires_at_ms > now);
     if (JSON.stringify(this.state) !== before) this._persist();
   }
@@ -248,7 +249,13 @@ export class ComposerService {
   eventsSince(auth, afterSeq) {
     validateAuth(auth);
     if (!Number.isSafeInteger(afterSeq) || afterSeq < 0) fail('ERR_INVALID', 'after_seq inválido.');
-    return this.state.events.filter((event) => event.owner === ownerKey(auth) && event.seq > afterSeq).map(({ owner: _owner, ...event }) => structuredClone(event));
+    this._collectExpired();
+    const owner = ownerKey(auth);
+    const retained = this.state.events.filter((event) => event.owner === owner);
+    const latest = this.state.counters.find((counter) => counter.owner === owner)?.sequence ?? 0;
+    const first = retained[0]?.seq ?? latest + 1;
+    if (afterSeq < first - 1) fail('ERR_CURSOR_EXPIRED', 'Eventos não estão mais retidos.');
+    return retained.filter((event) => event.seq > afterSeq).map(({ owner: _owner, ...event }) => structuredClone(event));
   }
 
   async previewFile(auth, { root, relative_path, kind = 'file' }) {

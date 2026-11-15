@@ -412,3 +412,11 @@ test('projeção rejeita evento de outra thread', async (t) => {
   assert.throws(() => projection.apply({ ...event, thread_id: ids.otherPrincipal }), (error) => error.code === 'ERR_FORBIDDEN');
   assert.equal(projection.drafts.length, 1);
 });
+
+test('eventos expiram com cursor antigo explícito, sem apagar draft', async (t) => {
+  const { service, now, auth: identity } = await makeHarness(t);
+  await saveDraft(service, identity);
+  now.value += 600_001;
+  assert.throws(() => service.eventsSince(identity, 0), (error) => error.code === 'ERR_CURSOR_EXPIRED');
+  assert.equal(service.getDraft(identity, ids.draft).text, 'Analise esta fonte.');
+});
