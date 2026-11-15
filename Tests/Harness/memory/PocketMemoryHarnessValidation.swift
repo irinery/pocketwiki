@@ -136,6 +136,26 @@ struct PocketMemoryHarnessValidation {
             "ingest_key": "pending", "prompt": "intent recovery unique", "sequence": pendingSequence,
             "provider_id": NSNull(), "model_id": NSNull()]], "ledger": ledger]
         try JSONSerialization.data(withJSONObject: pending).write(to: captureRoot.appendingPathComponent(".capture-intent.json"))
+        let legacy = PocketMemoryStore(directory: captureRoot)
+        let originalJournal = try Data(contentsOf: captureRoot.appendingPathComponent(".capture-intent.json"))
+        try FileManager.default.removeItem(at: captureRoot.appendingPathComponent(".capture-intent.json"))
+        for kind in ["capture", "note", "import"] {
+            let journal = captureRoot.appendingPathComponent(".\(kind)-intent.json")
+            let saved = Data("pending".utf8)
+            try saved.write(to: journal)
+            do { _ = try await legacy.readNote(); fatalError("v1 read accepted journal") }
+            catch PocketMemoryStoreError.unavailable {}
+            do { try await legacy.writeNote("overwrite"); fatalError("v1 note accepted journal") }
+            catch PocketMemoryStoreError.unavailable {}
+            do { _ = try await legacy.capture([event]); fatalError("v1 capture accepted journal") }
+            catch PocketMemoryStoreError.unavailable {}
+            do { _ = try await legacy.recall("postgres"); fatalError("v1 recall accepted journal") }
+            catch PocketMemoryStoreError.unavailable {}
+            let preserved = try Data(contentsOf: journal)
+            precondition(preserved == saved)
+            try FileManager.default.removeItem(at: journal)
+        }
+        try originalJournal.write(to: captureRoot.appendingPathComponent(".capture-intent.json"))
         let pendingURL = captureRoot.appendingPathComponent(".capture-intent.json")
         let pendingBytes = try Data(contentsOf: pendingURL)
         do {

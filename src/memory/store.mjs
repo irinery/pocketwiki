@@ -137,10 +137,15 @@ export class PocketMemoryStore {
   constructor(root) {
     this.root = path.resolve(root);
     this.captureRoot = path.join(this.root, 'captures');
-    this.writeTail = Promise.resolve();
   }
 
-  async readNote() {
+  // HTTP v1 and scoped operations may share a directory and writer lock.
+  readNote() { return serializeWrite(this.root, () => this.#readNote()); }
+  writeNote(content) { return serializeWrite(this.root, () => this.#writeNote(content)); }
+  capture(events) { const validated = validateMemoryEvents(events); return serializeWrite(this.root, () => this.#capture(validated)); }
+  recall(question, options) { return serializeWrite(this.root, () => this.#recall(question, options)); }
+
+  async #readNote() {
     try {
       return await readFile(path.join(this.root, 'MEMORY.md'), 'utf8');
     } catch (error) {
@@ -149,7 +154,7 @@ export class PocketMemoryStore {
     }
   }
 
-  async writeNote(content) {
+  async #writeNote(content) {
     if (typeof content !== 'string' || Buffer.byteLength(content, 'utf8') > 16 * 1024) {
       throw new Error('invalid_memory_note');
     }
@@ -322,7 +327,7 @@ export class PocketMemoryStore {
     return serializeWrite(`${this.root}:capture`, async () => {
       await this.#recoverCaptureIntent();
       await this.#recoverImportIntent();
-      return this.recall(question, options);
+      return this.#recall(question, options);
     });
   }
 
@@ -493,13 +498,6 @@ export class PocketMemoryStore {
     return { mapped:true, session_id:sessionID };
   }
 
-  capture(events) {
-    const validated = validateMemoryEvents(events);
-    const work = this.writeTail.then(() => this.#capture(validated));
-    this.writeTail = work.catch(() => {});
-    return work;
-  }
-
   async #capture(events) {
     const records = new Map();
     const acceptedKeys = [];
@@ -547,12 +545,12 @@ export class PocketMemoryStore {
     return acceptedKeys;
   }
 
-  async recall(question, { maxCharacters = 5000, limit = 3, includeNote = true, unicodeScalars = false } = {}) {
+  async #recall(question, { maxCharacters = 5000, limit = 3, includeNote = true, unicodeScalars = false } = {}) {
     if (typeof question !== 'string' || !question.trim() || (unicodeScalars ? [...question].length : question.length) > 2000) throw new Error('invalid_question');
     const terms = words(question);
     const blocks = [];
     let remaining = maxCharacters;
-    const note = includeNote ? (await this.readNote()).trim() : '';
+    const note = includeNote ? (await this.#readNote()).trim() : '';
     if (note) {
       const block = `Fonte: MEMORY.md\n${note}`.slice(0, Math.min(3000, remaining));
       blocks.push(block);

@@ -261,7 +261,7 @@ actor PocketMemoryStore {
            let revision = state["revision"] as? Int, revision >= 0 {
             return PocketMemoryNoteSnapshot(content: content, revision: revision)
         }
-        return PocketMemoryNoteSnapshot(content: try readNote(), revision: 0)
+        return PocketMemoryNoteSnapshot(content: try readNoteUnlocked(), revision: 0)
     }
 
     func notePutCAS(_ content: String, expectedRevision: Int, namespace: PocketMemoryNamespace? = nil) throws -> PocketMemoryNoteSnapshot {
@@ -453,7 +453,7 @@ actor PocketMemoryStore {
             let data = try JSONSerialization.data(withJSONObject: item, options: [.sortedKeys])
             events.append(try JSONDecoder().decode(PocketMemoryIncomingEvent.self, from: data))
         }
-        _ = try capture(events)
+        _ = try captureUnlocked(events)
         try write(JSONSerialization.data(withJSONObject: ledger, options: [.sortedKeys]),
                   to: directory.appendingPathComponent(".memory-receipts.json"))
         try fileManager.removeItem(at: intentURL)
@@ -793,7 +793,7 @@ actor PocketMemoryStore {
 
     private func recallScopedUnlocked(_ question: String, namespace: PocketMemoryNamespace, includePersonalNote: Bool) throws -> PocketMemoryScopedRecallResponse {
         let personalNote = includePersonalNote ? try noteGetCAS(namespace: namespace) : nil
-        let result = try recall(question, includeNote: false, harnessScoring: true,
+        let result = try recallUnlocked(question, includeNote: false, harnessScoring: true,
                                 limit: (personalNote?.content.isEmpty == false) ? 2 : 3)
         let terms = Self.harnessWords(question)
         var hits: [PocketMemoryScopedHit] = []
@@ -840,19 +840,29 @@ actor PocketMemoryStore {
         return PocketMemoryScopedRecallResponse(context: String(context.prefix(5_000)), hits: hits, noteRevision: revision)
     }
 
-    func readNote() throws -> String {
+    // The v1 endpoint can point at a scoped directory; use the same lock and journal gate.
+    func readNote() throws -> String { try withHarnessLock { try readNoteUnlocked() } }
+    func writeNote(_ content: String) throws { try withHarnessLock { try writeNoteUnlocked(content) } }
+    func capture(_ events: [PocketMemoryIncomingEvent]) throws -> [String] {
+        try withHarnessLock { try captureUnlocked(events) }
+    }
+    func recall(_ question: String, includeNote: Bool = true, harnessScoring: Bool = false, limit: Int = 3) throws -> PocketMemoryRecallResponse {
+        try withHarnessLock { try recallUnlocked(question, includeNote: includeNote, harnessScoring: harnessScoring, limit: limit) }
+    }
+
+    private func readNoteUnlocked() throws -> String {
         let url = directory.appendingPathComponent("MEMORY.md")
         guard !isSymbolicLink(url) else { throw PocketMemoryStoreError.scopeDenied }
         if !fileManager.fileExists(atPath: url.path) { return "" }
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    func writeNote(_ content: String) throws {
+    private func writeNoteUnlocked(_ content: String) throws {
         guard content.utf8.count <= 16 * 1024 else { throw PocketMemoryStoreError.invalidInput }
         try write(Data(content.utf8), to: directory.appendingPathComponent("MEMORY.md"))
     }
 
-    func capture(_ events: [PocketMemoryIncomingEvent]) throws -> [String] {
+    private func captureUnlocked(_ events: [PocketMemoryIncomingEvent]) throws -> [String] {
         guard (1...32).contains(events.count) else { throw PocketMemoryStoreError.invalidInput }
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         try ensureRealDirectory(directory)
@@ -939,11 +949,11 @@ actor PocketMemoryStore {
         return accepted
     }
 
-    func recall(_ question: String, includeNote: Bool = true, harnessScoring: Bool = false, limit: Int = 3) throws -> PocketMemoryRecallResponse {
+    private func recallUnlocked(_ question: String, includeNote: Bool = true, harnessScoring: Bool = false, limit: Int = 3) throws -> PocketMemoryRecallResponse {
         guard !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, question.count <= 2_000 else { throw PocketMemoryStoreError.invalidInput }
         var blocks: [String] = []
         var remaining = 5_000
-        let note = includeNote ? try readNote().trimmingCharacters(in: .whitespacesAndNewlines) : ""
+        let note = includeNote ? try readNoteUnlocked().trimmingCharacters(in: .whitespacesAndNewlines) : ""
         if !note.isEmpty {
             let block = String("Fonte: MEMORY.md\n\(note)".prefix(min(3_000, remaining)))
             blocks.append(block)
