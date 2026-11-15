@@ -393,3 +393,14 @@ test('nota v2 mantém cópia legível MEMORY.md com permissões privadas', async
   assert.equal((await stat(file)).mode & 0o777, 0o600);
   assert.equal((await stat(path.dirname(file))).mode & 0o777, 0o700);
 });
+
+test('MemoryHit respeita o schema fechado do contrato', async (t) => {
+  const { validateAgainst } = await import('../../../src/harness/contracts/validate.mjs');
+  const { memory } = await fixture(t);
+  await memory.captureScoped(auth(), { namespace:namespace(), events:[event()] });
+  const result = await memory.recallScoped(auth(), {
+    ...recallScope(namespace()), question:'postgres', include_personal_note:false
+  });
+  assert.equal(result.hits.length, 1);
+  assert.deepEqual(validateAgainst('MemoryHit', result.hits[0]), { valid:true, errors:[] });
+});
