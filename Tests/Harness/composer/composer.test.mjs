@@ -354,3 +354,19 @@ test('lock abandonado falha fechado sem apagar estado confirmado', async (t) => 
   await rm(path.join(service.dataDir, '.composer-lock'), { recursive: true });
   assert.equal(service.getDraft(identity, ids.draft).text, 'Analise esta fonte.');
 });
+
+test('host E1 autentica bearer e policy autoriza thread antes da mutação', async (t) => {
+  const { LocalCredentialHost } = await import('../../../src/harness/local-host.mjs');
+  const { ComposerGateway, ComposerPolicy } = await import('../../../src/harness/composer/gateway.mjs');
+  let bearer;
+  const host = new LocalCredentialHost({ principalId: ids.principal, environmentId: ids.environment, audience: 'pocketwiki.context.v1', grantedScopes: ['context.read'], deliverBearer: async (delivery) => { bearer = delivery.bearer; } });
+  await host.bootstrap(['context.read'], { threadId: ids.thread });
+  const policy = new ComposerPolicy([{ principal_id: ids.principal, environment_id: ids.environment, thread_id: ids.thread, roots: [] }]);
+  const { service } = await makeHarness(t);
+  const gateway = new ComposerGateway({ service, credentialHost: host, policy });
+  const input = { draft_id: ids.draft, thread_id: ids.thread, text: 'autenticado', references: [], revision: 0 };
+  assert.equal((await gateway.call({ bearer, thread_id: ids.thread, operation: 'composer.draft.save', input: { draft: input } })).revision, 1);
+  await assert.rejects(gateway.call({ bearer: 'inválido', thread_id: ids.thread, operation: 'composer.draft.save', input: { draft: input } }), { code: 'ERR_FORBIDDEN' });
+  await assert.rejects(gateway.call({ bearer, thread_id: ids.otherPrincipal, operation: 'composer.draft.save', input: { draft: input } }), { code: 'ERR_FORBIDDEN' });
+  assert.equal(service.getDraft(auth(), ids.draft).revision, 1);
+});

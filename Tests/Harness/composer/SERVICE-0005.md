@@ -11,7 +11,7 @@ node --test Tests/Harness/composer/composer.test.mjs
 swiftc -typecheck Sources/PocketWikiMac/Services/Harness/Composer/ComposerDraftStore.swift
 ```
 
-A suíte Node usa o serviço e stash reais em diretórios temporários privados, removidos ao término. A saída do runner contém nomes dos testes e contagens, sem conteúdo dos anexos ou credenciais. Em 2026-11-14: 21 testes passaram, nenhum skip; typecheck Swift sem saída, exit 0. Esses resultados não são uma execução do gate cumulativo nem provam os itens abaixo.
+A suíte Node usa o serviço e stash reais em diretórios temporários privados, removidos ao término. A saída do runner contém nomes dos testes e contagens, sem conteúdo dos anexos ou credenciais. Em 2026-11-14: 22 testes passaram, nenhum skip; typecheck Swift sem saída, exit 0. Esses resultados não são uma execução do gate cumulativo nem provam os itens abaixo.
 
 ## Portas para integração
 
@@ -19,11 +19,11 @@ A suíte Node usa o serviço e stash reais em diretórios temporários privados,
 
 O helper `src/harness/composer/secure-read.c` precisa ser compilado e instalado em caminho absoluto confiável, passado como `secureReaderPath`; sem ele, a leitura de arquivos falha fechada. A suíte compila o helper em diretório temporário e o remove no término.
 
-O host deve autenticar o bearer e extrair principal/environment/thread/scopes da credencial E1, verificar pertencimento da thread e audience do contexto antes de fornecer `auth`; objetos `auth` e `delegated_identity` não são credenciais e não podem ser aceitos do payload HTTP. Rotas devem usar schema fechado e conectar mutações ao ledger/CAS/receipt E1, sem logar segmentos. Resolve precisa receber identidade delegada verificada para a audience `pocketwiki.context.v1`. É necessário fornecer `rootsFor` e `sourceResolver` também na recriação do serviço. Integração de rotas, registry e shell pertence ao integrador.
+O módulo `gateway.mjs` contém `ComposerGateway` e `ComposerPolicy`: o teste usa `LocalCredentialHost` real, verifica audience/scope/thread e consulta concessão explícita. O host deve manter as concessões atualizadas; objetos `auth` e `delegated_identity` não são credenciais e não podem ser aceitos do payload HTTP. Rotas devem usar schema fechado e conectar mutações ao ledger/CAS/receipt E1, sem logar segmentos. Resolve precisa receber identidade delegada verificada para a audience `pocketwiki.context.v1`. É necessário fornecer `rootsFor` e `sourceResolver` também na recriação do serviço. Integração de rotas, registry e shell pertence ao integrador.
 
 ## Pendências antes de liberar a lane
 
-- O serviço aceita objeto de identidade já verificado pelo host; não há teste de integração com credenciais E1, autorização de thread, ledger/receipts e CAS de agregado.
+- O gateway autentica credenciais do `LocalCredentialHost` E1 e testa policy real. Falta conectar a execução das mutações ao ledger/receipts e CAS de agregado E1; não expor `ComposerService` diretamente a payload HTTP.
 - A quote do teste usa resolver de teste; falta exercitar o serviço real de histórico/proveniência. A aplicação do evento de 01-05 ocorre em projeção de teste, não na projeção cliente real. As fronteiras de processo/rede ainda não foram exercitadas.
 - A leitura usa descritor de root e `openat`/`O_NOFOLLOW` em cada componente. Falta ensaio de corrida com renomeação concorrente e revisão da política de concessão de roots, incluindo diretórios que um atacante possa mover para fora do root.
 - O writer JSON serializa processos por diretório de lock e sincroniza os bytes antes de renomear. Se o processo morrer segurando o lock, o serviço retorna ERR_UNAVAILABLE até recuperação operacional controlada; ainda falta protocolo de recuperação e prova de durabilidade do diretório após crash. Eventos e tombstones ainda não têm retenção limitada. O store Swift não tem testes de persistência nem transação de erro.
