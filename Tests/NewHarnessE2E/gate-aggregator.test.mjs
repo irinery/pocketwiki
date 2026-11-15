@@ -1,7 +1,8 @@
 import test from 'node:test';
+import { replayProofSHA256, canonicalJSON } from './replay-proof.mjs';
 import { execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import matrix from '../../docs/rfcs/new-harness/matriz-verificacao.json' with { type: 'json' };
@@ -162,12 +163,80 @@ test('target identity hashes real checkout files and rejects wrong or dirty chec
 });
 
 
-test('E1 requires all six cumulative pairs and rejects missing or duplicate E1 cases', () => {
+test('E1 requires all six cumulative pairs and validates replay artifact bindings', async t => {
   const input = reports().map(report => ({ ...report, stage: 'E1' }));
   input[0].cases.push({ id: 'SERVICE-0002', surface: 'service', status: 'passed', artifact_paths: ['service/runtime.log'] });
   input[1].cases.push({ id: 'UI-0002', surface: 'web', status: 'passed', artifact_paths: ['web/runtime.log'] });
   input[2].cases.push({ id: 'UI-0002', surface: 'macos', status: 'passed', artifact_paths: ['macos/runtime.log'] });
-  assert.equal(aggregateReports('E1', input, matrix).cases.length, 6);
+  assert.throws(() => aggregateReports('E1', input, matrix), /invalid integrated replay/);
+  for (const [index, surface] of [[1, 'web'], [2, 'macos']]) {
+    const nonce = 'a'.repeat(32), state = seq => ({ revision: 1, lastSeq: seq, receipts: {}, effects: {} });
+    const digest = data => replayProofSHA256(Buffer.from(canonicalJSON(data)));
+    const envelope = seq => ({ protocol_major: 1, event_id: '00000000-0000-4000-8000-000000000001', environment_id: '00000000-0000-4000-8000-000000000002', thread_id: '00000000-0000-4000-8000-000000000002', seq, committed_at_ms: 1, module: 'runtime', delivery: 'inline', payload: { entity_type: 'RuntimeEvent', entity_key: JSON.stringify('00000000-0000-4000-8000-000000000001'), change: 'upsert', value: { event_id: '00000000-0000-4000-8000-000000000001', thread_id: '00000000-0000-4000-8000-000000000002', seq, kind: 'intent_committed' } } });
+    const frame = (seq, before, after) => ({ seq, snapshot_id: '00000000-0000-4000-8000-000000000003', before_cursor: before, after_cursor: after, before_state: state(before), after_state: state(after), before: digest(state(before)), after: digest(state(after)), event_id: '00000000-0000-4000-8000-000000000001', event: envelope(seq), event_sha256: digest(envelope(seq)) });
+    const snapshot = { thread_id: '00000000-0000-4000-8000-000000000002', envelope: { module: 'runtime', data: { snapshot_id: '00000000-0000-4000-8000-000000000003', revision: 1, as_of_seq: 9, receipts: [], effects: [] } } };
+    const proof = { version: 1, level: 'integration', surface, nonce, boundary: 9, snapshot, snapshot_sha256: digest(snapshot), frames: [frame(8, 9, 9), frame(9, 9, 9), frame(10, 9, 10), frame(10, 10, 10)] };
+    Object.assign(input[index].cases[1], { replay_proof: proof, replay_nonce: nonce, replay_proof_sha256: replayProofSHA256(Buffer.from(JSON.stringify(proof))), replay_proof_path: surface + '/proof.json', replay_host_path: surface + '/result.json', replay_identity_path: surface + '/identity.json' });
+    input[index].cases[1].artifact_paths.push(surface + '/proof.json', surface + '/result.json', surface + '/identity.json');
+  }
+  assert.equal(aggregateReports('E1', input, matrix).gate_passed, true);
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'nh-replay-proof-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const paths = [];
+  for (const [index, report] of input.entries()) {
+    for (const item of report.cases) for (const artifact of item.artifact_paths) {
+      const target = path.join(dir, artifact); await mkdir(path.dirname(target), { recursive: true });
+      let content = 'fixture';
+      if (artifact === item.replay_proof_path) content = JSON.stringify(item.replay_proof);
+      if (artifact === item.replay_host_path) content = JSON.stringify({ surface: item.surface, cases: ['02-01', '02-02', '02-03', '02-04'].map(id => ({ id, status: 'passed', ...(id === '02-01' ? { replay_nonce: item.replay_nonce, replay_proof_sha256: item.replay_proof_sha256 } : {}) })) });
+      if (artifact === item.replay_identity_path) { const hostIdentity = Object.fromEntries(['pocketwiki_sha', 'pocketkernel_sha', 'middlewareauth_sha', 'schema_sha256', 'seed', 'auth_mode'].map(field => [field, report[field]])); content = JSON.stringify({ ...hostIdentity, after: hostIdentity }); }
+      await writeFile(target, content);
+    }
+    // Equivalent JSON in a different property order still matches the exact hashed artifact.
+    for (const item of report.cases) if (item.replay_proof) item.replay_proof = Object.fromEntries(Object.entries(item.replay_proof).reverse());
+    const reportPath = path.join(dir, `shard-${index}.json`); await writeFile(reportPath, JSON.stringify(report)); paths.push(reportPath);
+  }
+  assert.equal((await aggregateReportFiles('E1', paths, identity)).gate_passed, true);
+  for (const surface of ['web', 'macos']) {
+    const file = path.join(dir, surface, 'result.json');
+    const valid = JSON.parse(await readFile(file, 'utf8'));
+    for (const mutate of [
+      host => { host.cases[1].status = 'failed'; },
+      host => { host.cases.pop(); },
+      host => { host.cases[1] = { ...host.cases[0] }; },
+      host => { host.invalidated = true; },
+      host => { host.cases[2].invalidated = true; },
+      host => { host.surface = surface === 'web' ? 'macos' : 'web'; }
+    ]) {
+      const host = structuredClone(valid); mutate(host); await writeFile(file, JSON.stringify(host));
+      await assert.rejects(() => aggregateReportFiles('E1', paths, identity), /replay host artifact mismatch/);
+    }
+    await writeFile(file, JSON.stringify(valid));
+  }
+  for (const surface of ['web', 'macos']) {
+    const file = path.join(dir, surface, 'identity.json');
+    const valid = JSON.parse(await readFile(file, 'utf8'));
+    for (const field of ['pocketwiki_sha', 'pocketkernel_sha', 'middlewareauth_sha', 'schema_sha256', 'seed', 'auth_mode']) {
+      for (const phase of ['before', 'after', 'missing']) {
+        const bad = structuredClone(valid);
+        if (phase === 'before') bad[field] = field === 'seed' ? 42 : 'different';
+        else if (phase === 'after') bad.after[field] = field === 'seed' ? 42 : 'different';
+        else delete bad[field];
+        await writeFile(file, JSON.stringify(bad));
+        await assert.rejects(() => aggregateReportFiles('E1', paths, identity), /UI host identity mismatch/);
+      }
+    }
+    await rm(file);
+    await assert.rejects(() => aggregateReportFiles('E1', paths, identity));
+    await writeFile(file, JSON.stringify(valid));
+  }
+  await writeFile(path.join(dir, 'web/proof.json'), '{}');
+  await assert.rejects(() => aggregateReportFiles('E1', paths, identity), /replay proof artifact mismatch/);
+
+  const badBoundary = structuredClone(input); badBoundary[1].cases[1].replay_proof.boundary = 8;
+  assert.throws(() => aggregateReports('E1', badBoundary, matrix), /invalid (integrated replay|UI snapshot)/);
+  const badLevel = structuredClone(input); badLevel[1].cases[1].replay_proof.level = 'unit';
+  assert.throws(() => aggregateReports('E1', badLevel, matrix), /invalid integrated replay/);
   const missing = structuredClone(input); missing[2].cases.pop();
   assert.throws(() => aggregateReports('E1', missing, matrix), /missing required.*UI-0002\/macos/);
   const duplicate = structuredClone(input); duplicate[0].cases.push(structuredClone(duplicate[0].cases[1]));

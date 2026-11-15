@@ -26,6 +26,12 @@ struct RuntimeHostApp: App {
             return commandIDs[nextCommand]
         }) else { fatalError("Invalid runtime host configuration") }
         if config["observeFrames"] == "1" {
+            if let nonce = config["replayNonce"], !nonce.isEmpty {
+                session.replayNextFrameForFixture = true
+                session.onProjectionFrame = { boundary, snapshotID, seq, eventID, beforeCursor, afterCursor, before, after, event in
+                    DistributedNotificationCenter.default().post(name: Notification.Name("com.pocketwiki.RuntimeProjectionFrame"), object: nil, userInfo: ["nonce": nonce, "boundary": boundary, "snapshot_id": snapshotID, "seq": seq, "event_id": eventID, "event": event, "before_cursor": beforeCursor, "after_cursor": afterCursor, "before_state": before, "after_state": after])
+                }
+            }
             session.onFrame = { seq, cursor, receiptCount in
                 DistributedNotificationCenter.default().post(name: Notification.Name("com.pocketwiki.RuntimeUIFrame"), object: nil, userInfo: ["seq": seq, "cursor": cursor, "receiptCount": receiptCount])
             }

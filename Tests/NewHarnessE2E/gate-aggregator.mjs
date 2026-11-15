@@ -1,3 +1,4 @@
+import { validateReplayProof, replayProofSHA256, canonicalJSON } from './replay-proof.mjs';
 import { assertTrackedFlags } from './git-snapshot.mjs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -9,6 +10,16 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const matrixPath = path.resolve(here, '../../docs/rfcs/new-harness/matriz-verificacao.json');
 const hashFields = ['pocketwiki_sha', 'pocketkernel_sha', 'middlewareauth_sha'];
 const digestFields = ['schema_sha256', 'fixture_sha256', 'matrix_sha256'];
+
+// The UI host observes these fields before and after its own execution.
+export function assertUIHostIdentity(host, expected) {
+  const fields = ['pocketwiki_sha', 'pocketkernel_sha', 'middlewareauth_sha', 'schema_sha256', 'seed', 'auth_mode'];
+  for (const field of fields) {
+    if (host?.[field] !== expected?.[field] || host?.after?.[field] !== expected?.[field] || expected?.[field] === undefined) {
+      throw new Error('UI host identity mismatch: ' + field);
+    }
+  }
+}
 
 export async function aggregateReportFiles(stage, reportPaths, target) {
   if (!target) throw new Error('target build identity is required');
@@ -72,6 +83,10 @@ export function aggregateReports(stage, reports, matrix) {
       if (result.status !== 'passed') throw new Error('case is not passed (skip/failure is forbidden): ' + key);
       if (!Array.isArray(result.artifact_paths) || result.artifact_paths.length === 0 || result.artifact_paths.some((item) => !isSafeRelativePath(item))) {
         throw new Error('artifact_paths must be safe relative paths: ' + key);
+      }
+      if (result.id === 'UI-0002') {
+        validateReplayProof(result.replay_proof, { surface: result.surface, nonce: result.replay_nonce });
+        if (!isSafeRelativePath(result.replay_proof_path) || !result.artifact_paths.includes(result.replay_proof_path) || !isSafeRelativePath(result.replay_host_path) || !result.artifact_paths.includes(result.replay_host_path) || !isSafeRelativePath(result.replay_identity_path) || !result.artifact_paths.includes(result.replay_identity_path) || !/^[a-f0-9]{64}$/.test(result.replay_proof_sha256 || '')) throw new Error('invalid replay proof artifact binding: ' + key);
       }
       if (scenario.stage <= 2 && report.auth_mode !== 'host_local') {
         throw new Error('forbidden auth_mode for ' + key + ': ' + report.auth_mode);
@@ -169,6 +184,29 @@ async function verifyArtifacts(reportPath, report) {
   if (!report || !Array.isArray(report.cases)) throw new Error('report cases must be an array');
   const reportDirectory = await realpath(path.dirname(reportPath));
   for (const result of report.cases) {
+    if (result.id === 'UI-0002') {
+      if (!isSafeRelativePath(result.replay_proof_path) || !result.artifact_paths?.includes(result.replay_proof_path)) throw new Error('invalid replay proof artifact binding');
+      const proofPath = path.resolve(reportDirectory, ...result.replay_proof_path.split('/'));
+      const resolved = await realpath(proofPath), metadata = await lstat(proofPath);
+      if (!resolved.startsWith(reportDirectory + path.sep) || !metadata.isFile() || metadata.isSymbolicLink()) throw new Error('invalid replay proof file');
+      if (!isSafeRelativePath(result.replay_identity_path) || !result.artifact_paths.includes(result.replay_identity_path)) throw new Error('invalid UI host identity artifact binding');
+      const identityPath = path.resolve(reportDirectory, ...result.replay_identity_path.split('/'));
+      const identityResolved = await realpath(identityPath), identityMetadata = await lstat(identityPath);
+      if (!identityResolved.startsWith(reportDirectory + path.sep) || !identityMetadata.isFile() || identityMetadata.isSymbolicLink()) throw new Error('invalid UI host identity file');
+      assertUIHostIdentity(JSON.parse(await readFile(identityPath, 'utf8')), report);
+      if (!isSafeRelativePath(result.replay_host_path) || !result.artifact_paths.includes(result.replay_host_path)) throw new Error('invalid replay host artifact binding');
+      const hostPath = path.resolve(reportDirectory, ...result.replay_host_path.split('/'));
+      const hostResolved = await realpath(hostPath), hostMetadata = await lstat(hostPath);
+      if (!hostResolved.startsWith(reportDirectory + path.sep) || !hostMetadata.isFile() || hostMetadata.isSymbolicLink()) throw new Error('invalid replay host file');
+      const host = JSON.parse(await readFile(hostPath, 'utf8'));
+      const required = ['02-01', '02-02', '02-03', '02-04'];
+      if (host.surface !== result.surface || host.invalidated === true || !Array.isArray(host.cases) || host.cases.length !== required.length ||
+          !required.every(id => host.cases.filter(row => row?.id === id && row.status === 'passed' && row.invalidated !== true).length === 1)) throw new Error('replay host artifact mismatch');
+      const row = host.cases.find(item => item.id === '02-01');
+      if (row.replay_nonce !== result.replay_nonce || row.replay_proof_sha256 !== result.replay_proof_sha256) throw new Error('replay host artifact mismatch');
+      const bytes = await readFile(proofPath);
+      if (replayProofSHA256(bytes) !== result.replay_proof_sha256 || canonicalJSON(JSON.parse(bytes)) !== canonicalJSON(result.replay_proof)) throw new Error('replay proof artifact mismatch');
+    }
     if (!Array.isArray(result.artifact_paths)) throw new Error('artifact_paths must be an array');
     for (const relativePath of result.artifact_paths) {
       if (!isSafeRelativePath(relativePath)) throw new Error('unsafe artifact path: ' + String(relativePath));

@@ -26,6 +26,7 @@
       "Tests/NewHarnessE2E/mac-supervisor.test.mjs",
       "Tests/NewHarnessE2E/managed-helpers.test.mjs",
       "Tests/NewHarnessE2E/ps-preflight.test.mjs",
+      "Tests/NewHarnessE2E/replay-proof.test.mjs",
       "Tests/NewHarnessE2E/runtime-proof.test.mjs",
       "Tests/NewHarnessE2E/runtime-screenshot.test.mjs",
       "Tests/NewHarnessE2E/stale-report.test.mjs"

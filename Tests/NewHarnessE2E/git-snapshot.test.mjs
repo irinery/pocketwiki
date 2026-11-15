@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { exportGitSnapshot } from './git-snapshot.mjs';
+import { exportGitSnapshot, assertTrackedCheckoutClean } from './git-snapshot.mjs';
 
 test('export uses pinned tree and excludes ignored source injection', async t => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'nh-snapshot-'));
@@ -21,4 +21,26 @@ test('export uses pinned tree and excludes ignored source injection', async t =>
   assert.equal(await readFile(path.join(dest, 'main.go'), 'utf8'), 'package main\n');
   await assert.rejects(readFile(path.join(dest, 'injected.go')), { code: 'ENOENT' });
   await assert.rejects(exportGitSnapshot(repo, 'f'.repeat(40), path.join(root, 'wrong')), /differs/);
+});
+
+
+test('final host checkout rejects tracked changes and hidden flags, while allowing generated projects', async t => {
+  const repo = await mkdtemp(path.join(os.tmpdir(), 'nh-host-checkout-'));
+  t.after(() => rm(repo, { recursive: true, force: true }));
+  const git = (...args) => execFileSync('git', ['-C', repo, ...args]);
+  git('init', '-q');
+  await writeFile(path.join(repo, 'product.swift'), 'initial');
+  git('add', 'product.swift');
+  git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'fixture');
+  await writeFile(path.join(repo, 'generated-project'), 'untracked');
+  assert.doesNotThrow(() => assertTrackedCheckoutClean(repo));
+  await writeFile(path.join(repo, 'product.swift'), 'changed');
+  assert.throws(() => assertTrackedCheckoutClean(repo), /tracked modifications/);
+  git('restore', '--', 'product.swift');
+  for (const [set, clear] of [['--assume-unchanged', '--no-assume-unchanged'], ['--skip-worktree', '--no-skip-worktree']]) {
+    git('update-index', set, 'product.swift');
+    assert.throws(() => assertTrackedCheckoutClean(repo), /skip-worktree or assume-unchanged/);
+    git('update-index', clear, 'product.swift');
+  }
+  assert.doesNotThrow(() => assertTrackedCheckoutClean(repo));
 });
