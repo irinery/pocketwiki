@@ -113,7 +113,7 @@ function validateIOError(cause, fallback = 'ERR_UNAVAILABLE') {
 }
 
 export class MemoryHarnessService {
-  constructor({ root, now = () => Date.now(), pageSize = 100 } = {}) {
+  constructor({ root, now = () => Date.now(), pageSize = 100, policy } = {}) {
     if (typeof root !== 'string' || !root) throw error('ERR_INVALID', 'Memory store root is required');
     if (typeof now !== 'function' || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
       throw error('ERR_INVALID', 'Memory service configuration is invalid');
@@ -121,12 +121,23 @@ export class MemoryHarnessService {
     this.root = path.resolve(root);
     this.now = now;
     this.pageSize = pageSize;
+    if (policy !== undefined && typeof policy !== 'function') throw error('ERR_INVALID', 'Memory policy port is invalid');
+    this.policy = policy;
+  }
+
+  async #authorize(auth, namespace, scope, options = {}) {
+    authorize(auth, namespace, scope, options);
+    if (!this.policy) throw error('ERR_UNAVAILABLE', 'Memory policy port is unavailable', { retryable:true });
+    let granted;
+    try { granted = await this.policy(auth, { namespace, scope, personal:options.personal === true }); }
+    catch { throw error('ERR_UNAVAILABLE', 'Memory policy port is unavailable', { retryable:true }); }
+    if (granted !== true) throw error('ERR_FORBIDDEN', 'Memory policy denied access');
   }
 
   async captureScoped(auth, input) {
     const { namespace:rawNamespace, events } = exactInput(input, ['namespace', 'events']);
     const namespace = validateNamespace(rawNamespace);
-    authorize(auth, namespace, 'memory.write');
+    await this.#authorize(auth, namespace, 'memory.write');
     let validated;
     try { validated = validateMemoryEvents(events); }
     catch (cause) { throw validateIOError(cause, 'ERR_INVALID'); }
@@ -143,7 +154,7 @@ export class MemoryHarnessService {
     if (!thread_id) throw error('ERR_INVALID', 'Memory recall thread is required');
     const namespace = validateNamespace({ environment_id, ...(project_id === undefined ? {} : { project_id }), thread_id }, { recall:true });
     if (typeof include_personal_note !== 'boolean') throw error('ERR_INVALID', 'include_personal_note must be boolean');
-    authorize(auth, namespace, 'context.read', { personal:include_personal_note });
+    await this.#authorize(auth, namespace, 'context.read', { personal:include_personal_note });
     if (typeof question !== 'string' || !question.trim() || [...question].length > 2_000) {
       throw error('ERR_INVALID', 'Memory question is invalid');
     }
@@ -196,7 +207,7 @@ export class MemoryHarnessService {
   async noteGet(auth, input) {
     const { namespace:rawNamespace } = exactInput(input, ['namespace']);
     const namespace = validateNamespace(rawNamespace);
-    authorize(auth, namespace, 'memory.personal.read', { personal:true });
+    await this.#authorize(auth, namespace, 'memory.personal.read', { personal:true });
     try { return await (await this.#storeFor(namespace)).noteGetCAS(namespace); }
     catch (cause) { throw validateIOError(cause); }
   }
@@ -204,7 +215,7 @@ export class MemoryHarnessService {
   async notePut(auth, input) {
     const { namespace:rawNamespace, content, expected_revision } = exactInput(input, ['namespace', 'content', 'expected_revision']);
     const namespace = validateNamespace(rawNamespace);
-    authorize(auth, namespace, 'memory.write');
+    await this.#authorize(auth, namespace, 'memory.write');
     if (typeof content !== 'string' || Buffer.byteLength(content, 'utf8') > 16 * 1024 ||
         !Number.isSafeInteger(expected_revision) || expected_revision < 0) {
       throw error('ERR_INVALID', 'Memory note or expected_revision is invalid');
@@ -216,7 +227,7 @@ export class MemoryHarnessService {
   async mapLegacy(auth, input) {
     const { legacy_session_id, namespace:rawNamespace } = exactInput(input, ['legacy_session_id', 'namespace']);
     const namespace = validateNamespace(rawNamespace);
-    authorize(auth, namespace, 'memory.write');
+    await this.#authorize(auth, namespace, 'memory.write');
     if (!UUID.test(legacy_session_id || '')) throw error('ERR_INVALID', 'Legacy session ID must be a UUID');
     try {
       const store = await this.#storeFor(namespace);
@@ -245,7 +256,7 @@ export class MemoryHarnessService {
   async exportNamespace(auth, { namespace:rawNamespace, include_personal_note = false } = {}) {
     const namespace = validateNamespace(rawNamespace);
     if (typeof include_personal_note !== 'boolean') throw error('ERR_INVALID', 'include_personal_note must be boolean');
-    authorize(auth, namespace, 'context.read', { personal:include_personal_note });
+    await this.#authorize(auth, namespace, 'context.read', { personal:include_personal_note });
     const store = await this.#storeFor(namespace);
     const exported = {
       schema_version:2,
@@ -262,7 +273,7 @@ export class MemoryHarnessService {
 
   async importNamespace(auth, { namespace:rawNamespace, content } = {}) {
     const namespace = validateNamespace(rawNamespace);
-    authorize(auth, namespace, 'memory.write');
+    await this.#authorize(auth, namespace, 'memory.write');
     if (typeof content !== 'string' || Buffer.byteLength(content) > MAX_IMPORT_BYTES) {
       throw error('ERR_INVALID', 'Memory import exceeds the size limit');
     }
@@ -305,10 +316,10 @@ export class MemoryHarnessService {
     return { imported_count:imported.length };
   }
 
-  async snapshot(auth, { namespace:rawNamespace, page_size = this.pageSize, cursor } = {}) {
+  async snapshot(auth, { namespace:rawNamespace, page_size, cursor } = {}) {
     const namespace = validateNamespace(rawNamespace);
-    authorize(auth, namespace, 'context.read', { personal:true });
-    if (!Number.isInteger(page_size) || page_size < 1 || page_size > this.pageSize) {
+    await this.#authorize(auth, namespace, 'context.read', { personal:true });
+    if (page_size !== undefined && (!Number.isInteger(page_size) || page_size < 1 || page_size > this.pageSize)) {
       throw error('ERR_INVALID', 'Memory snapshot page_size is invalid');
     }
     if (cursor !== undefined && (typeof cursor !== 'string' || !/^[0-9a-f-]{36}\.[0-9a-f-]{36}$/.test(cursor))) {
@@ -328,16 +339,25 @@ export class MemoryHarnessService {
     if (cursor !== undefined) {
       [snapshotID] = cursor.split('.');
       snapshot = await this.#readSnapshot(snapshotsDir, snapshotID);
-      if (!snapshot || snapshot.expires_at_ms <= this.now()) throw error('ERR_CURSOR_EXPIRED', 'Memory snapshot expired');
+      if (!snapshot || snapshot.snapshot_id !== snapshotID || !Number.isSafeInteger(snapshot.expires_at_ms) ||
+          !Number.isSafeInteger(snapshot.as_of_seq) || !Number.isInteger(snapshot.page_size) ||
+          !Array.isArray(snapshot.items) || !snapshot.cursors || typeof snapshot.cursors !== 'object' ||
+          snapshot.expires_at_ms <= this.now()) throw error('ERR_CURSOR_EXPIRED', 'Memory snapshot expired');
       if (snapshot.principal_id !== auth.principal_id || JSON.stringify(snapshot.namespace) !== JSON.stringify(namespace)) {
         throw error('ERR_FORBIDDEN', 'Memory snapshot cursor is unauthorized');
       }
-      if (!await store.notesRetentionAvailable(snapshot.as_of_seq)) throw error('ERR_CURSOR_EXPIRED', 'Memory snapshot retention lost');
-      if (snapshot.page_size !== page_size) throw error('ERR_INVALID', 'Memory snapshot page_size changed');
+      const retained = await store.notesRetentionAvailable(snapshot.as_of_seq).catch((cause) => {
+        if (cause instanceof SyntaxError) return false;
+        throw cause;
+      });
+      if (!retained) throw error('ERR_CURSOR_EXPIRED', 'Memory snapshot retention lost');
+      if (page_size !== undefined && snapshot.page_size !== page_size) throw error('ERR_INVALID', 'Memory snapshot page_size changed');
+      page_size = snapshot.page_size;
       const position = snapshot.cursors[cursor];
       if (!Number.isSafeInteger(position)) throw error('ERR_INVALID', 'Memory snapshot cursor is invalid');
       offset = position;
     } else {
+      page_size ??= this.pageSize;
       snapshotID = randomUUID();
       snapshot = await this.#collectSnapshot(auth, namespace, store, false);
       snapshot.snapshot_id = snapshotID;
@@ -369,7 +389,7 @@ export class MemoryHarnessService {
 
   async eventsSince(auth, { namespace:rawNamespace, after_seq = 0 } = {}) {
     const namespace = validateNamespace(rawNamespace);
-    authorize(auth, namespace, 'context.read');
+    await this.#authorize(auth, namespace, 'context.read', { personal:true });
     if (!Number.isSafeInteger(after_seq) || after_seq < 0) throw error('ERR_INVALID', 'after_seq is invalid');
     const store = await this.#storeFor(namespace);
     const events = await store.notesEvents(after_seq);
@@ -409,7 +429,7 @@ export class MemoryHarnessService {
       const info = await lstat(file);
       if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_IMPORT_BYTES) throw error('ERR_SCOPE', 'Invalid memory snapshot file');
       return JSON.parse(await readFile(file, 'utf8'));
-    } catch (cause) { if (cause.code === 'ENOENT') return null; throw cause; }
+    } catch (cause) { if (cause.code === 'ENOENT' || cause instanceof SyntaxError) return null; throw cause; }
   }
 
   async #writeSnapshot(directory, id, value) {

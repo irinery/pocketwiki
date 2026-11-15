@@ -12,10 +12,12 @@ const projectB = '20000000-0000-4000-8000-000000000002';
 const threadA = '30000000-0000-4000-8000-000000000001';
 const sessionA = '40000000-0000-4000-8000-000000000001';
 
+const fixturePolicy = async () => true; // Boundary substitute; AUTH-REAL requires Kernel.
+
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'pocketwiki-memory-'));
   t.after(() => rm(root, { recursive: true, force: true }));
-  return { root, memory: new MemoryHarnessService({ root }) };
+  return { root, memory: new MemoryHarnessService({ root, policy:fixturePolicy }) };
 }
 
 function auth(environmentId = environmentA, extra = {}) {
@@ -69,7 +71,7 @@ test('01-02 reenvio após perda de ack e restart preserva uma mensagem e accepte
   const { root, memory } = await fixture(t);
   const batch = [event()];
   const accepted = await memory.captureScoped(auth(), { namespace:namespace(), events:batch });
-  const restarted = new MemoryHarnessService({ root });
+  const restarted = new MemoryHarnessService({ root, policy:fixturePolicy });
   const retried = await restarted.captureScoped(auth(), { namespace:namespace(), events:batch });
   assert.deepEqual(retried, accepted);
   const recalled = await restarted.recallScoped(auth(), {
@@ -213,7 +215,7 @@ test('R1 cursor expirado retorna ERR_CURSOR_EXPIRED e page_size permanece congel
   const root = await mkdtemp(path.join(os.tmpdir(), 'memory-cursor-'));
   t.after(() => rm(root, { recursive:true, force:true }));
   let now = 1_000;
-  const memory = new MemoryHarnessService({ root, now:() => now });
+  const memory = new MemoryHarnessService({ root, policy:fixturePolicy, now:() => now });
   await populateNotes(memory, 4);
   const scope = projectNamespace();
   const first = await memory.snapshot(auth(environmentA, { thread_id:undefined }), { namespace:scope, page_size:1 });
@@ -339,4 +341,55 @@ test('credencial vinculada a thread não autoriza snapshot de projeto inteiro', 
   const { memory } = await fixture(t);
   await assert.rejects(memory.snapshot(auth(), { namespace:projectNamespace() }),
     (error) => error.code === 'ERR_SCOPE');
+});
+
+test('cursor mantém page_size quando cliente omite parâmetro nas próximas páginas', async (t) => {
+  const { memory } = await fixture(t);
+  await populateNotes(memory, 3);
+  const scope = projectNamespace();
+  const projectAuth = auth(environmentA, { thread_id:undefined });
+  const first = await memory.snapshot(projectAuth, { namespace:scope, page_size:1 });
+  const second = await memory.snapshot(projectAuth, { namespace:scope, cursor:first.next_cursor });
+  assert.equal(second.notes.length, 1);
+  assert.equal(second.snapshot_id, first.snapshot_id);
+});
+
+test('snapshot corrompido retorna ERR_CURSOR_EXPIRED', async (t) => {
+  const { memory, root } = await fixture(t);
+  await populateNotes(memory, 2);
+  const scope = projectNamespace();
+  const projectAuth = auth(environmentA, { thread_id:undefined });
+  const first = await memory.snapshot(projectAuth, { namespace:scope, page_size:1 });
+  assert.ok(first.next_cursor);
+  await writeFile(path.join(root, 'v2', environmentA, 'projects', projectA, '.snapshots', `snapshot-${first.snapshot_id}.json`), '{broken');
+  await assert.rejects(memory.snapshot(projectAuth, { namespace:scope, cursor:first.next_cursor }),
+    (error) => error.code === 'ERR_CURSOR_EXPIRED');
+});
+
+test('facade falha fechada sem porta de autorização e respeita recusa da policy', async (t) => {
+  const { root } = await fixture(t);
+  const withoutPolicy = new MemoryHarnessService({ root });
+  await assert.rejects(withoutPolicy.captureScoped(auth(), { namespace:namespace(), events:[event()] }),
+    (error) => error.code === 'ERR_UNAVAILABLE');
+  const denied = new MemoryHarnessService({ root, policy:async () => false });
+  await assert.rejects(denied.captureScoped(auth(), { namespace:namespace(), events:[event()] }),
+    (error) => error.code === 'ERR_FORBIDDEN');
+});
+
+test('eventos que contêm nota exigem memory.personal.read', async (t) => {
+  const { memory } = await fixture(t);
+  await memory.notePut(auth(), { namespace:namespace(), content:'privado', expected_revision:0 });
+  await assert.rejects(memory.eventsSince(auth(environmentA, { scopes:['context.read'] }), {
+    namespace:namespace(), after_seq:0
+  }), (error) => error.code === 'ERR_SCOPE');
+});
+
+test('nota v2 mantém cópia legível MEMORY.md com permissões privadas', async (t) => {
+  const { memory, root } = await fixture(t);
+  await memory.notePut(auth(), { namespace:namespace(), content:'texto legível', expected_revision:0 });
+  const file = path.join(root, 'v2', environmentA, 'projects', projectA, '.notes', threadA, 'MEMORY.md');
+  assert.equal(await readFile(file, 'utf8'), 'texto legível');
+  const { stat } = await import('node:fs/promises');
+  assert.equal((await stat(file)).mode & 0o777, 0o600);
+  assert.equal((await stat(path.dirname(file))).mode & 0o777, 0o700);
 });
