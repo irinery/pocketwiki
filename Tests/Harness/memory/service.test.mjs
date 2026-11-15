@@ -275,3 +275,11 @@ test('página pode ser relida após perda de resposta sem consumir cursor', asyn
   assert.deepEqual(retry.items, second.items);
   assert.equal(retry.as_of_seq, second.as_of_seq);
 });
+
+test('comandos rejeitam campos desconhecidos antes de acessar o store', async (t) => {
+  const { memory } = await fixture(t);
+  await assert.rejects(memory.captureScoped(auth(), { namespace:namespace(), events:[event()], extra:true }),
+    (error) => error.code === 'ERR_INVALID');
+  await assert.rejects(memory.notePut(auth(), { namespace:namespace(), content:'x', expected_revision:0, extra:true }),
+    (error) => error.code === 'ERR_INVALID');
+});
