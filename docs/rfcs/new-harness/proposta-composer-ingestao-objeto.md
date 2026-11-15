@@ -1,6 +1,6 @@
 # Proposta em revisão: ingestão explícita de objeto no composer
 
-Status: proposta, sem alterar o contrato vigente. A leitura por root continua indisponível até que contenção e unicidade sejam comprovadas. Esta proposta não aprova SERVICE-0005 nem o gate E2.
+Status: concessão explícita de objeto aprovada pelo usuário em 2026-11-15 para desenvolvimento. A leitura live por root permanece requisito separado e indisponível até que contenção e unicidade sejam comprovadas. Esta aprovação não conclui SERVICE-0005 nem o gate E2.
 
 ## Problema
 

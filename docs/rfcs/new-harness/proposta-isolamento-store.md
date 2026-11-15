@@ -1,6 +1,6 @@
 # Proposta em revisão: isolamento do store do Kernel
 
-Status: proposta. Não instala serviços, altera contas, muda permissões nem habilita a migração. O `Open` atual recusa upgrades antigos enquanto a contenção da migração não estiver comprovada.
+Status: direção aprovada pelo usuário em 2026-11-15 para desenvolvimento na branch. Não autoriza instalar serviços, criar contas, alterar permissões ou habilitar a migração. O `Open` atual recusa upgrades antigos enquanto a contenção da migração não estiver comprovada.
 
 ## Problema
 
