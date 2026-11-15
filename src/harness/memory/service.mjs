@@ -99,7 +99,7 @@ function validateScopedEvents(events) {
 }
 
 function redactExportText(value) {
-  const withBasicRedacted = String(value).replace(/\bBasic\s+([^\s,;"'<>()[\]{}]+)/gi, (match, token) => {
+  const withBasicRedacted = String(value).replace(/(?<![A-Za-z0-9_])[Bb][Aa][Ss][Ii][Cc][\u0009-\u000D\u0020\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]+([^\u0009-\u000D\u0020\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF,;"'<>()\[\]{}]+)/g, (match, token) => {
     if (!/^[A-Za-z0-9+/]+={0,2}$/.test(token)) return match;
     const unpadded = token.replace(/=+$/, '');
     if (unpadded.length % 4 === 1) return match;
