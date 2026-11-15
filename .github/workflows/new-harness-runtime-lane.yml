@@ -40,6 +40,7 @@ jobs:
           node --version
           swift --version
           sh Tests/Harness/memory/run-swift-tests.sh
+          node --test Tests/Harness/memory/service.test.mjs Tests/Harness/memory/recovery-contract.test.mjs src/memory/*.test.mjs
 
   runtime-transport:
     name: Runtime transport and projection (Node and Swift)
