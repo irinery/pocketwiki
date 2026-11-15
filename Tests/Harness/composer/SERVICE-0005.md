@@ -35,7 +35,7 @@ O módulo `gateway.mjs` contém `ComposerGateway` e `ComposerPolicy`: o teste us
 - 01-01 usa trecho real de arquivo wiki autorizado, preservado por hash e relido após restart; referências a mensagens de thread dependem de `threads.history` E3. 01-05 agora usa `ComposerProjection` e eventos/snapshot verificados no schema real; falta exercício pelo transporte e cliente de E4. Processos independentes, SIGKILL e HTTP privado de pin/resolve foram exercitados; falta rede integrada ao Kernel.
 - A leitura usa root concedido por FD e uma única resolução beneath do kernel: macOS `openat(O_RESOLVE_BENEATH|O_NOFOLLOW_ANY|O_UNIQUE)`; Linux `openat2(RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS|RESOLVE_NO_MAGICLINKS)` com verificação de hardlinks. O helper testa suporte no runtime e falha fechado sem fallback. **macOS 14, alvo declarado do produto, não oferece as flags necessárias: leitura de wiki/arquivos retorna ERR_UNAVAILABLE nessa plataforma.** Não há paridade até existir isolamento seguro comprovado ou mudança de alvo. No macOS 26.6.2 passaram testes de troca de symlink e reparent para fora com inode externo de link único, além de substituição de path e FD reutilizado. Ensaio nativo adicional passou isoladamente com 100 mil lookups e leitura legítima confirmada, enquanto outro processo move o diretório e instala inode externo de link único. O teste concorrente não prova formalmente atomicidade contra todo interleaving de rename no XNU; revisão independente permanece obrigatória. Linux e macOS 14 não foram testados nesta máquina.
 - O writer JSON serializa processos por lock e sincroniza os bytes antes de renomear. O lock usa arquivo com metadata instalado por hardlink atômico; outro processo recupera lock do mesmo host somente quando o PID deixou de existir. Dono ambíguo, host diferente ou reaper abandonado falham fechados e exigem recuperação operacional; o arquivo e diretório são sincronizados após escrita/rename; SIGKILL após commit confirma replay local; falta injeção de falha nos demais pontos de commit. Eventos são mantidos por 10 minutos ou enquanto necessários para snapshot ativo; tombstones ainda não têm retenção limitada. O store Swift tem teste de falha de escrita seguida de retry e reabertura; falta prova concorrente e de crash.
-- O contrato técnico revisável está em `01_composer_dominio.md` nesta lane, para o integrador mover; corpus completo de todas as entidades/comandos em JS/Swift, deadlines, dados sensíveis e evidência dos cenários pelo host real permanecem pendentes. Não há prova dos gates R1–R7 completos ou CONTEXT-CHAIN.
+- O contrato técnico revisável está em `01_composer_dominio.md` nesta lane, para o integrador mover; corpus completo de todas as entidades/comandos em JS/Swift, deadlines, dados sensíveis e evidência dos cenários pelo host real permanecem pendentes. Em especial, `verifyAccepted` e `sourceResolver` ainda podem aguardar indefinidamente: falta deadline/cancelamento e teste correspondente antes de liberar a lane. Não há prova dos gates R1–R7 completos ou CONTEXT-CHAIN.
 
 ## Porta proposta para o ledger Kernel
 
@@ -48,3 +48,31 @@ Kernel deve, em uma transação própria, validar owner/scope/thread e CAS de `e
 Teste integrado exigido: subir Kernel E1 e host Composer reais com stores separados; registrar thread e credencial; enviar mutação por `/v1/harness/commands`; matar a ponte após persistência do composer e antes do ack; reiniciar, consultar receipt, reenviar a mesma intenção pelo outbox e confirmar um único efeito/revision e resultado idêntico. Repetir com hash alterado, `expected_revision` obsoleto e principal diferente, verificando ausência de efeito. Validar também snapshot/stream reais com boundary e duplicatas. Os testes locais de dois processos e replay após restart exercitam somente a metade Composer, não substituem esse teste.
 
 A base E1 anuncia apenas `runtime.dispatch`, `runtime.receipt` e `runtime.events`; não há porta de registro de handler Composer. O registry classifica as complementares como `local`, deliberadamente fora do enum de `HarnessCommand`; o dispatcher rejeita essas operações e suas portas locais validam os schemas próprios. Não ampliar o wire por essa diferença.
+
+## Commits da lane
+
+A lista abaixo cobre a base até o checkpoint anterior ao commit deste handoff; o commit do próprio handoff é o HEAD da branch `codex/nh-e2-composer-final`. Nenhum foi enviado ou integrado.
+
+- `49a1978` WIP: add isolated composer domain and regression cases
+- `daa86bb` Honor composer image boundary in R2
+- `80e661a` Reject duplicate references and unknown staging fields
+- `99f0e0c` Validate staged attachment thread identity
+- `3271b47` Exercise multibyte context budget boundary
+- `2b8f9da` Anchor file reads and serialize composer store processes
+- `5f1ab0b` Authenticate composer through E1 host and explicit policy
+- `7e1dc5b` Add schema-checked composer projection and contract handoff
+- `9fbf20d` Retain projection events through snapshot lifetime
+- `4e6225a` Recover dead writer locks and prepare real wiki quotes
+- `7ec54c5` Add idempotent composer handler for kernel outbox
+- `95e0045` Enforce local composer operation classes and atomic Swift save
+- `5e5334f` Validate unicode bounds and deduplicate projection event IDs
+- `b6c3f03` Test composer write failure and crash replay
+- `b7a80c4` Authorize picker previews through local E1 policy
+- `17ce138` Align composer reference validation across JS and Swift
+- `d32e280` Align draft contracts and expire quote stash
+- `873c4da` Expose authenticated loopback context endpoint
+- `f42f392` Exercise context pin TTL through delegated HTTP
+- `441780f` Bind root grants to descriptors and use kernel beneath resolution
+- `fff2e85` Stress kernel beneath lookup during directory reparent
+- `12e1726` Guard optional Linux openat2 test headers
+- `60b6a5d` Require verified kernel receipt for composer callback
