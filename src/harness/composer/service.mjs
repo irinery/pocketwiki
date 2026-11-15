@@ -1,6 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { chmodSync, constants as fsConstants, mkdirSync, openSync, readFileSync, realpathSync, renameSync, writeFileSync, closeSync, fstatSync, statSync, fsyncSync, unlinkSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -351,26 +350,12 @@ export function canonicalJSON(value) {
   return `{${Object.keys(value).sort().filter((key) => value[key] !== undefined).map((key) => `${JSON.stringify(key)}:${canonicalJSON(value[key])}`).join(',')}}`;
 }
 
-const verifiedReaders = new Set();
 export async function readAuthorizedFile(fd, relativePath, secureReaderPath) {
   if (typeof secureReaderPath !== 'string' || !path.isAbsolute(secureReaderPath)) fail('ERR_UNAVAILABLE', 'Leitor seguro não configurado.');
   if (typeof relativePath !== 'string' || path.isAbsolute(relativePath) || relativePath.split('/').some((part) => !part || part === '.' || part === '..')) fail('ERR_PATH_ESCAPE', 'Caminho inválido.');
-  if (!verifiedReaders.has(secureReaderPath)) {
-    const probe = spawnSync(secureReaderPath, ['--probe'], { stdio: 'ignore', timeout: 30_000 });
-    if (probe.error || probe.status !== 0) fail('ERR_UNAVAILABLE', 'Sistema sem resolução segura de caminhos.');
-    verifiedReaders.add(secureReaderPath);
-  }
-  try {
-    if (!Number.isInteger(fd) || !fstatSync(fd).isDirectory()) fail('ERR_FORBIDDEN', 'Root não concedido.');
-    const result = spawnSync(secureReaderPath, [relativePath], { stdio: ['ignore', 'pipe', 'ignore', fd], maxBuffer: 4 * 1024 * 1024 + 1, timeout: 30_000 });
-    if (result.error) fail(result.error.code === 'ETIMEDOUT' ? 'ERR_TIMEOUT' : 'ERR_UNAVAILABLE', 'Leitor seguro indisponível.');
-    if (result.status === 10) fail('ERR_PATH_ESCAPE', 'Caminho ou symlink não autorizado.');
-    if (result.status === 12) fail('ERR_INVALID', 'Fonte inválida ou grande demais.');
-    if (result.status !== 0) fail('ERR_CONTEXT_STALE', 'Fonte indisponível.');
-    return result.stdout;
-  } catch (error) {
-    if (error instanceof ComposerError) throw error;
-    if (error.code === 'ELOOP' || error.code === 'ENOTDIR') fail('ERR_PATH_ESCAPE', 'Root não autorizado.');
-    fail('ERR_CONTEXT_STALE', 'Fonte indisponível.');
-  }
+  if (!Number.isInteger(fd)) fail('ERR_FORBIDDEN', 'Root não concedido.');
+  // A post-open link count cannot prove that an inode was not outside the
+  // grant when opened. Keep file reads unavailable until containment and
+  // hardlink uniqueness are proved together for the active platform.
+  fail('ERR_UNAVAILABLE', 'Leitura de arquivos ainda não está disponível.');
 }

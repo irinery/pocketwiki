@@ -53,6 +53,8 @@ A base E1 anuncia apenas `runtime.dispatch`, `runtime.receipt` e `runtime.events
 
 A lista abaixo cobre a base até o checkpoint anterior ao commit deste handoff; o commit do próprio handoff é o HEAD da branch `codex/nh-e2-composer-final`. Nenhum foi enviado ou integrado.
 
+Atualização da integração: a leitura de arquivos foi desabilitada preventivamente. Uma corrida de hardlink entre a abertura e a consulta de `nlink` permite obter bytes fora do grant; a revisão da implementação XNU também não comprovou que `O_UNIQUE` feche a janela em todos os filesystems. `read-disabled.test.mjs` verifica a recusa; os testes anteriores de leitura bem-sucedida não demonstram mais uma capability disponível. SERVICE-0005 e E2 permanecem pendentes até haver contenção comprovada e regressão completa.
+
 - `49a1978` WIP: add isolated composer domain and regression cases
 - `daa86bb` Honor composer image boundary in R2
 - `80e661a` Reject duplicate references and unknown staging fields
