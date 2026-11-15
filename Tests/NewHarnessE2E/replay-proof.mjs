@@ -13,12 +13,14 @@ export function validateReplayProof(proof, { surface, nonce }) {
     Object.keys(state).sort().join(',') === 'effects,lastSeq,receipts,revision' &&
     Number.isSafeInteger(state.revision) && state.revision >= 0 && state.lastSeq === cursor &&
     validCollection(state.receipts, 'RuntimeReceipt', 'command_id') &&
+    Object.values(state.receipts).every(receipt => Number.isSafeInteger(receipt.revision) && receipt.revision >= 0 && receipt.revision <= state.revision) &&
     validCollection(state.effects, 'EffectRecord', 'effect_id');
   for (let i = 0; i < 3; i++) {
     const frame = proof.frames[i];
     if (!frame || frame.seq !== 9 + i || !hash(frame.before) || !hash(frame.after) ||
         frame.before_cursor !== 10 || frame.after_cursor !== (i < 2 ? 10 : 11) ||
         !validState(frame.before_state, frame.before_cursor) || !validState(frame.after_state, frame.after_cursor) ||
+        frame.after_state.revision < frame.before_state.revision ||
         replayProofSHA256(Buffer.from(canonicalJSON(frame.before_state))) !== frame.before ||
         replayProofSHA256(Buffer.from(canonicalJSON(frame.after_state))) !== frame.after ||
         (i > 0 && frame.before !== proof.frames[i - 1].after) ||

@@ -27,3 +27,18 @@ test('rejects malformed materialized records even with matching recomputed hashe
     assert.throws(() => validateReplayProof(proof, { surface: 'web', nonce }), /invalid integrated replay frames/);
   }
 });
+
+test('rejects regressive view revisions and receipts newer than the view', () => {
+  const regressive = sample();
+  regressive.frames[2].after_state.revision = 0;
+  regressive.frames[2].after = digest(regressive.frames[2].after_state);
+  assert.throws(() => validateReplayProof(regressive, { surface: 'web', nonce }), /invalid integrated replay frames/);
+  const ahead = sample();
+  const id = '00000000-0000-4000-8000-000000000001';
+  const receipt = { command_id: id, receipt_id: id, payload_sha256: 'a'.repeat(64), revision: 2, state: 'accepted' };
+  for (const item of ahead.frames) {
+    item.before_state.receipts[id] = receipt; item.after_state.receipts[id] = receipt;
+    item.before = digest(item.before_state); item.after = digest(item.after_state);
+  }
+  assert.throws(() => validateReplayProof(ahead, { surface: 'web', nonce }), /invalid integrated replay frames/);
+});
