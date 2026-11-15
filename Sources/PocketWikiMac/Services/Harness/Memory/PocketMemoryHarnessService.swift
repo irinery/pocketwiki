@@ -2,14 +2,18 @@ import Foundation
 
 actor PocketMemoryHarnessService {
     typealias Policy = @Sendable (PocketMemoryAuthorization, PocketMemoryNamespace, String, Bool) async throws -> Bool
+    typealias Association = @Sendable (PocketMemoryAuthorization, PocketMemoryNamespace) async throws -> Bool
     private let rootStore: PocketMemoryStore
     private var stores: [String: PocketMemoryStore] = [:]
     private let policy: Policy?
+    private let association: Association?
     private let now: @Sendable () -> Int64
 
-    init(directory: URL, policy: Policy? = nil, now: @escaping @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1_000) }) {
+    init(directory: URL, policy: Policy? = nil, association: Association? = nil,
+         now: @escaping @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1_000) }) {
         rootStore = PocketMemoryStore(directory: directory)
         self.policy = policy
+        self.association = association
         self.now = now
     }
 
@@ -110,6 +114,20 @@ actor PocketMemoryHarnessService {
                                            sessionID: legacySessionID)
     }
 
+    func exportNamespace(_ auth: PocketMemoryAuthorization, namespace rawNamespace: PocketMemoryNamespace,
+                         includePersonalNote: Bool = false) async throws -> PocketMemoryExportResponse {
+        let namespace = try await authorize(auth, namespace: rawNamespace, scope: "context.read",
+                                            includePersonalNote ? "memory.personal.read" : nil)
+        return try await store(for: namespace).exportNamespace(namespace, includePersonalNote: includePersonalNote)
+    }
+
+    func importNamespace(_ auth: PocketMemoryAuthorization, namespace rawNamespace: PocketMemoryNamespace,
+                         content: String) async throws -> PocketMemoryImportResponse {
+        guard content.utf8.count <= 16 * 1024 * 1024 else { throw PocketMemoryStoreError.invalidInput }
+        let namespace = try await authorize(auth, namespace: rawNamespace, scope: "memory.write")
+        return try await store(for: namespace).importNamespace(namespace, content: content)
+    }
+
     func snapshot(_ auth: PocketMemoryAuthorization, namespace rawNamespace: PocketMemoryNamespace,
                   pageSize: Int? = nil, cursor: String? = nil) async throws -> PocketMemoryFeatureSnapshot {
         let namespace = try await authorize(auth, namespace: rawNamespace, scope: "context.read", "memory.personal.read")
@@ -205,6 +223,13 @@ actor PocketMemoryHarnessService {
         do { granted = try await policy(auth, namespace, scope, additionalScope != nil || scope == "memory.personal.read") }
         catch { throw PocketMemoryStoreError.unavailable }
         guard granted else { throw PocketMemoryStoreError.forbidden }
+        if namespace.projectID != nil && namespace.threadID != nil {
+            guard let association else { throw PocketMemoryStoreError.unavailable }
+            let associated: Bool
+            do { associated = try await association(auth, namespace) }
+            catch { throw PocketMemoryStoreError.unavailable }
+            guard associated else { throw PocketMemoryStoreError.forbidden }
+        }
         return namespace
     }
 

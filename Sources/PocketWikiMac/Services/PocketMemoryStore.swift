@@ -112,6 +112,16 @@ struct PocketMemoryMappingResponse: Codable, Sendable, Equatable {
     enum CodingKeys: String, CodingKey { case mapped, sessionID = "session_id" }
 }
 
+struct PocketMemoryExportResponse: Codable, Sendable {
+    let content: String
+    let sha256: String
+}
+
+struct PocketMemoryImportResponse: Codable, Sendable {
+    let importedCount: Int
+    enum CodingKeys: String, CodingKey { case importedCount = "imported_count" }
+}
+
 struct PocketMemoryScopedHit: Codable, Sendable, Equatable {
     let sessionID: String
     let messageID: String
@@ -258,6 +268,7 @@ actor PocketMemoryStore {
         guard content.utf8.count <= 16 * 1024, expectedRevision >= 0 else { throw PocketMemoryStoreError.invalidInput }
         return try withHarnessLock {
         try recoverNoteIntent()
+        try recoverImportIntent()
         let current = try noteGetCAS(namespace: namespace)
         guard current.revision == expectedRevision else { throw PocketMemoryStoreError.revisionConflict(current.revision) }
         let next = PocketMemoryNoteSnapshot(content: content, revision: current.revision + 1)
@@ -296,7 +307,7 @@ actor PocketMemoryStore {
 
     private func recoverNoteIntent() throws {
         let intentURL = directory.appendingPathComponent(".note-intent.json")
-        guard let intent = try readObject(intentURL) else { return }
+        guard let intent = try readObject(intentURL, maxBytes: 32 * 1024 * 1024) else { return }
         guard let target = intent["namespace"] as? [String: Any],
               let environment = target["environment_id"] as? String,
               let content = intent["content"] as? String, content.utf8.count <= 16 * 1024,
@@ -320,6 +331,7 @@ actor PocketMemoryStore {
     func scopedNoteGet(namespace: PocketMemoryNamespace) throws -> PocketMemoryNoteSnapshot {
         try withHarnessLock {
             try recoverNoteIntent()
+            try recoverImportIntent()
             return try noteGetCAS(namespace: namespace)
         }
     }
@@ -335,6 +347,7 @@ actor PocketMemoryStore {
         try withHarnessLock {
             try recoverNoteIntent()
             try recoverCaptureIntent()
+            try recoverImportIntent()
             guard (1...32).contains(events.count) else { throw PocketMemoryStoreError.invalidInput }
             let ledgerURL = directory.appendingPathComponent(".memory-receipts.json")
             var ledger = try readObject(ledgerURL) ?? ["sequence": 0, "accepted_keys": [String: Int]()]
@@ -371,7 +384,34 @@ actor PocketMemoryStore {
     }
 
     func recoverCapture() throws {
-        try withHarnessLock { try recoverNoteIntent(); try recoverCaptureIntent() }
+        try withHarnessLock { try recoverNoteIntent(); try recoverCaptureIntent(); try recoverImportIntent() }
+    }
+
+    private func recoverImportIntent() throws {
+        let intentURL = directory.appendingPathComponent(".import-intent.json")
+        guard let intent = try readObject(intentURL, maxBytes: 32 * 1024 * 1024) else { return }
+        guard let records = intent["records"] as? [[String: Any]], records.count <= 500 else { throw PocketMemoryStoreError.invalidRecord }
+        let captures = directory.appendingPathComponent("captures", isDirectory: true)
+        try ensureRealDirectory(captures)
+        var seen = Set<String>()
+        for record in records {
+            guard let id = record["id"] as? String, UUID(uuidString: id)?.uuidString.lowercased() == id,
+                  record["messages"] is [Any], record["events"] is [Any], seen.insert(id).inserted else {
+                throw PocketMemoryStoreError.invalidRecord
+            }
+            let target = captures.appendingPathComponent("session-\(id).json")
+            if let existing = try readObject(target) {
+                guard NSDictionary(dictionary: existing).isEqual(to: record) else { throw PocketMemoryStoreError.revisionConflict(0) }
+            } else {
+                try write(JSONSerialization.data(withJSONObject: record, options: [.prettyPrinted, .sortedKeys]), to: target)
+            }
+        }
+        if let note = intent["note_intent"] as? [String: Any] {
+            try write(JSONSerialization.data(withJSONObject: note, options: [.sortedKeys]),
+                      to: directory.appendingPathComponent(".note-intent.json"))
+            try recoverNoteIntent()
+        }
+        try fileManager.removeItem(at: intentURL)
     }
 
     private func recoverCaptureIntent() throws {
@@ -428,7 +468,151 @@ actor PocketMemoryStore {
     func mapLegacySession(_ sessionID: String, sourceRoot: URL) throws -> Bool {
         try withHarnessLock {
             try recoverCaptureIntent()
+            try recoverImportIntent()
             return try mapLegacySessionUnlocked(sessionID, sourceRoot: sourceRoot)
+        }
+    }
+
+    func exportNamespace(_ namespace: PocketMemoryNamespace, includePersonalNote: Bool) throws -> PocketMemoryExportResponse {
+        try withHarnessLock {
+            try recoverNoteIntent(); try recoverCaptureIntent(); try recoverImportIntent()
+            var scope: [String: Any] = ["environment_id": namespace.environmentID]
+            if let project = namespace.projectID { scope["project_id"] = project }
+            if let thread = namespace.threadID { scope["thread_id"] = thread }
+            let captures = directory.appendingPathComponent("captures", isDirectory: true)
+            var sessions: [[String: Any]] = []
+            if fileManager.fileExists(atPath: captures.path) {
+                try ensureRealDirectory(captures)
+                let files = try fileManager.contentsOfDirectory(at: captures, includingPropertiesForKeys: nil)
+                    .filter { $0.lastPathComponent.range(of: #"^session-[0-9a-f-]{36}\.json$"#, options: .regularExpression) != nil }
+                    .sorted { $0.lastPathComponent < $1.lastPathComponent }
+                for file in files {
+                    guard let record = try? readObject(file), let id = record["id"] as? String,
+                          UUID(uuidString: id)?.uuidString.lowercased() == id else { continue }
+                    let messages = (record["messages"] as? [[String: Any]] ?? []).compactMap { item -> [String: Any]? in
+                        guard let role = item["role"] as? String, ["user", "assistant"].contains(role),
+                              let content = item["content"] as? String else { return nil }
+                        var safe: [String: Any] = ["role": role, "content": Self.redactExportText(content)]
+                        if let created = item["created_at"] as? String, Self.isExportTimestamp(created) { safe["created_at"] = created }
+                        return safe
+                    }
+                    let events = (record["events"] as? [[String: Any]] ?? []).compactMap { item -> [String: Any]? in
+                        guard let event = item["event"] as? String, Self.eventNames.contains(event),
+                              let key = item["ingest_key"] as? String,
+                              key.range(of: #"^[A-Za-z0-9_-]{1,64}$"#, options: .regularExpression) != nil else { return nil }
+                        let safeKey = SHA256.hash(data: Data("memory-export\u{0}\(key)".utf8)).map { String(format: "%02x", $0) }.joined()
+                        var safe: [String: Any] = ["event": event, "session_id": id, "ingest_key": safeKey]
+                        if let prompt = item["prompt"] as? String { safe["prompt"] = Self.redactExportText(prompt) }
+                        if let message = item["message"] as? String { safe["message"] = Self.redactExportText(message) }
+                        if let sequence = item["sequence"] as? Int { safe["sequence"] = sequence }
+                        return safe
+                    }
+                    var safe: [String: Any] = ["schema_version": 1, "id": id, "messages": messages, "events": events]
+                    if let created = record["created_at"] as? String, Self.isExportTimestamp(created) { safe["created_at"] = created }
+                    if let updated = record["updated_at"] as? String, Self.isExportTimestamp(updated) { safe["updated_at"] = updated }
+                    sessions.append(safe)
+                }
+            }
+            var exported: [String: Any] = ["schema_version": 2, "namespace": scope, "sessions": sessions]
+            if includePersonalNote {
+                let note = try noteGetCAS(namespace: namespace)
+                exported["note"] = ["content": Self.redactExportText(note.content), "revision": note.revision]
+            }
+            let bytes = try JSONSerialization.data(withJSONObject: exported, options: [.sortedKeys])
+            guard bytes.count <= 16 * 1024 * 1024, let content = String(data: bytes, encoding: .utf8) else { throw PocketMemoryStoreError.invalidInput }
+            let hash = SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+            return PocketMemoryExportResponse(content: content, sha256: hash)
+        }
+    }
+
+    private static func redactExportText(_ input: String) -> String {
+        let rules: [(String, String)] = [
+            (#"(?i)\bBearer\s+[A-Za-z0-9._~+/-]+=*"#, "[redacted credential]"),
+            (#"(?i)\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|secret|password|senha|token)\s*[:=]\s*)[^\s,;]+"#, "$1[redacted secret]"),
+            (#"\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_]{20,}|AIza[0-9A-Za-z_-]{30,})\b"#, "[redacted secret]"),
+            (#"(^|[\s(\"'=])(?:/(?!/)[^\s\"'<>]+|[A-Za-z]:\\[^\s\"'<>]+)"#, "$1[redacted path]")
+        ]
+        return rules.reduce(input) { text, rule in
+            text.replacingOccurrences(of: rule.0, with: rule.1, options: .regularExpression)
+        }
+    }
+
+    private static func isExportTimestamp(_ value: String) -> Bool {
+        value.range(of: #"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$"#, options: .regularExpression) != nil
+    }
+
+    func importNamespace(_ namespace: PocketMemoryNamespace, content: String) throws -> PocketMemoryImportResponse {
+        guard content.utf8.count <= 16 * 1024 * 1024,
+              let data = content.data(using: .utf8),
+              let document = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              document["schema_version"] as? Int == 2,
+              let scope = document["namespace"] as? [String: Any],
+              scope["environment_id"] as? String == namespace.environmentID,
+              scope["project_id"] as? String == namespace.projectID,
+              scope["thread_id"] as? String == namespace.threadID,
+              let sessions = document["sessions"] as? [[String: Any]], sessions.count <= 500 else {
+            throw PocketMemoryStoreError.importInvalid
+        }
+        let note = document["note"] as? [String: Any]
+        if document["note"] != nil {
+            guard let note, let text = note["content"] as? String, text.utf8.count <= 16 * 1024,
+                  let revision = note["revision"] as? Int, revision >= 0 else { throw PocketMemoryStoreError.importInvalid }
+        }
+        var records: [[String: Any]] = [], seen = Set<String>()
+        for session in sessions {
+            guard let id = session["id"] as? String, UUID(uuidString: id)?.uuidString.lowercased() == id,
+                  seen.insert(id).inserted, let messages = session["messages"] as? [[String: Any]], messages.count <= 5_000,
+                  messages.allSatisfy({ item in
+                      guard let role = item["role"] as? String, ["user", "assistant"].contains(role),
+                            let text = item["content"] as? String else { return false }
+                      return text.utf8.count <= 8_000
+                  }) else { throw PocketMemoryStoreError.importInvalid }
+            if session["events"] != nil && !(session["events"] is [[String: Any]]) { throw PocketMemoryStoreError.importInvalid }
+            let events = session["events"] as? [[String: Any]] ?? []
+            guard events.count <= 5_000, events.allSatisfy({ item in
+                guard let name = item["event"] as? String, Self.eventNames.contains(name),
+                      item["session_id"] as? String == id, let key = item["ingest_key"] as? String else { return false }
+                return key.range(of: #"^[A-Za-z0-9_-]{1,64}$"#, options: .regularExpression) != nil
+            }) else { throw PocketMemoryStoreError.importInvalid }
+            records.append(["schema_version": 1, "id": id,
+                "created_at": session["created_at"] as? String ?? "1970-01-01T00:00:00.000Z",
+                "updated_at": session["updated_at"] as? String ?? "1970-01-01T00:00:00.000Z",
+                "messages": messages, "events": events])
+        }
+        return try withHarnessLock {
+            try recoverNoteIntent(); try recoverCaptureIntent(); try recoverImportIntent()
+            let captures = directory.appendingPathComponent("captures", isDirectory: true)
+            try ensureRealDirectory(captures)
+            for record in records {
+                let target = captures.appendingPathComponent("session-\(record["id"] as! String).json")
+                if isSymbolicLink(target) || fileManager.fileExists(atPath: target.path) { throw PocketMemoryStoreError.revisionConflict(0) }
+            }
+            var intent: [String: Any] = ["records": records]
+            if let note, let content = note["content"] as? String {
+                let current = try noteGetCAS(namespace: namespace)
+                guard current.revision == 0 else { throw PocketMemoryStoreError.revisionConflict(current.revision) }
+                let file = directory.appendingPathComponent(".memory-notes.json")
+                var state = try readObject(file) ?? ["sequence": 0, "notes": [String: Any](), "events": [[String: Any]]()]
+                var notes = state["notes"] as? [String: Any] ?? [:]
+                var events = state["events"] as? [[String: Any]] ?? []
+                let key = try noteKey(namespace)
+                var target: [String: Any] = ["environment_id": namespace.environmentID]
+                if let project = namespace.projectID { target["project_id"] = project }
+                if let thread = namespace.threadID { target["thread_id"] = thread }
+                var valueScope = target; valueScope["schema_version"] = 2; valueScope["note_revision"] = 1
+                let value: [String: Any] = ["namespace": valueScope, "content": content, "revision": 1]
+                notes[key] = value
+                let sequence = (state["sequence"] as? Int ?? 0) + 1
+                events.append(["event_id": UUID().uuidString.lowercased(), "sequence": sequence,
+                               "entity_type": "MemoryNote", "entity_key": key, "change": "upsert", "value": value])
+                state["sequence"] = sequence; state["notes"] = notes; state["events"] = events
+                intent["note_intent"] = ["state": state, "namespace": target, "content": content]
+            }
+            let encoded = try JSONSerialization.data(withJSONObject: intent, options: [.sortedKeys])
+            guard encoded.count <= 32 * 1024 * 1024 else { throw PocketMemoryStoreError.importInvalid }
+            try write(encoded, to: directory.appendingPathComponent(".import-intent.json"))
+            try recoverImportIntent()
+            return PocketMemoryImportResponse(importedCount: records.count)
         }
     }
 
@@ -473,6 +657,7 @@ actor PocketMemoryStore {
     func snapshotProjection(namespace: PocketMemoryNamespace) throws -> (items: [PocketMemorySnapshotItem], sequence: Int) {
         try withHarnessLock {
             try recoverNoteIntent()
+            try recoverImportIntent()
             let state = try readObject(directory.appendingPathComponent(".memory-notes.json")) ?? [:]
             let notes = state["notes"] as? [String: [String: Any]] ?? [:]
             var items: [PocketMemorySnapshotItem] = []
@@ -491,6 +676,7 @@ actor PocketMemoryStore {
         guard afterSequence >= 0 else { throw PocketMemoryStoreError.invalidInput }
         return try withHarnessLock {
         try recoverNoteIntent()
+        try recoverImportIntent()
         let state = try readObject(directory.appendingPathComponent(".memory-notes.json")) ?? [:]
         let entries = state["events"] as? [[String: Any]] ?? []
         return try entries.compactMap { entry in
@@ -506,6 +692,7 @@ actor PocketMemoryStore {
     func notesRetentionAvailable(after sequence: Int) throws -> Bool {
         try withHarnessLock {
         try recoverNoteIntent()
+        try recoverImportIntent()
         guard let state = try readObject(directory.appendingPathComponent(".memory-notes.json")) else { return sequence == 0 }
         guard let current = state["sequence"] as? Int, current >= sequence,
               let events = state["events"] as? [[String: Any]] else { return false }
@@ -518,6 +705,7 @@ actor PocketMemoryStore {
         try withHarnessLock {
             try recoverNoteIntent()
             try recoverCaptureIntent()
+            try recoverImportIntent()
             return try recallScopedUnlocked(question, namespace: namespace, includePersonalNote: includePersonalNote)
         }
     }
@@ -746,12 +934,12 @@ actor PocketMemoryStore {
         return PocketMemoryRecallResponse(context: blocks.joined(separator: "\n\n---\n\n"), hits: hits)
     }
 
-    private func readObject(_ url: URL) throws -> [String: Any]? {
+    private func readObject(_ url: URL, maxBytes: Int = 16 * 1024 * 1024) throws -> [String: Any]? {
         guard !isSymbolicLink(url) else { throw PocketMemoryStoreError.scopeDenied }
         guard fileManager.fileExists(atPath: url.path) else { return nil }
         let attributes = try fileManager.attributesOfItem(atPath: url.path)
         guard attributes[.type] as? FileAttributeType == .typeRegular,
-              (attributes[.size] as? NSNumber)?.intValue ?? 0 <= 16 * 1024 * 1024 else {
+              (attributes[.size] as? NSNumber)?.intValue ?? 0 <= maxBytes else {
             throw PocketMemoryStoreError.invalidRecord
         }
         return try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]

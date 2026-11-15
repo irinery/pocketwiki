@@ -5,7 +5,7 @@ const namespace = { environment_id:auth.environment_id, project_id:auth.aggregat
 process.send('ready');
 process.on('message', async (message) => {
   if (message !== 'go') return;
-  try { await new MemoryHarnessService({ root, policy:async () => true }).notePut(auth, { namespace, content:value, expected_revision:0 }); process.send('ok'); }
+  try { await new MemoryHarnessService({ root, policy:async () => true, association:async () => true }).notePut(auth, { namespace, content:value, expected_revision:0 }); process.send('ok'); }
   catch (error) { process.send(error.code || 'unexpected'); }
   process.disconnect();
 });

@@ -170,32 +170,38 @@ export class PocketMemoryStore {
         !Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
       return Promise.reject(memoryError('ERR_INVALID', 'Invalid memory note or revision'));
     }
-    return serializeWrite(`${this.root}:note`, async () => {
+    return serializeWrite(`${this.root}:note`, () => this.#putNoteLocked(content, expectedRevision, namespace));
+  }
+
+  async #putNoteLocked(content, expectedRevision, namespace) {
       await this.#recoverNoteIntent();
+      await this.#recoverImportIntent();
       const current = await this.noteGetCAS(namespace);
       if (current.revision !== expectedRevision) {
         throw Object.assign(memoryError('ERR_CONFLICT', 'Memory note revision changed'), { revision:current.revision });
       }
       const next = { content, revision:current.revision + 1 };
       if (namespace) {
-        const file = path.join(this.root, '.memory-notes.json');
-        const state = await readJSON(file, { sequence:0, notes:{}, events:[] });
-        const key = JSON.stringify([namespace.environment_id, namespace.project_id || null, namespace.thread_id || null]);
-        const value = { namespace:{ ...namespace, schema_version:2, note_revision:next.revision }, ...next };
-        state.notes[key] = value;
-        state.sequence += 1;
-        state.events.push({ event_id:randomUUID(), sequence:state.sequence,
-          entity_type:'MemoryNote', entity_key:key, change:'upsert', value });
-        const encoded = JSON.stringify(state);
-        if (Buffer.byteLength(encoded) > 16 * 1024 * 1024) throw memoryError('ERR_UNAVAILABLE', 'Memory note journal full');
-        await this.#writeAtomic(path.join(this.root, '.note-intent.json'), JSON.stringify({ state, namespace, content }));
+        const intent = await this.#makeNoteIntent(namespace, next);
+        await this.#writeAtomic(path.join(this.root, '.note-intent.json'), JSON.stringify(intent));
         await this.#recoverNoteIntent();
         return next;
       }
       await this.#writeAtomic(path.join(this.root, '.memory-note.json'), JSON.stringify({ schema_version:2, ...next }));
       await this.#writeAtomic(path.join(this.root, 'MEMORY.md'), content);
       return next;
-    });
+  }
+
+  async #makeNoteIntent(namespace, next) {
+    const state = await readJSON(path.join(this.root, '.memory-notes.json'), { sequence:0, notes:{}, events:[] });
+    const key = JSON.stringify([namespace.environment_id, namespace.project_id || null, namespace.thread_id || null]);
+    const value = { namespace:{ ...namespace, schema_version:2, note_revision:next.revision }, ...next };
+    state.notes[key] = value;
+    state.sequence += 1;
+    state.events.push({ event_id:randomUUID(), sequence:state.sequence,
+      entity_type:'MemoryNote', entity_key:key, change:'upsert', value });
+    if (Buffer.byteLength(JSON.stringify(state)) > 16 * 1024 * 1024) throw memoryError('ERR_UNAVAILABLE', 'Memory note journal full');
+    return { state, namespace, content:next.content };
   }
 
   async #recoverNoteIntent() {
@@ -224,6 +230,7 @@ export class PocketMemoryStore {
   scopedNoteGet(namespace) {
     return serializeWrite(`${this.root}:note`, async () => {
       await this.#recoverNoteIntent();
+      await this.#recoverImportIntent();
       return this.noteGetCAS(namespace);
     });
   }
@@ -231,6 +238,7 @@ export class PocketMemoryStore {
   notesProjection(namespace) {
     return serializeWrite(`${this.root}:note`, async () => {
       await this.#recoverNoteIntent();
+      await this.#recoverImportIntent();
       const state = await readJSON(path.join(this.root, '.memory-notes.json'), { sequence:0, notes:{}, events:[] });
       const notes = Object.entries(state.notes).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
         .map(([, value]) => value)
@@ -242,6 +250,7 @@ export class PocketMemoryStore {
   notesEvents(afterSequence) {
     return serializeWrite(`${this.root}:note`, async () => {
       await this.#recoverNoteIntent();
+      await this.#recoverImportIntent();
       const state = await readJSON(path.join(this.root, '.memory-notes.json'), { sequence:0, notes:{}, events:[] });
       return state.events.filter((event) => event.sequence > afterSequence);
     });
@@ -250,6 +259,7 @@ export class PocketMemoryStore {
   notesRetentionAvailable(afterSequence) {
     return serializeWrite(`${this.root}:note`, async () => {
       await this.#recoverNoteIntent();
+      await this.#recoverImportIntent();
       const state = await readJSON(path.join(this.root, '.memory-notes.json'), { sequence:0, notes:{}, events:[] });
       if (!Number.isSafeInteger(state.sequence) || state.sequence < afterSequence || !Array.isArray(state.events)) return false;
       const later = state.events.filter((event) => event.sequence > afterSequence);
@@ -262,6 +272,7 @@ export class PocketMemoryStore {
     const validated = validateMemoryEvents(events, { unicodeScalars:true });
     return serializeWrite(`${this.root}:capture`, async () => {
       await this.#recoverCaptureIntent();
+      await this.#recoverImportIntent();
       const ledgerPath = path.join(this.root, '.memory-receipts.json');
       await secureDirectory(this.root, ['captures']);
       const ledger = await readJSON(ledgerPath, { sequence:0, accepted_keys:{} });
@@ -286,12 +297,14 @@ export class PocketMemoryStore {
     return serializeWrite(`${this.root}:capture`, async () => {
       await this.#recoverNoteIntent();
       await this.#recoverCaptureIntent();
+      await this.#recoverImportIntent();
     });
   }
 
   scopedRecall(question, options) {
     return serializeWrite(`${this.root}:capture`, async () => {
       await this.#recoverCaptureIntent();
+      await this.#recoverImportIntent();
       return this.recall(question, options);
     });
   }
@@ -299,6 +312,7 @@ export class PocketMemoryStore {
   scopedSessionsConsistent() {
     return serializeWrite(`${this.root}:capture`, async () => {
       await this.#recoverCaptureIntent();
+      await this.#recoverImportIntent();
       return this.scopedSessions();
     });
   }
@@ -352,44 +366,65 @@ export class PocketMemoryStore {
     return readJSON(path.join(this.root, '.memory-receipts.json'), { sequence:0, accepted_keys:{} });
   }
 
-  async importRecords(records) {
+  async importRecords(records, { namespace, note } = {}) {
     return serializeWrite(`${this.root}:capture`, async () => {
+      await this.#recoverNoteIntent();
+      await this.#recoverCaptureIntent();
+      await this.#recoverImportIntent();
       const normalized = records.map((record) => ({
-        schema_version:1,
-        id:record.id,
+        schema_version:1, id:record.id,
         created_at:record.created_at || new Date(0).toISOString(),
         updated_at:record.updated_at || new Date(0).toISOString(),
-        messages:record.messages,
-        events:Array.isArray(record.events) ? record.events : []
+        messages:record.messages, events:Array.isArray(record.events) ? record.events : []
       }));
+      if (new Set(normalized.map((record) => record.id)).size !== normalized.length) throw memoryError('ERR_IMPORT', 'Duplicate import session');
       await secureDirectory(this.root, ['captures']);
-      const staging = path.join(this.root, `.import-${randomUUID()}`);
-      await mkdir(staging, { mode:0o700 });
-      try {
-        for (const record of normalized) {
-          await writeFile(path.join(staging, `session-${record.id}.json`), JSON.stringify(record, null, 2), { mode:0o600, flag:'wx' });
-        }
-        for (const record of normalized) {
-          const target = path.join(this.captureRoot, `session-${record.id}.json`);
-          try { await lstat(target); throw memoryError('ERR_CONFLICT', 'Memory session already exists'); }
-          catch (error) { if (error.code !== 'ENOENT') throw error; }
-        }
-        for (const record of normalized) {
-          const target = path.join(this.captureRoot, `session-${record.id}.json`);
-          await rename(path.join(staging, `session-${record.id}.json`), target);
-          await chmod(target, 0o600);
-        }
-      } finally {
-        const { rm } = await import('node:fs/promises');
-        await rm(staging, { recursive:true, force:true });
+      for (const record of normalized) {
+        const target = path.join(this.captureRoot, `session-${record.id}.json`);
+        try { await lstat(target); throw memoryError('ERR_CONFLICT', 'Memory session already exists'); }
+        catch (cause) { if (cause.code !== 'ENOENT') throw cause; }
       }
+      let noteIntent;
+      if (note !== undefined) {
+        const current = await this.noteGetCAS(namespace);
+        if (current.revision !== 0) throw Object.assign(memoryError('ERR_CONFLICT', 'Memory note revision changed'), { revision:current.revision });
+        noteIntent = await this.#makeNoteIntent(namespace, { content:note.content, revision:1 });
+      }
+      const intent = { records:normalized, ...(noteIntent ? { note_intent:noteIntent } : {}) };
+      if (Buffer.byteLength(JSON.stringify(intent)) > 32 * 1024 * 1024) throw memoryError('ERR_IMPORT', 'Memory import intent too large');
+      await this.#writeAtomic(path.join(this.root, '.import-intent.json'), JSON.stringify(intent));
+      await this.#recoverImportIntent();
       return normalized.length;
     });
+  }
+
+  async #recoverImportIntent() {
+    const file = path.join(this.root, '.import-intent.json');
+    const intent = await readJSON(file, null);
+    if (!intent) return;
+    if (!Array.isArray(intent.records) || intent.records.length > 500 ||
+        intent.records.some((record) => !CANONICAL_UUID.test(record?.id || '') || !Array.isArray(record.messages) ||
+          !Array.isArray(record.events)) || new Set(intent.records.map((record) => record.id)).size !== intent.records.length) {
+      throw memoryError('ERR_MEMORY_UNAVAILABLE', 'Invalid memory import intent');
+    }
+    await secureDirectory(this.root, ['captures']);
+    for (const record of intent.records) {
+      const target = path.join(this.captureRoot, `session-${record.id}.json`);
+      const existing = await readJSON(target, null);
+      if (existing && !isDeepStrictEqual(existing, record)) throw memoryError('ERR_CONFLICT', 'Import session changed during recovery');
+      if (!existing) await this.#writeAtomic(target, JSON.stringify(record, null, 2));
+    }
+    if (intent.note_intent) {
+      await this.#writeAtomic(path.join(this.root, '.note-intent.json'), JSON.stringify(intent.note_intent));
+      await this.#recoverNoteIntent();
+    }
+    await unlink(file);
   }
 
   async mapLegacySession(sessionID, legacyRoot = this.root) {
     return serializeWrite(`${this.root}:capture`, async () => {
       await this.#recoverCaptureIntent();
+      await this.#recoverImportIntent();
       return this.#mapLegacySession(sessionID, legacyRoot);
     });
   }
