@@ -135,7 +135,7 @@ export async function targetIdentity(wiki, kernel, middleware, expectedSHA, stag
     middlewareauth_sha: checkedSHA(middleware, 'MiddlewareAuth')
   };
   if (identity.pocketwiki_sha !== expectedSHA) throw new Error('target SHA differs from PocketWiki checkout');
-  identity.fixture_sha256 = await fixtureDigest(wiki, stage);
+  identity.fixture_sha256 = await fixtureDigest(wiki, stage, { requireTracked: true });
   for (const [field, file] of [
     ['schema_sha256', 'src/harness/contracts/harness-v1.schema.json'],
     ['matrix_sha256', 'docs/rfcs/new-harness/matriz-verificacao.json']
@@ -144,9 +144,12 @@ export async function targetIdentity(wiki, kernel, middleware, expectedSHA, stag
 }
 
 // Versioned, cumulative fixture manifest. Length framing prevents path/content ambiguity.
-export async function fixtureDigest(wiki, stage) {
+export async function fixtureDigest(wiki, stage, { requireTracked = false } = {}) {
   const stageNumber = parseStage(stage);
-  const manifest = JSON.parse(await readFile(path.join(wiki, 'docs/rfcs/new-harness/fixture-hashes-v1.json'), 'utf8'));
+  const root = await realpath(wiki);
+  const manifestName = 'docs/rfcs/new-harness/fixture-hashes-v1.json';
+  await assertRegularFixture(root, manifestName);
+  const manifest = JSON.parse(await readFile(path.join(root, manifestName), 'utf8'));
   if (!manifest || manifest.version !== 1 || !manifest.stages || typeof manifest.stages !== 'object' || Array.isArray(manifest.stages)) throw new Error('invalid fixture manifest');
   const stages = Object.keys(manifest.stages);
   if (stages.some(key => !/^E[0-6]$/.test(key))) throw new Error('invalid fixture manifest stages');
@@ -168,14 +171,29 @@ export async function fixtureDigest(wiki, stage) {
   const hash = createHash('sha256');
   hash.update('pocketwiki-fixtures\0v1\0' + stage + '\0');
   const frame = bytes => { const size = Buffer.alloc(8); size.writeBigUInt64BE(BigInt(bytes.length)); hash.update(size); hash.update(bytes); };
-  const root = await realpath(wiki);
+  if (requireTracked) {
+    for (const file of [manifestName, ...selected]) {
+      try {
+        execFileSync('git', ['-C', root, 'ls-files', '--error-unmatch', '--', file], { stdio: 'ignore' });
+      } catch { throw new Error('fixture manifest and files must be tracked: ' + file); }
+    }
+  }
   for (const file of selected) {
+    await assertRegularFixture(root, file);
     const candidate = path.join(root, file);
-    const info = await lstat(candidate), resolved = await realpath(candidate);
-    if (!info.isFile() || info.isSymbolicLink() || !resolved.startsWith(root + path.sep)) throw new Error('fixture must be a regular file inside checkout: ' + file);
     frame(Buffer.from(file, 'utf8')); frame(await readFile(candidate));
   }
   return hash.digest('hex');
+}
+
+async function assertRegularFixture(root, file) {
+  let component = root;
+  for (const segment of file.split('/')) {
+    component = path.join(component, segment);
+    if ((await lstat(component)).isSymbolicLink()) throw new Error('fixture must be a regular file inside checkout: ' + file);
+  }
+  const info = await lstat(component), resolved = await realpath(component);
+  if (!info.isFile() || !resolved.startsWith(root + path.sep)) throw new Error('fixture must be a regular file inside checkout: ' + file);
 }
 
 function isSafeRelativePath(value) {

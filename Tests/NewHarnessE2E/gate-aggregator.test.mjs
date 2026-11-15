@@ -138,6 +138,14 @@ test('target identity hashes real checkout files and rejects wrong or dirty chec
   const actual = await targetIdentity(...repos, sha, 'E0');
   assert.equal(actual.pocketwiki_sha, sha);
   assert.match(actual.fixture_sha256, /^[a-f0-9]{64}$/);
+  // A clean checkout can contain untracked files; these must not become fixtures.
+  await writeFile(path.join(repos[0], 'untracked-fixture'), 'unversioned');
+  execFileSync('git', ['-C', repos[0], 'rm', '--cached', files[0]]);
+  execFileSync('git', ['-C', repos[0], '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'remove fixture']);
+  const untrackedSHA = execFileSync('git', ['-C', repos[0], 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+  await assert.rejects(() => targetIdentity(...repos, untrackedSHA, 'E0'), /must be tracked/);
+  execFileSync('git', ['-C', repos[0], 'reset', '--hard', sha]);
+  await rm(path.join(repos[0], 'untracked-fixture'));
   await assert.rejects(() => targetIdentity(...repos, sha), /stage must/);
   assert.equal(actual.fixture_sha256, await fixtureDigest(repos[0], 'E0'));
   assert.equal((await targetIdentity(...repos, sha, 'E1')).fixture_sha256, await fixtureDigest(repos[0], 'E1'));

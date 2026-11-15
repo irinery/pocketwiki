@@ -45,6 +45,14 @@ test('fixture manifest rejects traversal, duplicates and symlink files', async t
   await write({ E0: ['link'], E1: ['other'] });
   await symlink('/etc/passwd', path.join(root, 'link'));
   await assert.rejects(fixtureDigest(root, 'E0'), /regular file/);
+  await mkdir(path.join(root, 'actual'));
+  await writeFile(path.join(root, 'actual', 'fixture'), 'bytes');
+  await symlink('actual', path.join(root, 'alias'));
+  await write({ E0: ['alias/fixture'], E1: ['other'] });
+  await assert.rejects(fixtureDigest(root, 'E0'), /regular file/);
+  await rm(manifestFile);
+  await symlink(path.join(root, 'actual', 'fixture'), manifestFile);
+  await assert.rejects(fixtureDigest(root, 'E0'), /regular file/);
 });
 
 test('fixture digest requires every stage through the requested gate', async t => {
