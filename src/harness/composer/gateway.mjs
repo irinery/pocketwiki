@@ -1,7 +1,10 @@
+import path from 'node:path';
+import { fstatSync } from 'node:fs';
 import { validateOperationInput } from '../contracts/validate.mjs';
 import { UUID, fail } from './service.mjs';
 
 const AUDIENCE = 'pocketwiki.context.v1';
+const boundPolicies = new WeakMap();
 
 // Grants are installed by the trusted host, never supplied in a request.
 export class ComposerPolicy {
@@ -9,13 +12,22 @@ export class ComposerPolicy {
   constructor(grants) {
     if (!Array.isArray(grants)) throw new TypeError('Explicit grants are required');
     this.#grants = grants.map((grant) => {
-      if (!UUID.test(grant?.principal_id ?? '') || !UUID.test(grant?.environment_id ?? '') || !UUID.test(grant?.thread_id ?? '') || !Array.isArray(grant.roots) || grant.roots.some((root) => typeof root !== 'string' || !root.startsWith('/'))) throw new TypeError('Invalid composer grant');
-      return Object.freeze({ principal_id: grant.principal_id, environment_id: grant.environment_id, thread_id: grant.thread_id, roots: Object.freeze([...grant.roots]) });
+      if (!UUID.test(grant?.principal_id ?? '') || !UUID.test(grant?.environment_id ?? '') || !UUID.test(grant?.thread_id ?? '') || !Array.isArray(grant.roots) || grant.roots.some((root) => !root || typeof root.path !== 'string' || !path.isAbsolute(root.path) || !Number.isInteger(root.fd) || root.fd < 0 || !fstatSync(root.fd).isDirectory())) throw new TypeError('Invalid composer grant');
+      return Object.freeze({ principal_id: grant.principal_id, environment_id: grant.environment_id, thread_id: grant.thread_id, roots: Object.freeze(grant.roots.map((root) => { const stat = fstatSync(root.fd, { bigint: true }); return Object.freeze({ path: path.resolve(root.path), fd: root.fd, dev: stat.dev, ino: stat.ino }); })) });
     });
   }
   #grant(auth) { return this.#grants.find((grant) => grant.principal_id === auth.principal_id && grant.environment_id === auth.environment_id && grant.thread_id === auth.thread_id); }
   authorize(auth) { if (!this.#grant(auth)) fail('ERR_FORBIDDEN', 'Thread não concedida.'); }
-  rootsFor(auth) { this.authorize(auth); return [...this.#grant(auth).roots]; }
+  rootHandle(auth, root) {
+    this.authorize(auth);
+    const grant = this.#grant(auth).roots.find((item) => item.path === root);
+    if (!grant) fail('ERR_FORBIDDEN', 'Root não concedido.');
+    try {
+      const stat = fstatSync(grant.fd, { bigint: true });
+      if (!stat.isDirectory() || stat.dev !== grant.dev || stat.ino !== grant.ino) fail('ERR_FORBIDDEN', 'Concessão de root alterada.');
+    } catch { fail('ERR_FORBIDDEN', 'Concessão de root indisponível.'); }
+    return grant.fd;
+  }
 }
 
 // This boundary verifies E1's local bearer. Mutations still require the E1
@@ -26,10 +38,13 @@ export class ComposerGateway {
   #policy;
   constructor({ service, credentialHost, policy }) {
     if (!service || typeof credentialHost?.authenticate !== 'function' || !(policy instanceof ComposerPolicy)) throw new TypeError('Composer service, credential host and policy are required');
+    const existing = boundPolicies.get(service);
+    if (existing && existing !== policy) throw new TypeError('Service is already bound to a different policy');
+    boundPolicies.set(service, policy);
     this.#service = service;
     this.#host = credentialHost;
     this.#policy = policy;
-    service.rootsFor = (auth) => policy.rootsFor(auth);
+    service.rootHandleFor = (auth, root) => policy.rootHandle(auth, root);
   }
   #authenticate(bearer, thread_id) {
     if (!UUID.test(thread_id ?? '')) fail('ERR_INVALID', 'thread_id inválido.');

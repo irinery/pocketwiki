@@ -78,14 +78,14 @@ function cleanState(value) {
 }
 
 export class ComposerService {
-  constructor({ dataDir, now = Date.now, id = randomUUID, sourceResolver = null, rootsFor = () => [], secureReaderPath = null } = {}) {
+  constructor({ dataDir, now = Date.now, id = randomUUID, sourceResolver = null, rootHandleFor = () => null, secureReaderPath = null } = {}) {
     if (typeof dataDir !== 'string' || !dataDir) fail('ERR_INVALID', 'dataDir obrigatório.');
     this.dataDir = path.resolve(dataDir);
     this.statePath = path.join(this.dataDir, 'composer-state-v1.json');
     this.now = now;
     this.id = id;
     this.sourceResolver = sourceResolver;
-    this.rootsFor = rootsFor;
+    this.rootHandleFor = rootHandleFor;
     this.secureReaderPath = secureReaderPath;
     this.sourceLocations = new Map();
     mkdirSync(this.dataDir, { recursive: true, mode: 0o700 });
@@ -297,7 +297,7 @@ export class ComposerService {
     if (quote.length > MIME_LIMITS['text/plain']) fail('ERR_INVALID', 'Citação excede 1 MiB.');
     if (!Buffer.from(quote.toString('utf8'), 'utf8').equals(quote)) fail('ERR_INVALID', 'Intervalo divide caractere UTF-8.');
     const reference = { reference_id: this.id(), kind: 'quote', relative_path: path.posix.normalize(relative_path.split(path.sep).join('/')), sha256: digest(quote), size_bytes: quote.length, trust: 'untrusted_content' };
-    this.state.sources.push({ owner: ownerKey(auth), reference_id: reference.reference_id, root: approvedRoot, relative_path: reference.relative_path, source_sha256: digest(source), start_byte, end_byte, quote_base64: quote.toString('base64'), expires_at_ms: this.now() + DRAFT_TTL_MS });
+    this.state.sources.push({ owner: ownerKey(auth), reference_id: reference.reference_id, root: path.resolve(root), relative_path: reference.relative_path, source_sha256: digest(source), start_byte, end_byte, quote_base64: quote.toString('base64'), expires_at_ms: this.now() + DRAFT_TTL_MS });
     this._persist();
     return { reference };
   }
@@ -308,20 +308,10 @@ export class ComposerService {
     this._collectExpired();
     const source = this.state.sources.find((item) => item.owner === ownerKey(auth) && item.reference_id === referenceID && item.quote_base64 !== undefined);
     if (!source) fail('ERR_CONTEXT_STALE', 'Citação indisponível.');
-    let approvedRoot;
-    try { approvedRoot = this.authorizeRoot(auth, source.root); }
-    catch (error) {
-      if (!(error instanceof ComposerError) || error.code !== 'ERR_PATH_ESCAPE') throw error;
-      const grants = this.rootsFor(structuredClone(auth));
-      const allowed = Array.isArray(grants) && grants.some((grant) => {
-        try { const realGrant = realpathSync(grant); return source.root === realGrant || source.root.startsWith(`${realGrant}${path.sep}`); } catch { return false; }
-      });
-      if (!allowed) fail('ERR_FORBIDDEN', 'Root não concedido.');
-    }
+    const approvedRoot = this.authorizeRoot(auth, source.root);
     let sourceAvailable = false;
     try {
-      const bytes = approvedRoot ? await readAuthorizedFile(approvedRoot, source.relative_path, this.secureReaderPath) : null;
-      if (!bytes) throw new ComposerError('ERR_CONTEXT_STALE');
+      const bytes = await readAuthorizedFile(approvedRoot, source.relative_path, this.secureReaderPath);
       sourceAvailable = digest(bytes) === source.source_sha256;
     } catch (error) {
       if (!(error instanceof ComposerError) || error.code !== 'ERR_CONTEXT_STALE') throw error;
@@ -331,13 +321,12 @@ export class ComposerService {
   }
 
   authorizeRoot(auth, root) {
-    let target;
-    try { target = realpathSync(root); } catch { fail('ERR_PATH_ESCAPE', 'Root indisponível.'); }
-    const roots = this.rootsFor(structuredClone(auth));
-    if (!Array.isArray(roots) || !roots.some((grant) => {
-      try { const canonical = realpathSync(grant); return target === canonical || target.startsWith(`${canonical}${path.sep}`); } catch { return false; }
-    })) fail('ERR_FORBIDDEN', 'Root não concedido.');
-    return target;
+    if (typeof root !== 'string' || !path.isAbsolute(root)) fail('ERR_INVALID', 'Root inválido.');
+    const fd = this.rootHandleFor(structuredClone(auth), path.resolve(root));
+    if (!Number.isInteger(fd) || fd < 0) fail('ERR_FORBIDDEN', 'Root não concedido.');
+    try { if (!fstatSync(fd).isDirectory()) fail('ERR_FORBIDDEN', 'Root inválido.'); }
+    catch (error) { if (error instanceof ComposerError) throw error; fail('ERR_FORBIDDEN', 'Concessão de root indisponível.'); }
+    return fd;
   }
 
   removeReference(auth, draftId, referenceId, expectedRevision) {
@@ -362,15 +351,17 @@ export function canonicalJSON(value) {
   return `{${Object.keys(value).sort().filter((key) => value[key] !== undefined).map((key) => `${JSON.stringify(key)}:${canonicalJSON(value[key])}`).join(',')}}`;
 }
 
-export async function readAuthorizedFile(root, relativePath, secureReaderPath) {
+const verifiedReaders = new Set();
+export async function readAuthorizedFile(fd, relativePath, secureReaderPath) {
   if (typeof secureReaderPath !== 'string' || !path.isAbsolute(secureReaderPath)) fail('ERR_UNAVAILABLE', 'Leitor seguro não configurado.');
   if (typeof relativePath !== 'string' || path.isAbsolute(relativePath) || relativePath.split('/').some((part) => !part || part === '.' || part === '..')) fail('ERR_PATH_ESCAPE', 'Caminho inválido.');
-  let fd;
+  if (!verifiedReaders.has(secureReaderPath)) {
+    const probe = spawnSync(secureReaderPath, ['--probe'], { stdio: 'ignore', timeout: 30_000 });
+    if (probe.error || probe.status !== 0) fail('ERR_UNAVAILABLE', 'Sistema sem resolução segura de caminhos.');
+    verifiedReaders.add(secureReaderPath);
+  }
   try {
-    const expected = statSync(root);
-    fd = openSync(root, fsConstants.O_RDONLY | fsConstants.O_DIRECTORY | fsConstants.O_NOFOLLOW);
-    const opened = fstatSync(fd);
-    if (!opened.isDirectory() || expected.dev !== opened.dev || expected.ino !== opened.ino) fail('ERR_PATH_ESCAPE', 'Root alterado durante abertura.');
+    if (!Number.isInteger(fd) || !fstatSync(fd).isDirectory()) fail('ERR_FORBIDDEN', 'Root não concedido.');
     const result = spawnSync(secureReaderPath, [relativePath], { stdio: ['ignore', 'pipe', 'ignore', fd], maxBuffer: 4 * 1024 * 1024 + 1, timeout: 30_000 });
     if (result.error) fail(result.error.code === 'ETIMEDOUT' ? 'ERR_TIMEOUT' : 'ERR_UNAVAILABLE', 'Leitor seguro indisponível.');
     if (result.status === 10) fail('ERR_PATH_ESCAPE', 'Caminho ou symlink não autorizado.');
@@ -381,5 +372,5 @@ export async function readAuthorizedFile(root, relativePath, secureReaderPath) {
     if (error instanceof ComposerError) throw error;
     if (error.code === 'ELOOP' || error.code === 'ENOTDIR') fail('ERR_PATH_ESCAPE', 'Root não autorizado.');
     fail('ERR_CONTEXT_STALE', 'Fonte indisponível.');
-  } finally { if (fd !== undefined) closeSync(fd); }
+  }
 }

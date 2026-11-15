@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, openSync, closeSync, constants } from 'node:fs';
 import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,6 +9,7 @@ import test from 'node:test';
 import { ComposerError, ComposerService } from '../../../src/harness/composer/index.mjs';
 import { ComposerProjection } from '../../../src/harness/composer/projection.mjs';
 import { validateAgainst } from '../../../src/harness/contracts/validate.mjs';
+import { ComposerPolicy } from '../../../src/harness/composer/gateway.mjs';
 
 const helperDir = mkdtempSync(path.join(os.tmpdir(), 'composer-reader-'));
 const secureReaderPath = path.join(helperDir, 'secure-read');
@@ -31,7 +32,6 @@ function fixture(t, options = {}) {
   let idCounter = 0;
   const service = new ComposerService({
     dataDir: path.join(root, 'private-stash'),
-    rootsFor: () => [root],
     secureReaderPath,
     now: () => now.value,
     id: () => idQueue.shift() ?? `aaaaaaaa-aaaa-4aaa-8aaa-${String(++idCounter).padStart(12, '0')}`,
@@ -39,6 +39,14 @@ function fixture(t, options = {}) {
   });
   t.after(async () => rm(root, { recursive: true, force: true }));
   return { root, service, now };
+}
+
+function grantRoot(t, service, root) {
+  const fd = openSync(root, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+  const policy = new ComposerPolicy([{ principal_id: ids.principal, environment_id: ids.environment, thread_id: ids.thread, roots: [{ path: root, fd }] }]);
+  service.rootHandleFor = (identity, requestedRoot) => policy.rootHandle(identity, requestedRoot);
+  t.after(() => closeSync(fd));
+  return service.rootHandleFor;
 }
 
 function auth(principal = ids.principal) {
@@ -78,6 +86,7 @@ test('01-01: prepara manifesto com hash, origem e bytes exatos', async (t) => {
   const { root, service, auth: identity } = await makeHarness(t);
   const wikiRoot = path.join(root, 'wiki');
   await mkdir(wikiRoot);
+  grantRoot(t, service, wikiRoot);
   const original = Buffer.from('Trecho confiável como dado, sem autoridade de instrução.\n', 'utf8');
   await writeFile(path.join(wikiRoot, 'origem.md'), original);
   const { reference } = await service.previewFile(identity, { root: wikiRoot, relative_path: 'origem.md', kind: 'wiki' });
@@ -95,6 +104,7 @@ test('01-02: alteração da fonte retorna ERR_CONTEXT_STALE e preserva o draft',
   const { root, service, auth: identity } = await makeHarness(t);
   const wikiRoot = path.join(root, 'wiki');
   await mkdir(wikiRoot);
+  grantRoot(t, service, wikiRoot);
   await writeFile(path.join(wikiRoot, 'pagina.md'), 'versao inicial');
   const { reference } = await service.previewFile(identity, { root: wikiRoot, relative_path: 'pagina.md', kind: 'wiki' });
   await saveDraft(service, identity, { text: 'Pergunta permanece.', references: [reference] });
@@ -121,6 +131,7 @@ test('01-04: anexo segue untrusted_content e symlink com escape é rejeitado', a
   const allowedRoot = path.join(root, 'allowed');
   const outside = path.join(root, 'outside');
   await mkdir(allowedRoot);
+  grantRoot(t, service, allowedRoot);
   await mkdir(outside);
   await writeFile(path.join(outside, 'segredo.txt'), 'fora do root');
   await symlink(path.join(outside, 'segredo.txt'), path.join(allowedRoot, 'escape.txt'));
@@ -235,13 +246,14 @@ test('unpin é idempotente após liberação e expiração', async (t) => {
 });
 
 test('root precisa de concessão explícita e fonte é resolvida após restart', async (t) => {
-  const f = fixture(t, { rootsFor: () => [] });
+  const f = fixture(t);
   const identity = auth();
   const root = path.join(f.root, 'wiki');
   await mkdir(root);
   await writeFile(path.join(root, 'pagina.md'), 'conteúdo autorizado');
   await rejectsCode(f.service.previewFile(identity, { root, relative_path: 'pagina.md', kind: 'wiki' }), 'ERR_FORBIDDEN');
-  const options = { dataDir: f.service.dataDir, now: () => f.now.value, rootsFor: () => [root], secureReaderPath };
+  const rootHandleFor = grantRoot(t, f.service, root);
+  const options = { dataDir: f.service.dataDir, now: () => f.now.value, rootHandleFor, secureReaderPath };
   const authorized = new ComposerService(options);
   const { reference } = await authorized.previewFile(identity, { root, relative_path: 'pagina.md', kind: 'wiki' });
   await saveDraft(authorized, identity, { references: [reference] });
@@ -256,6 +268,7 @@ test('01-01: quote de trecho real da wiki preserva bytes e origem após restart'
   const identity = auth();
   const root = path.join(f.root, 'wiki');
   await mkdir(root);
+  grantRoot(t, f.service, root);
   const source = Buffer.from('antes: citação exata; depois', 'utf8');
   await writeFile(path.join(root, 'pagina.md'), source);
   const wiki = (await f.service.previewFile(identity, { root, relative_path: 'pagina.md', kind: 'wiki' })).reference;
@@ -263,7 +276,7 @@ test('01-01: quote de trecho real da wiki preserva bytes e origem após restart'
   const quote = Buffer.from('citação exata');
   const citation = (await f.service.previewQuote(identity, { root, relative_path: 'pagina.md', start_byte: start, end_byte: start + quote.length })).reference;
   await saveDraft(f.service, identity, { references: [wiki, citation] });
-  const restarted = new ComposerService({ dataDir: f.service.dataDir, now: () => f.now.value, rootsFor: () => [root], secureReaderPath });
+  const restarted = new ComposerService({ dataDir: f.service.dataDir, now: () => f.now.value, rootHandleFor: f.service.rootHandleFor, secureReaderPath });
   const result = await prepare(restarted, identity, { references: [wiki, citation] });
   const context = restarted.resolve(delegatedAuth(identity), { prepared_id: result.prepared_id, manifest_sha256: result.manifest_sha256 }).context;
   assert.equal(context.manifest[1].relative_path, 'pagina.md');
@@ -337,6 +350,7 @@ test('leitura ancorada rejeita symlink intermediário e root sem concessão', as
   const root = path.join(f.root, 'root');
   const outside = path.join(f.root, 'outside');
   await mkdir(root);
+  grantRoot(t, f.service, root);
   await mkdir(outside);
   await writeFile(path.join(outside, 'secret'), 'não permitido');
   await symlink(outside, path.join(root, 'link'));
@@ -383,7 +397,8 @@ test('host E1 autentica bearer e policy autoriza thread antes da mutação', asy
   await assert.rejects(gateway.execute({ bearer, thread_id: ids.thread, command }), { code: 'ERR_INVALID' });
   await assert.rejects(gateway.execute({ bearer: 'inválido', thread_id: ids.thread, command }), { code: 'ERR_FORBIDDEN' });
   await assert.rejects(gateway.execute({ bearer, thread_id: ids.otherPrincipal, command }), { code: 'ERR_FORBIDDEN' });
-  const deniedGateway = new ComposerGateway({ service, credentialHost: host, policy: new ComposerPolicy([]) });
+  const deniedService = new ComposerService({ dataDir: service.dataDir });
+  const deniedGateway = new ComposerGateway({ service: deniedService, credentialHost: host, policy: new ComposerPolicy([]) });
   await assert.rejects(deniedGateway.execute({ bearer, thread_id: ids.thread, command }), { code: 'ERR_FORBIDDEN' });
   assert.equal(service.getDraft(auth(), ids.draft).revision, 1);
 });
@@ -443,6 +458,7 @@ test('citação salva permanece legível com fonte removida; limites não divide
   const identity = auth();
   const root = path.join(f.root, 'wiki');
   await mkdir(root);
+  grantRoot(t, f.service, root);
   await writeFile(path.join(root, 'p.md'), 'aéz');
   await rejectsCode(f.service.previewQuote(identity, { root, relative_path: 'p.md', start_byte: 1, end_byte: 2 }), 'ERR_INVALID');
   const reference = (await f.service.previewQuote(identity, { root, relative_path: 'p.md', start_byte: 1, end_byte: 3 })).reference;
@@ -459,6 +475,7 @@ test('troca concorrente de diretório por symlink nunca lê bytes externos', asy
   const root = path.join(f.root, 'root');
   const outside = path.join(f.root, 'outside');
   await mkdir(root);
+  grantRoot(t, f.service, root);
   await mkdir(outside);
   await mkdir(path.join(root, 'slot'));
   await writeFile(path.join(root, 'slot', 'page.txt'), 'autorizado');
@@ -523,6 +540,7 @@ test('entradas recusam Unicode inválido e citação textual acima de 1 MiB', as
   await assert.rejects(saveDraft(f.service, auth(), { text: '\ud800' }), (error) => error.code === 'ERR_INVALID');
   const root = path.join(f.root, 'wiki');
   await mkdir(root);
+  grantRoot(t, f.service, root);
   await writeFile(path.join(root, 'grande.txt'), Buffer.alloc(1024 * 1024 + 1, 97));
   await rejectsCode(f.service.previewQuote(auth(), { root, relative_path: 'grande.txt', start_byte: 0, end_byte: 1024 * 1024 + 1 }), 'ERR_INVALID');
 });
@@ -591,7 +609,9 @@ test('preview wiki usa bearer E1 e policy real de root sem confiar em path escol
   let bearer;
   const host = new LocalCredentialHost({ principalId: ids.principal, environmentId: ids.environment, audience: 'pocketwiki.context.v1', grantedScopes: ['context.read'], deliverBearer: async (delivery) => { bearer = delivery.bearer; } });
   await host.bootstrap(['context.read'], { threadId: ids.thread });
-  const gateway = new ComposerGateway({ service: f.service, credentialHost: host, policy: new ComposerPolicy([{ principal_id: ids.principal, environment_id: ids.environment, thread_id: ids.thread, roots: [allowed] }]) });
+  const fd = openSync(allowed, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+  t.after(() => closeSync(fd));
+  const gateway = new ComposerGateway({ service: f.service, credentialHost: host, policy: new ComposerPolicy([{ principal_id: ids.principal, environment_id: ids.environment, thread_id: ids.thread, roots: [{ path: allowed, fd }] }]) });
   const reference = await gateway.previewFile({ bearer, thread_id: ids.thread, root: allowed, relative_path: 'p.md', kind: 'wiki' });
   assert.equal(reference.reference.sha256, hash(Buffer.from('wiki permitida')));
   await assert.rejects(gateway.previewFile({ bearer, thread_id: ids.thread, root: denied, relative_path: 'p.md', kind: 'wiki' }), { code: 'ERR_FORBIDDEN' });
@@ -621,6 +641,7 @@ test('stash de citação expira após 24 horas', async (t) => {
   const f = fixture(t);
   const root = path.join(f.root, 'wiki');
   await mkdir(root);
+  grantRoot(t, f.service, root);
   await writeFile(path.join(root, 'p.md'), 'trecho');
   const reference = (await f.service.previewQuote(auth(), { root, relative_path: 'p.md', start_byte: 0, end_byte: 6 })).reference;
   f.now.value += 86_400_000;
@@ -640,6 +661,7 @@ test('citação preservada segue legível se diretório da fonte sumir dentro do
   const f = fixture(t);
   const root = path.join(f.root, 'wiki');
   await mkdir(root);
+  grantRoot(t, f.service, root);
   await writeFile(path.join(root, 'p.md'), 'salvo');
   const reference = (await f.service.previewQuote(auth(), { root, relative_path: 'p.md', start_byte: 0, end_byte: 5 })).reference;
   await rm(root, { recursive: true });
@@ -694,4 +716,75 @@ test('pin e resolve usam serviço HTTP real com bearer delegado E1', async (t) =
   assert.equal((await post('resolve', { prepared_id: prepared.prepared_id, manifest_sha256: prepared.manifest_sha256 }, bearer)).status, 403);
   assert.deepEqual(await (await post('pin', { prepared_id: prepared.prepared_id, command_id: ids.command, retain: false }, delegatedBearer)).json(), { retained: false });
   assert.equal((await post('resolve', { prepared_id: prepared.prepared_id, manifest_sha256: prepared.manifest_sha256 }, delegatedBearer)).status, 409);
+});
+
+test('diretório movido para fora não autoriza leitura fora da raiz vinculada', async (t) => {
+  const { spawn } = await import('node:child_process');
+  const f = fixture(t);
+  const root = path.join(f.root, 'root');
+  const outside = path.join(f.root, 'outside');
+  await mkdir(root);
+  grantRoot(t, f.service, root);
+  await mkdir(outside);
+  await mkdir(path.join(root, 'slot'));
+  await writeFile(path.join(root, 'slot', 'page.txt'), 'permitido');
+  await writeFile(path.join(outside, 'secret.txt'), 'segredo externo');
+  const child = spawn(process.execPath, ['Tests/Harness/composer/reparent-racer.mjs', root, outside], { stdio: ['ignore', 'pipe', 'pipe'] });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => { stderr += chunk; });
+  const exited = new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', (code) => code === 0 ? resolve() : reject(new Error(stderr))); });
+  await new Promise((resolve) => child.stdout.once('data', resolve));
+  for (let i = 0; i < 100; i++) {
+    try {
+      const result = await f.service.previewFile(auth(), { root, relative_path: 'slot/page.txt' });
+      assert.equal(result.reference.sha256, hash(Buffer.from('permitido')));
+    } catch (error) {
+      if (!['ERR_PATH_ESCAPE', 'ERR_CONTEXT_STALE', 'ERR_UNAVAILABLE'].includes(error.code)) throw error;
+    }
+  }
+  await exited;
+  const final = await f.service.previewFile(auth(), { root, relative_path: 'slot/page.txt' });
+  assert.equal(final.reference.sha256, hash(Buffer.from('permitido')));
+});
+
+test('grant usa FD original mesmo se caminho for substituído', async (t) => {
+  const { rename } = await import('node:fs/promises');
+  const f = fixture(t);
+  const root = path.join(f.root, 'wiki');
+  const moved = path.join(f.root, 'moved');
+  await mkdir(root);
+  await writeFile(path.join(root, 'p.md'), 'autorizado');
+  grantRoot(t, f.service, root);
+  await rename(root, moved);
+  await mkdir(root);
+  await writeFile(path.join(root, 'p.md'), 'substituição');
+  const { reference } = await f.service.previewFile(auth(), { root, relative_path: 'p.md' });
+  assert.equal(reference.sha256, hash(Buffer.from('autorizado')));
+});
+
+test('policy rejeita descritor fechado e reutilizado para outro root', async (t) => {
+  const f = fixture(t);
+  const root = path.join(f.root, 'wiki');
+  const other = path.join(f.root, 'other');
+  await mkdir(root);
+  await mkdir(other);
+  const fd = openSync(root, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+  const policy = new ComposerPolicy([{ principal_id: ids.principal, environment_id: ids.environment, thread_id: ids.thread, roots: [{ path: root, fd }] }]);
+  closeSync(fd);
+  const reused = openSync(other, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+  t.after(() => closeSync(reused));
+  assert.equal(reused, fd);
+  f.service.rootHandleFor = (identity, requestedRoot) => policy.rootHandle(identity, requestedRoot);
+  await rejectsCode(f.service.previewFile(auth(), { root, relative_path: 'p.md' }), 'ERR_FORBIDDEN');
+});
+
+test('não troca policy de roots em serviço já vinculado a outro gateway', async (t) => {
+  const { LocalCredentialHost } = await import('../../../src/harness/local-host.mjs');
+  const { ComposerGateway } = await import('../../../src/harness/composer/gateway.mjs');
+  const { service } = await makeHarness(t);
+  const host = new LocalCredentialHost({ principalId: ids.principal, environmentId: ids.environment, audience: 'pocketwiki.context.v1', grantedScopes: ['context.read'], deliverBearer: async () => {} });
+  const first = new ComposerPolicy([{ principal_id: ids.principal, environment_id: ids.environment, thread_id: ids.thread, roots: [] }]);
+  const second = new ComposerPolicy([{ principal_id: ids.principal, environment_id: ids.environment, thread_id: ids.thread, roots: [] }]);
+  new ComposerGateway({ service, credentialHost: host, policy: first });
+  assert.throws(() => new ComposerGateway({ service, credentialHost: host, policy: second }), TypeError);
 });
