@@ -1,0 +1,494 @@
+{
+  "version": "0.2.0",
+  "cases": [
+    {
+      "id": "LEGACY-00",
+      "stage": 0,
+      "kind": "e2e",
+      "requires": [],
+      "surfaces": [
+        "web",
+        "macos"
+      ],
+      "assertion": "UI legada real: enviar resposta fixture via bridge/MiddlewareAuth, reiniciar e restaurar sessão; wiki e MCP Evidence operantes"
+    },
+    {
+      "id": "CONTRACT-00",
+      "stage": 0,
+      "kind": "contract",
+      "requires": [],
+      "surfaces": [
+        "service"
+      ],
+      "assertion": "Mesmo corpus positivo/negativo nos validadores JS/Swift; schemas fechados, registry de classes/owners, bootstrap local scoped, locks/build e casos de recusa do agregador de gates"
+    },
+    {
+      "id": "SERVICE-0002",
+      "stage": 1,
+      "kind": "service-integration",
+      "requires": [
+        "0002/02"
+      ],
+      "surfaces": [
+        "service"
+      ],
+      "assertion": "Todos os testes 01-NN da RFC, incluindo snapshot em múltiplas páginas, store real, isolamento e falha/recovery"
+    },
+    {
+      "id": "UI-0002",
+      "stage": 1,
+      "kind": "e2e",
+      "requires": [
+        "0002/02"
+      ],
+      "surfaces": [
+        "web",
+        "macos"
+      ],
+      "assertion": "Testes 02-NN do cliente base runtime no host real: snapshot/replay, receipt aceito versus concluído, major incompatível e fallback legado; sem provider novo"
+    },
+    {
+      "id": "SERVICE-0003",
+      "stage": 2,
+      "kind": "service-integration",
+      "requires": [
+        "0003/01"
+      ],
+      "surfaces": [
+        "service"
+      ],
+      "assertion": "Todos os testes 01-NN da RFC, incluindo snapshot em múltiplas páginas, store real, isolamento e falha/recovery"
+    },
+    {
+      "id": "UI-0003",
+      "stage": 4,
+      "kind": "e2e",
+      "requires": [
+        "0003/02"
+      ],
+      "surfaces": [
+        "web",
+        "macos"
+      ],
+      "assertion": "Todos os testes 02-NN da RFC pelo módulo real com serviço real; foco, erro, estado stale, segurança"
+    },
+    {
+      "id": "SERVICE-0004",
+      "stage": 3,
+      "kind": "service-integration",
+      "requires": [
+        "0004/01"
+      ],
+      "surfaces": [
+        "service"
+      ],
+      "assertion": "Todos os testes 01-NN da RFC, incluindo snapshot em múltiplas páginas, store real, isolamento e falha/recovery"
+    },
+    {
+      "id": "UI-0004",
+      "stage": 5,
+      "kind": "e2e",
+      "requires": [
+        "0004/02"
+      ],
+      "surfaces": [
+        "web",
+        "macos"
+      ],
+      "assertion": "Todos os testes 02-NN da RFC pelo módulo real com serviço real; foco, erro, estado stale, segurança"
+    },
+    {
+      "id": "SERVICE-0005",
+      "stage": 2,
+      "kind": "service-integration",
+      "requires": [
+        "0005/01"
+      ],
+      "surfaces": [
+        "service"
+      ],
+      "assertion": "Todos os testes 01-NN da RFC, incluindo snapshot em múltiplas páginas, store real, isolamento e falha/recovery"
+    },
+    {
+      "id": "UI-0005",
+      "stage": 4,
+      "kind": "e2e",
+      "requires": [
+        "0005/02"
+      ],
+      "surfaces": [
+        "web",
+        "macos"
+      ],
+      "assertion": "Todos os testes 02-NN da RFC pelo módulo real com serviço real; foco, erro, estado stale, segurança"
+    },
+    {
+      "id": "SERVICE-0006",
+      "stage": 2,
+      "kind": "service-integration",
+      "requires": [
+        "0006/01"
+      ],
+      "surfaces": [
+        "service"
+      ],
+      "assertion": "Todos os testes 01-NN da RFC, incluindo snapshot em múltiplas páginas, store real, isolamento e falha/recovery"
+    },
+    {
+      "id": "UI-0006",
+      "stage": 4,
+      "kind": "e2e",
+      "requires": [
+        "0006/02"
+      ],
+      "surfaces": [
+        "web",
+        "macos"
+      ],
+      "assertion": "Todos os testes 02-NN da RFC pelo módulo real com serviço real; foco, erro, estado stale, segurança"
+    },
+    {
+      "id": "SERVICE-0007",
+      "stage": 2,
+      "kind": "service-integration",
+      "requires": [
+        "0007/01"
+      ],
+      "surfaces": [
+        "service"
+      ],
+      "assertion": "Todos os testes 01-NN da RFC, incluindo snapshot em múltiplas páginas, store real, isolamento e falha/recovery"
+    },
+    {
+      "id": "UI-0007",
+      "stage": 4,
+      "kind": "e2e",
+      "requires": [
+        "0007/02"
+      ],
+      "surfaces": [
+        "web",
+        "macos"
+      ],
+      "assertion": "Todos os testes 02-NN da RFC pelo módulo real com serviço real; foco, erro, estado stale, segurança"
+    },
+    {
+      "id": "SERVICE-0008",
+      "stage": 3,
+      "kind": "service-integration",
+      "requires": [
+        "0008/01"
+      ],
+      "surfaces": [
+        "service"
+      ],
+      "assertion": "Todos os testes 01-NN da RFC, incluindo snapshot em múltiplas páginas, store real, isolamento e falha/recovery"
+    },
+    {
+      "id": "UI-0008",
+      "stage": 5,
+      "kind": "e2e",
+      "requires": [
+        "0008/02"
+      ],
+      "surfaces": [
+        "web",
+        "macos"
+      ],
+      "assertion": "Todos os testes 02-NN da RFC pelo módulo real com serviço real; foco, erro, estado stale, segurança"
+    },
+    {
+      "id": "SERVICE-0009",
+      "stage": 3,
+      "kind": "service-integration",
+      "requires": [
+        "0009/01"
+      ],
+      "surfaces": [
+        "service"
+      ],
+      "assertion": "Todos os testes 01-NN da RFC, incluindo snapshot em múltiplas páginas, store real, isolamento e falha/recovery"
+    },
+    {
+      "id": "UI-0009",
+      "stage": 5,
+      "kind": "e2e",
+      "requires": [
+        "0009/02"
+      ],
+      "surfaces": [
+        "web",
+        "macos"
+      ],
+      "assertion": "Todos os testes 02-NN da RFC pelo módulo real com serviço real; foco, erro, estado stale, segurança"
+    },
+    {
+      "id": "SERVICE-0010",
+      "stage": 3,
+      "kind": "service-integration",
+      "requires": [
+        "0010/01"
+      ],
+      "surfaces": [
+        "service"
+      ],
+      "assertion": "Todos os testes 01-NN da RFC, incluindo snapshot em múltiplas páginas, store real, isolamento e falha/recovery"
+    },
+    {
+      "id": "UI-0010",
+      "stage": 5,
+      "kind": "e2e",
+      "requires": [
+        "0010/02"
+      ],
+      "surfaces": [
+        "web",
+        "macos"
+      ],
+      "assertion": "Todos os testes 02-NN da RFC pelo módulo real com serviço real; foco, erro, estado stale, segurança"
+    },
+    {
+      "id": "SERVICE-0011",
+      "stage": 4,
+      "kind": "service-integration",
+      "requires": [
+        "0011/01"
+      ],
+      "surfaces": [
+        "service"
+      ],
+      "assertion": "Todos os testes 01-NN da RFC, incluindo snapshot em múltiplas páginas, store real, isolamento e falha/recovery"
+    },
+    {
+      "id": "UI-0011",
+      "stage": 5,
+      "kind": "e2e",
+      "requires": [
+        "0011/02"
+      ],
+      "surfaces": [
+        "web",
+        "macos"
+      ],
+      "assertion": "Todos os testes 02-NN da RFC pelo módulo real com serviço real; foco, erro, estado stale, segurança"
+    },
+    {
+      "id": "SERVICE-0012",
+      "stage": 4,
+      "kind": "service-integration",
+      "requires": [
+        "0012/01"
+      ],
+      "surfaces": [
+        "service"
+      ],
+      "assertion": "Todos os testes 01-NN da RFC, incluindo snapshot em múltiplas páginas, store real, isolamento e falha/recovery"
+    },
+    {
+      "id": "UI-0012",
+      "stage": 5,
+      "kind": "e2e",
+      "requires": [
+        "0012/02"
+      ],
+      "surfaces": [
+        "web",
+        "macos"
+      ],
+      "assertion": "Todos os testes 02-NN da RFC pelo módulo real com serviço real; foco, erro, estado stale, segurança"
+    },
+    {
+      "id": "SERVICE-0013",
+      "stage": 2,
+      "kind": "service-integration",
+      "requires": [
+        "0013/01"
+      ],
+      "surfaces": [
+        "service"
+      ],
+      "assertion": "Todos os testes 01-NN da RFC, incluindo snapshot em múltiplas páginas, store real, isolamento e falha/recovery"
+    },
+    {
+      "id": "UI-0013",
+      "stage": 4,
+      "kind": "e2e",
+      "requires": [
+        "0013/02"
+      ],
+      "surfaces": [
+        "web",
+        "macos"
+      ],
+      "assertion": "Todos os testes 02-NN da RFC pelo módulo real com serviço real; foco, erro, estado stale, segurança"
+    },
+    {
+      "id": "SERVICE-0014",
+      "stage": 4,
+      "kind": "service-integration",
+      "requires": [
+        "0014/01"
+      ],
+      "surfaces": [
+        "service"
+      ],
+      "assertion": "Todos os testes 01-NN da RFC, incluindo snapshot em múltiplas páginas, store real, isolamento e falha/recovery"
+    },
+    {
+      "id": "UI-0014",
+      "stage": 5,
+      "kind": "e2e",
+      "requires": [
+        "0014/02"
+      ],
+      "surfaces": [
+        "web",
+        "macos"
+      ],
+      "assertion": "Todos os testes 02-NN da RFC pelo módulo real com serviço real; foco, erro, estado stale, segurança"
+    },
+    {
+      "id": "SERVICE-0015",
+      "stage": 4,
+      "kind": "service-integration",
+      "requires": [
+        "0015/01"
+      ],
+      "surfaces": [
+        "service"
+      ],
+      "assertion": "Todos os testes 01-NN da RFC, incluindo snapshot em múltiplas páginas, store real, isolamento e falha/recovery"
+    },
+    {
+      "id": "UI-0015",
+      "stage": 5,
+      "kind": "e2e",
+      "requires": [
+        "0015/02"
+      ],
+      "surfaces": [
+        "web",
+        "macos"
+      ],
+      "assertion": "Todos os testes 02-NN da RFC pelo módulo real com serviço real; foco, erro, estado stale, segurança"
+    },
+    {
+      "id": "SERVICE-0016",
+      "stage": 2,
+      "kind": "service-integration",
+      "requires": [
+        "0016/01"
+      ],
+      "surfaces": [
+        "service"
+      ],
+      "assertion": "Todos os testes 01-NN da RFC, incluindo snapshot em múltiplas páginas, store real, isolamento e falha/recovery"
+    },
+    {
+      "id": "UI-0016",
+      "stage": 4,
+      "kind": "e2e",
+      "requires": [
+        "0016/02"
+      ],
+      "surfaces": [
+        "web",
+        "macos"
+      ],
+      "assertion": "Todos os testes 02-NN da RFC pelo módulo real com serviço real; foco, erro, estado stale, segurança"
+    },
+    {
+      "id": "CONTEXT-CHAIN",
+      "stage": 3,
+      "kind": "service-integration",
+      "requires": [
+        "0003/01",
+        "0004/01",
+        "0005/01"
+      ],
+      "surfaces": [
+        "service"
+      ],
+      "assertion": "Prepare/pin/queue/resolve/adapter: conferir bytes/roles/hash nos frames outbound; referência excluída ausente; crash entre pin e enqueue não perde contexto nem vaza pin"
+    },
+    {
+      "id": "HISTORY-CHAIN",
+      "stage": 4,
+      "kind": "service-integration",
+      "requires": [
+        "0004/01",
+        "0011/01",
+        "0012/01"
+      ],
+      "surfaces": [
+        "service"
+      ],
+      "assertion": "MCP read e handoff leem mensagens completas de >100 itens; boundary estável durante append; cliente sem cache"
+    },
+    {
+      "id": "AUTH-REAL",
+      "stage": 3,
+      "kind": "service-integration",
+      "requires": [
+        "0010/01"
+      ],
+      "surfaces": [
+        "service"
+      ],
+      "assertion": "MiddlewareAuth real: cliente limpo pareia e chama API; audience errada, refresh usado/expirado e token revogado recusados; indisponibilidade falha fechada"
+    },
+    {
+      "id": "SHELL-CHAIN",
+      "stage": 6,
+      "kind": "e2e",
+      "requires": [
+        "0002/02",
+        "0003/02",
+        "0004/02",
+        "0005/02",
+        "0006/02",
+        "0007/02",
+        "0008/02",
+        "0009/02",
+        "0010/02",
+        "0011/02",
+        "0012/02",
+        "0013/02",
+        "0014/02",
+        "0015/02",
+        "0016/02"
+      ],
+      "surfaces": [
+        "web",
+        "macos"
+      ],
+      "assertion": "Shell final: projeto/worktree→contexto→aprovação→tool/task→diff/restore→PR fixture→captura/recall→fork→restart; verificar dados no provider, receipts, Git e memória"
+    },
+    {
+      "id": "AUTH-SHELL",
+      "stage": 6,
+      "kind": "e2e",
+      "requires": [
+        "0010/02",
+        "0003/02"
+      ],
+      "surfaces": [
+        "web",
+        "macos"
+      ],
+      "assertion": "Sessão real MiddlewareAuth pelo cliente limpo: grant, uso, refresh, revogação e parada de stream em 1000 ms; nenhuma credencial previamente injetada"
+    },
+    {
+      "id": "PACKAGED",
+      "stage": 6,
+      "kind": "e2e",
+      "requires": [
+        "0016/02"
+      ],
+      "surfaces": [
+        "macos"
+      ],
+      "assertion": "Bundle real universal; hashes/ref após assinatura; 1 helper managed; external sem controle de processo; major incompatível preserva wiki/legado"
+    }
+  ]
+}

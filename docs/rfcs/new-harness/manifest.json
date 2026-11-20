@@ -1,0 +1,286 @@
+{
+  "version": "0.2.0",
+  "state": "draft",
+  "date": "2026-11-01",
+  "milestone": "New Harness.",
+  "upstream": {
+    "repository": "pingdotgg/t3code",
+    "commit": "5732bbee397f0a2b0e61d0c2e432f01dca6df3dc"
+  },
+  "features": [
+    {
+      "rfc": 2,
+      "path": "0002-runtime-duravel.md",
+      "module": "runtime",
+      "owner": "PocketKernel",
+      "depends_on": [],
+      "phase_01_stage": 1,
+      "phase_02_stage": 1,
+      "issue": 23,
+      "issue_url": "https://github.com/irinery/pocketwiki/issues/23"
+    },
+    {
+      "rfc": 3,
+      "path": "0003-providers-capabilities.md",
+      "module": "providers",
+      "owner": "PocketKernel + MiddlewareAuth",
+      "depends_on": [
+        2
+      ],
+      "phase_01_stage": 2,
+      "phase_02_stage": 4,
+      "issue": 24,
+      "issue_url": "https://github.com/irinery/pocketwiki/issues/24"
+    },
+    {
+      "rfc": 4,
+      "path": "0004-threads-runs-fila.md",
+      "module": "threads",
+      "owner": "PocketKernel",
+      "depends_on": [
+        2,
+        3,
+        5,
+        6,
+        7
+      ],
+      "phase_01_stage": 3,
+      "phase_02_stage": 5,
+      "issue": 25,
+      "issue_url": "https://github.com/irinery/pocketwiki/issues/25"
+    },
+    {
+      "rfc": 5,
+      "path": "0005-composer-contexto.md",
+      "module": "composer",
+      "owner": "PocketWiki",
+      "depends_on": [
+        2
+      ],
+      "phase_01_stage": 2,
+      "phase_02_stage": 4,
+      "issue": 26,
+      "issue_url": "https://github.com/irinery/pocketwiki/issues/26"
+    },
+    {
+      "rfc": 6,
+      "path": "0006-permissoes-aprovacoes.md",
+      "module": "permissions",
+      "owner": "PocketKernel",
+      "depends_on": [
+        2
+      ],
+      "phase_01_stage": 2,
+      "phase_02_stage": 4,
+      "issue": 27,
+      "issue_url": "https://github.com/irinery/pocketwiki/issues/27"
+    },
+    {
+      "rfc": 7,
+      "path": "0007-projetos-worktrees.md",
+      "module": "workspaces",
+      "owner": "PocketKernel",
+      "depends_on": [
+        2
+      ],
+      "phase_01_stage": 2,
+      "phase_02_stage": 4,
+      "issue": 28,
+      "issue_url": "https://github.com/irinery/pocketwiki/issues/28"
+    },
+    {
+      "rfc": 8,
+      "path": "0008-diff-checkpoint-rollback.md",
+      "module": "checkpoints",
+      "owner": "PocketKernel",
+      "depends_on": [
+        2,
+        3,
+        6,
+        7
+      ],
+      "phase_01_stage": 3,
+      "phase_02_stage": 5,
+      "issue": 29,
+      "issue_url": "https://github.com/irinery/pocketwiki/issues/29"
+    },
+    {
+      "rfc": 9,
+      "path": "0009-terminal-tasks.md",
+      "module": "terminal",
+      "owner": "PocketKernel",
+      "depends_on": [
+        2,
+        6,
+        7
+      ],
+      "phase_01_stage": 3,
+      "phase_02_stage": 5,
+      "issue": 30,
+      "issue_url": "https://github.com/irinery/pocketwiki/issues/30"
+    },
+    {
+      "rfc": 10,
+      "path": "0010-ambientes-remotos.md",
+      "module": "environments",
+      "owner": "PocketWiki + PocketKernel + MiddlewareAuth",
+      "depends_on": [
+        2,
+        6
+      ],
+      "phase_01_stage": 3,
+      "phase_02_stage": 5,
+      "issue": 31,
+      "issue_url": "https://github.com/irinery/pocketwiki/issues/31"
+    },
+    {
+      "rfc": 11,
+      "path": "0011-mcp-agentes-externos.md",
+      "module": "orchestrator-mcp",
+      "owner": "PocketKernel",
+      "depends_on": [
+        2,
+        4,
+        6,
+        10
+      ],
+      "phase_01_stage": 4,
+      "phase_02_stage": 5,
+      "issue": 32,
+      "issue_url": "https://github.com/irinery/pocketwiki/issues/32"
+    },
+    {
+      "rfc": 12,
+      "path": "0012-fork-handoff-portavel.md",
+      "module": "handoffs",
+      "owner": "PocketKernel",
+      "depends_on": [
+        2,
+        3,
+        4,
+        13
+      ],
+      "phase_01_stage": 4,
+      "phase_02_stage": 5,
+      "issue": 33,
+      "issue_url": "https://github.com/irinery/pocketwiki/issues/33"
+    },
+    {
+      "rfc": 13,
+      "path": "0013-memoria-evidencias.md",
+      "module": "memory",
+      "owner": "PocketWiki",
+      "depends_on": [
+        2
+      ],
+      "phase_01_stage": 2,
+      "phase_02_stage": 4,
+      "issue": 34,
+      "issue_url": "https://github.com/irinery/pocketwiki/issues/34"
+    },
+    {
+      "rfc": 14,
+      "path": "0014-git-pr-review.md",
+      "module": "source-control",
+      "owner": "PocketKernel",
+      "depends_on": [
+        2,
+        4,
+        6,
+        7,
+        8
+      ],
+      "phase_01_stage": 4,
+      "phase_02_stage": 5,
+      "issue": 35,
+      "issue_url": "https://github.com/irinery/pocketwiki/issues/35"
+    },
+    {
+      "rfc": 15,
+      "path": "0015-navegacao-inbox.md",
+      "module": "navigation",
+      "owner": "PocketKernel + PocketWiki",
+      "depends_on": [
+        2,
+        4
+      ],
+      "phase_01_stage": 4,
+      "phase_02_stage": 5,
+      "issue": 36,
+      "issue_url": "https://github.com/irinery/pocketwiki/issues/36"
+    },
+    {
+      "rfc": 16,
+      "path": "0016-diagnostico-compatibilidade.md",
+      "module": "diagnostics",
+      "owner": "PocketWiki + PocketKernel",
+      "depends_on": [
+        2
+      ],
+      "phase_01_stage": 2,
+      "phase_02_stage": 4,
+      "issue": 37,
+      "issue_url": "https://github.com/irinery/pocketwiki/issues/37"
+    }
+  ],
+  "enablers": [
+    {
+      "key": "NH-00",
+      "number": 21,
+      "url": "https://github.com/irinery/pocketwiki/issues/21",
+      "title": "[New Harness][E0] Congelar contratos v1, registro modular e dependências"
+    },
+    {
+      "key": "NH-TEST",
+      "number": 22,
+      "url": "https://github.com/irinery/pocketwiki/issues/22",
+      "title": "[New Harness][E0] Rig E2E determinístico com browser, app e Kernel reais"
+    }
+  ],
+  "gates": [
+    {
+      "key": "GATE-E0",
+      "number": 38,
+      "url": "https://github.com/irinery/pocketwiki/issues/38",
+      "title": "[New Harness][Gate E0] Revisão e E2E determinístico da etapa integrada"
+    },
+    {
+      "key": "GATE-E1",
+      "number": 39,
+      "url": "https://github.com/irinery/pocketwiki/issues/39",
+      "title": "[New Harness][Gate E1] Revisão e E2E determinístico da etapa integrada"
+    },
+    {
+      "key": "GATE-E2",
+      "number": 40,
+      "url": "https://github.com/irinery/pocketwiki/issues/40",
+      "title": "[New Harness][Gate E2] Revisão e E2E determinístico da etapa integrada"
+    },
+    {
+      "key": "GATE-E3",
+      "number": 41,
+      "url": "https://github.com/irinery/pocketwiki/issues/41",
+      "title": "[New Harness][Gate E3] Revisão e E2E determinístico da etapa integrada"
+    },
+    {
+      "key": "GATE-E4",
+      "number": 42,
+      "url": "https://github.com/irinery/pocketwiki/issues/42",
+      "title": "[New Harness][Gate E4] Revisão e E2E determinístico da etapa integrada"
+    },
+    {
+      "key": "GATE-E5",
+      "number": 43,
+      "url": "https://github.com/irinery/pocketwiki/issues/43",
+      "title": "[New Harness][Gate E5] Revisão e E2E determinístico da etapa integrada"
+    },
+    {
+      "key": "GATE-E6",
+      "number": 44,
+      "url": "https://github.com/irinery/pocketwiki/issues/44",
+      "title": "[New Harness][Gate E6] Revisão e E2E determinístico da etapa integrada"
+    }
+  ],
+  "documentation_readiness": "ready_to_start_e0",
+  "gate_e0_passed": false
+}

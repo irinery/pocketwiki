@@ -1,0 +1,7 @@
+[
+ {"id":"valid","accept":true,"value":{"draft_id":"55555555-5555-4555-8555-555555555555","thread_id":"44444444-4444-4444-8444-444444444444","text":"Olá","references":[],"revision":0}},
+ {"id":"extra","accept":false,"value":{"draft_id":"55555555-5555-4555-8555-555555555555","thread_id":"44444444-4444-4444-8444-444444444444","text":"Olá","references":[],"revision":0,"extra":true}},
+ {"id":"null","accept":false,"value":{"draft_id":"55555555-5555-4555-8555-555555555555","thread_id":"44444444-4444-4444-8444-444444444444","text":null,"references":[],"revision":0}},
+ {"id":"other-thread","accept":false,"value":{"draft_id":"55555555-5555-4555-8555-555555555555","thread_id":"22222222-2222-4222-8222-222222222222","text":"Olá","references":[],"revision":0}},
+ {"id":"unsafe-revision","accept":false,"value":{"draft_id":"55555555-5555-4555-8555-555555555555","thread_id":"44444444-4444-4444-8444-444444444444","text":"Olá","references":[],"revision":9007199254740992}}
+]

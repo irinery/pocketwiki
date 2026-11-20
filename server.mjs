@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import dgram from 'node:dgram';
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { homedir, networkInterfaces } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -54,6 +54,9 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && url.pathname.startsWith('/assets/')) {
+      if (url.pathname === '/assets/favicon.png') {
+        return sendOptionalFile(res, path.join(__dirname, 'favicon.png'), 'image/png');
+      }
       return sendStaticAsset(res, url.pathname);
     }
 
@@ -238,6 +241,12 @@ server.listen(PORT, HOST, async () => {
   console.log(`PocketKernel: ${runtime.kernel.baseUrl}`);
   console.log(`MiddlewareAuth: ${runtime.middlewareAuth.baseUrl}`);
   console.log(`LM Studio provider: ${runtime.ai.baseUrl}`);
+  if (process.env.NH_TEST_READY_FILE) {
+    const address = server.address();
+    if (address && typeof address === 'object') {
+      await writeFile(process.env.NH_TEST_READY_FILE, JSON.stringify({ http: `http://${HOST}:${address.port}`, port: address.port }) + '\n', { mode: 0o600 });
+    }
+  }
   if (mdnsEnabled) startMdnsResponder(publicHosts, PORT);
 });
 

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="NH-TEST E0/macos" tests="1" failures="1" errors="0" skipped="0">
+  <testcase classname="NH-TEST.macos" name="LEGACY-00"><failure message="scenario failed; inspect redacted shard log"/></testcase>
+</testsuite>

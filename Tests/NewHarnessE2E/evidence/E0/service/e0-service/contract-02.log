@@ -1,0 +1,30 @@
+$ npm run test:harness-contracts
+exit=0
+--- stdout ---
+
+> pocketwiki@0.1.0 test:harness-contracts
+> node --test src/harness/contracts/validate.test.mjs src/harness/local-host.test.mjs && sh scripts/test-harness-contracts-swift.sh
+
+✔ shared NH-00 corpus matches expected acceptance in JavaScript (63.408083ms)
+✔ commands require a registered mutation and preserve the closed envelope (0.344917ms)
+✔ capabilities expose only implemented operations (0.305208ms)
+✔ future operations and unknown protocol versions remain unavailable (0.312208ms)
+✔ shared operation corpus covers every registered operation and its validator path (2.01475ms)
+✔ all 15 snapshots, referenced entities, and module event variants have valid and nested closed cases (0.785583ms)
+✔ optional and nullable are independent (0.115667ms)
+✔ permission action discriminators reject fields from other variants and mismatched request metadata (0.097917ms)
+✔ local bootstrap delivers a random bearer and persists only its scoped verifier (2.51425ms)
+✔ local credential expires at the inclusive TTL boundary (0.199291ms)
+✔ local bootstrap refuses scopes the host did not grant (0.106667ms)
+✔ local credentials bind an aggregate and persist revocation after process delivery failure (0.13325ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 158.274042
+Swift corpus: 910 slots passed
+
+--- stderr ---

@@ -1,0 +1,6 @@
+$ node Tests/NewHarnessE2E/legacy-web-host.mjs
+exit=0
+--- stdout ---
+LEGACY-00/web real PocketWiki + PocketKernel + MiddlewareAuth bridge and restore passed
+
+--- stderr ---

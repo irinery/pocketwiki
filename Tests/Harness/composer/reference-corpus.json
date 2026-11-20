@@ -1,0 +1,96 @@
+[
+  {
+    "id": "valid",
+    "accept": true,
+    "value": {
+      "reference_id": "99999999-9999-4999-8999-999999999999",
+      "kind": "wiki",
+      "relative_path": "pages/a.md",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "size_bytes": 4,
+      "trust": "untrusted_content"
+    }
+  },
+  {
+    "id": "escape",
+    "accept": false,
+    "value": {
+      "reference_id": "99999999-9999-4999-8999-999999999999",
+      "kind": "wiki",
+      "relative_path": "../outside",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "size_bytes": 4,
+      "trust": "untrusted_content"
+    }
+  },
+  {
+    "id": "absolute",
+    "accept": false,
+    "value": {
+      "reference_id": "99999999-9999-4999-8999-999999999999",
+      "kind": "wiki",
+      "relative_path": "/outside",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "size_bytes": 4,
+      "trust": "untrusted_content"
+    }
+  },
+  {
+    "id": "oversize",
+    "accept": false,
+    "value": {
+      "reference_id": "99999999-9999-4999-8999-999999999999",
+      "kind": "wiki",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "size_bytes": 4194305,
+      "trust": "untrusted_content"
+    }
+  },
+  {
+    "id": "null",
+    "accept": false,
+    "value": {
+      "reference_id": "99999999-9999-4999-8999-999999999999",
+      "kind": "wiki",
+      "relative_path": null,
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "size_bytes": 4,
+      "trust": "untrusted_content"
+    }
+  },
+  {
+    "id": "extra",
+    "accept": false,
+    "value": {
+      "reference_id": "99999999-9999-4999-8999-999999999999",
+      "kind": "wiki",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "size_bytes": 4,
+      "trust": "untrusted_content",
+      "extra": true
+    }
+  },
+  {
+    "id": "uuid",
+    "accept": false,
+    "value": {
+      "reference_id": "99999999-9999-0999-0999-999999999999",
+      "kind": "wiki",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "size_bytes": 4,
+      "trust": "untrusted_content"
+    }
+  },
+  {
+    "id": "nul",
+    "accept": false,
+    "value": {
+      "reference_id": "99999999-9999-4999-8999-999999999999",
+      "kind": "wiki",
+      "relative_path": "x\u0000y",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "size_bytes": 4,
+      "trust": "untrusted_content"
+    }
+  }
+]

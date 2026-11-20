@@ -13,9 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="PocketWiki">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<script src="/assets/marked.min.js"></script>
 <script src="/assets/lz-string.min.js"></script>
 <style>
 :root {
@@ -4412,7 +4410,10 @@ function syncAiSettingsFromInputs(){
   const middlewareToken = $('#ai-settings-token')?.value.trim();
   const memoryWebToken = $('#ai-settings-memory-token')?.value.trim();
   const baseUrl = $('#ai-settings-base-url')?.value.trim();
-  const model = $('#ai-model')?.value?.trim() || $('#ai-settings-model')?.value.trim();
+  const settingsModal = $('#ai-settings-modal');
+  const model = settingsModal && !settingsModal.classList.contains('hidden')
+    ? $('#ai-settings-model')?.value.trim()
+    : $('#ai-model')?.value?.trim();
   const apiKeyInput = $('#ai-settings-api-key');
   if (method) state.ai.providerMethod = method === 'lmstudio' ? 'lmstudio' : 'openai';
   if (reasoning) state.ai.reasoning = reasoning;
@@ -5182,7 +5183,11 @@ async function fetchPocketKernel(question){
     text: question,
     channel: 'web',
     app_id: 'pocketwiki',
-    user_id: state.ai.kernelUserId || 'web'
+    user_id: state.ai.kernelUserId || 'web',
+    provider_id: aiProvider(),
+    profile_id: state.ai.middlewareProfileId || 'default',
+    model_id: state.ai.model || undefined,
+    desired_profile: 'wiki'
   };
   if (state.appConfig?.kernelProxy && location.protocol.startsWith('http')) {
     return fetch('/api/kernel/query', {

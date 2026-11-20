@@ -1,0 +1,23 @@
+$ npm run test:new-harness-rig
+exit=0
+--- stdout ---
+
+> pocketwiki@0.1.0 test:new-harness-rig
+> node --test Tests/NewHarnessE2E/*.test.mjs
+
+✔ E0 aggregator emits gate_passed only for the complete required matrix (0.556791ms)
+✔ aggregator rejects a missing surface pair (0.199583ms)
+✔ aggregator rejects failed, skipped, duplicate and unexpected cases (0.178334ms)
+✔ aggregator rejects divergent SHAs, hashes and forbidden authentication modes (0.168084ms)
+✔ aggregator rejects a non-zero shard exit and unsafe artifacts (0.174209ms)
+✔ file aggregator requires real artifacts contained in each report directory (5.108042ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 60.513833
+
+--- stderr ---

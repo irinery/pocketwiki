@@ -1,0 +1,1762 @@
+{
+  "protocol": "harness.v1",
+  "documentary_source_sha": "5311a8aae2876c572f25b79540f38ee0acac7121",
+  "operations": [
+    {
+      "name": "runtime.dispatch",
+      "interface_id": "IF-0002-01-1",
+      "module": "runtime",
+      "rfc": 2,
+      "owner": "PocketKernel",
+      "class": "mutation",
+      "input_schema": "operationInput_runtime_dispatch",
+      "input_fields": [
+        {
+          "name": "command_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "UUID estável por intenção"
+        },
+        {
+          "name": "thread_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "thread autorizado"
+        },
+        {
+          "name": "expected_revision",
+          "type": "int",
+          "required": true,
+          "validation": ">= 0"
+        },
+        {
+          "name": "operation",
+          "type": "enum[submit,cancel,resume]",
+          "required": true,
+          "validation": "lista fechada"
+        },
+        {
+          "name": "text",
+          "type": "string",
+          "required": true,
+          "validation": "0..32768 bytes UTF-8; submit exige 1..32768"
+        },
+        {
+          "name": "run_id",
+          "type": "uuid?",
+          "required": false,
+          "validation": "obrigatório em cancel/resume; ausente em submit"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-RUNTIME-DISPATCH"
+    },
+    {
+      "name": "runtime.receipt",
+      "interface_id": "IF-0002-01-2",
+      "module": "runtime",
+      "rfc": 2,
+      "owner": "PocketKernel",
+      "class": "read",
+      "input_schema": "operationInput_runtime_receipt",
+      "input_fields": [
+        {
+          "name": "command_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "intenção do mesmo principal"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-RUNTIME-RECEIPT"
+    },
+    {
+      "name": "runtime.events",
+      "interface_id": "IF-0002-01-3",
+      "module": "runtime",
+      "rfc": 2,
+      "owner": "PocketKernel",
+      "class": "read",
+      "input_schema": "operationInput_runtime_events",
+      "input_fields": [
+        {
+          "name": "thread_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "thread legível"
+        },
+        {
+          "name": "after_seq",
+          "type": "int",
+          "required": true,
+          "validation": ">=0"
+        },
+        {
+          "name": "limit",
+          "type": "int",
+          "required": true,
+          "validation": "1..100"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-RUNTIME-EVENTS"
+    },
+    {
+      "name": "providers.select",
+      "interface_id": "IF-0003-01-1",
+      "module": "providers",
+      "rfc": 3,
+      "owner": "PocketKernel + MiddlewareAuth",
+      "class": "mutation",
+      "input_schema": "operationInput_providers_select",
+      "input_fields": [
+        {
+          "name": "provider_id",
+          "type": "string",
+          "required": true,
+          "validation": "1..120 bytes; ID do catálogo"
+        },
+        {
+          "name": "account_ref",
+          "type": "string",
+          "required": true,
+          "validation": "1..120 bytes; referência opaca, nunca secret"
+        },
+        {
+          "name": "model_id",
+          "type": "string",
+          "required": true,
+          "validation": "1..120 bytes; catálogo atual"
+        },
+        {
+          "name": "reasoning",
+          "type": "string?",
+          "required": false,
+          "validation": "ID publicado pelo modelo; ausente usa default"
+        },
+        {
+          "name": "mode",
+          "type": "enum[inference,agent]",
+          "required": true,
+          "validation": "compatível com provider"
+        },
+        {
+          "name": "catalog_revision",
+          "type": "int",
+          "required": true,
+          "validation": ">= 1; deve coincidir"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-PROVIDERS-SELECT"
+    },
+    {
+      "name": "providers.catalog",
+      "interface_id": "IF-0003-01-2",
+      "module": "providers",
+      "rfc": 3,
+      "owner": "PocketKernel + MiddlewareAuth",
+      "class": "read",
+      "input_schema": "operationInput_providers_catalog",
+      "input_fields": [
+        {
+          "name": "project_id",
+          "type": "uuid?",
+          "required": false,
+          "validation": "projeto legível"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-PROVIDERS-CATALOG"
+    },
+    {
+      "name": "threads.message",
+      "interface_id": "IF-0004-01-1",
+      "module": "threads",
+      "rfc": 4,
+      "owner": "PocketKernel",
+      "class": "mutation",
+      "input_schema": "operationInput_threads_message",
+      "input_fields": [
+        {
+          "name": "thread_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "thread autorizado"
+        },
+        {
+          "name": "message_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "ID estável"
+        },
+        {
+          "name": "action",
+          "type": "enum[enqueue,edit,remove,steer,resume,cancel]",
+          "required": true,
+          "validation": "lista fechada"
+        },
+        {
+          "name": "text",
+          "type": "string",
+          "required": true,
+          "validation": "0..32768 bytes; enqueue/edit/steer exige conteúdo"
+        },
+        {
+          "name": "queue_revision",
+          "type": "int",
+          "required": true,
+          "validation": ">= 0"
+        },
+        {
+          "name": "binding_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "binding do próximo run ou run ativo em steer"
+        },
+        {
+          "name": "prepared_id",
+          "type": "uuid?",
+          "required": false,
+          "validation": "obrigatório com referências; contexto pertencente ao mesmo principal/thread/environment"
+        },
+        {
+          "name": "manifest_sha256",
+          "type": "sha256?",
+          "required": false,
+          "validation": "obrigatório junto de prepared_id; igual ao manifesto preparado"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-THREADS-MESSAGE"
+    },
+    {
+      "name": "threads.create",
+      "interface_id": "IF-0004-01-2",
+      "module": "threads",
+      "rfc": 4,
+      "owner": "PocketKernel",
+      "class": "mutation",
+      "input_schema": "operationInput_threads_create",
+      "input_fields": [
+        {
+          "name": "project_id",
+          "type": "uuid?",
+          "required": false,
+          "validation": "projeto autorizado; ausente scratch"
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": true,
+          "validation": "1..200 caracteres"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-THREADS-CREATE"
+    },
+    {
+      "name": "threads.list",
+      "interface_id": "IF-0004-01-3",
+      "module": "threads",
+      "rfc": 4,
+      "owner": "PocketKernel",
+      "class": "read",
+      "input_schema": "operationInput_threads_list",
+      "input_fields": [
+        {
+          "name": "after_id",
+          "type": "uuid?",
+          "required": false,
+          "validation": "cursor da página anterior"
+        },
+        {
+          "name": "limit",
+          "type": "int",
+          "required": true,
+          "validation": "1..100"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-THREADS-LIST"
+    },
+    {
+      "name": "threads.history",
+      "interface_id": "IF-0004-01-4",
+      "module": "threads",
+      "rfc": 4,
+      "owner": "PocketKernel",
+      "class": "read",
+      "input_schema": "operationInput_threads_history",
+      "input_fields": [
+        {
+          "name": "thread_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "thread legível"
+        },
+        {
+          "name": "through_seq",
+          "type": "int",
+          "required": true,
+          "validation": "boundary concluído; 0 representa histórico vazio"
+        },
+        {
+          "name": "cursor",
+          "type": "string?",
+          "required": false,
+          "validation": "cursor opaco da mesma revisão"
+        },
+        {
+          "name": "limit",
+          "type": "int",
+          "required": true,
+          "validation": "1..100"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-THREADS-HISTORY"
+    },
+    {
+      "name": "composer.prepare",
+      "interface_id": "IF-0005-01-1",
+      "module": "composer",
+      "rfc": 5,
+      "owner": "PocketWiki",
+      "class": "mutation",
+      "input_schema": "operationInput_composer_prepare",
+      "input_fields": [
+        {
+          "name": "thread_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "thread autorizado"
+        },
+        {
+          "name": "draft_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "ID local estável"
+        },
+        {
+          "name": "text",
+          "type": "string",
+          "required": true,
+          "validation": "1..32768 bytes"
+        },
+        {
+          "name": "references",
+          "type": "array[ContextReference]",
+          "required": true,
+          "validation": "0..20; máximo agregado 4 MiB"
+        },
+        {
+          "name": "context_budget_bytes",
+          "type": "int",
+          "required": true,
+          "validation": "1024..65536; default 16384"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-COMPOSER-PREPARE"
+    },
+    {
+      "name": "composer.stage",
+      "interface_id": "IF-0005-01-2",
+      "module": "composer",
+      "rfc": 5,
+      "owner": "PocketWiki",
+      "class": "local",
+      "input_schema": "operationInput_composer_stage",
+      "input_fields": [
+        {
+          "name": "thread_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "thread autorizada"
+        },
+        {
+          "name": "filename",
+          "type": "string",
+          "required": true,
+          "validation": "1..255 bytes; basename sem path"
+        },
+        {
+          "name": "mime",
+          "type": "enum[text/plain,text/markdown,image/png,image/jpeg]",
+          "required": true,
+          "validation": "lista fechada"
+        },
+        {
+          "name": "content_base64",
+          "type": "string",
+          "required": true,
+          "validation": "base64 válido; <=5592408 bytes codificados; limite decodificado da fase prevalece"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-COMPOSER-STAGE"
+    },
+    {
+      "name": "composer.draft.save",
+      "interface_id": "IF-0005-01-3",
+      "module": "composer",
+      "rfc": 5,
+      "owner": "PocketWiki",
+      "class": "local",
+      "input_schema": "operationInput_composer_draft_save",
+      "input_fields": [
+        {
+          "name": "draft",
+          "type": "ComposerDraft",
+          "required": true,
+          "validation": "validar recursivamente; CAS por revision"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-COMPOSER-DRAFT-SAVE"
+    },
+    {
+      "name": "composer.resolve",
+      "interface_id": "IF-0005-01-4",
+      "module": "composer",
+      "rfc": 5,
+      "owner": "PocketWiki",
+      "class": "local",
+      "input_schema": "operationInput_composer_resolve",
+      "input_fields": [
+        {
+          "name": "prepared_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "principal/thread/environment associados à identidade delegada"
+        },
+        {
+          "name": "manifest_sha256",
+          "type": "sha256",
+          "required": true,
+          "validation": "hash canônico esperado"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-COMPOSER-RESOLVE"
+    },
+    {
+      "name": "composer.pin",
+      "interface_id": "IF-0005-01-5",
+      "module": "composer",
+      "rfc": 5,
+      "owner": "PocketWiki",
+      "class": "local",
+      "input_schema": "operationInput_composer_pin",
+      "input_fields": [
+        {
+          "name": "prepared_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "mesmo principal"
+        },
+        {
+          "name": "command_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "intenção estável que usará o contexto"
+        },
+        {
+          "name": "retain",
+          "type": "bool",
+          "required": true,
+          "validation": "true cria referência idempotente; false libera"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-COMPOSER-PIN"
+    },
+    {
+      "name": "permissions.respond",
+      "interface_id": "IF-0006-01-1",
+      "module": "permissions",
+      "rfc": 6,
+      "owner": "PocketKernel",
+      "class": "mutation",
+      "input_schema": "operationInput_permissions_respond",
+      "input_fields": [
+        {
+          "name": "request_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "pendência pertencente ao principal"
+        },
+        {
+          "name": "request_revision",
+          "type": "int",
+          "required": true,
+          "validation": ">= 1; CAS"
+        },
+        {
+          "name": "answer",
+          "type": "enum[approve_once,deny,answer]",
+          "required": true,
+          "validation": "tipo da pendência"
+        },
+        {
+          "name": "text",
+          "type": "string",
+          "required": true,
+          "validation": "0..4096 bytes; answer exige texto ou option_id"
+        },
+        {
+          "name": "option_id",
+          "type": "string?",
+          "required": false,
+          "validation": "ID dentre opções publicadas"
+        },
+        {
+          "name": "action_sha256",
+          "type": "sha256",
+          "required": true,
+          "validation": "igual à ação exibida"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-PERMISSIONS-RESPOND"
+    },
+    {
+      "name": "permissions.pending",
+      "interface_id": "IF-0006-01-2",
+      "module": "permissions",
+      "rfc": 6,
+      "owner": "PocketKernel",
+      "class": "read",
+      "input_schema": "operationInput_permissions_pending",
+      "input_fields": [
+        {
+          "name": "thread_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "thread autorizada"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-PERMISSIONS-PENDING"
+    },
+    {
+      "name": "permissions.mode",
+      "interface_id": "IF-0006-01-3",
+      "module": "permissions",
+      "rfc": 6,
+      "owner": "PocketKernel",
+      "class": "mutation",
+      "input_schema": "operationInput_permissions_mode",
+      "input_fields": [
+        {
+          "name": "thread_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "thread autorizada"
+        },
+        {
+          "name": "mode",
+          "type": "enum[supervised,edits,full]",
+          "required": true,
+          "validation": "lista fechada; scope próprio"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-PERMISSIONS-MODE"
+    },
+    {
+      "name": "workspaces.prepare",
+      "interface_id": "IF-0007-01-1",
+      "module": "workspaces",
+      "rfc": 7,
+      "owner": "PocketKernel",
+      "class": "mutation",
+      "input_schema": "operationInput_workspaces_prepare",
+      "input_fields": [
+        {
+          "name": "mode",
+          "type": "enum[project,worktree,scratch]",
+          "required": true,
+          "validation": "lista fechada"
+        },
+        {
+          "name": "base_sha",
+          "type": "sha1?",
+          "required": false,
+          "validation": "40 hex; obrigatório em worktree"
+        },
+        {
+          "name": "branch",
+          "type": "string?",
+          "required": false,
+          "validation": "git check-ref-format --branch; prefixo codex/"
+        },
+        {
+          "name": "thread_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "titular do lease"
+        },
+        {
+          "name": "settings_revision",
+          "type": "int",
+          "required": true,
+          "validation": ">= 0"
+        },
+        {
+          "name": "project_id",
+          "type": "uuid?",
+          "required": false,
+          "validation": "obrigatório em project/worktree; proibido em scratch"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-WORKSPACES-PREPARE"
+    },
+    {
+      "name": "workspaces.release",
+      "interface_id": "IF-0007-01-2",
+      "module": "workspaces",
+      "rfc": 7,
+      "owner": "PocketKernel",
+      "class": "mutation",
+      "input_schema": "operationInput_workspaces_release",
+      "input_fields": [
+        {
+          "name": "lease_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "lease pertencente ao principal"
+        },
+        {
+          "name": "remove",
+          "type": "bool",
+          "required": true,
+          "validation": "true exige idle e clean"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-WORKSPACES-RELEASE"
+    },
+    {
+      "name": "workspaces.settings",
+      "interface_id": "IF-0007-01-3",
+      "module": "workspaces",
+      "rfc": 7,
+      "owner": "PocketKernel",
+      "class": "mutation",
+      "input_schema": "operationInput_workspaces_settings",
+      "input_fields": [
+        {
+          "name": "project_id",
+          "type": "uuid?",
+          "required": false,
+          "validation": "projeto autorizado ou defaults do environment"
+        },
+        {
+          "name": "patch",
+          "type": "WorkspaceSettings",
+          "required": true,
+          "validation": "objeto fechado; não aceita credencial"
+        },
+        {
+          "name": "reset",
+          "type": "bool",
+          "required": true,
+          "validation": "true remove override; patch desconsiderado"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-WORKSPACES-SETTINGS"
+    },
+    {
+      "name": "workspaces.register_project",
+      "interface_id": "IF-0007-01-4",
+      "module": "workspaces",
+      "rfc": 7,
+      "owner": "PocketKernel",
+      "class": "mutation",
+      "input_schema": "operationInput_workspaces_register_project",
+      "input_fields": [
+        {
+          "name": "root_relative",
+          "type": "string",
+          "required": true,
+          "validation": "root já concedido pelo host; canonicalizar sem escape"
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": true,
+          "validation": "1..200 caracteres"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-WORKSPACES-REGISTER-PROJECT"
+    },
+    {
+      "name": "checkpoints.restore",
+      "interface_id": "IF-0008-01-1",
+      "module": "checkpoints",
+      "rfc": 8,
+      "owner": "PocketKernel",
+      "class": "mutation",
+      "input_schema": "operationInput_checkpoints_restore",
+      "input_fields": [
+        {
+          "name": "thread_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "thread autorizada"
+        },
+        {
+          "name": "checkpoint_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "checkpoint do mesmo workspace"
+        },
+        {
+          "name": "preview_sha256",
+          "type": "sha256",
+          "required": true,
+          "validation": "hash do plano de restore"
+        },
+        {
+          "name": "workspace_revision",
+          "type": "int",
+          "required": true,
+          "validation": ">= 1; deve coincidir"
+        },
+        {
+          "name": "approval_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "aprovação específica válida"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-CHECKPOINTS-RESTORE"
+    },
+    {
+      "name": "checkpoints.capture",
+      "interface_id": "IF-0008-01-2",
+      "module": "checkpoints",
+      "rfc": 8,
+      "owner": "PocketKernel",
+      "class": "mutation",
+      "input_schema": "operationInput_checkpoints_capture",
+      "input_fields": [
+        {
+          "name": "run_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "run autorizado"
+        },
+        {
+          "name": "boundary",
+          "type": "enum[before,after]",
+          "required": true,
+          "validation": "lista fechada"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-CHECKPOINTS-CAPTURE"
+    },
+    {
+      "name": "checkpoints.preview",
+      "interface_id": "IF-0008-01-3",
+      "module": "checkpoints",
+      "rfc": 8,
+      "owner": "PocketKernel",
+      "class": "read",
+      "input_schema": "operationInput_checkpoints_preview",
+      "input_fields": [
+        {
+          "name": "checkpoint_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "mesmo workspace autorizado"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-CHECKPOINTS-PREVIEW"
+    },
+    {
+      "name": "checkpoints.diff",
+      "interface_id": "IF-0008-01-4",
+      "module": "checkpoints",
+      "rfc": 8,
+      "owner": "PocketKernel",
+      "class": "read",
+      "input_schema": "operationInput_checkpoints_diff",
+      "input_fields": [
+        {
+          "name": "thread_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "thread legível"
+        },
+        {
+          "name": "scope",
+          "type": "enum[turn,branch]",
+          "required": true,
+          "validation": "lista fechada"
+        },
+        {
+          "name": "run_id",
+          "type": "uuid?",
+          "required": false,
+          "validation": "obrigatório em turn"
+        },
+        {
+          "name": "base_sha",
+          "type": "sha1?",
+          "required": false,
+          "validation": "obrigatório em branch"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-CHECKPOINTS-DIFF"
+    },
+    {
+      "name": "terminal.open",
+      "interface_id": "IF-0009-01-1",
+      "module": "terminal",
+      "rfc": 9,
+      "owner": "PocketKernel",
+      "class": "mutation",
+      "input_schema": "operationInput_terminal_open",
+      "input_fields": [
+        {
+          "name": "workspace_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "workspace com lease autorizado"
+        },
+        {
+          "name": "kind",
+          "type": "enum[pty,task]",
+          "required": true,
+          "validation": "lista fechada"
+        },
+        {
+          "name": "argv",
+          "type": "array[string]",
+          "required": true,
+          "validation": "1..64 argumentos, 4096 bytes cada; task obrigatório"
+        },
+        {
+          "name": "cols",
+          "type": "int",
+          "required": true,
+          "validation": "20..400"
+        },
+        {
+          "name": "rows",
+          "type": "int",
+          "required": true,
+          "validation": "5..200"
+        },
+        {
+          "name": "approval_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "aprovação da policy para execução"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-TERMINAL-OPEN"
+    },
+    {
+      "name": "terminal.input",
+      "interface_id": "IF-0009-01-2",
+      "module": "terminal",
+      "rfc": 9,
+      "owner": "PocketKernel",
+      "class": "mutation",
+      "input_schema": "operationInput_terminal_input",
+      "input_fields": [
+        {
+          "name": "terminal_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "terminal autorizado"
+        },
+        {
+          "name": "data_base64",
+          "type": "string",
+          "required": true,
+          "validation": "base64 válido; <=87384 bytes; decodificado <=64 KiB"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-TERMINAL-INPUT"
+    },
+    {
+      "name": "terminal.resize",
+      "interface_id": "IF-0009-01-3",
+      "module": "terminal",
+      "rfc": 9,
+      "owner": "PocketKernel",
+      "class": "mutation",
+      "input_schema": "operationInput_terminal_resize",
+      "input_fields": [
+        {
+          "name": "terminal_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "terminal autorizado"
+        },
+        {
+          "name": "cols",
+          "type": "int",
+          "required": true,
+          "validation": "20..400"
+        },
+        {
+          "name": "rows",
+          "type": "int",
+          "required": true,
+          "validation": "5..200"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-TERMINAL-RESIZE"
+    },
+    {
+      "name": "terminal.close",
+      "interface_id": "IF-0009-01-4",
+      "module": "terminal",
+      "rfc": 9,
+      "owner": "PocketKernel",
+      "class": "mutation",
+      "input_schema": "operationInput_terminal_close",
+      "input_fields": [
+        {
+          "name": "terminal_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "terminal autorizado"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-TERMINAL-CLOSE"
+    },
+    {
+      "name": "terminal.read",
+      "interface_id": "IF-0009-01-5",
+      "module": "terminal",
+      "rfc": 9,
+      "owner": "PocketKernel",
+      "class": "read",
+      "input_schema": "operationInput_terminal_read",
+      "input_fields": [
+        {
+          "name": "terminal_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "terminal legível"
+        },
+        {
+          "name": "after_seq",
+          "type": "int",
+          "required": true,
+          "validation": ">=0"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-TERMINAL-READ"
+    },
+    {
+      "name": "environments.pair",
+      "interface_id": "IF-0010-01-1",
+      "module": "environments",
+      "rfc": 10,
+      "owner": "PocketWiki + PocketKernel + MiddlewareAuth",
+      "class": "bootstrap",
+      "input_schema": "operationInput_environments_pair",
+      "input_fields": [
+        {
+          "name": "endpoint",
+          "type": "string",
+          "required": true,
+          "validation": "URL HTTPS sem credenciais/query; HTTP só loopback"
+        },
+        {
+          "name": "challenge_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "emitido pelo host autenticado"
+        },
+        {
+          "name": "challenge_secret",
+          "type": "string",
+          "required": true,
+          "validation": "32 bytes aleatórios codificados base64url"
+        },
+        {
+          "name": "server_fingerprint",
+          "type": "sha256",
+          "required": true,
+          "validation": "confirmado na tela dos 2 dispositivos"
+        },
+        {
+          "name": "requested_scopes",
+          "type": "array[enum[read,submit,approve,execute,context.read,memory.personal.read,memory.write,scm.write,scm.merge]]",
+          "required": true,
+          "validation": "subset da concessão do host"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-ENVIRONMENTS-PAIR"
+    },
+    {
+      "name": "environments.challenge",
+      "interface_id": "IF-0010-01-2",
+      "module": "environments",
+      "rfc": 10,
+      "owner": "PocketWiki + PocketKernel + MiddlewareAuth",
+      "class": "bootstrap",
+      "input_schema": "operationInput_environments_challenge",
+      "input_fields": [
+        {
+          "name": "requested_scopes",
+          "type": "array[enum[read,submit,approve,execute,context.read,memory.personal.read,memory.write,scm.write,scm.merge]]",
+          "required": true,
+          "validation": "1..9 únicos; host autenticado"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-ENVIRONMENTS-CHALLENGE"
+    },
+    {
+      "name": "environments.revoke",
+      "interface_id": "IF-0010-01-3",
+      "module": "environments",
+      "rfc": 10,
+      "owner": "PocketWiki + PocketKernel + MiddlewareAuth",
+      "class": "bootstrap",
+      "input_schema": "operationInput_environments_revoke",
+      "input_fields": [
+        {
+          "name": "connection_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "host/admin da conexão autorizada"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-ENVIRONMENTS-REVOKE"
+    },
+    {
+      "name": "environments.refresh",
+      "interface_id": "IF-0010-01-4",
+      "module": "environments",
+      "rfc": 10,
+      "owner": "PocketWiki + PocketKernel + MiddlewareAuth",
+      "class": "bootstrap",
+      "input_schema": "operationInput_environments_refresh",
+      "input_fields": [
+        {
+          "name": "session_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "sessão emitida para este dispositivo"
+        },
+        {
+          "name": "refresh_token",
+          "type": "string",
+          "required": true,
+          "validation": "32 bytes base64url; nunca em URL/log"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-ENVIRONMENTS-REFRESH"
+    },
+    {
+      "name": "mcp.thread.call",
+      "interface_id": "IF-0011-01-1",
+      "module": "orchestrator-mcp",
+      "rfc": 11,
+      "owner": "PocketKernel",
+      "class": "mutation",
+      "input_schema": "operationInput_mcp_thread_call",
+      "input_fields": [
+        {
+          "name": "tool",
+          "type": "enum[thread.list,thread.read,thread.start,thread.send,thread.interrupt]",
+          "required": true,
+          "validation": "prefixo wire harness.; lista fechada"
+        },
+        {
+          "name": "command_id",
+          "type": "uuid?",
+          "required": false,
+          "validation": "idempotência das tools de mutação"
+        },
+        {
+          "name": "thread_id",
+          "type": "uuid?",
+          "required": false,
+          "validation": "obrigatório read/send/interrupt"
+        },
+        {
+          "name": "project_id",
+          "type": "uuid?",
+          "required": false,
+          "validation": "obrigatório start em projeto; ausente cria scratch"
+        },
+        {
+          "name": "text",
+          "type": "string?",
+          "required": false,
+          "validation": "0..32768 bytes; start/send exige conteúdo"
+        },
+        {
+          "name": "after_seq",
+          "type": "int?",
+          "required": false,
+          "validation": ">= 0; cursor de leitura"
+        },
+        {
+          "name": "through_seq",
+          "type": "int?",
+          "required": false,
+          "validation": "thread.read: omitir somente na primeira página para obter boundary atual"
+        },
+        {
+          "name": "cursor",
+          "type": "string?",
+          "required": false,
+          "validation": "cursor de threads.history para thread.read"
+        },
+        {
+          "name": "binding_id",
+          "type": "uuid?",
+          "required": false,
+          "validation": "obrigatório em start/send; binding integrado E2"
+        },
+        {
+          "name": "message_id",
+          "type": "uuid?",
+          "required": false,
+          "validation": "obrigatório em start/send; intenção estável"
+        },
+        {
+          "name": "queue_revision",
+          "type": "int?",
+          "required": false,
+          "validation": "obrigatório em send/interrupt; CAS do snapshot"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-MCP-THREAD-CALL"
+    },
+    {
+      "name": "handoffs.prepare",
+      "interface_id": "IF-0012-01-1",
+      "module": "handoffs",
+      "rfc": 12,
+      "owner": "PocketKernel",
+      "class": "mutation",
+      "input_schema": "operationInput_handoffs_prepare",
+      "input_fields": [
+        {
+          "name": "source_thread_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "thread legível"
+        },
+        {
+          "name": "through_seq",
+          "type": "int",
+          "required": true,
+          "validation": ">= 0 e item concluído"
+        },
+        {
+          "name": "target_binding_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "binding autorizado"
+        },
+        {
+          "name": "mode",
+          "type": "enum[switch,fork,merge_back]",
+          "required": true,
+          "validation": "lista fechada"
+        },
+        {
+          "name": "history_budget_bytes",
+          "type": "int",
+          "required": true,
+          "validation": "1024..64000; default 16000"
+        },
+        {
+          "name": "current_request",
+          "type": "string",
+          "required": true,
+          "validation": "1..32768 bytes; nunca truncar"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-HANDOFFS-PREPARE"
+    },
+    {
+      "name": "handoffs.export",
+      "interface_id": "IF-0012-01-2",
+      "module": "handoffs",
+      "rfc": 12,
+      "owner": "PocketKernel",
+      "class": "read",
+      "input_schema": "operationInput_handoffs_export",
+      "input_fields": [
+        {
+          "name": "handoff_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "handoff legível"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-HANDOFFS-EXPORT"
+    },
+    {
+      "name": "handoffs.import",
+      "interface_id": "IF-0012-01-3",
+      "module": "handoffs",
+      "rfc": 12,
+      "owner": "PocketKernel",
+      "class": "mutation",
+      "input_schema": "operationInput_handoffs_import",
+      "input_fields": [
+        {
+          "name": "schema_version",
+          "type": "int",
+          "required": true,
+          "validation": "exatamente 1"
+        },
+        {
+          "name": "source_environment_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "proveniência sem conceder confiança"
+        },
+        {
+          "name": "messages",
+          "type": "array[HandoffMessage]",
+          "required": true,
+          "validation": "0..1000 mensagens; <=16 MiB total"
+        },
+        {
+          "name": "lineage",
+          "type": "ThreadLineage",
+          "required": true,
+          "validation": "IDs válidos; origem tratada como dado"
+        },
+        {
+          "name": "target_project_id",
+          "type": "uuid?",
+          "required": false,
+          "validation": "projeto autorizado"
+        },
+        {
+          "name": "package_sha256",
+          "type": "sha256",
+          "required": true,
+          "validation": "SHA-256 do pacote canônico sem este campo"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-HANDOFFS-IMPORT"
+    },
+    {
+      "name": "memory.recall_scoped",
+      "interface_id": "IF-0013-01-1",
+      "module": "memory",
+      "rfc": 13,
+      "owner": "PocketWiki",
+      "class": "read",
+      "input_schema": "operationInput_memory_recall_scoped",
+      "input_fields": [
+        {
+          "name": "environment_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "ambiente autorizado"
+        },
+        {
+          "name": "project_id",
+          "type": "uuid?",
+          "required": false,
+          "validation": "ausente restringe a thread; global exige scope próprio"
+        },
+        {
+          "name": "thread_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "thread autorizada"
+        },
+        {
+          "name": "question",
+          "type": "string",
+          "required": true,
+          "validation": "1..2000 caracteres Unicode"
+        },
+        {
+          "name": "include_personal_note",
+          "type": "bool",
+          "required": true,
+          "validation": "default false; exige scope memory.personal.read"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-MEMORY-RECALL-SCOPED"
+    },
+    {
+      "name": "memory.capture_scoped",
+      "interface_id": "IF-0013-01-2",
+      "module": "memory",
+      "rfc": 13,
+      "owner": "PocketWiki",
+      "class": "mutation",
+      "input_schema": "operationInput_memory_capture_scoped",
+      "input_fields": [
+        {
+          "name": "namespace",
+          "type": "MemoryNamespace",
+          "required": true,
+          "validation": "escopo autorizado"
+        },
+        {
+          "name": "events",
+          "type": "array[LegacyCaptureEvent]",
+          "required": true,
+          "validation": "1..32 eventos validados"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-MEMORY-CAPTURE-SCOPED"
+    },
+    {
+      "name": "memory.note.get",
+      "interface_id": "IF-0013-01-3",
+      "module": "memory",
+      "rfc": 13,
+      "owner": "PocketWiki",
+      "class": "read",
+      "input_schema": "operationInput_memory_note_get",
+      "input_fields": [
+        {
+          "name": "namespace",
+          "type": "MemoryNamespace",
+          "required": true,
+          "validation": "scope memory.personal.read para nota pessoal"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-MEMORY-NOTE-GET"
+    },
+    {
+      "name": "memory.note.put",
+      "interface_id": "IF-0013-01-4",
+      "module": "memory",
+      "rfc": 13,
+      "owner": "PocketWiki",
+      "class": "mutation",
+      "input_schema": "operationInput_memory_note_put",
+      "input_fields": [
+        {
+          "name": "namespace",
+          "type": "MemoryNamespace",
+          "required": true,
+          "validation": "scope de escrita próprio"
+        },
+        {
+          "name": "content",
+          "type": "string",
+          "required": true,
+          "validation": "0..16384 bytes UTF-8"
+        },
+        {
+          "name": "expected_revision",
+          "type": "int",
+          "required": true,
+          "validation": ">=0; CAS"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-MEMORY-NOTE-PUT"
+    },
+    {
+      "name": "memory.map_legacy",
+      "interface_id": "IF-0013-01-5",
+      "module": "memory",
+      "rfc": 13,
+      "owner": "PocketWiki",
+      "class": "mutation",
+      "input_schema": "operationInput_memory_map_legacy",
+      "input_fields": [
+        {
+          "name": "legacy_session_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "sessão legível e ainda não mapeada ou mesma intenção"
+        },
+        {
+          "name": "namespace",
+          "type": "MemoryNamespace",
+          "required": true,
+          "validation": "destino explicitamente autorizado"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-MEMORY-MAP-LEGACY"
+    },
+    {
+      "name": "source_control.preview",
+      "interface_id": "IF-0014-01-1",
+      "module": "source-control",
+      "rfc": 14,
+      "owner": "PocketKernel",
+      "class": "mutation",
+      "input_schema": "operationInput_source_control_preview",
+      "input_fields": [
+        {
+          "name": "thread_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "thread autorizada"
+        },
+        {
+          "name": "operation",
+          "type": "enum[link,create_draft,comment,review,merge]",
+          "required": true,
+          "validation": "lista fechada"
+        },
+        {
+          "name": "repository",
+          "type": "string",
+          "required": true,
+          "validation": "owner/repo da conexão autorizada"
+        },
+        {
+          "name": "pr_number",
+          "type": "int?",
+          "required": false,
+          "validation": ">=1; obrigatório exceto create_draft"
+        },
+        {
+          "name": "head_sha",
+          "type": "sha1",
+          "required": true,
+          "validation": "40 hex; revisão exata"
+        },
+        {
+          "name": "body",
+          "type": "string",
+          "required": true,
+          "validation": "0..16384 bytes; texto editável no preview"
+        },
+        {
+          "name": "host",
+          "type": "string",
+          "required": true,
+          "validation": "campos por variante conforme R3; URL nunca fornece credencial"
+        },
+        {
+          "name": "title",
+          "type": "string?",
+          "required": false,
+          "validation": "campos por variante conforme R3; URL nunca fornece credencial"
+        },
+        {
+          "name": "base_branch",
+          "type": "string?",
+          "required": false,
+          "validation": "campos por variante conforme R3; URL nunca fornece credencial"
+        },
+        {
+          "name": "head_branch",
+          "type": "string?",
+          "required": false,
+          "validation": "campos por variante conforme R3; URL nunca fornece credencial"
+        },
+        {
+          "name": "review_event",
+          "type": "enum[comment,approve,request_changes]?",
+          "required": false,
+          "validation": "campos por variante conforme R3; URL nunca fornece credencial"
+        },
+        {
+          "name": "merge_method",
+          "type": "enum[merge,squash,rebase]?",
+          "required": false,
+          "validation": "campos por variante conforme R3; URL nunca fornece credencial"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-SOURCE-CONTROL-PREVIEW"
+    },
+    {
+      "name": "source_control.execute",
+      "interface_id": "IF-0014-01-2",
+      "module": "source-control",
+      "rfc": 14,
+      "owner": "PocketKernel",
+      "class": "mutation",
+      "input_schema": "operationInput_source_control_execute",
+      "input_fields": [
+        {
+          "name": "preview_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "preview ainda válido"
+        },
+        {
+          "name": "action_sha256",
+          "type": "sha256",
+          "required": true,
+          "validation": "hash exibido ao usuário"
+        },
+        {
+          "name": "head_sha",
+          "type": "sha1",
+          "required": true,
+          "validation": "head ainda coincide"
+        },
+        {
+          "name": "approval_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "aprovação de uso único vinculada ao preview"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-SOURCE-CONTROL-EXECUTE"
+    },
+    {
+      "name": "source_control.links",
+      "interface_id": "IF-0014-01-3",
+      "module": "source-control",
+      "rfc": 14,
+      "owner": "PocketKernel",
+      "class": "read",
+      "input_schema": "operationInput_source_control_links",
+      "input_fields": [
+        {
+          "name": "thread_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "thread legível"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-SOURCE-CONTROL-LINKS"
+    },
+    {
+      "name": "navigation.update",
+      "interface_id": "IF-0015-01-1",
+      "module": "navigation",
+      "rfc": 15,
+      "owner": "PocketKernel + PocketWiki",
+      "class": "mutation",
+      "input_schema": "operationInput_navigation_update",
+      "input_fields": [
+        {
+          "name": "thread_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "thread autorizada"
+        },
+        {
+          "name": "action",
+          "type": "enum[pin,unpin,archive,unarchive,mark_read,reorder]",
+          "required": true,
+          "validation": "lista fechada"
+        },
+        {
+          "name": "before_thread_id",
+          "type": "uuid?",
+          "required": false,
+          "validation": "mesma seção/environment no reorder"
+        },
+        {
+          "name": "navigation_revision",
+          "type": "int",
+          "required": true,
+          "validation": ">=0; CAS"
+        },
+        {
+          "name": "read_through_seq",
+          "type": "int",
+          "required": true,
+          "validation": ">=0; só mark_read"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-NAVIGATION-UPDATE"
+    },
+    {
+      "name": "navigation.list",
+      "interface_id": "IF-0015-01-2",
+      "module": "navigation",
+      "rfc": 15,
+      "owner": "PocketKernel + PocketWiki",
+      "class": "read",
+      "input_schema": "operationInput_navigation_list",
+      "input_fields": [
+        {
+          "name": "project_id",
+          "type": "uuid?",
+          "required": false,
+          "validation": "projeto legível"
+        },
+        {
+          "name": "section",
+          "type": "enum[active,pinned,archived]",
+          "required": true,
+          "validation": "lista fechada"
+        },
+        {
+          "name": "after_position",
+          "type": "int?",
+          "required": false,
+          "validation": ">=0; junto de after_id"
+        },
+        {
+          "name": "after_id",
+          "type": "uuid?",
+          "required": false,
+          "validation": "junto de after_position"
+        },
+        {
+          "name": "revision",
+          "type": "int?",
+          "required": false,
+          "validation": "obrigatória com cursor"
+        },
+        {
+          "name": "limit",
+          "type": "int",
+          "required": true,
+          "validation": "1..100"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-NAVIGATION-LIST"
+    },
+    {
+      "name": "diagnostics.snapshot",
+      "interface_id": "IF-0016-01-1",
+      "module": "diagnostics",
+      "rfc": 16,
+      "owner": "PocketWiki + PocketKernel",
+      "class": "read",
+      "input_schema": "operationInput_diagnostics_snapshot",
+      "input_fields": [
+        {
+          "name": "environment_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "ambiente autorizado"
+        },
+        {
+          "name": "run_id",
+          "type": "uuid?",
+          "required": false,
+          "validation": "filtrar somente run legível"
+        },
+        {
+          "name": "include_logs",
+          "type": "bool",
+          "required": true,
+          "validation": "default false; somente logs redigidos"
+        },
+        {
+          "name": "max_bytes",
+          "type": "int",
+          "required": true,
+          "validation": "1024..1048576; default 262144"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-DIAGNOSTICS-SNAPSHOT"
+    },
+    {
+      "name": "diagnostics.export",
+      "interface_id": "IF-0016-01-2",
+      "module": "diagnostics",
+      "rfc": 16,
+      "owner": "PocketWiki + PocketKernel",
+      "class": "mutation",
+      "input_schema": "operationInput_diagnostics_export",
+      "input_fields": [
+        {
+          "name": "report_id",
+          "type": "uuid",
+          "required": true,
+          "validation": "relatório legível com preview atual"
+        },
+        {
+          "name": "approval_preview_sha256",
+          "type": "sha256",
+          "required": true,
+          "validation": "hash do preview revisado pelo usuário"
+        }
+      ],
+      "contract_status": "closed",
+      "implemented": false,
+      "test_slot": "NH00-OP-DIAGNOSTICS-EXPORT"
+    }
+  ]
+}

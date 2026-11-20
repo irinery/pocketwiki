@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createServer as createTCPServer } from 'node:net';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -84,6 +84,37 @@ test('API interna protege, persiste, consulta e reabre a mesma memoria', async (
       server.child.kill('SIGTERM');
       await once(server.child, 'exit');
     }
+    await rm(root, { recursive:true, force:true });
+  }
+});
+
+test('rotas v1 bloqueiam estado parcial e preservam qualquer journal na raiz compartilhada', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'pocketwiki-v1-journal-'));
+  await writeFile(path.join(root, '.env'), '');
+  const memory = path.join(root, 'memory');
+  await mkdir(path.join(memory, 'captures'), { recursive:true });
+  const partial = JSON.stringify({ id:SESSION, messages:[{ role:'user', content:'partial postgres' }], events:[] });
+  const session = path.join(memory, 'captures', `session-${SESSION}.json`);
+  await writeFile(session, partial);
+  await writeFile(path.join(memory, 'MEMORY.md'), 'partial note');
+  const server = await startServer(root, await freePort());
+  try {
+    for (const kind of ['capture', 'note', 'import']) {
+      const journal = path.join(memory, `.${kind}-intent.json`);
+      await writeFile(journal, 'pending journal');
+      for (const [endpoint, method, body] of [
+        ['recall', 'POST', { question:'postgres' }],
+        ['capture', 'POST', { events:[{ event:'user-prompt-submit', session_id:SESSION, ingest_key:'later', prompt:'overwrite' }] }],
+        ['note', 'GET', undefined], ['note', 'PUT', { content:'overwrite' }]
+      ]) assert.equal((await request(server.base, endpoint, method, body)).status, 500);
+      assert.equal(await readFile(journal, 'utf8'), 'pending journal');
+      assert.equal(await readFile(session, 'utf8'), partial);
+      assert.equal(await readFile(path.join(memory, 'MEMORY.md'), 'utf8'), 'partial note');
+      await rm(journal);
+    }
+    assert.equal((await request(server.base, 'note', 'GET')).status, 200);
+  } finally {
+    server.child.kill('SIGTERM'); await once(server.child, 'exit');
     await rm(root, { recursive:true, force:true });
   }
 });

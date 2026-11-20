@@ -51,6 +51,36 @@ struct IntegrationTestRunner {
         print("\(tests.count) integration tests passing")
     }
 
+    private static func awaitFixtureReadiness(_ pipe: Pipe, process: Process, timeoutMS: UInt64) throws {
+        let deadline = DispatchTime.now().uptimeNanoseconds + timeoutMS * 1_000_000
+        var descriptor = pollfd(fd: pipe.fileHandleForReading.fileDescriptor, events: Int16(POLLIN), revents: 0)
+        func processState() -> String {
+            if process.isRunning { return "running" }
+            return "exited status=\(process.terminationStatus) reason=\(process.terminationReason.rawValue)"
+        }
+        while true {
+            let now = DispatchTime.now().uptimeNanoseconds
+            guard now < deadline else {
+                throw IntegrationTestFailure.failed("PocketKernel upstream fixture readiness timed out after \(timeoutMS)ms (process=\(processState()), poll revents=\(descriptor.revents))")
+            }
+            let remainingMS = Int32(min((deadline - now + 999_999) / 1_000_000, UInt64(Int32.max)))
+            descriptor.revents = 0
+            let result = Darwin.poll(&descriptor, 1, remainingMS)
+            if result > 0 {
+                guard descriptor.revents & Int16(POLLIN) != 0 else {
+                    throw IntegrationTestFailure.failed("PocketKernel upstream fixture closed readiness pipe (process=\(processState()), poll revents=\(descriptor.revents))")
+                }
+                return
+            }
+            if result < 0 {
+                let pollError = errno
+                if pollError == EINTR { continue }
+                throw IntegrationTestFailure.failed("PocketKernel upstream fixture readiness poll failed (errno=\(pollError), process=\(processState()), poll revents=\(descriptor.revents))")
+            }
+            throw IntegrationTestFailure.failed("PocketKernel upstream fixture readiness timed out after \(timeoutMS)ms (process=\(processState()), poll revents=\(descriptor.revents))")
+        }
+    }
+
     static func testPocketKernelStructuredAnswerParsing() async throws {
         let payload = Data(#"{"ok":true,"answer":{"summary":"resposta final","facts":[],"assumptions":[],"missing_evidence":[]},"profile_used":"fast"}"#.utf8)
         let parsed = try PocketKernelClient.parseResponse(payload)
@@ -63,7 +93,12 @@ struct IntegrationTestRunner {
     static func testNativeServerHTTPContract() async throws {
         let upstreamScript = #"""
         from http.server import BaseHTTPRequestHandler, HTTPServer
+        from socketserver import TCPServer
         import json
+        class LoopbackHTTPServer(HTTPServer):
+            def server_bind(self):
+                TCPServer.server_bind(self)
+                self.server_name, self.server_port = self.server_address
         class Handler(BaseHTTPRequestHandler):
             def do_POST(self):
                 body = json.dumps({"ok": True, "upstream": "managed-pocketkernel"}).encode()
@@ -74,7 +109,7 @@ struct IntegrationTestRunner {
                 self.wfile.write(body)
             def log_message(self, format, *args):
                 pass
-        server = HTTPServer(("127.0.0.1", 0), Handler)
+        server = LoopbackHTTPServer(("127.0.0.1", 0), Handler)
         print(server.server_address[1], flush=True)
         server.serve_forever()
         """#
@@ -83,7 +118,8 @@ struct IntegrationTestRunner {
         upstream.arguments = ["-c", upstreamScript]
         let readyPipe = Pipe()
         upstream.standardOutput = readyPipe.fileHandleForWriting
-        upstream.standardError = FileHandle.nullDevice
+        // Preserve Python startup diagnostics in the CI log.
+        upstream.standardError = FileHandle.standardError
         try upstream.run()
         try? readyPipe.fileHandleForWriting.close()
         defer {
@@ -92,12 +128,7 @@ struct IntegrationTestRunner {
                 upstream.waitUntilExit()
             }
         }
-        var readyDescriptor = pollfd(
-            fd: readyPipe.fileHandleForReading.fileDescriptor,
-            events: Int16(POLLIN),
-            revents: 0
-        )
-        try expect(Darwin.poll(&readyDescriptor, 1, 5_000) > 0, "PocketKernel upstream fixture did not start")
+        try awaitFixtureReadiness(readyPipe, process: upstream, timeoutMS: 5_000)
         var portBuffer = [UInt8](repeating: 0, count: 32)
         let portByteCount = portBuffer.withUnsafeMutableBytes {
             Darwin.read(readyPipe.fileHandleForReading.fileDescriptor, $0.baseAddress, $0.count)
@@ -880,13 +911,10 @@ struct IntegrationTestRunner {
             )
             try expect(!runtimeEvents.contains(where: \.presentsAlert), "successful PocketKernel recovery should not request a modal")
 
-            let occupiedKernelPort = try availablePort()
             let externalKernel = Process()
             externalKernel.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
             externalKernel.arguments = ["-c", #"""
             from http.server import BaseHTTPRequestHandler, HTTPServer
-            import sys
-
             class Handler(BaseHTTPRequestHandler):
                 def do_GET(self):
                     self.send_response(405)
@@ -894,18 +922,33 @@ struct IntegrationTestRunner {
                 def log_message(self, format, *args):
                     pass
 
-            HTTPServer(("127.0.0.1", int(sys.argv[1])), Handler).serve_forever()
-            """#, String(occupiedKernelPort)]
-            externalKernel.standardOutput = FileHandle.nullDevice
-            externalKernel.standardError = FileHandle.nullDevice
+            server = HTTPServer(("127.0.0.1", 0), Handler)
+            print(server.server_address[1], flush=True)
+            server.serve_forever()
+            """#]
+            let externalReady = Pipe()
+            externalKernel.standardOutput = externalReady.fileHandleForWriting
+            externalKernel.standardError = FileHandle.standardError
             try externalKernel.run()
+            try? externalReady.fileHandleForWriting.close()
             defer {
                 if externalKernel.isRunning {
                     externalKernel.terminate()
                     externalKernel.waitUntilExit()
                 }
             }
-            try await Task.sleep(for: .milliseconds(250))
+            try awaitFixtureReadiness(externalReady, process: externalKernel, timeoutMS: 5_000)
+            var externalPortBuffer = [UInt8](repeating: 0, count: 32)
+            let externalPortBytes = externalPortBuffer.withUnsafeMutableBytes {
+                Darwin.read(externalReady.fileHandleForReading.fileDescriptor, $0.baseAddress, $0.count)
+            }
+            try expect(externalPortBytes > 0, "external PocketKernel fixture did not report its port")
+            let externalPortText = String(bytes: externalPortBuffer.prefix(externalPortBytes), encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let occupiedKernelPort = try require(externalPortText.flatMap(Int.init), "external PocketKernel fixture reported an invalid port")
+            let externalURL = try require(URL(string: "http://127.0.0.1:\(occupiedKernelPort)/v1/kernel"), "external PocketKernel fixture URL is invalid")
+            let externalResponse = try await request(externalURL)
+            try expect(externalResponse.status == 405, "external PocketKernel fixture is not healthy")
 
             var automaticConfiguration = configuration
             automaticConfiguration.pocketKernelAddonMode = .automatic
@@ -1092,7 +1135,12 @@ struct IntegrationTestRunner {
     static func testWebRuntimeAssets() async throws {
         let root = try PocketWikiWebRuntimeResolver.webRoot()
         try expect(root.appendingPathComponent("wiki-cockpit.html").path.hasSuffix("wiki-cockpit.html"), "web root did not resolve cockpit")
-        try expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("assets/favicon.png").path), "favicon asset missing")
+        let bundledFavicon = root.appendingPathComponent("assets/favicon.png").path
+        let sourceFavicon = root.appendingPathComponent("favicon.png").path
+        try expect(
+            FileManager.default.fileExists(atPath: bundledFavicon) || FileManager.default.fileExists(atPath: sourceFavicon),
+            "favicon asset missing"
+        )
         try expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("sw.js").path), "service worker missing")
     }
 

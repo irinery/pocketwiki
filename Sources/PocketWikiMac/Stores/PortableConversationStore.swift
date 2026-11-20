@@ -51,7 +51,9 @@ struct PortableConversationStore {
     init(fileManager: FileManager = .default, directoryURL: URL? = nil) {
         let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support", isDirectory: true)
-        let memoryDirectory = directoryURL ?? appSupport.appendingPathComponent("PocketWiki/AI Memory", isDirectory: true)
+        let configuredDirectory = ProcessInfo.processInfo.environment["POCKETWIKI_CONVERSATION_STORE_PATH"]
+            .map { URL(fileURLWithPath: $0, isDirectory: true) }
+        let memoryDirectory = directoryURL ?? configuredDirectory ?? appSupport.appendingPathComponent("PocketWiki/AI Memory", isDirectory: true)
         directory = memoryDirectory
         memoryFileURL = memoryDirectory.appendingPathComponent("MEMORY.md")
         hookOutboxURL = memoryDirectory.appendingPathComponent("pocket-memory-outbox.json")

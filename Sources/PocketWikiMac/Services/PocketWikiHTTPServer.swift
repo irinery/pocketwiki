@@ -191,6 +191,9 @@ final class PocketWikiHTTPServer: @unchecked Sendable {
             return fileResponse(String(path.dropFirst()), contentType: PocketWikiContentTypes.contentType(for: path), headers: ["Cache-Control": "no-cache"], optional: true, headOnly: request.isHead)
         }
         if path.hasPrefix("/assets/") {
+            if path == "/assets/favicon.png" {
+                return fileResponse("favicon.png", contentType: "image/png", headOnly: request.isHead)
+            }
             return assetResponse(path, headOnly: request.isHead)
         }
         if request.method == "GET", path == "/api/config" {

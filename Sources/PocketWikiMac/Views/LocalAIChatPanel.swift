@@ -136,6 +136,12 @@ struct LocalAIChatPanel: View {
                 }
                 .padding(16)
             }
+            .onAppear {
+                guard let last = chat.messages.last else { return }
+                DispatchQueue.main.async {
+                    proxy.scrollTo(last.id, anchor: .bottom)
+                }
+            }
             .onChange(of: chat.messagesRevision) { _, _ in
                 guard let last = chat.messages.last else { return }
                 withAnimation(.easeOut(duration: 0.12)) {
@@ -152,6 +158,8 @@ struct LocalAIChatPanel: View {
                     .font(.caption)
                     .foregroundStyle(PocketWikiTheme.bad)
                     .lineLimit(3)
+                    .accessibilityLabel(error)
+                    .accessibilityIdentifier("legacy.ai.error")
             }
 
             HStack(alignment: .bottom, spacing: 10) {
@@ -172,6 +180,7 @@ struct LocalAIChatPanel: View {
                     .buttonBorderShape(.roundedRectangle(radius: 8))
                     .tint(PocketWikiTheme.accent)
                     .disabled(!canSend)
+                    .accessibilityIdentifier("legacy.ai.send")
                     .keyboardShortcut(.return, modifiers: [])
                     .help("Enviar")
                 }
@@ -234,6 +243,7 @@ private struct LocalAIPromptTextView: NSViewRepresentable {
 
         let textView = PromptNSTextView(frame: .zero)
         textView.delegate = context.coordinator
+        textView.setAccessibilityIdentifier("legacy.ai.prompt")
         textView.onSubmit = onSubmit
         textView.string = text
         textView.font = .preferredFont(forTextStyle: .body)
@@ -377,6 +387,8 @@ private struct LocalAIMessageBubble: View {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .stroke(isUser ? PocketWikiTheme.accent2.opacity(0.38) : PocketWikiTheme.accent.opacity(0.25), lineWidth: 1)
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("legacy.ai.message.\(message.role.rawValue)")
 
             if !isUser { Spacer(minLength: 72) }
         }

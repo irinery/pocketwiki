@@ -42,6 +42,7 @@ struct WikiTabStrip: View {
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("legacy.tab.\(tab.id)")
         .help(tab.title)
     }
 }

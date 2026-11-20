@@ -1,0 +1,80 @@
+$ npm run test:harness-contracts
+exit=0
+--- stdout ---
+
+> pocketwiki@0.1.0 test:harness-contracts
+> node --test src/harness/contracts/validate.test.mjs src/harness/local-host.test.mjs && sh scripts/test-harness-contracts-swift.sh
+
+TAP version 13
+# Subtest: shared NH-00 corpus matches expected acceptance in JavaScript
+ok 1 - shared NH-00 corpus matches expected acceptance in JavaScript
+  ---
+  duration_ms: 148.053625
+  ...
+# Subtest: commands require a registered mutation and preserve the closed envelope
+ok 2 - commands require a registered mutation and preserve the closed envelope
+  ---
+  duration_ms: 1.148708
+  ...
+# Subtest: capabilities expose only implemented operations
+ok 3 - capabilities expose only implemented operations
+  ---
+  duration_ms: 0.601209
+  ...
+# Subtest: future operations and unknown protocol versions remain unavailable
+ok 4 - future operations and unknown protocol versions remain unavailable
+  ---
+  duration_ms: 0.466042
+  ...
+# Subtest: shared operation corpus covers every registered operation and its validator path
+ok 5 - shared operation corpus covers every registered operation and its validator path
+  ---
+  duration_ms: 8.238417
+  ...
+# Subtest: all 15 snapshots, referenced entities, and module event variants have valid and nested closed cases
+ok 6 - all 15 snapshots, referenced entities, and module event variants have valid and nested closed cases
+  ---
+  duration_ms: 3.978583
+  ...
+# Subtest: optional and nullable are independent
+ok 7 - optional and nullable are independent
+  ---
+  duration_ms: 0.41575
+  ...
+# Subtest: permission action discriminators reject fields from other variants and mismatched request metadata
+ok 8 - permission action discriminators reject fields from other variants and mismatched request metadata
+  ---
+  duration_ms: 0.184042
+  ...
+# Subtest: local bootstrap delivers a random bearer and persists only its scoped verifier
+ok 9 - local bootstrap delivers a random bearer and persists only its scoped verifier
+  ---
+  duration_ms: 3.81625
+  ...
+# Subtest: local credential expires at the inclusive TTL boundary
+ok 10 - local credential expires at the inclusive TTL boundary
+  ---
+  duration_ms: 0.390542
+  ...
+# Subtest: local bootstrap refuses scopes the host did not grant
+ok 11 - local bootstrap refuses scopes the host did not grant
+  ---
+  duration_ms: 0.30025
+  ...
+# Subtest: local credentials bind an aggregate and persist revocation after process delivery failure
+ok 12 - local credentials bind an aggregate and persist revocation after process delivery failure
+  ---
+  duration_ms: 0.327917
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 12
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 311.291125
+Swift corpus: 910 slots passed
+
+--- stderr ---

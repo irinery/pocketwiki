@@ -1,0 +1,10 @@
+$ npm run test:nh00-bootstrap
+exit=0
+--- stdout ---
+
+> pocketwiki@0.1.0 test:nh00-bootstrap
+> sh scripts/test-nh00-bootstrap-integration.sh
+
+AC-05 process integration passed: scoped allow, principal/environment/audience/scope/aggregate/expiry/revoke/delivery/restart denials before effect; store contains hashes only
+
+--- stderr ---

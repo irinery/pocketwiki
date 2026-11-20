@@ -1,0 +1,3 @@
+$ node Tests/NewHarnessE2E/gate-aggregator.mjs --stage E0 --reports /tmp/nh-test-e0-isolated/service/e0-service.json /tmp/nh-test-e0-isolated/web/e0-web.json /tmp/nh-test-e0-isolated/macos/e0-macos.json
+exit=1
+gate rejected: shard exit_code is not zero
