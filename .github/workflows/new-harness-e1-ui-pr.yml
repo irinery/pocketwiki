@@ -70,9 +70,8 @@ jobs:
       - name: Prepare macOS toolchain
         run: |
           sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
-          if ! command -v xcodegen >/dev/null 2>&1; then
-            brew install xcodegen
-          fi
+          sh scripts/install-xcodegen-ci.sh
+          export PATH="$RUNNER_TEMP/xcodegen-2.46.0/xcodegen/bin:$PATH"
           test "$(uname -m)" = arm64
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git -C "$POCKETKERNEL_NH00_ROOT" rev-parse HEAD)" = 582e216c13feb7485fa9620d9543b272ec3794b5
